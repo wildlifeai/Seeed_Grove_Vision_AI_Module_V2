@@ -237,6 +237,56 @@ int main(void)
 }
 #endif
 
+#ifdef EI_STANDALONE_INFERENCING_CMSIS
+#include "ei_standalone_inferencing_cmsis.h"
+
+int main(void)
+{
+	board_init();
+	ei_standalone_inferencing_app();
+
+	return 0;
+}
+#endif
+
+#ifdef EI_STANDALONE_INFERENCING_ETHOS
+#include "ei_standalone_inferencing_ethos.h"
+
+int main(void)
+{
+	board_init();
+	ei_standalone_inferencing_app();
+
+	return 0;
+}
+#endif
+
+/************************ Wildlife.ai additions *****************/
+
+#ifdef WW130_TEST
+#include "ww130_test.h"
+
+/** main entry */
+int main(void)
+{
+	board_init();
+	app_main();
+	return 0;
+}
+#endif
+
+#ifdef I2C_SLAVE_APP
+#include "i2c_slave_app.h"
+
+/** main entry */
+int main(void)
+{
+	board_init();
+	app_main();
+	return 0;
+}
+#endif
+
 #ifdef EI_STANDALONE_INFERENCING
 #include "ei_standalone_inferencing.h"
 
@@ -301,6 +351,18 @@ int main(void)
 {
 	board_init();
 	tflm_peoplenet_app();
+	return 0;
+}
+#endif
+
+#ifdef SEEED_SAMPLE
+#include "seeed_sample.h"
+
+/** main entry */
+int main(void)
+{
+	board_init();
+	app_main();
 	return 0;
 }
 #endif

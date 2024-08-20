@@ -211,26 +211,58 @@ int main(void)
 }
 #endif
 
-#ifdef SEEED_SAMPLE
-#include "seeed_sample.h"
+#ifdef EI_STANDALONE_INFERENCING
+#include "ei_standalone_inferencing.h"
 
-/** main entry */
 int main(void)
 {
 	board_init();
-	app_main();
+	ei_standalone_inferencing_app();
 	return 0;
 }
 #endif
 
-#ifdef I2C_SLAVE_APP
-#include "i2c_slave_app.h"
+#ifdef EI_STANDALONE_INFERENCING_CAMERA
+#include "ei_standalone_inferencing_camera.h"
 
-/** main entry */
 int main(void)
 {
 	board_init();
-	app_main();
+	ei_standalone_inferencing_app();
+
+	return 0;
+}
+#endif
+
+#ifdef EDGE_IMPULSE_FIRMWARE
+#include "edge_impulse_firmware.h"
+
+int main(void)
+{
+	/*set pinmux init*/
+	pinmux_init();
+	/*platform driver init*/
+	platform_driver_init();
+#ifdef IP_uart
+	console_setup(USE_DW_UART_0, UART_BAUDRATE_115200);
+#endif
+#ifdef LIB_COMMON
+	xprintf_setup();
+#endif
+	edge_impulse_app();
+
+	return 0;
+}
+#endif
+
+#ifdef KWS_PDM_RECORD
+#include "kws_pdm_record.h"
+
+/* main entry */
+int main(void)
+{
+	board_init();
+	kws_pdm_record_app();
 	return 0;
 }
 #endif

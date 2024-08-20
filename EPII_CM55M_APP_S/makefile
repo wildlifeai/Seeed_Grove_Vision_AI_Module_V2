@@ -145,6 +145,10 @@ CUSTOMER ?= seeed
 # seeed_sample
 # i2c_slave_app
 # hello_world_cmsis_cv
+# kws_pdm_record
+# ei_standalone_inferencing
+# ei_standalone_inferencing_camera
+# edge_impulse_firmware
 ##
 APP_TYPE = i2c_slave_app#timed_interrupt_fatfs#allon_sensor_tflm
  

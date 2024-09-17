@@ -41,6 +41,8 @@
 
 #include "hx_drv_gpio.h"
 #include "hx_drv_scu.h"
+#include "cisdp_sensor.h"
+#include "cisdp_cfg.h"
 
 #include "crc16_ccitt.h"
 
@@ -53,6 +55,13 @@
 
 #define DRV ""
 
+// TODO - is this the best way of managing errors?
+#define APP_BLOCK_FUNC()          \
+    do                            \
+    {                             \
+        __asm volatile("b    ."); \
+    } while (0)
+
 /*************************************** Local Function Declarations *****************************/
 
 static void vImageTask(void *pvParameters);
@@ -63,7 +72,6 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T rxMessage);
 static APP_MSG_DEST_T handleEventForNNIdle(APP_MSG_T rxMessage);
 static APP_MSG_DEST_T handleEventForNNProcessing(APP_MSG_T rxMessage);
 
-// This is to process an unexpected event
 static APP_MSG_DEST_T flagUnexpectedEvent(APP_MSG_T rxMessage);
 
 // Strings for each of these states. Values must match APP_TASK1_STATE_E in task1.h
@@ -81,6 +89,7 @@ const char *imageTaskEventString[APP_MSG_IMAGETASK_LAST - APP_MSG_IMAGETASK_FIRS
     "Stop Capture",
     "Start NN",
     "Stop NN"};
+
 /*************************************** External variables *******************************************/
 
 extern SemaphoreHandle_t xI2CTxSemaphore;
@@ -91,6 +100,13 @@ extern SemaphoreHandle_t xI2CTxSemaphore;
 TaskHandle_t image_task_id;
 QueueHandle_t xImageTaskQueue;
 volatile APP_IMAGE_STATE_E image_task_state = APP_IMAGE_CAPTURE_STATE_UNINIT;
+
+// Image processing variables
+static uint8_t g_frame_ready;
+static uint32_t g_cur_jpegenc_frame;
+static uint8_t g_spi_master_initial_status;
+uint32_t jpeg_addr, jpeg_sz;
+uint32_t g_img_data = 0;
 
 static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T rxMessage)
 {
@@ -107,11 +123,30 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T rxMessage)
     case APP_MSG_IMAGETASK_START_CAPTURE:
         // Start NN processing
         image_task_state = APP_IMAGE_CAPTURE_STATE_CAPTURING;
+
+        // Should this be RESTART or ALLON?
+        app_start_state(APP_STATE_RESTART);
+
+        rxMessage.msg_data = 0;
+        rxMessage.msg_event = APP_MSG_MAINEVENT_START_CAPTURE;
+        if (xQueueSend(xImageTaskQueue, (void *)&rxMessage, __QueueSendTicksToWait) != pdTRUE)
+        {
+            dbg_printf(DBG_LESS_INFO, "send rxMessage=0x%x fail\r\n", rxMessage.msg_event);
+        }
         break;
-    case APP_MSG_IMAGETASK_STOP_NN:
+
+    case APP_MSG_IMAGETASK_STOP_CAPTURE:
         // Stop NN processing
         image_task_state = APP_IMAGE_CAPTURE_STATE_IDLE;
+        cisdp_sensor_stop();
+        rxMessage.msg_data = rxMessage.msg_event;
+        rxMessage.msg_event = APP_MSG_MAINEVENT_STOP_CAPTURE;
+        if (xQueueSend(xImageTaskQueue, (void *)&rxMessage, __QueueSendTicksToWait) != pdTRUE)
+        {
+            dbg_printf(DBG_LESS_INFO, "send rxMessage=0x%x fail\r\n", rxMessage.msg_event);
+        }
         break;
+
     default:
         // Unexpected event
         flagUnexpectedEvent(rxMessage);
@@ -240,7 +275,6 @@ static void vImageTask(void *pvParameters)
     APP_MSG_T rxMessage;
     APP_MSG_DEST_T txMessage;
     QueueHandle_t targetQueue;
-    APP_MSG_T send_msg;
 
     APP_IMAGE_STATE_E old_state;
     const char *eventString;
@@ -301,14 +335,12 @@ static void vImageTask(void *pvParameters)
                 break;
 
             default:
-                // should not happen
                 txMessage = flagUnexpectedEvent(rxMessage);
                 break;
             }
 
             if (old_state != image_task_state)
             {
-                // state has changed
                 XP_LT_CYAN;
                 xprintf("IMAGE Task state changed ");
                 XP_WHITE;
@@ -369,4 +401,57 @@ uint16_t image_task_getState(void)
 const char *image_task_getStateString(void)
 {
     return *&imageTaskStateString[image_task_state];
+}
+
+/**
+ * Initialises image processing variables
+ */
+void image_var_int(void)
+{
+    g_frame_ready = 0;
+    g_cur_jpegenc_frame = 0;
+    g_spi_master_initial_status = 0;
+}
+
+/**
+ * Initialises camera capturing
+ */
+void app_start_state(APP_STATE_E state)
+{
+    image_var_int();
+
+    if (state == APP_STATE_ALLON)
+    {
+        xprintf("APP_STATE_ALLON\n");
+        if (cisdp_sensor_init(true) < 0)
+        {
+            xprintf("\r\nCIS Init fail\r\n");
+            APP_BLOCK_FUNC();
+        }
+    }
+    else if (state == APP_STATE_RESTART)
+    {
+        xprintf("APP_STATE_RESTART\n");
+        if (cisdp_sensor_init(false) < 0)
+        {
+            xprintf("\r\nCIS Init fail\r\n");
+            APP_BLOCK_FUNC();
+        }
+    }
+    else if (state == APP_STATE_STOP)
+    {
+        xprintf("APP_STATE_STOP\n");
+        cisdp_sensor_stop();
+        return;
+    }
+
+    // if wdma variable is zero when not init yet, then this step is a must be to retrieve wdma address
+    //  Datapath events give callbacks to os_app_dplib_cb() in dp_task
+    if (cisdp_dp_init(true, SENSORDPLIB_PATH_INT_INP_HW5X5_JPEG, os_app_dplib_cb, g_img_data, APP_DP_RES_YUV640x480_INP_SUBSAMPLE_1X) < 0)
+    {
+        xprintf("\r\nDATAPATH Init fail\r\n");
+        APP_BLOCK_FUNC();
+    }
+
+    cisdp_sensor_start();
 }

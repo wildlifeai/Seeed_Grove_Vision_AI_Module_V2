@@ -27,4 +27,13 @@ typedef enum
     APP_IMAGE_NUMSTATES = 0x0006
 } APP_IMAGE_STATE_E;
 
+// Create the task and all its support pieces
+TaskHandle_t image_createTask(int8_t priority);
+
+// Return the internal state (as a number)
+uint16_t image_task_getState(void);
+
+// Return the internal state (as a string)
+const char *image_task_getStateString(void);
+
 #endif /* APP_WW_PROJECTS_WW130_CLI_IMAGETASK_H_ */

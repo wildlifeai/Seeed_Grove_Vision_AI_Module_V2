@@ -12,20 +12,39 @@
 #define APP_WW_PROJECTS_WW130_CLI_IMAGETASK_H_
 
 #include <stdio.h>
+// Create the task and all its support pieces
 #include <stdlib.h>
 
-// The states for the image_processing_task
-// APP_FATFS_STATE_NUMSTATES is only used to establish the number of states
+#define APP_BLOCK_FUNC()          \
+    do                            \
+    {                             \
+        __asm volatile("b    ."); \
+    } while (0)
+
+// The camera states for the image_processing_task
 typedef enum
 {
     APP_IMAGE_CAPTURE_STATE_UNINIT = 0x0000,
-    APP_IMAGE_CAPTURE_STATE_IDLE = 0x0001,
-    APP_IMAGE_CAPTURE_STATE_CAPTURING = 0x0002,
-    APP_IMAGE_NN_STATE_UNINIT = 0x0003,
-    APP_IMAGE_NN_STATE_IDLE = 0x0004,
-    APP_IMAGE_NN_STATE_PROCESSING = 0x0005,
-    APP_IMAGE_NUMSTATES = 0x0006
-} APP_IMAGE_STATE_E;
+    APP_IMAGE_CAPTURE_STATE_INIT = 0x0001,
+    APP_IMAGE_CAPTURE_STATE_SETUP_CAP_START = 0x0002,
+    APP_IMAGE_CAPTURE_STATE_SETUP_CAP_END = 0x0003,
+    APP_IMAGE_CAPTURE_STATE_RECAP_FRAME = 0x0004,
+    APP_IMAGE_CAPTURE_STATE_CAP_FRAMERDY = 0x0005,
+    APP_IMAGE_CAPTURE_STATE_STOP_CAP_START = 0x0006,
+    APP_IMAGE_CAPTURE_STATE_STOP_CAP_END = 0x0007,
+    APP_IMAGE_CAPTURE_STATE_IDLE = 0x0008,
+    APP_IMAGE_CAPTURE_NUMSTATE = 0x0009,
+    APP_IMAGE_CAPTURE_STATE_ERROR,
+} APP_IMAGE_CAPTURE_STATE_E;
+
+// The NN states for the image_processing_task
+typedef enum
+{
+    APP_IMAGE_NN_STATE_UNINIT = 0x0000,
+    APP_IMAGE_NN_STATE_IDLE = 0x0001,
+    APP_IMAGE_NN_STATE_PROCESSING = 0x0002,
+    APP_IMAGE_NUMSTATES = 0x0003
+} APP_IMAGE_NN_STATE_E;
 
 // The states for the image
 typedef enum

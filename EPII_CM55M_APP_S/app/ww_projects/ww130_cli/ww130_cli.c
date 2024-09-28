@@ -144,7 +144,7 @@ int app_main(void)
 	xprintf("Created '%s' Priority %d\n", pcTaskGetName(task_id), priority);
 
 	// Image processing task & NN task
-	// It handles camera operations and process images against the NN
+	// It handles camera operations and processes images against the NN
 	task_id = image_createTask(--priority);
 	internalState.task_id = task_id;
 	internalState.getState = image_task_getState;

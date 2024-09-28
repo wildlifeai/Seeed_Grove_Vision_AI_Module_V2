@@ -24,18 +24,21 @@
 
 // FreeRTOS kernel includes.
 #include "FreeRTOS.h"
+#include "FreeRTOSConfig.h"
 #include "task.h"
 #include "queue.h"
 #include "timers.h"
 #include "semphr.h"
 
 #include "image_processing_task.h"
-#include "task1.h"
 #include "app_msg.h"
-#include "if_task.h"
-#include "fatfs_task.h"
 #include "ww130_cli.h"
 #include "i2c_comm.h"
+#include "CLI-commands.h"
+#ifdef IP_xdma
+#include "hx_drv_xdma.h"
+#include "sensor_dp_lib.h"
+#endif
 
 #include "WE2_debug.h"
 
@@ -49,7 +52,7 @@
 /*************************************** Definitions *******************************************/
 
 // TODO sort out how to allocate priorities
-#define image_task_PRIORITY (configMAX_PRIORITIES - 4)
+#define image_task_PRIORITY (configMAX_PRIORITIES - 1)
 
 #define IMAGE_TASK_QUEUE_LEN 10
 
@@ -81,10 +84,11 @@ const char *imageTaskStateString[APP_IMAGE_CAPTURE_NUMSTATE] = {
 
 // Strings for expected messages. Values must match messages directed to image Task in app_msg.h
 const char *imageTaskEventString[APP_MSG_IMAGEEVENT_LAST - APP_MSG_IMAGEEVENT_FIRST] = {
-    "Start Capture",
-    "Stop Capture",
-    "Start NN",
-    "Stop NN"};
+    "Image Event Start Capture",
+    "Image Event Stop Capture",
+    "Image Event Start NN",
+    "Image Event Stop NN",
+    "Image Event ReCapture"};
 
 /*************************************** External variables *******************************************/
 
@@ -103,10 +107,20 @@ static uint8_t g_frame_ready;
 static uint32_t g_cur_jpegenc_frame;
 static uint8_t g_spi_master_initial_status;
 static uint8_t g_time;
-uint32_t g_img_data = 0;
+extern uint32_t g_img_data = 0;
 /*volatile*/ uint32_t jpeg_addr, jpeg_sz;
 
 /*************************************** Local Functions *******************************************/
+
+/**
+ * Initialises image processing variables
+ */
+void image_var_int(void)
+{
+    g_frame_ready = 0;
+    g_cur_jpegenc_frame = 0;
+    g_spi_master_initial_status = 0;
+}
 
 /*
  * Callback from datapath processing
@@ -296,7 +310,6 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T rxMessage)
     sendMsg.destination = NULL;
     event = rxMessage.msg_event;
     // data = rxMessage.msg_data;
-    image_task_state = APP_IMAGE_CAPTURE_STATE_INIT;
 
     switch (event)
     {
@@ -453,11 +466,13 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T rxMessage)
 
     case APP_MSG_IMAGEEVENT_STARTCAPTURE:
         // Start Capture Event
-        image_task_state = APP_IMAGE_CAPTURE_STATE_STOP_CAP_START;
+        image_task_state = APP_IMAGE_CAPTURE_STATE_SETUP_CAP_START;
         // Should this be RESTART or ALLON?
         app_start_state(APP_STATE_ALLON);
 
-        sendMsg.message.msg_data = rxMessage.msg_event;
+        // Should data be 0 or msg_event?
+        // sendMsg.message.msg_data = rxMessage.msg_event;
+        sendMsg.message.msg_data = 0;
         sendMsg.message.msg_event = APP_MSG_MAINEVENT_START_CAPTURE;
         if (xQueueSend(xImageTaskQueue, (void *)&sendMsg, __QueueSendTicksToWait) != pdTRUE)
         {
@@ -466,9 +481,9 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T rxMessage)
         break;
 
     case APP_MSG_IMAGEEVENT_STOPCAPTURE:
-        // Stop NN processing
-        image_task_state = APP_IMAGE_CAPTURE_STATE_STOP_CAP_END;
+        image_task_state = APP_IMAGE_CAPTURE_STATE_STOP_CAP_START;
         cisdp_sensor_stop();
+        app_start_state(APP_STATE_STOP);
         sendMsg.message.msg_data = rxMessage.msg_event;
         sendMsg.message.msg_event = APP_MSG_MAINEVENT_STOP_CAPTURE;
         if (xQueueSend(xImageTaskQueue, (void *)&sendMsg, __QueueSendTicksToWait) != pdTRUE)
@@ -476,6 +491,7 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T rxMessage)
             dbg_printf(DBG_LESS_INFO, "send sendMsg=0x%x fail\r\n", sendMsg.message.msg_event);
         }
         break;
+
     case APP_MSG_IMAGEEVENT_RECAPTURE:
         image_task_state = APP_IMAGE_CAPTURE_STATE_RECAP_FRAME;
         sensordplib_retrigger_capture();
@@ -499,6 +515,9 @@ static void vImageTask(void *pvParameters)
     const char *eventString;
     APP_MSG_EVENT_E event;
     uint32_t rxData;
+
+    // Init camera on task creation
+    image_task_state = APP_IMAGE_CAPTURE_STATE_INIT;
 
     for (;;)
     {
@@ -524,9 +543,16 @@ static void vImageTask(void *pvParameters)
             XP_WHITE;
             xprintf(" received event '%s' (0x%04x). Value = 0x%08x\r\n", eventString, event, rxData);
 
+            // Hacky solution to capture just a single frame thourgh "snapshot"
+            if (g_cur_jpegenc_frame == 1)
+            {
+                image_task_state = APP_IMAGE_CAPTURE_STATE_STOP_CAP_END;
+                event = APP_MSG_IMAGEEVENT_STOPCAPTURE;
+                g_cur_jpegenc_frame = 0;
+            }
             old_state = image_task_state;
 
-            // switch on state - and call individual event handling functions
+            // switch on state - needs to be reviewed as all events are redirected to the "capturing" event handler
             switch (image_task_state)
             {
             case APP_IMAGE_CAPTURE_STATE_UNINIT:
@@ -589,7 +615,9 @@ static APP_MSG_DEST_T flagUnexpectedEvent(APP_MSG_T rxMessage)
     sendMsg.destination = NULL;
 
     event = rxMessage.msg_event;
-    image_task_state = APP_IMAGE_CAPTURE_STATE_ERROR;
+    sendMsg.message.msg_data = rxMessage.msg_event;
+    sendMsg.message.msg_event = APP_MSG_MAINEVENT_DP_ERROR;
+    // image_task_state = APP_IMAGE_CAPTURE_STATE_ERROR;
 
     XP_LT_RED;
     if ((event >= APP_MSG_IMAGEEVENT_FIRST) && (event < APP_MSG_IMAGEEVENT_LAST))
@@ -604,41 +632,6 @@ static APP_MSG_DEST_T flagUnexpectedEvent(APP_MSG_T rxMessage)
 
     // If non-null then our task sends another message to another task
     return sendMsg;
-}
-
-/********************************** Public Functions  *************************************/
-
-TaskHandle_t image_createTask(int8_t priority)
-{
-    // Create the task
-    xTaskCreate(vImageTask, "ImageTask", configMINIMAL_STACK_SIZE, NULL, priority, &image_task_id);
-    return image_task_id;
-}
-
-/**
- * Returns the internal state as a number
- */
-uint16_t image_task_getState(void)
-{
-    return image_task_state;
-}
-
-/**
- * Returns the internal state as a string
- */
-const char *image_task_getStateString(void)
-{
-    return *&imageTaskStateString[image_task_state];
-}
-
-/**
- * Initialises image processing variables
- */
-void image_var_int(void)
-{
-    g_frame_ready = 0;
-    g_cur_jpegenc_frame = 0;
-    g_spi_master_initial_status = 0;
 }
 
 /**
@@ -690,4 +683,60 @@ void app_start_state(APP_STATE_E state)
         cisdp_sensor_stop();
         return;
     }
+}
+
+/********************************** Public Functions  *************************************/
+
+/**
+ * Placeholder for code to send EXIF data to the WW130
+ */
+void image_task_sendExif(void)
+{
+    dbg_printf(DBG_LESS_INFO, "Not yet implemented\r\n");
+}
+
+/**
+ * Creates the image task
+ * Returns the task priority
+ */
+TaskHandle_t image_createTask(int8_t priority)
+{
+    if (priority < 0)
+    {
+        priority = 0;
+    }
+
+    xImageTaskQueue = xQueueCreate(IMAGE_TASK_QUEUE_LEN, sizeof(APP_MSG_T));
+    if (xImageTaskQueue == 0)
+    {
+        xprintf("Failed to create xImageTaskQueue\n");
+        configASSERT(0);
+    }
+    if (xTaskCreate(vImageTask, "ImageTask",
+                    3 * configMINIMAL_STACK_SIZE + CLI_CMD_LINE_BUF_SIZE + CLI_OUTPUT_BUF_SIZE,
+                    NULL, priority, &image_task_id) != pdPASS)
+    {
+        xprintf("Failed to create vFatFsTask\n");
+        configASSERT(0); // TODO add debug messages?
+    }
+
+    // Create the task
+    // xTaskCreate(vImageTask, "ImageTask", configMINIMAL_STACK_SIZE, NULL, priority, &image_task_id);
+    return image_task_id;
+}
+
+/**
+ * Returns the internal state as a number
+ */
+uint16_t image_task_getState(void)
+{
+    return image_task_state;
+}
+
+/**
+ * Returns the internal state as a string
+ */
+const char *image_task_getStateString(void)
+{
+    return *&imageTaskStateString[image_task_state];
 }

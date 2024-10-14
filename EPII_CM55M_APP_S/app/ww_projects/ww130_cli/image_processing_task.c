@@ -35,10 +35,10 @@
 #include "ww130_cli.h"
 #include "i2c_comm.h"
 #include "CLI-commands.h"
-#ifdef IP_xdma
-#include "hx_drv_xdma.h"
+// #ifdef IP_xdma
+// #include "hx_drv_xdma.h"
 #include "sensor_dp_lib.h"
-#endif
+// #endif
 
 #include "WE2_debug.h"
 
@@ -468,7 +468,7 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T rxMessage)
         // Start Capture Event
         image_task_state = APP_IMAGE_CAPTURE_STATE_SETUP_CAP_START;
         // Should this be RESTART or ALLON?
-        app_start_state(APP_STATE_ALLON);
+        // app_start_state(APP_STATE_ALLON);
 
         // Should data be 0 or msg_event?
         // sendMsg.message.msg_data = rxMessage.msg_event;
@@ -483,7 +483,7 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T rxMessage)
     case APP_MSG_IMAGEEVENT_STOPCAPTURE:
         image_task_state = APP_IMAGE_CAPTURE_STATE_STOP_CAP_START;
         cisdp_sensor_stop();
-        app_start_state(APP_STATE_STOP);
+        // app_start_state(APP_STATE_STOP);
         sendMsg.message.msg_data = rxMessage.msg_event;
         sendMsg.message.msg_event = APP_MSG_MAINEVENT_STOP_CAPTURE;
         if (xQueueSend(xImageTaskQueue, (void *)&sendMsg, __QueueSendTicksToWait) != pdTRUE)
@@ -560,10 +560,12 @@ static void vImageTask(void *pvParameters)
                 break;
 
             case APP_MSG_IMAGEEVENT_STARTCAPTURE:
+                app_start_state(APP_STATE_ALLON);
                 txMessage = handleEventForCapturing(rxMessage);
                 break;
 
             case APP_MSG_IMAGEEVENT_STOPCAPTURE:
+                app_start_state(APP_STATE_STOP);
                 txMessage = handleEventForCapturing(rxMessage);
                 break;
 
@@ -711,6 +713,8 @@ TaskHandle_t image_createTask(int8_t priority)
     {
         xprintf("Failed to create xImageTaskQueue\n");
         configASSERT(0);
+        while (1)
+            ;
     }
     if (xTaskCreate(vImageTask, "ImageTask",
                     3 * configMINIMAL_STACK_SIZE + CLI_CMD_LINE_BUF_SIZE + CLI_OUTPUT_BUF_SIZE,

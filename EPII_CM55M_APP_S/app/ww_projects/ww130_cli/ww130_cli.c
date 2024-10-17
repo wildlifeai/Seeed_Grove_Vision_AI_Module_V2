@@ -89,6 +89,7 @@ int app_main(void)
 	TaskHandle_t task_id;
 	internal_state_t internalState;
 	uint8_t taskIndex = 0;
+	app_start_state(APP_STATE_ALLON);
 
 	pinmux_init();
 

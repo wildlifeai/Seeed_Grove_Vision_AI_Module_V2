@@ -38,6 +38,7 @@ SECTIONS
         __unprivileged_flash_start__ = .;
     } > CM55M_S_APP_ROM
 
+
     .text : ALIGN(4)
     {
        *(.text*)

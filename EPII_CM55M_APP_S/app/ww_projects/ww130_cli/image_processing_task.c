@@ -35,10 +35,10 @@
 #include "ww130_cli.h"
 #include "i2c_comm.h"
 #include "CLI-commands.h"
-// #ifdef IP_xdma
-// #include "hx_drv_xdma.h"
+#ifdef IP_xdma
+#include "hx_drv_xdma.h"
 #include "sensor_dp_lib.h"
-// #endif
+#endif
 
 #include "WE2_debug.h"
 
@@ -52,7 +52,7 @@
 /*************************************** Definitions *******************************************/
 
 // TODO sort out how to allocate priorities
-#define image_task_PRIORITY (configMAX_PRIORITIES - 1)
+// #define image_task_PRIORITY (configMAX_PRIORITIES - 1)
 
 #define IMAGE_TASK_QUEUE_LEN 10
 
@@ -63,12 +63,13 @@
 static void vImageTask(void *pvParameters);
 
 // These are separate event handlers, one for each of the possible state machine state
-static APP_MSG_DEST_T handleEventForCaptureIdle(APP_MSG_T rxMessage);
-static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T rxMessage);
-static APP_MSG_DEST_T handleEventForNNIdle(APP_MSG_T rxMessage);
-static APP_MSG_DEST_T handleEventForNNProcessing(APP_MSG_T rxMessage);
+static APP_MSG_DEST_T handleEventForCaptureIdle(APP_MSG_T img_recv_msg);
+static APP_MSG_DEST_T handleEventForStartCapture(APP_MSG_T img_recv_msg);
+static APP_MSG_DEST_T handleEventForStopCapture(APP_MSG_T img_recv_msg);
+static APP_MSG_DEST_T handleEventForNNIdle(APP_MSG_T img_recv_msg);
+static APP_MSG_DEST_T handleEventForNNProcessing(APP_MSG_T img_recv_msg);
 
-static APP_MSG_DEST_T flagUnexpectedEvent(APP_MSG_T rxMessage);
+static APP_MSG_DEST_T flagUnexpectedEvent(APP_MSG_T img_recv_msg);
 
 // Strings for each of these states. Values must match APP_IMAGE_CAPTURE_STATE_E in image_processing_task.h
 const char *imageTaskStateString[APP_IMAGE_CAPTURE_NUMSTATE] = {
@@ -107,7 +108,7 @@ static uint8_t g_frame_ready;
 static uint32_t g_cur_jpegenc_frame;
 static uint8_t g_spi_master_initial_status;
 static uint8_t g_time;
-extern uint32_t g_img_data = 0;
+uint32_t g_img_data = 0;
 /*volatile*/ uint32_t jpeg_addr, jpeg_sz;
 
 /*************************************** Local Functions *******************************************/
@@ -302,14 +303,14 @@ void os_app_dplib_cb(SENSORDPLIB_STATUS_E event)
     }
 }
 
-static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T rxMessage)
+static APP_MSG_DEST_T handleEventForStartCapture(APP_MSG_T img_recv_msg)
 {
     APP_MSG_EVENT_E event;
     // uint32_t data;
-    APP_MSG_DEST_T sendMsg;
-    sendMsg.destination = NULL;
-    event = rxMessage.msg_event;
-    // data = rxMessage.msg_data;
+    APP_MSG_DEST_T send_msg;
+    send_msg.destination = NULL;
+    event = img_recv_msg.msg_event;
+    // data = img_recv_msg.msg_data;
 
     switch (event)
     {
@@ -323,11 +324,11 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T rxMessage)
     case APP_MSG_DPEVENT_ERR_FE_ERR:    /*!< [2] reg_inpparser_fe_cycle_error_int_en*/
     case APP_MSG_DPEVENT_ERR_HSIZE_ERR: /*!< [1] reg_inpparser_hsize_error_int_en*/
     case APP_MSG_DPEVENT_ERR_FS_ERR:    /*!< [0] reg_inpparser_fs_cycle_error_int_en*/
-        sendMsg.message.msg_data = rxMessage.msg_event;
-        sendMsg.message.msg_event = APP_MSG_MAINEVENT_DP_ERROR;
-        if (xQueueSend(xImageTaskQueue, (void *)&sendMsg, __QueueSendTicksToWait) != pdTRUE)
+        send_msg.message.msg_data = img_recv_msg.msg_event;
+        send_msg.message.msg_event = APP_MSG_MAINEVENT_DP_ERROR;
+        if (xQueueSend(xImageTaskQueue, (void *)&send_msg, __QueueSendTicksToWait) != pdTRUE)
         {
-            dbg_printf(DBG_LESS_INFO, "send sendMsg=0x%x fail\r\n", rxMessage.msg_event);
+            dbg_printf(DBG_LESS_INFO, "send send_msg=0x%x fail\r\n", img_recv_msg.msg_event);
         }
         break;
 
@@ -352,29 +353,29 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T rxMessage)
     case APP_MSG_DPEVENT_EDM_WDT3_TIMEOUT: /*!< EDM WDT3 Timeout*/
     case APP_MSG_DPEVENT_EDM_WDT2_TIMEOUT: /*!< EDM WDT2 Timeout*/
     case APP_MSG_DPEVENT_EDM_WDT1_TIMEOUT: /*!< EDM WDT1 Timeout*/
-        sendMsg.message.msg_data = rxMessage.msg_event;
-        sendMsg.message.msg_event = APP_MSG_MAINEVENT_SENSOR_DP_ERROR;
-        if (xQueueSend(xImageTaskQueue, (void *)&sendMsg, __QueueSendTicksToWait) != pdTRUE)
+        send_msg.message.msg_data = img_recv_msg.msg_event;
+        send_msg.message.msg_event = APP_MSG_MAINEVENT_SENSOR_DP_ERROR;
+        if (xQueueSend(xImageTaskQueue, (void *)&send_msg, __QueueSendTicksToWait) != pdTRUE)
         {
-            dbg_printf(DBG_LESS_INFO, "send sendMsg=0x%x fail\r\n", sendMsg.message.msg_event);
+            dbg_printf(DBG_LESS_INFO, "send send_msg=0x%x fail\r\n", send_msg.message.msg_event);
         }
         break;
 
     case APP_MSG_DPEVENT_SENSORCTRL_WDT_OUT: /*!< Sensor Control Timeout (not used in current code)*/
-        sendMsg.message.msg_data = rxMessage.msg_event;
-        sendMsg.message.msg_event = APP_MSG_MAINEVENT_SENSOR_DP_ERROR;
-        if (xQueueSend(xImageTaskQueue, (void *)&sendMsg, __QueueSendTicksToWait) != pdTRUE)
+        send_msg.message.msg_data = img_recv_msg.msg_event;
+        send_msg.message.msg_event = APP_MSG_MAINEVENT_SENSOR_DP_ERROR;
+        if (xQueueSend(xImageTaskQueue, (void *)&send_msg, __QueueSendTicksToWait) != pdTRUE)
         {
-            dbg_printf(DBG_LESS_INFO, "send sendMsg=0x%x fail\r\n", sendMsg.message.msg_event);
+            dbg_printf(DBG_LESS_INFO, "send send_msg=0x%x fail\r\n", send_msg.message.msg_event);
         }
         break;
     case APP_MSG_DPEVENT_CDM_FIFO_OVERFLOW:  /*!< CDM Abnormal OVERFLOW*/
     case APP_MSG_DPEVENT_CDM_FIFO_UNDERFLOW: /*!< CDM Abnormal UnderFLOW */
-        sendMsg.message.msg_data = rxMessage.msg_event;
-        sendMsg.message.msg_event = APP_MSG_MAINEVENT_DP_ERROR;
-        if (xQueueSend(xImageTaskQueue, (void *)&sendMsg, __QueueSendTicksToWait) != pdTRUE)
+        send_msg.message.msg_data = img_recv_msg.msg_event;
+        send_msg.message.msg_event = APP_MSG_MAINEVENT_DP_ERROR;
+        if (xQueueSend(xImageTaskQueue, (void *)&send_msg, __QueueSendTicksToWait) != pdTRUE)
         {
-            dbg_printf(DBG_LESS_INFO, "send sendMsg=0x%x fail\r\n", sendMsg.message.msg_event);
+            dbg_printf(DBG_LESS_INFO, "send send_msg=0x%x fail\r\n", send_msg.message.msg_event);
         }
         break;
 
@@ -411,20 +412,20 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T rxMessage)
     case APP_MSG_DPEVENT_XDMA_RDMA_ABNORMAL3: /*!< RDMA Abnormal Case3 */
     case APP_MSG_DPEVENT_XDMA_RDMA_ABNORMAL4: /*!< RDMA Abnormal Case4 */
     case APP_MSG_DPEVENT_XDMA_RDMA_ABNORMAL5: /*!< RDMA Abnormal Case5 */
-        sendMsg.message.msg_data = rxMessage.msg_event;
-        sendMsg.message.msg_event = APP_MSG_MAINEVENT_DP_ERROR;
-        if (xQueueSend(xImageTaskQueue, (void *)&sendMsg, __QueueSendTicksToWait) != pdTRUE)
+        send_msg.message.msg_data = img_recv_msg.msg_event;
+        send_msg.message.msg_event = APP_MSG_MAINEVENT_DP_ERROR;
+        if (xQueueSend(xImageTaskQueue, (void *)&send_msg, __QueueSendTicksToWait) != pdTRUE)
         {
-            dbg_printf(DBG_LESS_INFO, "send sendMsg=0x%x fail\r\n", sendMsg.message.msg_event);
+            dbg_printf(DBG_LESS_INFO, "send send_msg=0x%x fail\r\n", send_msg.message.msg_event);
         }
         break;
 
     case APP_MSG_DPEVENT_CDM_MOTION_DETECT:
-        sendMsg.message.msg_data = 0;
-        sendMsg.message.msg_event = APP_MSG_MAINEVENT_MOTION_DETECT;
-        if (xQueueSend(xImageTaskQueue, (void *)&sendMsg, __QueueSendTicksToWait) != pdTRUE)
+        send_msg.message.msg_data = 0;
+        send_msg.message.msg_event = APP_MSG_MAINEVENT_MOTION_DETECT;
+        if (xQueueSend(xImageTaskQueue, (void *)&send_msg, __QueueSendTicksToWait) != pdTRUE)
         {
-            dbg_printf(DBG_LESS_INFO, "send sendMsg=0x%x fail\r\n", sendMsg.message.msg_event);
+            dbg_printf(DBG_LESS_INFO, "send send_msg=0x%x fail\r\n", send_msg.message.msg_event);
         }
         break;
 
@@ -435,16 +436,16 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T rxMessage)
         break;
 
     case APP_MSG_DPEVENT_XDMA_FRAME_READY:
+        // Data path says frame ready
         image_task_state = APP_IMAGE_CAPTURE_STATE_CAP_FRAMERDY;
-        // app_dump_jpeginfo();
         g_cur_jpegenc_frame++;
         g_frame_ready = 1;
         dbg_printf(DBG_LESS_INFO, "SENSORDPLIB_STATUS_XDMA_FRAME_READY %d \n", g_cur_jpegenc_frame);
-        sendMsg.message.msg_event = APP_MSG_MAINEVENT_CAP_FRAME_DONE;
-        sendMsg.message.msg_data = 0;
-        if (xQueueSend(xImageTaskQueue, (void *)&sendMsg, __QueueSendTicksToWait) != pdTRUE)
+        send_msg.message.msg_event = APP_MSG_MAINEVENT_CAP_FRAME_DONE;
+        send_msg.message.msg_data = 0;
+        if (xQueueSend(xImageTaskQueue, (void *)&send_msg, __QueueSendTicksToWait) != pdTRUE)
         {
-            dbg_printf(DBG_LESS_INFO, "send sendMsg=0x%x fail\r\n", sendMsg.message.msg_event);
+            dbg_printf(DBG_LESS_INFO, "send send_msg=0x%x fail\r\n", send_msg.message.msg_event);
         }
         break;
 
@@ -456,39 +457,38 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T rxMessage)
 
     case APP_MSG_DPEVENT_UNKOWN: /*!< DP Unknown */
         // error
-        sendMsg.message.msg_data = 0;
-        sendMsg.message.msg_event = APP_MSG_MAINEVENT_DP_ERROR;
-        if (xQueueSend(xImageTaskQueue, (void *)&sendMsg, __QueueSendTicksToWait) != pdTRUE)
+        send_msg.message.msg_data = 0;
+        send_msg.message.msg_event = APP_MSG_MAINEVENT_DP_ERROR;
+        if (xQueueSend(xImageTaskQueue, (void *)&send_msg, __QueueSendTicksToWait) != pdTRUE)
         {
-            dbg_printf(DBG_LESS_INFO, "send sendMsg=0x%x fail\r\n", sendMsg.message.msg_event);
+            dbg_printf(DBG_LESS_INFO, "send send_msg=0x%x fail\r\n", send_msg.message.msg_event);
         }
         break;
 
     case APP_MSG_IMAGEEVENT_STARTCAPTURE:
         // Start Capture Event
         image_task_state = APP_IMAGE_CAPTURE_STATE_SETUP_CAP_START;
-        // Should this be RESTART or ALLON?
-        // app_start_state(APP_STATE_ALLON);
-
-        // Should data be 0 or msg_event?
-        // sendMsg.message.msg_data = rxMessage.msg_event;
-        sendMsg.message.msg_data = 0;
-        sendMsg.message.msg_event = APP_MSG_MAINEVENT_START_CAPTURE;
-        if (xQueueSend(xImageTaskQueue, (void *)&sendMsg, __QueueSendTicksToWait) != pdTRUE)
+        // TP Should this be RESTART or ALLON?
+        app_start_state(APP_STATE_ALLON);
+        // TP set msg_data to 0 or msg_event?
+        send_msg.message.msg_data = img_recv_msg.msg_event;
+        // send_msg.message.msg_data = 0;
+        send_msg.message.msg_event = APP_MSG_MAINEVENT_START_CAPTURE;
+        if (xQueueSend(xImageTaskQueue, (void *)&send_msg, __QueueSendTicksToWait) != pdTRUE)
         {
-            dbg_printf(DBG_LESS_INFO, "send rxMessage=0x%x fail\r\n", sendMsg.message.msg_event);
+            dbg_printf(DBG_LESS_INFO, "send img_recv_msg=0x%x fail\r\n", send_msg.message.msg_event);
         }
         break;
 
     case APP_MSG_IMAGEEVENT_STOPCAPTURE:
         image_task_state = APP_IMAGE_CAPTURE_STATE_STOP_CAP_START;
         cisdp_sensor_stop();
-        // app_start_state(APP_STATE_STOP);
-        sendMsg.message.msg_data = rxMessage.msg_event;
-        sendMsg.message.msg_event = APP_MSG_MAINEVENT_STOP_CAPTURE;
-        if (xQueueSend(xImageTaskQueue, (void *)&sendMsg, __QueueSendTicksToWait) != pdTRUE)
+        app_start_state(APP_STATE_STOP);
+        send_msg.message.msg_data = img_recv_msg.msg_event;
+        send_msg.message.msg_event = APP_MSG_MAINEVENT_STOP_CAPTURE;
+        if (xQueueSend(xImageTaskQueue, (void *)&send_msg, __QueueSendTicksToWait) != pdTRUE)
         {
-            dbg_printf(DBG_LESS_INFO, "send sendMsg=0x%x fail\r\n", sendMsg.message.msg_event);
+            dbg_printf(DBG_LESS_INFO, "send send_msg=0x%x fail\r\n", send_msg.message.msg_event);
         }
         break;
 
@@ -499,20 +499,45 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T rxMessage)
 
     default:
         // Unexpected event
-        flagUnexpectedEvent(rxMessage);
+        flagUnexpectedEvent(img_recv_msg);
         break;
     }
-    return sendMsg;
+    return send_msg;
+}
+
+/**
+ * Sends messages to stop capture.
+ *
+ * Typically called when a button is pressed?
+ */
+static APP_MSG_DEST_T handleEventForStopCapture(APP_MSG_T img_recv_msg)
+{
+    APP_MSG_DEST_T send_msg;
+    if ((image_task_state == APP_IMAGE_CAPTURE_STATE_STOP_CAP_START) || (image_task_state == APP_IMAGE_CAPTURE_STATE_STOP_CAP_END))
+    {
+        dbg_printf(DBG_LESS_INFO, "image_task_state=0x%x no send STOPCAPTURE\r\n", image_task_state);
+    }
+    else
+    {
+        send_msg.message.msg_data = 0;
+        send_msg.message.msg_event = APP_MSG_IMAGEEVENT_STOPCAPTURE;
+        if (xQueueSend(xImageTaskQueue, (void *)&img_recv_msg, __QueueSendTicksToWait) != pdTRUE)
+        {
+            dbg_printf(DBG_LESS_INFO, "send dp_send_msg=0x%x fail\r\n", img_recv_msg.msg_event);
+        }
+    }
+    return send_msg;
 }
 
 static void vImageTask(void *pvParameters)
 {
-    APP_MSG_T rxMessage;
-    APP_MSG_DEST_T txMessage;
-    QueueHandle_t targetQueue;
+    APP_MSG_T img_recv_msg;
+    APP_MSG_DEST_T send_msg;
+    // TP Is target_queue needed?
+    // QueueHandle_t target_queue;
 
     APP_IMAGE_CAPTURE_STATE_E old_state;
-    const char *eventString;
+    const char *event_string;
     APP_MSG_EVENT_E event;
     uint32_t rxData;
 
@@ -522,28 +547,12 @@ static void vImageTask(void *pvParameters)
     for (;;)
     {
         // Wait for a message in the queue
-        if (xQueueReceive(xImageTaskQueue, &(rxMessage), __QueueRecvTicksToWait) == pdTRUE)
+        if (xQueueReceive(xImageTaskQueue, &(img_recv_msg), __QueueRecvTicksToWait) == pdTRUE)
         {
             // convert event to a string
-            event = rxMessage.msg_event;
-            rxData = rxMessage.msg_data;
-
-            // convert event to a string
-            if ((event >= APP_MSG_IMAGEEVENT_FIRST) && (event < APP_MSG_IMAGEEVENT_LAST))
-            {
-                eventString = imageTaskStateString[event - APP_MSG_IMAGEEVENT_FIRST];
-            }
-            else
-            {
-                eventString = "Unexpected";
-            }
-
-            XP_LT_CYAN
-            xprintf("\nIMAGE Task");
-            XP_WHITE;
-            xprintf(" received event '%s' (0x%04x). Value = 0x%08x\r\n", eventString, event, rxData);
-
-            // Hacky solution to capture just a single frame thourgh "snapshot"
+            event = img_recv_msg.msg_event;
+            rxData = img_recv_msg.msg_data;
+            // TP Hacky solution to capture just a single frame thourgh "snapshot"
             if (g_cur_jpegenc_frame == 1)
             {
                 image_task_state = APP_IMAGE_CAPTURE_STATE_STOP_CAP_END;
@@ -552,45 +561,58 @@ static void vImageTask(void *pvParameters)
             }
             old_state = image_task_state;
 
+            // convert event to a string
+            if ((event >= APP_MSG_IMAGEEVENT_FIRST) && (event < APP_MSG_IMAGEEVENT_LAST))
+            {
+                event_string = imageTaskStateString[event - APP_MSG_IMAGEEVENT_FIRST];
+            }
+            else
+            {
+                event_string = "Unexpected";
+            }
+
+            XP_LT_CYAN
+            xprintf("\nIMAGE Task");
+            XP_WHITE;
+            xprintf(" received event '%s' (0x%04x). Value = 0x%08x\r\n", event_string, event, rxData);
             // switch on state - needs to be reviewed as all events are redirected to the "capturing" event handler
             switch (image_task_state)
             {
+
             case APP_IMAGE_CAPTURE_STATE_UNINIT:
-                txMessage = flagUnexpectedEvent(rxMessage);
+                send_msg = flagUnexpectedEvent(img_recv_msg);
                 break;
 
-            case APP_MSG_IMAGEEVENT_STARTCAPTURE:
-                app_start_state(APP_STATE_ALLON);
-                txMessage = handleEventForCapturing(rxMessage);
+            case APP_IMAGE_CAPTURE_STATE_SETUP_CAP_START:
+                send_msg = handleEventForStartCapture(img_recv_msg);
                 break;
 
-            case APP_MSG_IMAGEEVENT_STOPCAPTURE:
-                app_start_state(APP_STATE_STOP);
-                txMessage = handleEventForCapturing(rxMessage);
+            case APP_IMAGE_CAPTURE_STATE_SETUP_CAP_END:
+                send_msg = handleEventForStopCapture(img_recv_msg);
                 break;
 
-            case APP_IMAGE_CAPTURE_STATE_RECAP_FRAME:
-                txMessage = handleEventForCapturing(rxMessage);
-                break;
+                // case APP_IMAGE_CAPTURE_STATE_RECAP_FRAME:
+                //     send_msg = handleEventForStartCapture(img_recv_msg);
+                //     break;
 
-            case APP_IMAGE_CAPTURE_STATE_CAP_FRAMERDY:
-                txMessage = handleEventForCapturing(rxMessage);
-                break;
+                // case APP_IMAGE_CAPTURE_STATE_CAP_FRAMERDY:
+                //     send_msg = handleEventForStartCapture(img_recv_msg);
+                //     break;
 
-            case APP_IMAGE_CAPTURE_STATE_STOP_CAP_START:
-                txMessage = handleEventForCapturing(rxMessage);
-                break;
+                // case APP_IMAGE_CAPTURE_STATE_STOP_CAP_START:
+                //     send_msg = handleEventForStartCapture(img_recv_msg);
+                //     break;
 
-            case APP_IMAGE_CAPTURE_STATE_STOP_CAP_END:
-                txMessage = handleEventForCapturing(rxMessage);
-                break;
+                // case APP_IMAGE_CAPTURE_STATE_STOP_CAP_END:
+                //     send_msg = handleEventForStartCapture(img_recv_msg);
+                //     break;
 
-            case APP_IMAGE_CAPTURE_STATE_IDLE:
-                txMessage = handleEventForCapturing(rxMessage);
-                break;
+                // case APP_IMAGE_CAPTURE_STATE_IDLE:
+                //     send_msg = handleEventForStartCapture(img_recv_msg);
+                //     break;
 
             default:
-                txMessage = flagUnexpectedEvent(rxMessage);
+                send_msg = flagUnexpectedEvent(img_recv_msg);
                 break;
             }
 
@@ -610,15 +632,14 @@ static void vImageTask(void *pvParameters)
 /**
  * For state machine: Print a red message to see if there are unhandled events we should manage
  */
-static APP_MSG_DEST_T flagUnexpectedEvent(APP_MSG_T rxMessage)
+static APP_MSG_DEST_T flagUnexpectedEvent(APP_MSG_T img_recv_msg)
 {
     APP_MSG_EVENT_E event;
-    APP_MSG_DEST_T sendMsg;
-    sendMsg.destination = NULL;
-
-    event = rxMessage.msg_event;
-    sendMsg.message.msg_data = rxMessage.msg_event;
-    sendMsg.message.msg_event = APP_MSG_MAINEVENT_DP_ERROR;
+    APP_MSG_DEST_T send_msg;
+    send_msg.destination = NULL;
+    event = img_recv_msg.msg_event;
+    send_msg.message.msg_data = img_recv_msg.msg_event;
+    send_msg.message.msg_event = APP_MSG_MAINEVENT_DP_ERROR;
     // image_task_state = APP_IMAGE_CAPTURE_STATE_ERROR;
 
     XP_LT_RED;
@@ -633,7 +654,7 @@ static APP_MSG_DEST_T flagUnexpectedEvent(APP_MSG_T rxMessage)
     XP_WHITE;
 
     // If non-null then our task sends another message to another task
-    return sendMsg;
+    return send_msg;
 }
 
 /**
@@ -642,14 +663,6 @@ static APP_MSG_DEST_T flagUnexpectedEvent(APP_MSG_T rxMessage)
 void app_start_state(APP_STATE_E state)
 {
     image_var_int();
-
-    // if wdma variable is zero when not init yet, then this step is a must be to retrieve wdma address
-    //  Datapath events give callbacks to os_app_dplib_cb() in dp_task
-    if (cisdp_dp_init(true, SENSORDPLIB_PATH_INT_INP_HW5X5_JPEG, os_app_dplib_cb, g_img_data, APP_DP_RES_YUV640x480_INP_SUBSAMPLE_1X) < 0)
-    {
-        xprintf("\r\nDATAPATH Init fail\r\n");
-        APP_BLOCK_FUNC();
-    }
 
     if (state == APP_STATE_ALLON)
     {
@@ -684,6 +697,14 @@ void app_start_state(APP_STATE_E state)
         xprintf("APP_STATE_STOP\n");
         cisdp_sensor_stop();
         return;
+    }
+
+    // if wdma variable is zero when not init yet, then this step is a must be to retrieve wdma address
+    //  Datapath events give callbacks to os_app_dplib_cb() in dp_task
+    if (cisdp_dp_init(true, SENSORDPLIB_PATH_INT_INP_HW5X5_JPEG, os_app_dplib_cb, g_img_data, APP_DP_RES_YUV640x480_INP_SUBSAMPLE_1X) < 0)
+    {
+        xprintf("\r\nDATAPATH Init fail\r\n");
+        APP_BLOCK_FUNC();
     }
 }
 

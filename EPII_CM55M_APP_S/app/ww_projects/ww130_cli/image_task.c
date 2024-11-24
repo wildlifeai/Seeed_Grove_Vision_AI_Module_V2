@@ -8,6 +8,7 @@
 #include "WE2_core.h"
 #include "board.h"
 #include "printf_x.h"
+#include "libexif/exif-data.h"
 
 // FreeRTOS kernel includes.
 #ifdef FREERTOS
@@ -110,6 +111,33 @@ const char *imageTaskEventString[APP_MSG_IMAGETASK_LAST - APP_MSG_IMAGETASK_FIRS
     "Image Event Disk Read Complete",
     "Image Event Error",
 };
+
+// Define the dictionary containing the field-value pairs
+const char *mediaExifFields[] = {
+    "mediaID",
+    "deploymentID",
+    "captureMethod",
+    "timeStamp",
+    "filePath",
+    "filePublic",
+    "fileName",
+    "fileMediaType",
+    "exifData",
+    "favourite",
+    "mediaComments"};
+
+// const char **mediaExifValues[] = {
+//     &mediaID,
+//     &deploymentID,
+//     &captureMethod,
+//     &timeStamp,
+//     &filePath,
+//     &filePublic,
+//     &fileName,
+//     &fileMediaType,
+//     &exifData,
+//     &favourite,
+//     &mediaComments};
 
 /********************************** Local Functions  *************************************/
 

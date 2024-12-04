@@ -9,8 +9,17 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "libexif/exif-data.h"
+#include "exif-data.h"
+#include "exif-content.h"
 #include "exif_handler.h"
+#include <sys/time.h>
+
+int _gettimeofday(struct timeval *tv, void *tzvp)
+{
+    (void)tv;   // Avoid unused parameter warning
+    (void)tzvp; // Avoid unused parameter warning
+    return 0;   // Stub always returns success
+}
 
 /* Create a new EXIFHandler
  * Returns: handler - a pointer to the new EXIFHandler

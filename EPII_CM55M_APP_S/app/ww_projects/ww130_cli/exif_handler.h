@@ -7,7 +7,7 @@
  */
 #ifndef APP_WW_PROJECTS_WW130_CLI_EXIF_HANDLER_H
 #define APP_WW_PROJECTS_WW130_CLI_EXIF_HANDLER_H
-#include "libexif/exif-data.h"
+#include "exif-data.h"
 
 typedef struct
 {

@@ -8,7 +8,8 @@
 #include "WE2_core.h"
 #include "board.h"
 #include "printf_x.h"
-#include "libexif/exif-data.h"
+#include "exif-data.h"
+#include "exif_handler.h"
 
 // FreeRTOS kernel includes.
 #ifdef FREERTOS
@@ -68,6 +69,7 @@ void app_start_state(APP_STATE_E state);
 extern SemaphoreHandle_t xI2CTxSemaphore;
 extern QueueHandle_t xFatTaskQueue;
 fileOperation_t *fileOp;
+EXIFHandler *exif_handler;
 
 /*************************************** Local variables *******************************************/
 
@@ -372,6 +374,10 @@ static APP_MSG_DEST_T handleEventForInit(APP_MSG_T img_recv_msg)
     APP_MSG_EVENT_E event;
     event = img_recv_msg.msg_event;
     send_msg.destination = NULL;
+    // exif_handler->exif_data = exif_data_new();
+    exif_handler = media_exif_handler_create();
+    // exif_handler_set_tag(exif_handler, EXIF_TAG_IMAGE_DESCRIPTION, "Image description");
+    // exif_handler_destroy(exif_handler);
 
     // first instance for request
     if (g_captures_to_take == 0)
@@ -506,6 +512,9 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg)
 
     // returned from fatfs task
     case APP_MSG_IMAGETASK_DISK_WRITE_COMPLETE:
+        uint32_t jpg_address = jpeg_addr + fileOp->fileName;
+        exif_handler_save(exif_handler, jpg_address);
+        exif_handler_destroy(exif_handler);
         send_msg.destination = xImageTaskQueue;
         image_task_state = APP_IMAGE_TASK_STATE_INIT;
         send_msg.message.msg_event = APP_MSG_IMAGETASK_STARTCAPTURE;

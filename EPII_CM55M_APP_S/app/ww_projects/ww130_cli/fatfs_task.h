@@ -15,6 +15,7 @@
 #define APP_WW_PROJECTS_WW130_CLI_FATFS_TASK_H_
 
 #include <stdbool.h>
+#include "exif_handler.h"
 #include "ff.h"
 
 // Experimental: set a limit on the name of files
@@ -35,6 +36,7 @@ typedef struct {
 	char *		fileName;
 	uint8_t *	buffer;		// Pointer to the buffer containing file contents
 	uint32_t 	length;		// Number of bytes to write or read
+	EXIFHandler *exif_handler;	// Pointer to the EXIF handler
 	FRESULT 	res;		// Result code returned from fatFs
 	bool		closeWhenDone;	// If true the file is closed when the operation completes
 	bool		unmountWhenDone;	// If true the SD card is unmounted when the operation completed

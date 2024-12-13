@@ -180,6 +180,7 @@ void set_jpeginfo(uint32_t jpeg_sz, uint32_t jpeg_addr, uint32_t frame_num)
     // Set the length to the size of the JPEG data obtained from cisdp_get_jpginfo
     fileOp->length = jpeg_sz;
     fileOp->senderQueue = xImageTaskQueue;
+    fileOp->exif_handler = exif_handler;
     fileOp->closeWhenDone = true;
 }
 
@@ -374,10 +375,12 @@ static APP_MSG_DEST_T handleEventForInit(APP_MSG_T img_recv_msg)
     APP_MSG_EVENT_E event;
     event = img_recv_msg.msg_event;
     send_msg.destination = NULL;
-    // exif_handler->exif_data = exif_data_new();
+
     exif_handler = media_exif_handler_create();
-    // exif_handler_set_tag(exif_handler, EXIF_TAG_IMAGE_DESCRIPTION, "Image description");
-    // exif_handler_destroy(exif_handler);
+    printf("exif_handler: %p\n", exif_handler);
+    exif_handler_set_tag(exif_handler, EXIF_TAG_MAKE, "WildlifeAI");
+    exif_handler_set_tag(exif_handler, EXIF_TAG_MODEL, "Seeed_Grove_V2");
+    xprintf("EXIF_TAG_MAKE: %s\n", exif_handler->exif_data->ifd);
 
     // first instance for request
     if (g_captures_to_take == 0)
@@ -512,9 +515,6 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg)
 
     // returned from fatfs task
     case APP_MSG_IMAGETASK_DISK_WRITE_COMPLETE:
-        uint32_t jpg_address = jpeg_addr + fileOp->fileName;
-        exif_handler_save(exif_handler, jpg_address);
-        exif_handler_destroy(exif_handler);
         send_msg.destination = xImageTaskQueue;
         image_task_state = APP_IMAGE_TASK_STATE_INIT;
         send_msg.message.msg_event = APP_MSG_IMAGETASK_STARTCAPTURE;

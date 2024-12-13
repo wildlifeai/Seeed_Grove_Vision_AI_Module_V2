@@ -58,6 +58,7 @@
 #include "ww130_cli.h"
 #include "ff.h"
 #include "CLI-FATFS-commands.h"
+#include "exif_handler.h"
 
 // TODO I am not using the public functions in this. Can we move the important bits of this to here?
 #include "spi_fatfs.h"
@@ -200,6 +201,9 @@ static FRESULT fileWriteImage(fileOperation_t * fileOp)
 	} else{	
 		g_cur_jpegenc_frame++;	
 	}
+	xprintf("received exif_handler: %s\n", fileOp->exif_handler);
+	exif_handler_save(fileOp->exif_handler, fileOp->fileName);
+	// exif_handler_destroy(exif_handler);
 
 	XP_GREEN
 	xprintf("Wrote image to SD: %s\n", fileOp->fileName);

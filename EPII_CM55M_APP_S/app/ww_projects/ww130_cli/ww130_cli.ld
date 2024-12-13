@@ -57,6 +57,8 @@ SECTIONS
     .text : ALIGN(4)
     {
        *(.text*)
+       *(.text.exif_*)
+       *libexif.a(.text*)           /* Text from libexif */
        KEEP(*freertos*/tasks.o(.rodata*)) /* FreeRTOS Debug Config */
        . = ALIGN(4);
        KEEP(*(.init))
@@ -81,10 +83,16 @@ SECTIONS
         KEEP(*(.eh_frame*))
     } > CM55M_S_APP_ROM
 
+    .text.exif_* : ALIGN(4) {
+        *(.text.exif_*)
+    } > CM55M_S_APP_ROM
+
     .rodata : ALIGN(4)
     {
         __rodata_start = .;
         *(.rodata .rodata.* .constdata .constdata.*)
+        *(.rodata.exif_*)
+        *libexif.a(.rodata*) 
         __rodata_end = .;
     } > CM55M_S_APP_DATA
 
@@ -147,7 +155,7 @@ SECTIONS
        __privileged_sram_end__ = (. - 1);
         *(vtable)
        *(.data)
-       *(.data.*)
+       *libexif.a(.data*)
        . = ALIGN(4);
        /* preinit data */
        PROVIDE_HIDDEN (__preinit_array_start = .);
@@ -182,6 +190,7 @@ SECTIONS
     __bss_start__ = .;
     *(.bss)
     *(.bss.*)
+    *libexif.a(.bss*)  
     *(COMMON)
     . = ALIGN(4);
     __bss_end__ = .;

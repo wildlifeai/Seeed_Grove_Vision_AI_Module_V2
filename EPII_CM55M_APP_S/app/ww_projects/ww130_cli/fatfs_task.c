@@ -58,6 +58,7 @@
 #include "ww130_cli.h"
 #include "ff.h"
 #include "CLI-FATFS-commands.h"
+#include "metadata.h"
 
 // TODO I am not using the public functions in this. Can we move the important bits of this to here?
 #include "spi_fatfs.h"
@@ -93,6 +94,8 @@ static FRESULT fileWrite(fileOperation_t * fileOp);
 
 extern SemaphoreHandle_t xI2CTxSemaphore;
 extern fileOperation_t *fileOp;
+extern int createAPP1Block(ImageMetadata *metadata, unsigned char *app1Block, int app1Size);
+extern uint8_t *findSOSMarker(uint8_t *buffer, uint32_t length);
 
 /*************************************** Local variables *******************************************/
 
@@ -190,15 +193,95 @@ static FRESULT fileWrite(fileOperation_t * fileOp) {
 static FRESULT fileWriteImage(fileOperation_t * fileOp)
 {
 	FRESULT res;
+	size_t app1Size = 0;
+	size_t jpeg_sz = fileOp->length;
+	uint8_t *jpeg_addr = fileOp->buffer;
+	uint8_t *sos_marker = NULL;
+	size_t part1_sz = 0, part3_sz = 0;
+
+    // Allocate temporary buffer for APP1 metadata
+    unsigned char app1Block[MAX_METADATA_SIZE];
 	
-	res = fastfs_write_image(fileOp->buffer, fileOp->length, fileOp->fileName);
+    // Create APP1 block with metadata
+    app1Size = createAPP1Block(fileOp->metadata, app1Block, MAX_METADATA_SIZE);
+    if (app1Size <= 0|| app1Size > MAX_METADATA_SIZE) {
+        xprintf("Error creating APP1 block for metadata.\n");
+        fileOp->res = FR_INVALID_OBJECT;
+        return fileOp->res;
+    }
+
+ 	// (v) Parse the JPEG file to find the [SOS] marker
+    sos_marker = findSOSMarker(jpeg_addr, jpeg_sz);
+    if (sos_marker == NULL) {
+        xprintf("Error finding SOS marker in JPEG file.\n");
+        fileOp->res = FR_INVALID_OBJECT;
+        return fileOp->res;
+    }
+
+    // Calculate sizes for the three parts
+    part1_sz = sos_marker - jpeg_addr;                // From start to SOS marker
+    part3_sz = jpeg_sz - part1_sz;                    // From SOS marker to end
+
+	// Validate calculated sizes
+	if (part1_sz + part3_sz != jpeg_sz) {
+		xprintf("Error: Part sizes mismatch (Part1: %d, Part3: %d, Total: %d).\n",
+				part1_sz, part3_sz, jpeg_sz);
+		fileOp->res = FR_INVALID_OBJECT;
+		return fileOp->res;
+	}
+
+	xprintf("Buffer size BEFORE: %d\n", fileOp->length);
+	xprintf("Part1: %d, APP1: %d, Part3: %d, Total: %d\n",
+			part1_sz, app1Size, part3_sz, part1_sz + app1Size + part3_sz);
+	xprintf("jpeg_addr: %d\n", jpeg_addr);
+
+    size_t totalSize = part1_sz + app1Size + part3_sz;
+    uint8_t *newBuffer = pvPortMalloc(totalSize);
+
+	// Ensure buffer can hold the full data
+    if (!newBuffer) {
+		xprintf("Memory allocation failed for buffer reallocation.\n");
+		fileOp->res = FR_NOT_ENOUGH_CORE;
+		return fileOp->res;
+	}
+
+	xprintf("APP1 Block (Hex): ");
+	for (size_t i = 0; i < app1Size; i++) {
+		xprintf("%02X ", app1Block[i]);
+		if ((i + 1) % 16 == 0) xprintf("\n"); // Print a newline every 16 bytes
+	}
+	xprintf("\n");
+	xprintf("APP1 Block (Decoded):\n");
+	for (size_t i = 0; i < app1Size; i++) {
+		if (app1Block[i] == '\n') {
+			xprintf("\n"); // Break lines for better readability
+		} else {
+			xprintf("%c", app1Block[i]);
+		}
+	}
+	xprintf("\n");
+
+	memcpy(newBuffer, jpeg_addr, part1_sz);  // Part 1: Original JPEG up to SOS
+	memcpy(newBuffer + part1_sz, app1Block, app1Size); // Part 2: APP1 block
+	memcpy(newBuffer + part1_sz + app1Size, sos_marker, part3_sz); // Part 3
+
+	fileOp->buffer = newBuffer;
+	fileOp->length = totalSize;
+	
+	xprintf("buffer length AFTER: %d\n", fileOp->length);
+
+	res = fastfs_write_image(newBuffer, fileOp->length, fileOp->fileName);
 	if (res != FR_OK) {
 		xprintf("Error writing file %s\n", fileOp->fileName);
-		fileOp->length = 0;
+		fileOp->length = 0; 
 		fileOp->res = res;
 		return res;
 	} else{	
 		g_cur_jpegenc_frame++;	
+	}
+
+	if (newBuffer) {
+		vPortFree(newBuffer);
 	}
 
 	XP_GREEN
@@ -207,7 +290,6 @@ static FRESULT fileWriteImage(fileOperation_t * fileOp)
 
 	return res;
 }
-
 
 /** Another task asks us to read a file for them
  *

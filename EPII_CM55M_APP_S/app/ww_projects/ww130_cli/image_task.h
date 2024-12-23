@@ -6,6 +6,8 @@
 #include "WE2_device.h"
 #include "WE2_core.h"
 #include "board.h"
+#include "FreeRTOS.h"
+#include "task.h"
 
 #define APP_BLOCK_FUNC()          \
 	do                            \
@@ -32,8 +34,7 @@ typedef enum
 	APP_IMAGE_TASK_STATE_NUMSTATES = 0x0006,
 } APP_IMAGE_TASK_STATE_E;
 
-TaskHandle_t
-image_createTask(int8_t priority);
+TaskHandle_t image_createTask(int8_t priority);
 
 uint16_t image_getState(void);
 

@@ -1,3 +1,11 @@
+/**
+ * metadata.h
+ * created on: 24.12.2024
+ * author: 	TBP
+ *
+ * @brief Header file for metadata structures and functions
+ */
+
 #include <stdint.h>
 #include <string.h>
 #include <stdbool.h>
@@ -5,29 +13,6 @@
 
 #ifndef METADATA_H
 #define METADATA_H
-
-// // Device-level metadata
-// typedef struct
-// {
-//     char mediaID[20];
-//     char cameraID[20];
-//     double latitude;
-//     double longitude;
-//     char timestamp[20];
-//     bool favourite;
-// } DeviceMetadata;
-
-// // Deployment-level metadata
-// typedef struct
-// {
-//     char deploymentID[20];
-//     char locationID[20];
-//     char deploymentStart[20];
-//     char deploymentEnd[20];
-//     char setupBy[50];
-// } DeploymentMetadata;
-
-// Define a structure to hold your custom metadata fields
 
 typedef struct
 {

@@ -210,7 +210,7 @@ static FRESULT fileWriteImage(fileOperation_t * fileOp)
         return fileOp->res;
     }
 
- 	// (v) Parse the JPEG file to find the [SOS] marker
+ 	// Parse the JPEG file to find the [SOS] marker
     sos_marker = findSOSMarker(jpeg_addr, jpeg_sz);
     if (sos_marker == NULL) {
         xprintf("Error finding SOS marker in JPEG file.\n");
@@ -219,8 +219,8 @@ static FRESULT fileWriteImage(fileOperation_t * fileOp)
     }
 
     // Calculate sizes for the three parts
-    part1_sz = sos_marker - jpeg_addr;                // From start to SOS marker
-    part3_sz = jpeg_sz - part1_sz;                    // From SOS marker to end
+    part1_sz = sos_marker - jpeg_addr;     // From start to SOS marker
+    part3_sz = jpeg_sz - part1_sz;         // From SOS marker to end
 
 	// Validate calculated sizes
 	if (part1_sz + part3_sz != jpeg_sz) {
@@ -230,36 +230,14 @@ static FRESULT fileWriteImage(fileOperation_t * fileOp)
 		return fileOp->res;
 	}
 
-	xprintf("Buffer size BEFORE: %d\n", fileOp->length);
-	xprintf("Part1: %d, APP1: %d, Part3: %d, Total: %d\n",
-			part1_sz, app1Size, part3_sz, part1_sz + app1Size + part3_sz);
-	xprintf("jpeg_addr: %d\n", jpeg_addr);
-
     size_t totalSize = part1_sz + app1Size + part3_sz;
     uint8_t *newBuffer = pvPortMalloc(totalSize);
 
-	// Ensure buffer can hold the full data
     if (!newBuffer) {
 		xprintf("Memory allocation failed for buffer reallocation.\n");
 		fileOp->res = FR_NOT_ENOUGH_CORE;
 		return fileOp->res;
 	}
-
-	xprintf("APP1 Block (Hex): ");
-	for (size_t i = 0; i < app1Size; i++) {
-		xprintf("%02X ", app1Block[i]);
-		if ((i + 1) % 16 == 0) xprintf("\n"); // Print a newline every 16 bytes
-	}
-	xprintf("\n");
-	xprintf("APP1 Block (Decoded):\n");
-	for (size_t i = 0; i < app1Size; i++) {
-		if (app1Block[i] == '\n') {
-			xprintf("\n"); // Break lines for better readability
-		} else {
-			xprintf("%c", app1Block[i]);
-		}
-	}
-	xprintf("\n");
 
 	memcpy(newBuffer, jpeg_addr, part1_sz);  // Part 1: Original JPEG up to SOS
 	memcpy(newBuffer + part1_sz, app1Block, app1Size); // Part 2: APP1 block
@@ -268,8 +246,6 @@ static FRESULT fileWriteImage(fileOperation_t * fileOp)
 	fileOp->buffer = newBuffer;
 	fileOp->length = totalSize;
 	
-	xprintf("buffer length AFTER: %d\n", fileOp->length);
-
 	res = fastfs_write_image(newBuffer, fileOp->length, fileOp->fileName);
 	if (res != FR_OK) {
 		xprintf("Error writing file %s\n", fileOp->fileName);
@@ -353,7 +329,9 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 
 		if( fileOp->senderQueue == xImageTaskQueue) {
 			//writes image
+			xSemaphoreTake(xI2CTxSemaphore, portMAX_DELAY); // Acquire the semaphore
 			res = fileWriteImage(fileOp);
+			xSemaphoreGive(xI2CTxSemaphore); // Release the semaphore
 		} else {
 			//writes file
 			res = fileWrite(fileOp);

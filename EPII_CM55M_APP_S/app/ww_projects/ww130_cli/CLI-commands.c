@@ -158,7 +158,7 @@ static char cliOutBuffer[WW130_MAX_PAYLOAD_SIZE]; /* Buffer for output */
 
 static bool processingWW130Command;
 
-static bool enabled = false;
+static bool enabled = true;
 
 // These for disk operation - probably only for testing?
 static fileOperation_t fileOp;

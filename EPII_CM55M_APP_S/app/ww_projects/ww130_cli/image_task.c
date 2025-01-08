@@ -365,6 +365,7 @@ static APP_MSG_DEST_T handleEventForInit(APP_MSG_T img_recv_msg)
         switch (event)
         {
         case APP_MSG_IMAGETASK_STARTCAPTURE:
+            // example metadata
             ImageMetadata metadata = {
                 "12345",      // mediaID
                 "abc123",     // deploymentID

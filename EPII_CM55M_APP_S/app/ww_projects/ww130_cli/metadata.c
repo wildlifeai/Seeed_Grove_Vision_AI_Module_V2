@@ -1,73 +1,132 @@
+/**
+ * metadata.c
+ * created on: 24.12.2024
+ * author: 	TBP
+ *
+ * @brief Metadata functions to add custom metadata to JPEG images via manually inserting data into the APP1 block
+ * Checking to see if the images are successful, I was using the exiftool on the command line to check the metadata.
+ * "exiftool -g1 -a -s -warning -validate image0001.jpg"
+ * "exiftool image0001.jpg -v3"
+ */
+
 #include <stdint.h>
 #include <string.h>
 #include <stdio.h>
 #include <stdbool.h>
 #include "metadata.h"
 
-#define MAX_METADATA_SIZE 8192 // 512
-
 #define APP1_MARKER 0xE1
+#define TIFF_HEADER_SIZE 8
+#define IFD_ENTRY_SIZE 12
+#define EXIF_HEADER "Exif\0\0"
+#define BYTE_ORDER "II" // Little-endian format for Intel systems
+#define TIFF_TAG_VERSION 42
+#define TAG_OFFSET_IFD0 8
+#define EXIF_TAG_COUNT 6 // Adjust this for the number of tags you are adding
 
-// Helper function to create an APP1 block with metadata
+#pragma pack(push, 1)
+typedef struct
+{
+    uint16_t tag;
+    uint16_t type;
+    uint32_t count;
+    uint32_t valueOffset;
+} ExifTag;
+#pragma pack(pop)
+
+uint8_t *writeExifTag(uint8_t *ptr, uint16_t tag, uint16_t type, uint32_t count, uint32_t valueOffset)
+{
+    ExifTag *exifTag = (ExifTag *)ptr;
+    exifTag->tag = tag;
+    exifTag->type = type;
+    exifTag->count = count;
+    exifTag->valueOffset = valueOffset;
+    return ptr + sizeof(ExifTag);
+}
+
 int createAPP1Block(ImageMetadata *metadata, unsigned char *buffer, int bufferSize)
 {
-    int offset = 0;
+    const char exifHeader[] = "Exif\0\0";                 // EXIF identifier
+    const size_t exifHeaderSize = sizeof(exifHeader) - 1; // Exclude null terminator
+    const uint32_t numTags = 4;
+    const uint32_t xResolutionOffset = 0xA8;                  // example offset for XResolution
+    const uint32_t yResolutionOffset = xResolutionOffset + 8; // example offset for YResolution
 
-    // Ensure buffer is large enough for the minimum structure
-    if (bufferSize < 10)
-    {
-        return -1; // Buffer too small
+    // Verify buffer size
+    if (bufferSize < exifHeaderSize + 2 + 8 + 2 + numTags * sizeof(ExifTag) + 4 + 256)
+    {             // 2 bytes for length field, 8 bytes for TIFF header, 2 bytes for tag count, 4 bytes for next IFD offset, 256 bytes for metadata
+        return 0; // Not enough space
     }
 
-    // APP1 Marker and Placeholder for Length (filled later)
-    buffer[offset++] = 0xFF;
-    buffer[offset++] = APP1_MARKER; // APP1 Marker
-    buffer[offset++] = 0x00; // Placeholder for Length (high byte)
-    buffer[offset++] = 0x00; // Placeholder for Length (low byte)
+    // Start writing APP1 block
+    uint8_t *ptr = buffer;
+
+    // APP1 Marker
+    *ptr++ = 0xFF;
+    *ptr++ = APP1_MARKER;
+
+    // Placeholder for APP1 block length (big-endian)
+    uint8_t *lengthPtr = ptr;
+    ptr += 2;
 
     // EXIF Header
-    memcpy(buffer + offset, "Exif\0\0", 6); // EXIF identifier
-    offset += 6;
+    memcpy(ptr, exifHeader, exifHeaderSize);
+    ptr += exifHeaderSize;
 
-    // TIFF Header
-    // Endianness: Big Endian
-    buffer[offset++] = 0x4D; // 'M'
-    buffer[offset++] = 0x4D; // 'M'
-    buffer[offset++] = 0x00; // Fixed value
-    buffer[offset++] = 0x2A; // Fixed value
-    buffer[offset++] = 0x00; // Offset to IFD (placeholder)
-    buffer[offset++] = 0x08;
+    // Start of TIFF header
+    *ptr++ = 0x49;
+    *ptr++ = 0x49;
 
-    // Custom Metadata (Example as ASCII tag fields)
-    int metadataSize = snprintf((char *)(buffer + offset), bufferSize - offset,
-                                "mediaID=%s\n"
-                                "deploymentID=%s\n"
-                                "captureMethod=%s\n"
-                                "latitude=%f\n"
-                                "longitude=%f\n"
-                                "timestamp=%s\n"
-                                "favourite=%d\n",
-                                metadata->mediaID,
-                                metadata->deploymentID,
-                                metadata->captureMethod,
-                                metadata->latitude,
-                                metadata->longitude,
-                                metadata->timestamp,
-                                metadata->favourite);
+    // TIFF Header: Fixed "42" marker
+    *ptr++ = 0x2A;
+    *ptr++ = 0x00;
 
-    if (metadataSize <= 0 || metadataSize + offset > bufferSize)
-    {
-        return -1; // Metadata too large for buffer
-    }
+    // Offset to first IFD (start of metadata), set to 8
+    *ptr++ = 0x08;
+    *ptr++ = 0x00;
+    *ptr++ = 0x00;
+    *ptr++ = 0x00;
 
-    offset += metadataSize;
+    // Number of IFD0 entries
+    *ptr++ = (uint8_t)(numTags);
+    *ptr++ = 0x00;
 
-    // Set the total APP1 block length (excluding the marker itself)
-    int app1Length = offset - 2; // Subtract `FF E1` marker (2 bytes)
-    buffer[2] = (app1Length >> 8) & 0xFF; // High byte
-    buffer[3] = app1Length & 0xFF;        // Low byte
+    // Write tags
+    ptr = writeExifTag(ptr, 0x011A, 5, 1, xResolutionOffset); // XResolution
+    ptr = writeExifTag(ptr, 0x011B, 5, 1, yResolutionOffset); // YResolution
+    ptr = writeExifTag(ptr, 0x0128, 3, 1, 2);                 // ResolutionUnit
+    ptr = writeExifTag(ptr, 0x0213, 3, 1, 1);                 // YCbCrPositioning
 
-    return offset; // Return the size of the block
+    // Next IFD offset, set to 0 (no more IFDs)
+    *ptr++ = 0x00;
+    *ptr++ = 0x00;
+    *ptr++ = 0x00;
+    *ptr++ = 0x00;
+
+    // Write the actual values for XResolution and YResolution
+    uint32_t *xResolution = (uint32_t *)(buffer + xResolutionOffset);
+    xResolution[0] = 72;
+    xResolution[1] = 1;
+
+    uint32_t *yResolution = (uint32_t *)(buffer + yResolutionOffset);
+    yResolution[0] = 72;
+    yResolution[1] = 1;
+
+    // Add custom metadata after EXIF tags
+    sprintf((char *)(ptr + 8), "MediaID: %s\nDeploymentID: %s\nCaptureMethod: %s\n"
+                               "Latitude: %.6f\nLongitude: %.6f\nTimestamp: %s\nFavourite: %d\n",
+            metadata->mediaID, metadata->deploymentID, metadata->captureMethod,
+            metadata->latitude, metadata->longitude, metadata->timestamp,
+            metadata->favourite);
+
+    ptr += 8 + strlen((char *)(ptr + 8));
+
+    // Calculate and set the APP1 block length
+    uint16_t app1Length = (uint16_t)(ptr - buffer - 2); // Exclude the initial 2 bytes for the marker
+    lengthPtr[0] = (app1Length >> 8) & 0xFF;            // High byte
+    lengthPtr[1] = app1Length & 0xFF;                   // Low byte
+
+    return (ptr - buffer); // Total size of the block
 }
 
 // Helper function to find the SOS marker in a JPEG file

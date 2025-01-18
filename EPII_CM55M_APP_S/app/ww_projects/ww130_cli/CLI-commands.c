@@ -323,7 +323,7 @@ static const CLI_Command_Definition_t xDisable = {
 /* Structure that defines the "int" command line command. */
 static const CLI_Command_Definition_t xInt = {
 	"int", /* The command string to type. */
-	"int <pulsewidth>:\r\n Pulse PA0 for <pulsewidth>ms\r\n",
+	"int <pulsewidth>:\r\n Pulse interprocessor interrupt for <pulsewidth>ms\r\n",
 	prvInt, /* The function to run. */
 	1		/* One parameter expected */
 };
@@ -723,7 +723,7 @@ static BaseType_t prvDisable(char *pcWriteBuffer, size_t xWriteBufferLen, const 
 	return pdFALSE;
 }
 
-// Pulse the PA0 pin for nms
+// Pulse the interprocessor interrupt pin for nms
 static BaseType_t prvInt(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString)
 {
 	const char *pcParameter;
@@ -973,9 +973,8 @@ static BaseType_t prvCapture(char *pcWriteBuffer, size_t xWriteBufferLen, const 
 		{
 			pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen, "Must supply a parameter number between 0 and 1000 (%d bytes max)", FNAMELEN);
 		}
-
-		return pdFALSE;
 	}
+		return pdFALSE;
 }
 
 /********************************** Private Functions - Other *************************************/

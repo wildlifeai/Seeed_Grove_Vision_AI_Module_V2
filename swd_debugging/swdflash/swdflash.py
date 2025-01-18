@@ -704,7 +704,7 @@ def main():
 #            target_override="we2",
             target_override="cortex-m",
             **options)
-
+            
         session.open()
         target = session.board.target
         target.reset_and_halt()

@@ -5901,3 +5901,67 @@
 2025-01-19 10:51:17,354 [INFO] LogOutputStream:76 - [STDOUT_REDIRECT] notify type hierarchies
 2025-01-19 10:54:50,295 [INFO] LogOutputStream:76 - [STDOUT_REDIRECT] notify type hierarchies
 2025-01-19 10:55:41,747 [INFO] LogOutputStream:76 - [STDOUT_REDIRECT] notify type hierarchies
+2025-01-19 11:10:46,813 [INFO] LogOutputStream:76 - [STDOUT_REDIRECT] notify type hierarchies
+2025-01-19 12:28:50,779 [INFO] LogOutputStream:76 - [STDOUT_REDIRECT] notify type hierarchies
+2025-01-19 12:29:05,399 [INFO] LogOutputStream:76 - [STDOUT_REDIRECT] notify type hierarchies
+2025-01-19 12:29:31,569 [INFO] LogOutputStream:76 - [STDOUT_REDIRECT] notify type hierarchies
+2025-01-19 13:20:15,439 [INFO] LogOutputStream:76 - [STDOUT_REDIRECT] notify type hierarchies
+2025-01-19 13:22:40,518 [INFO] LogOutputStream:76 - [STDOUT_REDIRECT] notify type hierarchies
+2025-01-19 13:23:08,396 [INFO] LogOutputStream:76 - [STDOUT_REDIRECT] notify type hierarchies
+2025-01-30 12:08:26,203 [INFO] Activator:177 - 
+
+
+2025-01-30 12:08:26,203 [INFO] Activator:178 - !SESSION log4j initialized
+2025-01-30 12:08:31,414 [ERROR] LogOutputStream:74 - [STDERR_REDIRECT] Managed Build system manifest file error: Option com.arm.toolchain.v6.base.options.debug.level.1416453481 uses a null category that is invalid in its context. The option was ignored.
+2025-01-30 14:25:08,602 [INFO] LogOutputStream:76 - [STDOUT_REDIRECT] notify type hierarchies
+2025-01-30 14:25:25,275 [INFO] LogOutputStream:76 - [STDOUT_REDIRECT] notify type hierarchies
+2025-01-30 14:25:28,652 [INFO] LogOutputStream:76 - [STDOUT_REDIRECT] notify type hierarchies
+2025-01-30 14:25:33,306 [INFO] LogOutputStream:76 - [STDOUT_REDIRECT] notify type hierarchies
+2025-01-30 14:25:43,043 [INFO] LogOutputStream:76 - [STDOUT_REDIRECT] notify type hierarchies
+2025-01-30 14:26:10,575 [INFO] LogOutputStream:76 - [STDOUT_REDIRECT] notify type hierarchies
+2025-01-30 14:26:15,482 [INFO] LogOutputStream:76 - [STDOUT_REDIRECT] notify type hierarchies
+2025-01-30 14:28:40,735 [INFO] LogOutputStream:76 - [STDOUT_REDIRECT] notify type hierarchies
+2025-01-30 14:29:14,721 [INFO] LogOutputStream:76 - [STDOUT_REDIRECT] notify type hierarchies
+2025-01-30 14:37:36,107 [INFO] LogOutputStream:76 - [STDOUT_REDIRECT] notify type hierarchies
+2025-01-31 20:51:15,576 [INFO] Activator:177 - 
+
+
+2025-01-31 20:51:15,576 [INFO] Activator:178 - !SESSION log4j initialized
+2025-01-31 20:51:20,164 [ERROR] LogOutputStream:74 - [STDERR_REDIRECT] Managed Build system manifest file error: Option com.arm.toolchain.v6.base.options.debug.level.1416453481 uses a null category that is invalid in its context. The option was ignored.
+2025-01-31 20:51:56,803 [INFO] LogOutputStream:76 - [STDOUT_REDIRECT] notify type hierarchies
+2025-01-31 20:52:19,801 [INFO] LogOutputStream:76 - [STDOUT_REDIRECT] notify type hierarchies
+2025-01-31 20:52:26,136 [INFO] LogOutputStream:76 - [STDOUT_REDIRECT] notify type hierarchies
+2025-01-31 20:53:08,113 [INFO] LogOutputStream:76 - [STDOUT_REDIRECT] notify type hierarchies
+2025-01-31 20:53:15,751 [INFO] LogOutputStream:76 - [STDOUT_REDIRECT] notify type hierarchies
+2025-01-31 20:53:50,978 [INFO] LogOutputStream:76 - [STDOUT_REDIRECT] notify type hierarchies
+2025-01-31 20:53:56,292 [INFO] LogOutputStream:76 - [STDOUT_REDIRECT] notify type hierarchies
+2025-01-31 20:54:03,933 [INFO] LogOutputStream:76 - [STDOUT_REDIRECT] notify type hierarchies
+2025-01-31 21:02:45,234 [INFO] LogOutputStream:76 - [STDOUT_REDIRECT] notify type hierarchies
+2025-01-31 21:02:53,626 [INFO] LogOutputStream:76 - [STDOUT_REDIRECT] notify type hierarchies
+2025-01-31 21:03:15,020 [INFO] LogOutputStream:76 - [STDOUT_REDIRECT] notify type hierarchies
+2025-01-31 21:03:22,813 [INFO] LogOutputStream:76 - [STDOUT_REDIRECT] notify type hierarchies
+2025-01-31 21:03:35,762 [INFO] LogOutputStream:76 - [STDOUT_REDIRECT] notify type hierarchies
+2025-01-31 21:03:43,480 [INFO] LogOutputStream:76 - [STDOUT_REDIRECT] notify type hierarchies
+2025-01-31 21:03:53,027 [INFO] LogOutputStream:76 - [STDOUT_REDIRECT] notify type hierarchies
+2025-01-31 21:04:18,703 [INFO] LogOutputStream:76 - [STDOUT_REDIRECT] notify type hierarchies
+2025-01-31 21:07:33,673 [INFO] LogOutputStream:76 - [STDOUT_REDIRECT] notify type hierarchies
+2025-01-31 21:07:47,150 [INFO] LogOutputStream:76 - [STDOUT_REDIRECT] notify type hierarchies
+2025-01-31 21:07:57,958 [INFO] LogOutputStream:76 - [STDOUT_REDIRECT] notify type hierarchies
+2025-01-31 21:12:24,221 [INFO] LogOutputStream:76 - [STDOUT_REDIRECT] notify type hierarchies
+2025-01-31 21:12:44,787 [INFO] LogOutputStream:76 - [STDOUT_REDIRECT] notify type hierarchies
+2025-01-31 21:14:23,782 [INFO] LogOutputStream:76 - [STDOUT_REDIRECT] notify type hierarchies
+2025-01-31 21:15:57,598 [INFO] LogOutputStream:76 - [STDOUT_REDIRECT] notify type hierarchies
+2025-01-31 21:16:05,268 [INFO] LogOutputStream:76 - [STDOUT_REDIRECT] notify type hierarchies
+2025-01-31 21:17:27,939 [INFO] LogOutputStream:76 - [STDOUT_REDIRECT] notify type hierarchies
+2025-01-31 21:18:55,329 [INFO] LogOutputStream:76 - [STDOUT_REDIRECT] notify type hierarchies
+2025-01-31 21:19:19,911 [INFO] LogOutputStream:76 - [STDOUT_REDIRECT] notify type hierarchies
+2025-01-31 21:24:02,628 [INFO] LogOutputStream:76 - [STDOUT_REDIRECT] notify type hierarchies
+2025-01-31 21:26:47,361 [INFO] LogOutputStream:76 - [STDOUT_REDIRECT] notify type hierarchies
+2025-01-31 21:28:28,799 [INFO] LogOutputStream:76 - [STDOUT_REDIRECT] notify type hierarchies
+2025-01-31 21:31:47,408 [INFO] LogOutputStream:76 - [STDOUT_REDIRECT] notify type hierarchies
+2025-01-31 21:32:39,968 [INFO] LogOutputStream:76 - [STDOUT_REDIRECT] notify type hierarchies
+2025-02-06 11:14:58,034 [INFO] Activator:177 - 
+
+
+2025-02-06 11:14:58,034 [INFO] Activator:178 - !SESSION log4j initialized
+2025-02-06 11:15:00,869 [ERROR] LogOutputStream:74 - [STDERR_REDIRECT] Managed Build system manifest file error: Option com.arm.toolchain.v6.base.options.debug.level.1416453481 uses a null category that is invalid in its context. The option was ignored.

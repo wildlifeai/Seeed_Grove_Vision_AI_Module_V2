@@ -14,17 +14,17 @@
 		</list>
 	</section>
 	<section name="TextSearchPage">
-		<item key="CASE_SENSITIVE" value="true"/>
+		<item key="CASE_SENSITIVE" value="false"/>
 		<item key="REG_EX_SEARCH" value="false"/>
-		<item key="WHOLE_WORD" value="true"/>
+		<item key="WHOLE_WORD" value="false"/>
 		<item key="SEARCH_DERIVED" value="false"/>
 		<item key="SEARCH_IN_BINARIES" value="false"/>
 		<item key="HISTORY_SIZE" value="12"/>
 		<section name="HISTORY0">
-			<item key="ignoreCase" value="false"/>
+			<item key="ignoreCase" value="true"/>
 			<item key="isRegExSearch" value="false"/>
-			<item key="isWholeWord" value="true"/>
-			<item key="textPattern" value="Built:"/>
+			<item key="isWholeWord" value="false"/>
+			<item key="textPattern" value="PB11"/>
 			<item key="scope" value="0"/>
 			<list key="fileNamePatterns">
 				<item value="*"/>
@@ -42,10 +42,10 @@
 			<item key="6" value="*.c"/>
 		</section>
 		<section name="HISTORY1">
-			<item key="ignoreCase" value="false"/>
+			<item key="ignoreCase" value="true"/>
 			<item key="isRegExSearch" value="false"/>
-			<item key="isWholeWord" value="true"/>
-			<item key="textPattern" value="WW500"/>
+			<item key="isWholeWord" value="false"/>
+			<item key="textPattern" value="Initialised PB11"/>
 			<item key="scope" value="0"/>
 			<list key="fileNamePatterns">
 				<item value="*"/>
@@ -54,10 +54,10 @@
 			</list>
 		</section>
 		<section name="HISTORY2">
-			<item key="ignoreCase" value="false"/>
+			<item key="ignoreCase" value="true"/>
 			<item key="isRegExSearch" value="false"/>
-			<item key="isWholeWord" value="true"/>
-			<item key="textPattern" value="WW130 CLI.  Built:"/>
+			<item key="isWholeWord" value="false"/>
+			<item key="textPattern" value="WW500"/>
 			<item key="scope" value="0"/>
 			<list key="fileNamePatterns">
 				<item value="*"/>
@@ -66,10 +66,10 @@
 			</list>
 		</section>
 		<section name="HISTORY3">
-			<item key="ignoreCase" value="false"/>
+			<item key="ignoreCase" value="true"/>
 			<item key="isRegExSearch" value="false"/>
-			<item key="isWholeWord" value="true"/>
-			<item key="textPattern" value="#if ( ENTER_SLEEP_MODE == 1 )"/>
+			<item key="isWholeWord" value="false"/>
+			<item key="textPattern" value="sensor_enable_gpio1_pinmux_cfg"/>
 			<item key="scope" value="0"/>
 			<list key="fileNamePatterns">
 				<item value="*"/>
@@ -78,10 +78,10 @@
 			</list>
 		</section>
 		<section name="HISTORY4">
-			<item key="ignoreCase" value="false"/>
+			<item key="ignoreCase" value="true"/>
 			<item key="isRegExSearch" value="false"/>
-			<item key="isWholeWord" value="true"/>
-			<item key="textPattern" value="TRUSTZONE_SEC_ONLY"/>
+			<item key="isWholeWord" value="false"/>
+			<item key="textPattern" value="pin_pb10"/>
 			<item key="scope" value="0"/>
 			<list key="fileNamePatterns">
 				<item value="*"/>
@@ -90,10 +90,10 @@
 			</list>
 		</section>
 		<section name="HISTORY5">
-			<item key="ignoreCase" value="false"/>
+			<item key="ignoreCase" value="true"/>
 			<item key="isRegExSearch" value="false"/>
-			<item key="isWholeWord" value="true"/>
-			<item key="textPattern" value="TRUSTZONE_TYPE"/>
+			<item key="isWholeWord" value="false"/>
+			<item key="textPattern" value="pa1"/>
 			<item key="scope" value="0"/>
 			<list key="fileNamePatterns">
 				<item value="*"/>
@@ -105,7 +105,7 @@
 			<item key="ignoreCase" value="false"/>
 			<item key="isRegExSearch" value="false"/>
 			<item key="isWholeWord" value="true"/>
-			<item key="textPattern" value="security"/>
+			<item key="textPattern" value="Built:"/>
 			<item key="scope" value="0"/>
 			<list key="fileNamePatterns">
 				<item value="*"/>
@@ -116,8 +116,8 @@
 		<section name="HISTORY7">
 			<item key="ignoreCase" value="false"/>
 			<item key="isRegExSearch" value="false"/>
-			<item key="isWholeWord" value="false"/>
-			<item key="textPattern" value="TRUSTZONE"/>
+			<item key="isWholeWord" value="true"/>
+			<item key="textPattern" value="WW130 CLI.  Built:"/>
 			<item key="scope" value="0"/>
 			<list key="fileNamePatterns">
 				<item value="*"/>
@@ -128,8 +128,8 @@
 		<section name="HISTORY8">
 			<item key="ignoreCase" value="false"/>
 			<item key="isRegExSearch" value="false"/>
-			<item key="isWholeWord" value="false"/>
-			<item key="textPattern" value="APP_TYPE = "/>
+			<item key="isWholeWord" value="true"/>
+			<item key="textPattern" value="#if ( ENTER_SLEEP_MODE == 1 )"/>
 			<item key="scope" value="0"/>
 			<list key="fileNamePatterns">
 				<item value="*"/>
@@ -140,8 +140,8 @@
 		<section name="HISTORY9">
 			<item key="ignoreCase" value="false"/>
 			<item key="isRegExSearch" value="false"/>
-			<item key="isWholeWord" value="false"/>
-			<item key="textPattern" value="This is the scenario_app which can capture"/>
+			<item key="isWholeWord" value="true"/>
+			<item key="textPattern" value="TRUSTZONE_SEC_ONLY"/>
 			<item key="scope" value="0"/>
 			<list key="fileNamePatterns">
 				<item value="*"/>
@@ -152,8 +152,8 @@
 		<section name="HISTORY10">
 			<item key="ignoreCase" value="false"/>
 			<item key="isRegExSearch" value="false"/>
-			<item key="isWholeWord" value="false"/>
-			<item key="textPattern" value="tickless"/>
+			<item key="isWholeWord" value="true"/>
+			<item key="textPattern" value="TRUSTZONE_TYPE"/>
 			<item key="scope" value="0"/>
 			<list key="fileNamePatterns">
 				<item value="*"/>
@@ -164,8 +164,8 @@
 		<section name="HISTORY11">
 			<item key="ignoreCase" value="false"/>
 			<item key="isRegExSearch" value="false"/>
-			<item key="isWholeWord" value="false"/>
-			<item key="textPattern" value="PA0 interrupt."/>
+			<item key="isWholeWord" value="true"/>
+			<item key="textPattern" value="security"/>
 			<item key="scope" value="0"/>
 			<list key="fileNamePatterns">
 				<item value="*"/>

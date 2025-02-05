@@ -10,6 +10,10 @@
 		<item key="WizardFileSystemResourceImportPage1.STORE_OVERWRITE_EXISTING_RESOURCES_ID" value="false"/>
 		<item key="WizardFileSystemResourceImportPage1.STORE_CREATE_CONTAINER_STRUCTURE_ID" value="false"/>
 		<list key="WizardFileSystemResourceImportPage1.STORE_SOURCE_NAMES_ID">
+			<item value="D:\Dropbox\Acute_Information\Documents\235000-235099_WW500\235000_WW500_Schematic\235000.A01"/>
+			<item value="D:\Development\MokoTech\Workspace\_Documentation\images"/>
+			<item value="D:\Development\MokoTech\Workspace\_Documentation"/>
+			<item value="D:\Development\MokoTech\Workspace\WildlifeWatcher_1\ww500_a00\s132\armgcc\firmware_images"/>
 			<item value="D:\Development\MokoTech\Workspace\Rewild_1\ww130_b00\s132\armgcc\firmware_images"/>
 		</list>
 	</section>

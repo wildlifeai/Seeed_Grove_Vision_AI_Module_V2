@@ -52,7 +52,7 @@ HX6538 console. Other commands are interpretted by the MKL62BA (which does not i
 
 
 ## Hardware Summary
-The WW500 has two processors running indepenent software:
+The [WW500 schematic](images/SCH-235000.A01.pdf) shows it has two processors running indepenent software:
 
 * The [MKL62BA](https://www.mokosmart.com/lorawan-module/) is a module using the Nordic Semiconductor nRF52836 processor. It provides Bluetooth (BLE) and LoRaWAN communications.
 * The [HX6538](https://himaxwiseeyeplus.github.io/) processor connects to image sensors and has neural network (NN) accelerator. It supports an SD card socket.

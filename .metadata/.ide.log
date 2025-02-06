@@ -5965,3 +5965,20 @@
 
 2025-02-06 11:14:58,034 [INFO] Activator:178 - !SESSION log4j initialized
 2025-02-06 11:15:00,869 [ERROR] LogOutputStream:74 - [STDERR_REDIRECT] Managed Build system manifest file error: Option com.arm.toolchain.v6.base.options.debug.level.1416453481 uses a null category that is invalid in its context. The option was ignored.
+2025-02-06 11:33:44,077 [INFO] LogOutputStream:76 - [STDOUT_REDIRECT] notify type hierarchies
+2025-02-06 11:40:24,592 [INFO] LogOutputStream:76 - [STDOUT_REDIRECT] notify type hierarchies
+2025-02-06 11:40:36,583 [INFO] LogOutputStream:76 - [STDOUT_REDIRECT] notify type hierarchies
+2025-02-06 11:40:48,509 [INFO] LogOutputStream:76 - [STDOUT_REDIRECT] notify type hierarchies
+2025-02-06 11:41:21,947 [INFO] LogOutputStream:76 - [STDOUT_REDIRECT] notify type hierarchies
+2025-02-06 11:48:51,146 [INFO] LogOutputStream:76 - [STDOUT_REDIRECT] notify type hierarchies
+2025-02-06 11:50:51,419 [INFO] LogOutputStream:76 - [STDOUT_REDIRECT] notify type hierarchies
+2025-02-06 11:51:35,830 [INFO] LogOutputStream:76 - [STDOUT_REDIRECT] notify type hierarchies
+2025-02-06 11:54:48,817 [INFO] LogOutputStream:76 - [STDOUT_REDIRECT] notify type hierarchies
+2025-02-06 11:55:18,591 [INFO] LogOutputStream:76 - [STDOUT_REDIRECT] notify type hierarchies
+2025-02-06 11:55:44,795 [INFO] LogOutputStream:76 - [STDOUT_REDIRECT] notify type hierarchies
+2025-02-07 09:09:21,766 [INFO] Activator:177 - 
+
+
+2025-02-07 09:09:21,768 [INFO] Activator:178 - !SESSION log4j initialized
+2025-02-07 09:09:27,760 [ERROR] LogOutputStream:74 - [STDERR_REDIRECT] Managed Build system manifest file error: Option com.arm.toolchain.v6.base.options.debug.level.1416453481 uses a null category that is invalid in its context. The option was ignored.
+2025-02-07 09:12:23,477 [INFO] LogOutputStream:76 - [STDOUT_REDIRECT] notify type hierarchies

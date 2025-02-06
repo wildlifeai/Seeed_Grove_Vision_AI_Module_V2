@@ -1,6 +1,6 @@
 WW500 Initial Shipment
 ==============================================
-#### CGP 19 January 2025
+#### CGP 6 February 2025
 
 These notes relate to the initial batch of WW500 boards. There are 5 boards in this batch - one of which I will retain.
 The other 4 are to be sent to Victor for distribution to developers. These notes are intended as a brief summary of the boards for early users.
@@ -11,7 +11,6 @@ The other 4 are to be sent to Victor for distribution to developers. These notes
 Look at these two views of the test setup:
 
 ![Test setup top view](images/WW500_Test_Setup_1.jpg)
-
  
 ![Test setup side view](images/WW500_Test_Setup_2.jpg) 
 
@@ -52,13 +51,29 @@ HX6538 console. Other commands are interpretted by the MKL62BA (which does not i
 
 
 ## Hardware Summary
-The [WW500 schematic](images/SCH-235000.A01.pdf) shows it has two processors running indepenent software:
+The [WW500 schematic](images/SCH-235000.A01.pdf) shows it has two processors running independent software:
 
 * The [MKL62BA](https://www.mokosmart.com/lorawan-module/) is a module using the Nordic Semiconductor nRF52836 processor. It provides Bluetooth (BLE) and LoRaWAN communications.
 * The [HX6538](https://himaxwiseeyeplus.github.io/) processor connects to image sensors and has neural network (NN) accelerator. It supports an SD card socket.
 
 The two processors communicate via an I2C interface. The HX6538 is the I2C slave. There is a single signal between 
 the processors which acts as an (active low) bidirectional interrupt.
+
+WW500 PCB artwork is shown here:
+
+![Top side view](images/PCB-235001.A01-TOP.svg) 
+![Bottom side view](images/PCB-235001.A01-BOTTOM.svg) 
+
+WW500 component layout is available as these pdf files:
+
+* <a href="images/ASS-235002.A01-TOP.pdf" target="_blank">Top side view</a>
+* <a href="images/ASS-235002.A01-BOTTOM.pdf" target="_blank">Bottom side view</a>
+
+_NOTE_ There are a few manual changes to the hardware that are not shown on the schematic:
+* Wire link from HX6538 processor PB11 to MKL62BA P18 (SW2) - this is the inter-processor interrupt signal.
+* 4M7pull-down resistor added to /POWER_EN signal (processor PA1 pin for powering off volatage regulators for DPD - this is untested.)
+* Lifted J2 pin 1 and added a wire link so that a WWIF100 board on J2 sources power to 3V3 instead of 3V3_WE.
+ 
 
 ## Console Interface
 

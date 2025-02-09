@@ -1,5 +1,37 @@
-21:32:33 **** Build of configuration Debug for project EPII_CM55M_APP_S ****
-make list_mk_files 
+12:43:44 **** Incremental Build of configuration Debug for project EPII_CM55M_APP_S ****
+make all 
+Choosing PROJECT_FOLDER='ww_projects' for our projects 
+In ww130.mk TOOLCHAIN='gnu', SCENARIO_APP_ROOT='./app/ww_projects',  APP_TYPE='ww130_cli'
+In ww130.mk LINKER_SCRIPT_FILE='./app/ww_projects/ww130_cli/ww130_cli.ld'
+In ww130.mk CIS_SUPPORT_INAPP_MODEL='cis_ov5647' SCENARIO_APP_INCDIR=''
+In ww.mk OUT_DIR=''
+In ww.mk CIS_SUPPORT_INAPP='cis_sensor' SCENARIO_APP_INCDIR='./app/ww_projects  ./app/ww_projects/ww130_cli ./app/ww_projects/ww130_cli/cis_sensor/cis_ov5647'
+using /NTZ/NTZ.mk
+In os.mk OS_SEL='OS_FREERTOS_10_5_1' OS_ID='OS_FREERTOS_10_5_1' OS_DEFINES='-DconfigENABLE_MPU=0 -DFREERTOS -DFREERTOS_SECONLY -DOS_FREERTOS_10_5_1 -DENABLE_OS'
+OSES_ROOT_DIR='./os/freertos_10_5_1' FREERTOS_OSHAL=''
+In makefile APP_TYPE='ww130_cli' SCENARIO_APP_INCDIR='./app/ww_projects  ./app/ww_projects/ww130_cli ./app/ww_projects/ww130_cli/cis_sensor/cis_ov5647'
+"Creating Directory    : " obj_epii_evb_icv30_bdv10/gnu_epii_evb_WLCSP65/app/ww_projects/ww130_cli/cis_sensor/cis_ov5647
+out-file : FileStream was asked to open a device that was not a file. For support for devices like 'com1:' or 'lpt1:', 
+call CreateFile, then use the FileStream constructors that take an OS handle as an IntPtr.
+At line:1 char:1
++ C:\Windows\system32\cmd.exe /C if not exist  obj_epii_evb_icv30_bdv10 ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OpenError: (:) [Out-File], NotSupportedException
+    + FullyQualifiedErrorId : FileOpenFailure,Microsoft.PowerShell.Commands.OutFileCommand
+ 
+make: [options/rules.mk:321: obj_epii_evb_icv30_bdv10/gnu_epii_evb_WLCSP65/app/ww_projects/ww130_cli/cis_sensor/cis_ov5647/.mkdir_done] Error 1 (ignored)
+out-file : Could not find a part of the path 'D:\Development\wildlife.ai\Seeed_Grove_Vision_AI_Module_V2\EPII_CM55M_APP
+_S\obj_epii_evb_icv30_bdv10\gnu_epii_evb_WLCSP65\app\ww_projects\ww130_cli\cis_sensor\cis_ov5647\.mkdir_done'.
+At line:1 char:1
++ C:\Windows\system32\cmd.exe /C echo obj_epii_evb_icv30_bdv10/gnu_epii ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OpenError: (:) [Out-File], DirectoryNotFoundException
+    + FullyQualifiedErrorId : FileOpenFailure,Microsoft.PowerShell.Commands.OutFileCommand
+ 
+make: *** [options/rules.mk:322: obj_epii_evb_icv30_bdv10/gnu_epii_evb_WLCSP65/app/ww_projects/ww130_cli/cis_sensor/cis_ov5647/.mkdir_done] Error 1
+"make all" terminated with exit code 2. Build might be incomplete.
+12:45:00 **** Incremental Build of configuration Debug for project EPII_CM55M_APP_S ****
+make all 
 Choosing PROJECT_FOLDER='ww_projects' for our projects 
 In ww130.mk TOOLCHAIN='gnu', SCENARIO_APP_ROOT='./app/ww_projects',  APP_TYPE='ww130_cli'
 In ww130.mk LINKER_SCRIPT_FILE='./app/ww_projects/ww130_cli/ww130_cli.ld'
@@ -10,10 +42,115 @@ using /NTZ/NTZ.mk
 In os.mk OS_SEL='OS_FREERTOS_10_5_1' OS_ID='OS_FREERTOS_10_5_1' OS_DEFINES='-DconfigENABLE_MPU=0 -DFREERTOS -DFREERTOS_SECONLY -DOS_FREERTOS_10_5_1 -DENABLE_OS'
 OSES_ROOT_DIR='./os/freertos_10_5_1' FREERTOS_OSHAL=''
 In makefile APP_TYPE='ww130_cli' SCENARIO_APP_INCDIR='./app/ww_projects  ./app/ww_projects/ww130_cli ./app/ww_projects/ww130_cli/cis_sensor/cis_imx219'
-File D:\Development\wildlife.ai\Seeed_Grove_Vision_AI_Module_V2\EPII_CM55M_APP_S\list_mk_files.ps1 cannot be loaded 
-because running scripts is disabled on this system. For more information, see about_Execution_Policies at 
-https:/go.microsoft.com/fwlink/?LinkID=135170.
-    + CategoryInfo          : SecurityError: (:) [], ParentContainsErrorRecordException
-    + FullyQualifiedErrorId : UnauthorizedAccess
-make: *** [makefile:172: list_mk_files] Error 1
-"make list_mk_files" terminated with exit code 2. Build might be incomplete.
+make: Nothing to be done for 'all'.
+12:45:33 **** Incremental Build of configuration Debug for project EPII_CM55M_APP_S ****
+make all 
+Choosing PROJECT_FOLDER='ww_projects' for our projects 
+In ww130.mk TOOLCHAIN='gnu', SCENARIO_APP_ROOT='./app/ww_projects',  APP_TYPE='ww130_cli'
+In ww130.mk LINKER_SCRIPT_FILE='./app/ww_projects/ww130_cli/ww130_cli.ld'
+In ww130.mk CIS_SUPPORT_INAPP_MODEL='cis_imx708' SCENARIO_APP_INCDIR=''
+In ww.mk OUT_DIR=''
+In ww.mk CIS_SUPPORT_INAPP='cis_sensor' SCENARIO_APP_INCDIR='./app/ww_projects  ./app/ww_projects/ww130_cli ./app/ww_projects/ww130_cli/cis_sensor/cis_imx708'
+using /NTZ/NTZ.mk
+In os.mk OS_SEL='OS_FREERTOS_10_5_1' OS_ID='OS_FREERTOS_10_5_1' OS_DEFINES='-DconfigENABLE_MPU=0 -DFREERTOS -DFREERTOS_SECONLY -DOS_FREERTOS_10_5_1 -DENABLE_OS'
+OSES_ROOT_DIR='./os/freertos_10_5_1' FREERTOS_OSHAL=''
+In makefile APP_TYPE='ww130_cli' SCENARIO_APP_INCDIR='./app/ww_projects  ./app/ww_projects/ww130_cli ./app/ww_projects/ww130_cli/cis_sensor/cis_imx708'
+"Creating Directory    : " obj_epii_evb_icv30_bdv10/gnu_epii_evb_WLCSP65/app/ww_projects/ww130_cli/cis_sensor/cis_imx708
+out-file : FileStream was asked to open a device that was not a file. For support for devices like 'com1:' or 'lpt1:', 
+call CreateFile, then use the FileStream constructors that take an OS handle as an IntPtr.
+At line:1 char:1
++ C:\Windows\system32\cmd.exe /C if not exist  obj_epii_evb_icv30_bdv10 ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OpenError: (:) [Out-File], NotSupportedException
+    + FullyQualifiedErrorId : FileOpenFailure,Microsoft.PowerShell.Commands.OutFileCommand
+ 
+make: [options/rules.mk:321: obj_epii_evb_icv30_bdv10/gnu_epii_evb_WLCSP65/app/ww_projects/ww130_cli/cis_sensor/cis_imx708/.mkdir_done] Error 1 (ignored)
+out-file : Could not find a part of the path 'D:\Development\wildlife.ai\Seeed_Grove_Vision_AI_Module_V2\EPII_CM55M_APP
+_S\obj_epii_evb_icv30_bdv10\gnu_epii_evb_WLCSP65\app\ww_projects\ww130_cli\cis_sensor\cis_imx708\.mkdir_done'.
+At line:1 char:1
++ C:\Windows\system32\cmd.exe /C echo obj_epii_evb_icv30_bdv10/gnu_epii ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OpenError: (:) [Out-File], DirectoryNotFoundException
+    + FullyQualifiedErrorId : FileOpenFailure,Microsoft.PowerShell.Commands.OutFileCommand
+ 
+make: *** [options/rules.mk:322: obj_epii_evb_icv30_bdv10/gnu_epii_evb_WLCSP65/app/ww_projects/ww130_cli/cis_sensor/cis_imx708/.mkdir_done] Error 1
+"make all" terminated with exit code 2. Build might be incomplete.
+12:45:59 **** Clean-only build of configuration Debug for project EPII_CM55M_APP_S ****
+make clean 
+Choosing PROJECT_FOLDER='ww_projects' for our projects 
+In ww130.mk TOOLCHAIN='gnu', SCENARIO_APP_ROOT='./app/ww_projects',  APP_TYPE='ww130_cli'
+In ww130.mk LINKER_SCRIPT_FILE='./app/ww_projects/ww130_cli/ww130_cli.ld'
+In ww130.mk CIS_SUPPORT_INAPP_MODEL='cis_imx708' SCENARIO_APP_INCDIR=''
+In ww.mk OUT_DIR=''
+In ww.mk CIS_SUPPORT_INAPP='cis_sensor' SCENARIO_APP_INCDIR='./app/ww_projects  ./app/ww_projects/ww130_cli ./app/ww_projects/ww130_cli/cis_sensor/cis_imx708'
+using /NTZ/NTZ.mk
+In os.mk OS_SEL='OS_FREERTOS_10_5_1' OS_ID='OS_FREERTOS_10_5_1' OS_DEFINES='-DconfigENABLE_MPU=0 -DFREERTOS -DFREERTOS_SECONLY -DOS_FREERTOS_10_5_1 -DENABLE_OS'
+OSES_ROOT_DIR='./os/freertos_10_5_1' FREERTOS_OSHAL=''
+In makefile APP_TYPE='ww130_cli' SCENARIO_APP_INCDIR='./app/ww_projects  ./app/ww_projects/ww130_cli ./app/ww_projects/ww130_cli/cis_sensor/cis_imx708'
+"Clean Workspace For Selected Configuration : epii_evb_icv30_bdv10-gnu_epii_evb_WLCSP65"
+C:\Windows\system32\cmd.exe /C if exist  obj_epii_evb_icv30_bdv10\gnu_epii_evb_WLCSP65   C:\Windows\system32\cmd.exe /C rd /S /Q obj_epii_evb_icv30_bdv10\gnu_epii_evb_WLCSP65
+C:\Windows\system32\cmd.exe /C if exist  .sc.project   C:\Windows\system32\cmd.exe /C rd /S /Q .sc.project
+12:46:03 **** Build of configuration Debug for project EPII_CM55M_APP_S ****
+make all 
+Choosing PROJECT_FOLDER='ww_projects' for our projects 
+In ww130.mk TOOLCHAIN='gnu', SCENARIO_APP_ROOT='./app/ww_projects',  APP_TYPE='ww130_cli'
+In ww130.mk LINKER_SCRIPT_FILE='./app/ww_projects/ww130_cli/ww130_cli.ld'
+In ww130.mk CIS_SUPPORT_INAPP_MODEL='cis_imx708' SCENARIO_APP_INCDIR=''
+In ww.mk OUT_DIR=''
+In ww.mk CIS_SUPPORT_INAPP='cis_sensor' SCENARIO_APP_INCDIR='./app/ww_projects  ./app/ww_projects/ww130_cli ./app/ww_projects/ww130_cli/cis_sensor/cis_imx708'
+using /NTZ/NTZ.mk
+In os.mk OS_SEL='OS_FREERTOS_10_5_1' OS_ID='OS_FREERTOS_10_5_1' OS_DEFINES='-DconfigENABLE_MPU=0 -DFREERTOS -DFREERTOS_SECONLY -DOS_FREERTOS_10_5_1 -DENABLE_OS'
+OSES_ROOT_DIR='./os/freertos_10_5_1' FREERTOS_OSHAL=''
+In makefile APP_TYPE='ww130_cli' SCENARIO_APP_INCDIR='./app/ww_projects  ./app/ww_projects/ww130_cli ./app/ww_projects/ww130_cli/cis_sensor/cis_imx708'
+"Creating Directory    : " obj_epii_evb_icv30_bdv10/gnu_epii_evb_WLCSP65/app
+out-file : FileStream was asked to open a device that was not a file. For support for devices like 'com1:' or 'lpt1:', 
+call CreateFile, then use the FileStream constructors that take an OS handle as an IntPtr.
+At line:1 char:1
++ C:\Windows\system32\cmd.exe /C if not exist  obj_epii_evb_icv30_bdv10 ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OpenError: (:) [Out-File], NotSupportedException
+    + FullyQualifiedErrorId : FileOpenFailure,Microsoft.PowerShell.Commands.OutFileCommand
+ 
+make: [options/rules.mk:321: obj_epii_evb_icv30_bdv10/gnu_epii_evb_WLCSP65/app/.mkdir_done] Error 1 (ignored)
+out-file : Could not find a part of the path 'D:\Development\wildlife.ai\Seeed_Grove_Vision_AI_Module_V2\EPII_CM55M_APP
+_S\obj_epii_evb_icv30_bdv10\gnu_epii_evb_WLCSP65\app\.mkdir_done'.
+At line:1 char:1
++ C:\Windows\system32\cmd.exe /C echo obj_epii_evb_icv30_bdv10/gnu_epii ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OpenError: (:) [Out-File], DirectoryNotFoundException
+    + FullyQualifiedErrorId : FileOpenFailure,Microsoft.PowerShell.Commands.OutFileCommand
+ 
+make: *** [options/rules.mk:322: obj_epii_evb_icv30_bdv10/gnu_epii_evb_WLCSP65/app/.mkdir_done] Error 1
+"make all" terminated with exit code 2. Build might be incomplete.
+12:47:05 **** Incremental Build of configuration Debug for project EPII_CM55M_APP_S ****
+make all 
+Choosing PROJECT_FOLDER='ww_projects' for our projects 
+In ww130.mk TOOLCHAIN='gnu', SCENARIO_APP_ROOT='./app/ww_projects',  APP_TYPE='ww130_cli'
+In ww130.mk LINKER_SCRIPT_FILE='./app/ww_projects/ww130_cli/ww130_cli.ld'
+In ww130.mk CIS_SUPPORT_INAPP_MODEL='cis_imx708' SCENARIO_APP_INCDIR=''
+In ww.mk OUT_DIR=''
+In ww.mk CIS_SUPPORT_INAPP='cis_sensor' SCENARIO_APP_INCDIR='./app/ww_projects  ./app/ww_projects/ww130_cli ./app/ww_projects/ww130_cli/cis_sensor/cis_imx708'
+using /NTZ/NTZ.mk
+In os.mk OS_SEL='OS_FREERTOS_10_5_1' OS_ID='OS_FREERTOS_10_5_1' OS_DEFINES='-DconfigENABLE_MPU=0 -DFREERTOS -DFREERTOS_SECONLY -DOS_FREERTOS_10_5_1 -DENABLE_OS'
+OSES_ROOT_DIR='./os/freertos_10_5_1' FREERTOS_OSHAL=''
+In makefile APP_TYPE='ww130_cli' SCENARIO_APP_INCDIR='./app/ww_projects  ./app/ww_projects/ww130_cli ./app/ww_projects/ww130_cli/cis_sensor/cis_imx708'
+"Creating Directory    : " obj_epii_evb_icv30_bdv10/gnu_epii_evb_WLCSP65/app
+out-file : FileStream was asked to open a device that was not a file. For support for devices like 'com1:' or 'lpt1:', 
+call CreateFile, then use the FileStream constructors that take an OS handle as an IntPtr.
+At line:1 char:1
++ C:\Windows\system32\cmd.exe /C if not exist  obj_epii_evb_icv30_bdv10 ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OpenError: (:) [Out-File], NotSupportedException
+    + FullyQualifiedErrorId : FileOpenFailure,Microsoft.PowerShell.Commands.OutFileCommand
+ 
+make: [options/rules.mk:321: obj_epii_evb_icv30_bdv10/gnu_epii_evb_WLCSP65/app/.mkdir_done] Error 1 (ignored)
+out-file : Could not find a part of the path 'D:\Development\wildlife.ai\Seeed_Grove_Vision_AI_Module_V2\EPII_CM55M_APP
+_S\obj_epii_evb_icv30_bdv10\gnu_epii_evb_WLCSP65\app\.mkdir_done'.
+At line:1 char:1
++ C:\Windows\system32\cmd.exe /C echo obj_epii_evb_icv30_bdv10/gnu_epii ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OpenError: (:) [Out-File], DirectoryNotFoundException
+    + FullyQualifiedErrorId : FileOpenFailure,Microsoft.PowerShell.Commands.OutFileCommand
+ 
+make: *** [options/rules.mk:322: obj_epii_evb_icv30_bdv10/gnu_epii_evb_WLCSP65/app/.mkdir_done] Error 1
+"make all" terminated with exit code 2. Build might be incomplete.

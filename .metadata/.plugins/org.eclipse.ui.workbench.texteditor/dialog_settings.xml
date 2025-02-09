@@ -1,28 +1,28 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <section name="Workbench">
 	<section name="org.eclipse.ui.texteditor.FindReplaceDialog">
-		<item key="selection" value="TRUSTZONE_SEC_ONLY"/>
+		<item key="selection" value="fundamental direction"/>
 		<item key="wrap" value="true"/>
 		<item key="casesensitive" value="false"/>
 		<item key="wholeword" value="false"/>
 		<item key="incremental" value="false"/>
 		<item key="isRegEx" value="false"/>
 		<list key="findhistory">
-			<item value="TRUSTZONE_SEC_ONLY"/>
-			<item value="security"/>
-			<item value="LIB_SCENARIO_APP"/>
-			<item value="main("/>
-			<item value="prvInt"/>
-			<item value="TESTPA0PULSE"/>
-			<item value="pa0"/>
-			<item value="delay"/>
-			<item value="cisdp_sensor_init"/>
-			<item value="_delay_ms"/>
-			<item value="hx_drv_timer"/>
-			<item value="chip"/>
-			<item value="__time"/>
-			<item value="ww500"/>
-			<item value="pb10"/>
+			<item value="fundamental direction"/>
+			<item value="grrr"/>
+			<item value=".pdf"/>
+			<item value="OP_CODE_CALCULATE_CHECKSUM"/>
+			<item value="nrf_dfu_obj_op"/>
+			<item value="on_cmd_obj_select_request()"/>
+			<item value="I am trying"/>
+			<item value="HM0360_init_setting"/>
+			<item value="on_cmd_obj_write_request"/>
+			<item value="nrf_dfu_req_handler_req"/>
+			<item value=" control p"/>
+			<item value="control"/>
+			<item value="on_ctrl_pt_write"/>
+			<item value="The device processes"/>
+			<item value="the device"/>
 		</list>
 		<list key="replacehistory">
 			<item value="TEST_INT_PULSE"/>
@@ -43,8 +43,8 @@
 		</list>
 	</section>
 	<section name="org.eclipse.ui.texteditor.FindReplaceDialog_dialogBounds">
-		<item key="DIALOG_X_ORIGIN" value="1017"/>
-		<item key="DIALOG_Y_ORIGIN" value="290"/>
+		<item key="DIALOG_X_ORIGIN" value="1163"/>
+		<item key="DIALOG_Y_ORIGIN" value="209"/>
 		<item key="DIALOG_WIDTH" value="414"/>
 		<item key="DIALOG_HEIGHT" value="454"/>
 		<item key="DIALOG_FONT_NAME" value="1|Segoe UI|9.0|0|WINDOWS|1|-15|0|0|0|400|0|0|0|1|0|0|0|0|Segoe UI"/>

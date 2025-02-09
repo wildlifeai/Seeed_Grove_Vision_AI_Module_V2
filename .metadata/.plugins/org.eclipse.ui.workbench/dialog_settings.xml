@@ -10,6 +10,8 @@
 		<item key="WizardFileSystemResourceImportPage1.STORE_OVERWRITE_EXISTING_RESOURCES_ID" value="false"/>
 		<item key="WizardFileSystemResourceImportPage1.STORE_CREATE_CONTAINER_STRUCTURE_ID" value="false"/>
 		<list key="WizardFileSystemResourceImportPage1.STORE_SOURCE_NAMES_ID">
+			<item value="D:\Development\wildlife.ai\bleak_work"/>
+			<item value="D:\Development\DFU"/>
 			<item value="D:\Dropbox\Acute_Information\Documents\235000-235099_WW500\235000_WW500_Schematic\235000.A01"/>
 			<item value="D:\Development\MokoTech\Workspace\_Documentation\images"/>
 			<item value="D:\Development\MokoTech\Workspace\_Documentation"/>

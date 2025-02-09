@@ -3,6 +3,7 @@ Python NRF Tools
 
 #### CGP 9/2/25
 
+(Work in progress - I don't understand this yet. And I have not tried to do DFU update using these tools.)
 
 It is possible that nrfTools can perform DFU operations from a laptop, using python.
 See [here](https://github.com/NordicSemiconductor/pc-nrfutil/blob/master/nordicsemi/dfu/dfu_transport_ble.py)
@@ -11,7 +12,9 @@ I had a .exe version of `nrfutils` installed. I then tried this:
 ```
 pip install nrfutil
 ```
-Which installed something (but what, and where?).
+Which installed something. Looks like code was loaded here (your location will vary!):
+C:\Users\charl\AppData\Roaming\Python\Python312\site-packages\nordicsemi\dfu
+
 Then running this clearly does something:
 ``
 nrfutil dfu ble
@@ -24,10 +27,8 @@ As does this:
 ```
 nrfutil dfu ble --help
 ```
-Looks like code was loaded here:
-C:\Users\charl\AppData\Roaming\Python\Python312\site-packages\nordicsemi\dfu
 
-Copilot suggested this:
+Copilot suggested doing this:
 
 ```py
 import subprocess

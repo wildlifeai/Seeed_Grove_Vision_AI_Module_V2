@@ -1,6 +1,6 @@
 Android DFU Library
 ===================
-#### CGP 6/2/25
+#### CGP 9/2/25
 
 **Nordic implement a Device Firmware Update (DFU) mechanism that is used to securely download new firmware images
 to BLE devices. I am researching the workings of the DFU mechanism to see whether it could be extended to transfer other 
@@ -9,6 +9,7 @@ data to/from our Wildlife Watcher devices. Extensions could include:**
 * Writing of files to the SD card (could include new Neural Network models).
 * Reading of files from the SD card (could include uploading of image files). 
 * DFU for the HX65386
+* Bringing the DFU of the MKL62BA into the app.
 
 In the short term there is no need to embed the DFU function within our own app, since a reliable standard
 mechanism exists for DFU to the MKL62BA (the BLE and LoRaWAN module on the WW500).
@@ -82,7 +83,7 @@ understand the BLE Transport mechanism to see if and how it can be extended to p
 
 The next section of this file is the result of examining the BLE Library code. It will be very helpful to
 consider the description and sequence diagrams shown [here](https://docs.nordicsemi.com/bundle/sdk_nrf5_v17.1.0/page/lib_dfu_transport_ble.html).
-However, unfortunately the diagrams do perhaps contain some errors, and miss some steps (grrrr...).
+(Not certain these are complete...)
 
 It looks like the DFU app performs several operations such as finding and verifying the file to download,
 and connecting to the device. It then calls `performDfu()` to perform the download.
@@ -103,7 +104,7 @@ It seems to involve two steps (which are echoed in the [BLE Service documentatio
 2. Transfer of a firmware image: [sendFirmware()](https://github.com/NordicSemiconductor/Android-DFU-Library/blob/main/lib/dfu/src/main/java/no/nordicsemi/android/dfu/SecureDfuImpl.java#L501)
 
 There is considerable complexity here, as the library must partition the two key parts into multiple BLE transfers,
-and recover from a variety of error conditions. 
+and recover from a variety of error conditions.
 
 #### Send Init Packet
 
@@ -125,7 +126,7 @@ to the Control Point Characteristic with [writeOpCode()](https://github.com/Nord
  which calls [writeInitPacket()](https://github.com/NordicSemiconductor/Android-DFU-Library/blob/main/lib/dfu/src/main/java/no/nordicsemi/android/dfu/BaseCustomDfuImpl.java#L322)
  which finally transfers data to the DFU PACKET characteristic: [`mGatt.writeCharacteristic(characteristic)`](https://github.com/NordicSemiconductor/Android-DFU-Library/blob/main/lib/dfu/src/main/java/no/nordicsemi/android/dfu/BaseCustomDfuImpl.java#L344)
 4. the write execute command [writeExecute()](https://github.com/NordicSemiconductor/Android-DFU-Library/blob/main/lib/dfu/src/main/java/no/nordicsemi/android/dfu/SecureDfuImpl.java#L948)
-expects a return notification containing status code.
+verifies the download is OK. It expects a return notification containing status code.
 
 #### Send Firmware
 [sendFirmware()](https://github.com/NordicSemiconductor/Android-DFU-Library/blob/main/lib/dfu/src/main/java/no/nordicsemi/android/dfu/SecureDfuImpl.java#L501)
@@ -143,10 +144,10 @@ This uses `gatt.writeCharacteristic()` to write to the DFU Packet Characteristic
 3. The write execute command [writeExecute()](https://github.com/NordicSemiconductor/Android-DFU-Library/blob/main/lib/dfu/src/main/java/no/nordicsemi/android/dfu/SecureDfuImpl.java#L948)
 expects a return notification containing status code.
 
-It looks like the first `writePacket()` call is made from 
-and then is called more times as a results of the `onCharacteristicWrite()` and/or `handlePacketReceiptNotification()` events 
-[here](https://github.com/NordicSemiconductor/Android-DFU-Library/blob/main/lib/dfu/src/main/java/no/nordicsemi/android/dfu/BaseCustomDfuImpl.java#L153)
-and [here](https://github.com/NordicSemiconductor/Android-DFU-Library/blob/main/lib/dfu/src/main/java/no/nordicsemi/android/dfu/BaseCustomDfuImpl.java#L225)
+It looks like the first `writePacket()` call is made from [uploadFirmwareImage()](https://github.com/NordicSemiconductor/Android-DFU-Library/blob/main/lib/dfu/src/main/java/no/nordicsemi/android/dfu/BaseCustomDfuImpl.java#L390)
+and then is called more times as a results of the [onCharacteristicWrite()](https://github.com/NordicSemiconductor/Android-DFU-Library/blob/main/lib/dfu/src/main/java/no/nordicsemi/android/dfu/BaseCustomDfuImpl.java#L153) 
+and/or [handlePacketReceiptNotification()](https://github.com/NordicSemiconductor/Android-DFU-Library/blob/main/lib/dfu/src/main/java/no/nordicsemi/android/dfu/BaseCustomDfuImpl.java#L225) 
+events to transfer subsequent packets.
 
 It looks like these `onCharacteristicWrite()` and `handlePacketReceiptNotification()` events keep track of the progress through the full firmware transfer.
 Perhaps `uploadFirmwareImage()` blocks till the whole transfer is complete.
@@ -155,7 +156,7 @@ Perhaps `uploadFirmwareImage()` blocks till the whole transfer is complete.
 
 Several commands and responses are shown in the [sequence diagrams](https://github.com/NordicSemiconductor/Android-DFU-Library/blob/main/lib/dfu/src/main/java/no/nordicsemi/android/dfu/BaseDfuImpl.java#L786)
 
-The commands and responses are listed here:
+The commands and responses are listed here (all except the last entry originate from the app):
 
 | Command | Byte 0 | Byte 1 | Byte 2 | Byte 3 | Byte 4 | Byte 5 | Parameter(s)| Purpose |
 | -------- | ------- | ------- | ------- | ------- | ------- | ------- | ------- | ------- |
@@ -290,7 +291,7 @@ TODO - check all instances of writeOpCode()
 
 I am trying to work out which files are needed to execute the DFU stuff on the device side.
 
-The device-side software is here.
+The device-side software is [in here.](https://github.com/rickeycv/nRF52840_BLE_bootloader/tree/0884150055de7274c809d900180c4774c1d9dc31/nRF5_SDK_17.1.0_ddde560_bootloader/components/libraries/bootloader)
 **NOTE: Links to files are to an unofficial repository as it looks like Nordic's is missing from Github**
 
 
@@ -413,12 +414,10 @@ for example [here](https://github.com/rickeycv/nRF52840_BLE_bootloader/blob/main
 
 `nrf_dfu_ble.c` contains all the necessary BLE interface code, but also a lot of code only required in the case
 of a stand-alone bootloader, such as code to initialise the softDevice stack, set up advertising etc.
-
 So the necessary functions should be copied from here and added to a custom service (e.g. an extended `WWUS`).
 
 `nrf_dfu_req_handler.c` probably contains necessary code. Some might be removed (temporarily) if the nRF52832
 DFU update is __NOT__ in the main application.
-
 So the necessary functions should be copied from here and added to a file to support the custom service.
 
 New top-level functions could probably be added to these app-side 
@@ -457,7 +456,7 @@ case NRF_DFU_OBJ_TYPE_FILE_RD:
 Then a new `nrf_dfu_file_write_req()` function would be required to accept the data and to transfer it to the 
 HX6538 for moving to the SD card.
 
-The `nrf_dfu_file_read_req()` code is different since the fundamental direction of data transfer is different.
+The `nrf_dfu_file_read_req()` code is different since the direction of data transfer is different.
 The NUS (and WWUS) service send data to the app using notifications, so I guess this could be done for file reads as well. 
 Perhaps the notification could be added to the `DFU Packet` characteristic to make it easier for the app to recognise the
 source of the notification (i.e. that it contained file data). 
@@ -469,7 +468,7 @@ was complete.
 
 I am fairly confident that I can do the device-side work. One appraoch might be as follows:
 
-1. Create a new WW500 project/app that contained modified a new Service that implemented the extensions. Perhaps this could __initially__
+1. Create a new WW500 project/app that contained a new Service that implemented the extensions. Perhaps this could __initially__
 advertise as the DFU Service. In that way debugging could __initially__ start by using the unmodified server-side DFU app.
 2. Probably I should try fully implementing the existing DFU functionality.
 3. I could then change the device-side code so that the downloaded data was treated as a file and routed to the SD card as a file.
@@ -482,19 +481,23 @@ could include DFU of code for the HX6538 (though that is not the highest priorit
 It looks like I can make some progress on implementing and testing the app-side code by myself, by using the
 [Bleak python library](https://github.com/hbldh/bleak)
 which can run on a laptop and turn it into the BLE central device. Docs for Bleak are [here.](https://bleak.readthedocs.io/en/latest/)
-At the time of writing I have already written a script (actually, Copilot did most of the work) that connects 
+At the time of writing I have already written [a script](./Scan_nus.py) (actually, Copilot did most of the work) that connects 
 to a WW500 and prints messages it sends (normally to the WW app or to the NUS in nRFToolbox.
 
-It is possible that nrfTools can perform DFU operations from a laptop, using python.
+It is possible that a python version of nrfTools can perform DFU operations from a laptop, but I have not explored this yet.
 See [here](https://github.com/NordicSemiconductor/pc-nrfutil/blob/master/nordicsemi/dfu/dfu_transport_ble.py)
-See separate `nrftools_python` file about this...
+See separate [nrftools_python.md](./nrftools_python.md) file for my early work on this...
 
+Hopefully I can make progress on extending the functionality of both the device-side and app-side code by myself,
+using the app-side tools mentioned above. It will be more efficient it I do both parts by myself.
 
 After that there seems to be two options for adding new app-side functionality:
 
 1. Modifying the Wildlife Watcher app. This will obviously be needed at some point, but more work?
-2. Modifying the DFU app, as an interim step. It looks like full source code is available.
+2. Modifying the DFU app, as an interim step. It looks like full source code is available (for both Android and iOS).
 
+Either or both of these options should be done by Miha (or other app-side developer) as I don't have the skills to do a decent job here.
+If we want an app that works for both Android and iOS then there may be two lots of work to do.
 
 #### Markdown Syntax
 (Note to self: [Markdown Guide](https://confluence.atlassian.com/bitbucketserver083/markdown-syntax-guide-1155483368.html))

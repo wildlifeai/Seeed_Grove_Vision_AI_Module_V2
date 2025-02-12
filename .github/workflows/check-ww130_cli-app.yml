@@ -21,14 +21,31 @@ jobs:
     # - name: Set up build dependencies
     #   run: |
     #     sudo apt-get update
-    #     sudo apt-get install -y arm-none-eabi-gcc
-
+    #     sudo apt-get install -y gcc-arm-none-eabi
+      
     - name: Set up build dependencies
       run: |
-        wget -q https://developer.arm.com/-/media/Files/downloads/gnu/13.3.rel1/binrel/arm-gnu-toolchain-13.3.rel1-x86_64-arm-none-eabi.tar.xz
-        tar -xf arm-gnu-toolchain-13.3.rel1-x86_64-arm-none-eabi.tar.xz
-        sudo cp -r arm-gnu-toolchain-13.3.rel1-x86_64-arm-none-eabi /usr/local/
-        echo "/usr/local/arm-gnu-toolchain-13.3.rel1-x86_64-arm-none-eabi/bin" >> $GITHUB_PATH
+        set -x  # Enable debugging
+        PAGE_CONTENT=$(curl -s https://developer.arm.com/downloads/-/arm-gnu-toolchain-downloads)
+        LATEST_VERSION=$(echo "$PAGE_CONTENT" | grep -oP 'arm-gnu-toolchain-\K[0-9]+\.[0-9]+\.rel[0-9]+' | sed -n '1p')
+        echo "Latest version: $LATEST_VERSION"  # Print the latest version for debugging
+        
+        TOOLCHAIN_URL="https://developer.arm.com/-/media/Files/downloads/gnu/${LATEST_VERSION}/binrel/arm-gnu-toolchain-${LATEST_VERSION}-x86_64-arm-none-eabi.tar.xz"
+        echo "Downloading from: $TOOLCHAIN_URL"
+    
+        # Download the toolchain
+        wget -q "$TOOLCHAIN_URL" || { echo "❌ Failed to download toolchain"; exit 1; }
+        tar -xf "arm-gnu-toolchain-${LATEST_VERSION}-x86_64-arm-none-eabi.tar.xz" || { echo "❌ Failed to extract toolchain"; exit 1; }
+    
+        # Move the toolchain to /usr/local/
+        sudo mv "arm-gnu-toolchain-${LATEST_VERSION}-x86_64-arm-none-eabi" /usr/local/ || { echo "❌ Failed to move toolchain"; exit 1; }
+    
+        # Add to PATH
+        echo "/usr/local/arm-gnu-toolchain-${LATEST_VERSION}-x86_64-arm-none-eabi/bin" >> $GITHUB_PATH
+
+    - name: Verify GCC Version
+      run: |
+        echo arm-none-eabi-gcc --version
 
     - name: Update APP_TYPE variable to ww130_cli
       run: |
@@ -37,7 +54,7 @@ jobs:
     - name: Build WW130_cli
       run: |
         cd EPII_CM55M_APP_S/
-        make clean
+        make clean 
         make
 
 # Test specific functionality within the WW130_cli application

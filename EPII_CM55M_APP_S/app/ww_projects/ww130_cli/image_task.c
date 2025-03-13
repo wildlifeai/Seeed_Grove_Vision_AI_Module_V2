@@ -75,6 +75,7 @@ fileOperation_t *fileOp;
 // This is the handle of the task
 TaskHandle_t image_task_id;
 QueueHandle_t xImageTaskQueue;
+const char gps_coordinates[48];
 
 volatile APP_IMAGE_TASK_STATE_E image_task_state = APP_IMAGE_TASK_STATE_UNINIT;
 
@@ -417,6 +418,10 @@ static APP_MSG_DEST_T handleEventForInit(APP_MSG_T img_recv_msg)
         case APP_MSG_IMAGETASK_DONE:
             send_msg.message.msg_event = APP_MSG_IMAGETASK_DONE;
             image_task_state = APP_IMAGE_TASK_STATE_INIT;
+            break;
+
+        case APP_MSG_IMAGETASK_SET_GPS:
+            char *gps_coordinates = (char *)img_recv_msg.msg_data;
             break;
 
         default:

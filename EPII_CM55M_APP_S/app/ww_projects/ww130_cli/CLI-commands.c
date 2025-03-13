@@ -82,6 +82,7 @@
 #include <stdio.h>
 #include <stdbool.h>
 #include <stdlib.h>
+#include <sys/time.h>
 
 /* FreeRTOS includes. */
 #include "FreeRTOS.h"
@@ -220,6 +221,8 @@ static BaseType_t prvWriteFile(char *pcWriteBuffer, size_t xWriteBufferLen, cons
 static BaseType_t prvReadFile(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 static BaseType_t prvSend(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 static BaseType_t prvCapture(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
+static BaseType_t prvGPS(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
+static BaseType_t prvStartDeployment(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 
 static void processSingleCharacter(char rxChar);
 static void processWW130Command(char *rxString);
@@ -358,6 +361,22 @@ static const CLI_Command_Definition_t xCapture = {
 	"capture <numCaptures> <timerDelay>:\r\n Capture <numCaptures> images per <timerDelay> in seconds\r\n",
 	prvCapture, /* The function to run. */
 	2			/* One parameter expected */
+};
+
+/* Structure that defines the "send" command line command. */
+static const CLI_Command_Definition_t xGPS = {
+	"gps",
+	"gps <str_gps_coordinates>:\r\n GPS <strGpsCoordinates> to match GPSLatitude=<latitude>;GPSLongitude=<longitude>\r\n",
+	prvGPS,
+	1 /* One parameters expected */
+};
+
+/* Structure that defines the "send" command line command. */
+static const CLI_Command_Definition_t xStartDeployment = {
+	"start", /* The command string to type. */
+	"startdeployment <projectName> <deploymentName> <locationName> <startTimeUtc> <deploymentLocationJpg> <gps> <setupBy>:\r\n startDeployment\r\n",
+	prvStartDeployment, /* The function to run. */
+	6					/* Seven parameters expected */
 };
 /********************************** Private Functions - for CLI commands *************************************/
 
@@ -1006,6 +1025,251 @@ static BaseType_t prvCapture(char *pcWriteBuffer, size_t xWriteBufferLen, const 
 	return pdFALSE;
 }
 
+/**
+ * Set GPS coordinates from deployment location
+ * Sends the  event to Image task to store for deployment period
+ * Retrieves one parameter string to match the format of "GPSLatitude=<latitude>;GPSLongitude=<longitude>"
+ */
+static BaseType_t prvGPS(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString)
+{
+	const char *pcParameter;
+	BaseType_t lParameterStringLength;
+	uint16_t eventNum;
+	APP_MSG_T send_msg;
+
+	/* Get parameter */
+	pcParameter = FreeRTOS_CLIGetParameter(pcCommandString, 1, &lParameterStringLength);
+	if (pcParameter != NULL)
+	{
+		// Check if the parameter is in the correct format
+		char *latitude = strcpy(pcParameter, "GPSLatitude=");
+		char *longitude = strcpy(pcParameter, "GPSLongitude=");
+		if (latitude && longitude)
+		{
+			send_msg.msg_data = pcParameter;
+			send_msg.msg_event = APP_MSG_IMAGETASK_SET_GPS;
+			if (xQueueSend(xTask1Queue, (void *)&send_msg, __QueueSendTicksToWait) != pdTRUE)
+			{
+				pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen, "send send_msg=0x%x fail\r\n", send_msg.msg_event);
+			}
+			else
+			{
+				pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen, "Sending event 0x%04x to Image task\r\n",
+										  send_msg.msg_event);
+			}
+		}
+		else
+		{
+			pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen, "Must supply a string input formatted to GPSLatitude=<latitude>;GPSLongitude=<longitude>\r\n");
+		}
+	}
+	else
+	{
+		pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen, "Must supply a string input formatted to GPSLatitude=<latitude>;GPSLongitude=<longitude>\r\n");
+	}
+
+	return pdFALSE;
+}
+
+/**
+ * Set GPS coordinates from deployment location
+ * Sends the  event to Image task to store for deployment period
+ * Retrieves one parameter string formatted to GPSLatitude=;GPSLongitude=
+ */
+static BaseType_t prvStartDeployment(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString)
+{
+	APP_MSG_T send_msg;
+	const char *projectName, *deploymentName, *locationName, *setupBy, *GPS;
+	static char projectNameStr[20], deploymentNameStr[20], locationNameStr[20], setupByStr[20], GPSStr[20];
+
+	time_t *startTimeUtc;
+	fileOperation_t *deploymentLocationJpg;
+
+	// Sets all parameters to variable name and types
+	for (int i = 1; i <= 7; i++)
+	{
+		const char *pcParameterX = NULL;
+		int mutatedParameter = 0;
+		BaseType_t xParameter;
+		pcParameterX = FreeRTOS_CLIGetParameter(pcCommandString, i, &xParameter);
+
+		if (pcParameterX != NULL)
+		{
+			switch (i)
+			{
+			case 1:
+				mutatedParameter = atoi(pcParameterX);
+				sprintf(projectNameStr, "%d", mutatedParameter);
+				projectName = projectNameStr;
+				break;
+			case 2:
+				mutatedParameter = atoi(pcParameterX);
+				sprintf(deploymentNameStr, "%d", mutatedParameter);
+				deploymentName = deploymentNameStr;
+				break;
+			case 3:
+				mutatedParameter = atoi(pcParameterX);
+				sprintf(locationNameStr, "%d", mutatedParameter);
+				locationName = locationNameStr;
+				break;
+			case 4:
+				mutatedParameter = atoi(pcParameterX);
+				sprintf(setupByStr, "%d", mutatedParameter);
+				setupBy = setupByStr;
+				break;
+			case 5:
+				mutatedParameter = atoi(pcParameterX);
+				sprintf(GPSStr, "%d", mutatedParameter);
+				GPS = GPSStr;
+				break;
+			case 6:
+				startTimeUtc = (time_t *)pcParameterX;
+				break;
+			case 7:
+				// Handle deploymentLocationJpg properly
+				break;
+			}
+		}
+	}
+
+	xprintf("projectName: %s, deploymentName: %s, locationName: %s, setupBy: %s, GPS: %s, startTimeUtc: %d, deploymentLocationJpg: %s\r\n", projectName, deploymentName, locationName, setupBy, GPS, startTimeUtc, deploymentLocationJpg);
+
+	// if (projectName && deploymentName)
+	// {
+	// 	uint32_t *data = (uint32_t *)send_msg.msg_data;
+	// 	data[0] = (uint32_t)startTimeUtc;
+	// 	data[1] = (uint32_t)GPS;
+	// 	send_msg.msg_data = data;
+	// 	send_msg.msg_event = APP_MSG_IMAGETASK_SET_DEPLOY_INFO;
+	// 	if (xQueueSend(xImageTaskQueue, (void *)&send_msg, __QueueSendTicksToWait) != pdTRUE)
+	// 	{
+	// 		pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen, "send send_msg=0x%x fail\r\n", send_msg.msg_event);
+	// 	}
+	// 	else
+	// 	{
+	// 		pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen, "Sending event 0x%04x to Image task\r\n",
+	// 								  send_msg.msg_event);
+	// 	}
+	// }
+	// else
+	// {
+	// 	pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen, "Failed to retrieve projectName, ensure project name field is in the format projectNameXXXX\r\n");
+	// }
+
+	// if (deploymentName && projectName && locationName && deploymentLocationJpg && setupBy)
+	// {
+	// 	uint32_t *data = (uint32_t *)&send_msg.msg_data;
+	// 	data[0] = (uint32_t)deploymentName;
+	// 	data[1] = (uint32_t)projectName;
+	// 	data[2] = (uint32_t)locationName;
+	// 	data[3] = (uint32_t)deploymentLocationJpg;
+	// 	data[4] = (uint32_t)setupBy;
+	// 	send_msg.msg_data = (void *)data;
+	// 	send_msg.msg_event = APP_MSG_FATFSTASK_SET_DATA;
+
+	// 	if (xQueueSend(xFatTaskQueue, (void *)&send_msg, __QueueSendTicksToWait) != pdTRUE)
+	// 	{
+	// 		pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen, "Failed to send data to xFatfsTask\r\n");
+	// 	}
+	// 	else
+	// 	{
+	// 		pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen, "Sending data to xFatfsTask\r\n");
+	// 	}
+	// }
+	// else
+	// {
+	// 	pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen, "Failed to retrieve all required parameters\r\n");
+	// }
+
+	// OLD from now
+
+	// /* Get the first parameter */
+	// pcParameter1 = FreeRTOS_CLIGetParameter(pcCommandString, 1, &xParameter1StringLength);
+	// if (pcParameter1 != NULL)
+	// {
+	// 	captures = atoi(pcParameter1);
+	// }
+	// else
+	// {
+	// 	snprintf(pcWriteBuffer, xWriteBufferLen, "Error: Invalid number of images.\r\n");
+	// 	return pdFALSE;
+	// }
+
+	// /* Get the second parameter */
+	// pcParameter2 = FreeRTOS_CLIGetParameter(pcCommandString, 2, &xParameter2StringLength);
+	// if (pcParameter2 != NULL)
+	// {
+	// 	timerInterval = atoi(pcParameter2);
+	// }
+	// else
+	// {
+	// 	snprintf(pcWriteBuffer, xWriteBufferLen, "Error: Invalid timer interval.\r\n");
+	// 	return pdFALSE;
+	// }
+
+	// /* Get the third parameter */
+	// pcParameter3 = FreeRTOS_CLIGetParameter(pcCommandString, 3, &xParameter3StringLength);
+	// if (pcParameter3 != NULL)
+	// {
+	// 	timerInterval = atoi(pcParameter3);
+	// }
+	// else
+	// {
+	// 	snprintf(pcWriteBuffer, xWriteBufferLen, "Error: Invalid timer interval.\r\n");
+	// 	return pdFALSE;
+	// }
+
+	// /* Get the fouth parameter */
+	// pcParameter4 = FreeRTOS_CLIGetParameter(pcCommandString, 4, &xParameter4StringLength);
+	// if (pcParameter4 != NULL)
+	// {
+	// 	timerInterval = atoi(pcParameter4);
+	// }
+	// else
+	// {
+	// 	snprintf(pcWriteBuffer, xWriteBufferLen, "Error: Invalid timer interval.\r\n");
+	// 	return pdFALSE;
+	// }
+
+	// /* Get the fifth parameter */
+	// pcParameter5 = FreeRTOS_CLIGetParameter(pcCommandString, 5, &xParameter5StringLength);
+	// if (pcParameter5 != NULL)
+	// {
+	// 	timerInterval = atoi(pcParameter5);
+	// }
+	// else
+	// {
+	// 	snprintf(pcWriteBuffer, xWriteBufferLen, "Error: Invalid timer interval.\r\n");
+	// 	return pdFALSE;
+	// }
+
+	// /* Get the sixth parameter */
+	// pcParameter6 = FreeRTOS_CLIGetParameter(pcCommandString, 6, &xParameter6StringLength);
+	// if (pcParameter6 != NULL)
+	// {
+	// 	timerInterval = atoi(pcParameter6);
+	// }
+	// else
+	// {
+	// 	snprintf(pcWriteBuffer, xWriteBufferLen, "Error: Invalid timer interval.\r\n");
+	// 	return pdFALSE;
+	// }
+
+	// /* Get the seventh parameter */
+	// pcParameter7 = FreeRTOS_CLIGetParameter(pcCommandString, 7, &xParameter7StringLength);
+	// if (pcParameter7 != NULL)
+	// {
+	// 	timerInterval = atoi(pcParameter7);
+	// }
+	// else
+	// {
+	// 	snprintf(pcWriteBuffer, xWriteBufferLen, "Error: Invalid timer interval.\r\n");
+	// 	return pdFALSE;
+	// }
+
+	return pdFALSE;
+}
+
 /********************************** Private Functions - Other *************************************/
 
 /**
@@ -1426,6 +1690,8 @@ static void vRegisterCLICommands(void)
 	FreeRTOS_CLIRegisterCommand(&xReadFile);
 	FreeRTOS_CLIRegisterCommand(&xSend);
 	FreeRTOS_CLIRegisterCommand(&xCapture);
+	FreeRTOS_CLIRegisterCommand(&xGPS);
+	FreeRTOS_CLIRegisterCommand(&xStartDeployment);
 }
 
 /********************************** Public Functions  *************************************/

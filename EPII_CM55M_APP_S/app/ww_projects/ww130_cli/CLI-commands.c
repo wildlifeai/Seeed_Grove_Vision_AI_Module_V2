@@ -1072,9 +1072,7 @@ static BaseType_t prvGPS(char *pcWriteBuffer, size_t xWriteBufferLen, const char
 }
 
 /**
- * Set GPS coordinates from deployment location
- * Sends the  event to Image task to store for deployment period
- * Retrieves one parameter string formatted to GPSLatitude=;GPSLongitude=
+ * Initial structure for multi-parameter handling
  */
 static BaseType_t prvStartDeployment(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString)
 {
@@ -1126,7 +1124,6 @@ static BaseType_t prvStartDeployment(char *pcWriteBuffer, size_t xWriteBufferLen
 				startTimeUtc = (time_t *)pcParameterX;
 				break;
 			case 7:
-				// Handle deploymentLocationJpg properly
 				break;
 			}
 		}
@@ -1134,139 +1131,30 @@ static BaseType_t prvStartDeployment(char *pcWriteBuffer, size_t xWriteBufferLen
 
 	xprintf("projectName: %s, deploymentName: %s, locationName: %s, setupBy: %s, GPS: %s, startTimeUtc: %d, deploymentLocationJpg: %s\r\n", projectName, deploymentName, locationName, setupBy, GPS, startTimeUtc, deploymentLocationJpg);
 
-	// if (projectName && deploymentName)
-	// {
-	// 	uint32_t *data = (uint32_t *)send_msg.msg_data;
-	// 	data[0] = (uint32_t)startTimeUtc;
-	// 	data[1] = (uint32_t)GPS;
-	// 	send_msg.msg_data = data;
-	// 	send_msg.msg_event = APP_MSG_IMAGETASK_SET_DEPLOY_INFO;
-	// 	if (xQueueSend(xImageTaskQueue, (void *)&send_msg, __QueueSendTicksToWait) != pdTRUE)
-	// 	{
-	// 		pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen, "send send_msg=0x%x fail\r\n", send_msg.msg_event);
-	// 	}
-	// 	else
-	// 	{
-	// 		pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen, "Sending event 0x%04x to Image task\r\n",
-	// 								  send_msg.msg_event);
-	// 	}
-	// }
-	// else
-	// {
-	// 	pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen, "Failed to retrieve projectName, ensure project name field is in the format projectNameXXXX\r\n");
-	// }
-
-	// if (deploymentName && projectName && locationName && deploymentLocationJpg && setupBy)
-	// {
-	// 	uint32_t *data = (uint32_t *)&send_msg.msg_data;
-	// 	data[0] = (uint32_t)deploymentName;
-	// 	data[1] = (uint32_t)projectName;
-	// 	data[2] = (uint32_t)locationName;
-	// 	data[3] = (uint32_t)deploymentLocationJpg;
-	// 	data[4] = (uint32_t)setupBy;
-	// 	send_msg.msg_data = (void *)data;
-	// 	send_msg.msg_event = APP_MSG_FATFSTASK_SET_DATA;
-
-	// 	if (xQueueSend(xFatTaskQueue, (void *)&send_msg, __QueueSendTicksToWait) != pdTRUE)
-	// 	{
-	// 		pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen, "Failed to send data to xFatfsTask\r\n");
-	// 	}
-	// 	else
-	// 	{
-	// 		pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen, "Sending data to xFatfsTask\r\n");
-	// 	}
-	// }
-	// else
-	// {
-	// 	pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen, "Failed to retrieve all required parameters\r\n");
-	// }
-
-	// OLD from now
-
-	// /* Get the first parameter */
-	// pcParameter1 = FreeRTOS_CLIGetParameter(pcCommandString, 1, &xParameter1StringLength);
-	// if (pcParameter1 != NULL)
-	// {
-	// 	captures = atoi(pcParameter1);
-	// }
-	// else
-	// {
-	// 	snprintf(pcWriteBuffer, xWriteBufferLen, "Error: Invalid number of images.\r\n");
-	// 	return pdFALSE;
-	// }
-
-	// /* Get the second parameter */
-	// pcParameter2 = FreeRTOS_CLIGetParameter(pcCommandString, 2, &xParameter2StringLength);
-	// if (pcParameter2 != NULL)
-	// {
-	// 	timerInterval = atoi(pcParameter2);
-	// }
-	// else
-	// {
-	// 	snprintf(pcWriteBuffer, xWriteBufferLen, "Error: Invalid timer interval.\r\n");
-	// 	return pdFALSE;
-	// }
-
-	// /* Get the third parameter */
-	// pcParameter3 = FreeRTOS_CLIGetParameter(pcCommandString, 3, &xParameter3StringLength);
-	// if (pcParameter3 != NULL)
-	// {
-	// 	timerInterval = atoi(pcParameter3);
-	// }
-	// else
-	// {
-	// 	snprintf(pcWriteBuffer, xWriteBufferLen, "Error: Invalid timer interval.\r\n");
-	// 	return pdFALSE;
-	// }
-
-	// /* Get the fouth parameter */
-	// pcParameter4 = FreeRTOS_CLIGetParameter(pcCommandString, 4, &xParameter4StringLength);
-	// if (pcParameter4 != NULL)
-	// {
-	// 	timerInterval = atoi(pcParameter4);
-	// }
-	// else
-	// {
-	// 	snprintf(pcWriteBuffer, xWriteBufferLen, "Error: Invalid timer interval.\r\n");
-	// 	return pdFALSE;
-	// }
-
-	// /* Get the fifth parameter */
-	// pcParameter5 = FreeRTOS_CLIGetParameter(pcCommandString, 5, &xParameter5StringLength);
-	// if (pcParameter5 != NULL)
-	// {
-	// 	timerInterval = atoi(pcParameter5);
-	// }
-	// else
-	// {
-	// 	snprintf(pcWriteBuffer, xWriteBufferLen, "Error: Invalid timer interval.\r\n");
-	// 	return pdFALSE;
-	// }
-
-	// /* Get the sixth parameter */
-	// pcParameter6 = FreeRTOS_CLIGetParameter(pcCommandString, 6, &xParameter6StringLength);
-	// if (pcParameter6 != NULL)
-	// {
-	// 	timerInterval = atoi(pcParameter6);
-	// }
-	// else
-	// {
-	// 	snprintf(pcWriteBuffer, xWriteBufferLen, "Error: Invalid timer interval.\r\n");
-	// 	return pdFALSE;
-	// }
-
-	// /* Get the seventh parameter */
-	// pcParameter7 = FreeRTOS_CLIGetParameter(pcCommandString, 7, &xParameter7StringLength);
-	// if (pcParameter7 != NULL)
-	// {
-	// 	timerInterval = atoi(pcParameter7);
-	// }
-	// else
-	// {
-	// 	snprintf(pcWriteBuffer, xWriteBufferLen, "Error: Invalid timer interval.\r\n");
-	// 	return pdFALSE;
-	// }
-
+	if (projectName && deploymentName)
+	{
+		xprintf("Entered projectName and deploymentName\r\n");
+		uint32_t *data = (uint32_t *)send_msg.msg_data;
+		data[0] = atoi(projectName);
+		data[1] = atoi(deploymentName);
+		send_msg.msg_data = data;
+		send_msg.msg_event = APP_MSG_IMAGETASK_SET_DEPLOY_INFO;
+		xprintf("msg_data: %s, %s\r\n", data[0], data[1]);
+		if (xQueueSend(xImageTaskQueue, (void *)&send_msg, __QueueSendTicksToWait) != pdTRUE)
+		{
+			pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen, "send send_msg=0x%x fail\r\n", send_msg.msg_event);
+		}
+		else
+		{
+			pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen, "Sending event 0x%04x to Image task\r\n",
+									  send_msg.msg_event);
+		}
+		xprintf("Passed queuesend");
+	}
+	else
+	{
+		pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen, "Failed to retrieve projectName, ensure project name field is in the format projectNameXXXX\r\n");
+	}
 	return pdFALSE;
 }
 

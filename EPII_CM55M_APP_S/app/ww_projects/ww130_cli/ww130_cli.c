@@ -393,9 +393,6 @@ int app_main(void){
 
 #ifdef CHECKGPS
 	check_GPS();	// test of GPS functions
-
-
-
 #endif	// CHECKGPS
 
 

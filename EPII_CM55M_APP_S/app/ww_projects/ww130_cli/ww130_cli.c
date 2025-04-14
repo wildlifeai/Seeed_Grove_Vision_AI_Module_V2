@@ -64,6 +64,8 @@
 
 internal_state_t internalStates[NUMBEROFTASKS];
 
+static char versionString[64]; // Make sure the buffer is large enough
+
 /*************************************** Local routine prototypes  *************************************/
 
 
@@ -111,6 +113,21 @@ void pinmux_init(void)
 	hx_drv_scu_set_all_pinmux_cfg(&pinmux_cfg, 1);
 }
 
+void initVersionString(void) {
+    snprintf(versionString, sizeof(versionString), "%s %s",__TIME__, __DATE__);
+}
+
+/*************************************** Public function definitions *************************************/
+
+// So the version can be reported
+char * app_get_version_string(void) {
+	return versionString;
+}
+
+char * app_get_board_name_string(void) {
+	static char * boardString = BOARD_NAME_STRING;
+	return boardString;
+}
 
 /*************************************** Main()  *************************************/
 
@@ -125,6 +142,8 @@ int app_main(void){
 	TaskHandle_t task_id;
 	internal_state_t internalState;
 	uint8_t taskIndex = 0;
+
+	initVersionString();
 
 	pinmux_init();
 
@@ -236,14 +255,6 @@ int app_main(void){
 		xprintf("FreeRTOS tickless idle is disabled. configMAX_PRIORITIES = %d\n", configMAX_PRIORITIES);
 		XP_WHITE;
 	}
-
-#ifdef CHECKGPS
-	check_GPS();	// test of GPS functions
-#endif	// CHECKGPS
-
-#ifdef CHECKRTC
-	check_RTC();	// DEBUG: see if the RTC works
-#endif	// CHECKRTC
 
 	// Initialises clock and sets a time to be going on with...
 	//exif_utc_init("2025-01-01T00:00:00Z");

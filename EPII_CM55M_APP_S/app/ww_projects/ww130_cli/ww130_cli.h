@@ -18,6 +18,7 @@
 #include "task.h"
 #include "if_task.h"
 
+
 #if defined(FREERTOS_SECONLY) || \
     defined(FREERTOS_NS) || \
     defined(RTE_CMSIS_RTOS2_FreeRTOS) || \
@@ -55,5 +56,8 @@ typedef struct {
 } internal_state_t;
 
 int app_main(void);
+
+char * app_get_version_string(void);
+char * app_get_board_name_string(void);
 
 #endif // APP_WW_PROJECTS_WW_TEMPLATE_H_

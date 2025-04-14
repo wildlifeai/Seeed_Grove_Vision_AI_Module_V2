@@ -101,6 +101,8 @@ void create_deployment_folder(void);
 /*************************************** External variables *******************************************/
 
 extern SemaphoreHandle_t xI2CTxSemaphore;
+
+// TODO - I DONT THINK THIS SHOULD BE A GLOBAL. iT SHOULD BE LOCAL TO THE CALLING FUNCTION!
 extern fileOperation_t *fileOp;
 
 /*************************************** Local variables *******************************************/
@@ -110,7 +112,7 @@ TaskHandle_t 		fatFs_task_id;
 QueueHandle_t     	xFatTaskQueue;
 extern QueueHandle_t     xIfTaskQueue;
 extern QueueHandle_t     xImageTaskQueue;
-//int g_cur_jpegenc_frame = 0; // This varoable is in image_task.c - does not belonh here.
+//int g_cur_jpegenc_frame = 0; // This variable is in image_task.c - does not belong here.
 
 // These are the handles for the input queues of Task2. So we can send it messages
 //extern QueueHandle_t     xFatTaskQueue;
@@ -217,6 +219,7 @@ static FRESULT fileWriteImage(fileOperation_t * fileOp) {
 	xprintf("Wrote image to SD: %s ", fileOp->fileName);
 	XP_WHITE;
 
+	// Printing the time seems redundant, as the time is already in the file name
 	exif_utc_get_rtc_as_time(&time);
 
 	xprintf("at %d:%d:%d %d/%d/%d\n",
@@ -280,6 +283,10 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 
 	event = rxMessage.msg_event;
 
+	// TODO - serious error here: fileOp should be passed in the message but we are not picking it up;
+	// Should have something like:
+	//fileOp = rxMessage.msg_data;
+
 	switch (event) {
 
 	case APP_MSG_FATFSTASK_WRITE_FILE:
@@ -287,10 +294,12 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
     	fatFs_task_state = APP_FATFS_STATE_BUSY;
     	xStartTime = xTaskGetTickCount();
 
+    	// The if statement is redundant, since we do the same thing in either case!
 		if( fileOp->senderQueue == xImageTaskQueue) {
 			//writes image
 			res = fileWriteImage(fileOp);
-		} else {
+		}
+		else {
 			//writes file
 			res = fileWrite(fileOp);
 		}
@@ -306,7 +315,8 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
     	// if the messages were grouped by the sender rather than the receiver, so this next test was not necessary:
     	if (sendMsg.destination == xIfTaskQueue) {
         	sendMsg.message.msg_event = APP_MSG_IFTASK_DISK_WRITE_COMPLETE;
-    	} else if (sendMsg.destination == xImageTaskQueue) {
+    	}
+    	else if (sendMsg.destination == xImageTaskQueue) {
 			sendMsg.message.msg_event = APP_MSG_IMAGETASK_DISK_WRITE_COMPLETE;
 		}
 //    	// Complete this as necessary
@@ -476,7 +486,7 @@ static void vFatFsTask(void *pvParameters) {
     	fatFs_task_state = APP_FATFS_STATE_IDLE;
     	// Only if the file system is working should we add CLI commands for FATFS
     	cli_fatfs_init();
-		create_deployment_folder();
+	create_deployment_folder();
     }
     else {
         xprintf("Fat FS init fail (reason %d)\r\n", res);

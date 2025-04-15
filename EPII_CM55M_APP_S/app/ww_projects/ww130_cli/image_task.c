@@ -48,7 +48,9 @@
 #define image_task_PRIORITY (configMAX_PRIORITIES - 2)
 
 #define IMAGE_TASK_QUEUE_LEN 10
-// Not used #define VAD_BUFF_SIZE 2048
+
+// This is experimental. TODO check it is ok
+#define MSGTOMASTERLEN 100
 
 /*************************************** Local Function Declarations *****************************/
 
@@ -69,14 +71,13 @@ static void app_start_state(APP_STATE_E state);
 // Send unsolicited message to the master
 static void sendMsgToMaster(char * str);
 
+static void setFileOpFromJpeg(uint32_t jpeg_sz, uint32_t jpeg_addr, uint32_t frame_num);
+
 /*************************************** External variables *******************************************/
 
 extern SemaphoreHandle_t xI2CTxSemaphore;
 extern QueueHandle_t xFatTaskQueue;
 extern QueueHandle_t     xIfTaskQueue;
-
-// TODO - I DONT THINK SHIS SHOULD BE A GLOBAL. iT SHOULD BE LOCAL TO THE CALLING FUNCTION!
-fileOperation_t *fileOp;
 
 /*************************************** Local variables *******************************************/
 
@@ -132,9 +133,12 @@ static char imageFileName[IMAGEFILENAMELEN];
 // This is the most recently written file name
 static char lastImageFileName[IMAGEFILENAMELEN] = "";
 
-// This is experimental. TODO check it is ok
-#define MSGTOMASTERLEN 100
+
+
 static char msgToMaster[MSGTOMASTERLEN];
+
+fileOperation_t *fileOp;
+
 
 /********************************** Local Functions  *************************************/
 
@@ -160,30 +164,8 @@ static void image_var_int(void)
  *
  * Parameters: uint32_t - jpeg_sz, jpeg_addr, frame_num
  */
-void set_jpeginfo(uint32_t jpeg_sz, uint32_t jpeg_addr, uint32_t frame_num) {
+static void setFileOpFromJpeg(uint32_t jpeg_sz, uint32_t jpeg_addr, uint32_t frame_num) {
 	rtc_time time;
-
-	// CGP all this can be replaced by new exif_utc.c functions.
-
-//    time_t current_time;
-//    struct tm *time_info;
-//    char fileDate[11];		// '2025-01-01' = 10 character, plus 1 for '\0'
-//
-//    time(&current_time);
-//    time_info = localtime(&current_time);
-//    // format fileDate
-//    strftime(fileDate, sizeof(fileDate), "%Y-%m-%d", time_info);
-
-//    // Allocate and set fileName
-//    fileOp->fileName = (char *)pvPortMalloc(24);
-//    if (fileOp->fileName == NULL)
-//    {
-//        printf("Memory allocation for fileName failed.\n");
-//        return;
-//    }
-//    // TODO fix compiler warning. Replace '24' with a defined value
-//    //  warning: '%04ld' directive output may be truncated writing between 4 and 11 bytes into a region of size between 0 and 19
-//    snprintf(fileOp->fileName, 24, "%simage%04ld.jpg", fileDate, g_cur_jpegenc_frame);
 
     // Create a file name
 	// file name: 'image_2025-02-03_1234.jpg' = 25 characters, plus trailing '\0'
@@ -196,7 +178,7 @@ void set_jpeginfo(uint32_t jpeg_sz, uint32_t jpeg_addr, uint32_t frame_num) {
     fileOp->fileName = imageFileName;
     fileOp->buffer = (uint8_t *)jpeg_addr;
     fileOp->length = jpeg_sz;
-    fileOp->senderQueue = xImageTaskQueue;
+    fileOp->senderQueue = xImageTaskQueue;	// us
     fileOp->closeWhenDone = true;
 }
 
@@ -542,9 +524,10 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg)
     case APP_MSG_IMAGETASK_DONE:
         g_cur_jpegenc_frame++;	// The number in this sequence
         g_frames_total++;		// The number since the start of time.
+
         cisdp_get_jpginfo(&jpeg_sz, &jpeg_addr);
-        //set_jpeginfo(jpeg_sz, jpeg_addr, g_cur_jpegenc_frame);
-        set_jpeginfo(jpeg_sz, jpeg_addr, g_frames_total);
+        // Set the fileOp structure
+        setFileOpFromJpeg(jpeg_sz, jpeg_addr, g_frames_total);
 
         dbg_printf(DBG_LESS_INFO, "Writing frame to %s, data size = %d, addr = 0x%x\n",
         		fileOp->fileName, fileOp->length, jpeg_addr);

@@ -468,13 +468,13 @@ static FRESULT fatFsInit(void) {
  * FreeRTOS task responsible for handling interactions with the FatFS
  */
 static void vFatFsTask(void *pvParameters) {
-    APP_MSG_T       rxMessage;
-    APP_MSG_DEST_T  txMessage;
+	APP_MSG_T       rxMessage;
+	APP_MSG_DEST_T  txMessage;
 	QueueHandle_t   targetQueue;
-    APP_MSG_T 		send_msg;
+	APP_MSG_T 		send_msg;
 	FRESULT res;
 
-    APP_FATFS_STATE_E old_state;
+	APP_FATFS_STATE_E old_state;
 	const char * eventString;
 	APP_MSG_EVENT_E event;
 	uint32_t rxData;
@@ -482,15 +482,17 @@ static void vFatFsTask(void *pvParameters) {
 	// One-off initialisation here...
 	res = fatFsInit();
 
-    if ( res == FR_OK ) {
-    	fatFs_task_state = APP_FATFS_STATE_IDLE;
-    	// Only if the file system is working should we add CLI commands for FATFS
-    	cli_fatfs_init();
-	create_deployment_folder();
-    }
-    else {
-        xprintf("Fat FS init fail (reason %d)\r\n", res);
-    }
+	if ( res == FR_OK ) {
+		fatFs_task_state = APP_FATFS_STATE_IDLE;
+		// Only if the file system is working should we add CLI commands for FATFS
+		cli_fatfs_init();
+		create_deployment_folder();
+	}
+	else {
+		xprintf("Fat FS init fail (reason %d)\r\n", res);
+		// Stay in uninit state. All events will be flagged as "unexpected"
+		fatFs_task_state = APP_FATFS_STATE_UNINIT;
+	}
 
 	// The task loops forever here, waiting for messages to arrive in its input queue
 	for (;;)  {
@@ -513,12 +515,12 @@ static void vFatFsTask(void *pvParameters) {
 
 			old_state = fatFs_task_state;
 
-    		// switch on state - and call individual event handling functions
-    		switch (fatFs_task_state) {
+			// switch on state - and call individual event handling functions
+			switch (fatFs_task_state) {
 
-    		case APP_FATFS_STATE_UNINIT:
-    			txMessage = flagUnexpectedEvent(rxMessage);
-    			break;
+			case APP_FATFS_STATE_UNINIT:
+				txMessage = flagUnexpectedEvent(rxMessage);
+				break;
 
     		case APP_FATFS_STATE_IDLE:
     			txMessage = handleEventForIdle(rxMessage);

@@ -45,4 +45,15 @@ we2_image_gen_local/Images*.txt
 *.map
 *.img
 
+we2_image_gen_local/arm_none_eabi/arm-none-eabi-objcopy
+we2_image_gen_local/arm_none_eabi/arm-none-eabi-objdump
+we2_image_gen_local/secureboot_tool/cert/ICVSBContent.crt
+we2_image_gen_local/secureboot_tool/cert/ICVSBContent_Cert.txt
+we2_image_gen_local/secureboot_tool/cert/Images.txt
+we2_image_gen_local/secureboot_tool/generate_secureboot_certificates
+we2_image_gen_local/secureboot_tool/sb_content_cert.log
+we2_image_gen_local/we2_local_image_gen
+we2_image_gen_local/arm-none-eabi-objcopy
+we2_image_gen_local/arm-none-eabi-objdump
+
 .vscode/

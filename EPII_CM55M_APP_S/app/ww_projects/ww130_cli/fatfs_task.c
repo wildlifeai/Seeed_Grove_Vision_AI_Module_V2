@@ -290,23 +290,25 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 	switch (event) {
 
 	case APP_MSG_FATFSTASK_WRITE_FILE:
-		// someone wants a file written. Structure including file name a buffer is passed in data
-    	fatFs_task_state = APP_FATFS_STATE_BUSY;
-    	xStartTime = xTaskGetTickCount();
+		if (mounted) {
+			// someone wants a file written. Structure including file name a buffer is passed in data
+			fatFs_task_state = APP_FATFS_STATE_BUSY;
+			xStartTime = xTaskGetTickCount();
 
-    	// The if statement is redundant, since we do the same thing in either case!
-		if( fileOp->senderQueue == xImageTaskQueue) {
-			//writes image
-			res = fileWriteImage(fileOp);
+			// The if statement is redundant, since we do the same thing in either case!
+			if( fileOp->senderQueue == xImageTaskQueue) {
+				//writes image
+				res = fileWriteImage(fileOp);
+			}
+			else {
+				//writes file
+				res = fileWrite(fileOp);
+			}
+
+			xprintf("Elapsed time (fileWrite) %dms\n", (xTaskGetTickCount() - xStartTime) * portTICK_PERIOD_MS );
+
+			fatFs_task_state = APP_FATFS_STATE_IDLE;
 		}
-		else {
-			//writes file
-			res = fileWrite(fileOp);
-		}
-
-		xprintf("Elapsed time (fileWrite) %dms\n", (xTaskGetTickCount() - xStartTime) * portTICK_PERIOD_MS );
-
-    	fatFs_task_state = APP_FATFS_STATE_IDLE;
 
     	// Inform the if task that the disk operation is complete
     	sendMsg.message.msg_data = (uint32_t) res;
@@ -331,17 +333,19 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 
 	case APP_MSG_FATFSTASK_READ_FILE:
 		// someone wants a file read
-    	fatFs_task_state = APP_FATFS_STATE_BUSY;
-    	xStartTime = xTaskGetTickCount();
-		res = fileRead(fileOp);
+		if (mounted) {
+			fatFs_task_state = APP_FATFS_STATE_BUSY;
+			xStartTime = xTaskGetTickCount();
+			res = fileRead(fileOp);
 
-		xprintf("Elapsed time (fileRead) %dms. Result code %d\n", (xTaskGetTickCount() - xStartTime) * portTICK_PERIOD_MS, res );
+			xprintf("Elapsed time (fileRead) %dms. Result code %d\n", (xTaskGetTickCount() - xStartTime) * portTICK_PERIOD_MS, res );
 
-    	fatFs_task_state = APP_FATFS_STATE_IDLE;
+			fatFs_task_state = APP_FATFS_STATE_IDLE;
+		}
 
-    	// Inform the if task that the disk operation is complete
-    	sendMsg.message.msg_data = (uint32_t) res;
-    	sendMsg.destination = fileOp->senderQueue;
+		// Inform the if task that the disk operation is complete
+		sendMsg.message.msg_data = (uint32_t) res;
+		sendMsg.destination = fileOp->senderQueue;
     	// The message to send depends on the destination! In retrospect it would have been better
     	// if the messages were grouped by the sender rather than the receiver, so this next test was not necessary:
     	if (sendMsg.destination == xIfTaskQueue) {

@@ -15,7 +15,7 @@
 extern "C" {
 #endif
 
-int cv_init(bool security_enable, bool privilege_enable);
+int cv_init(bool security_enable, bool privilege_enable, uint32_t model_addr);
 
 // CGP I am asking the NN processing to return an array
 //int cv_run();

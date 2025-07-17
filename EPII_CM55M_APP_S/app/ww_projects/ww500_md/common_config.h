@@ -27,4 +27,8 @@
 // Time to sleep between taking pictures
 #define	APP_SLEEP_INTERVAL	10000
 
+// Address set at virtual address: 0x3A200000 and called as physical memory region parameter: 0x200000
+// Default from Himax's GetModel function was 0x3A180000
+#define MODEL_ADDR 0x3A200000
+
 #endif /* APP_SCENARIO_ALLON_SENSOR_TFLM_COMMON_CONFIG_H_ */

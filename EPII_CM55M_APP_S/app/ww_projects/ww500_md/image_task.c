@@ -305,11 +305,11 @@ static void capture_timer_callback(TimerHandle_t xTimer) {
 static void generateImageFileName(uint16_t number) {
 #if FF_USE_LFN
     // Create a file name
-	// file name: 'image_2025-02-03_1234.jpg' = 25 characters, plus trailing '\0'
+	// file name: 'image_1234_2025-02-03.jpg' = 25 characters, plus trailing '\0'
 	rtc_time time;
 	exif_utc_get_rtc_as_time(&time);
-    snprintf(imageFileName, IMAGEFILENAMELEN, "image_%d-%02d-%02d_%04d.jpg",
-    		time.tm_year, time.tm_mon, time.tm_mday, (uint16_t) frame_num);
+    snprintf(imageFileName, IMAGEFILENAMELEN, "image_%04d_%d-%02d-%02d.jpg",
+             (uint16_t)frame_num, time.tm_year, time.tm_mon, time.tm_mday);
 #else
     // Must use 8.3 file name: upper case alphanumeric
     if (woken == APP_WAKE_REASON_MD)  {
@@ -1301,7 +1301,7 @@ static void vImageTask(void *pvParameters) {
     flashLEDPWMInit();
 
     // Computer vision init
-    if (cv_init(true, true) < 0)  {
+    if (cv_init(true, true, MODEL_ADDR) < 0)  {
     	xprintf("cv init fail\n");
         configASSERT(0);
     }

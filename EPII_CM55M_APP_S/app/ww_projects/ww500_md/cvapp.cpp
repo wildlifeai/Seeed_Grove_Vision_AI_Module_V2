@@ -167,14 +167,14 @@ static int _arm_npu_init(bool security_enable, bool privilege_enable)
 	return 0;
 }
 
-int cv_init(bool security_enable, bool privilege_enable) {
+int cv_init(bool security_enable, bool privilege_enable, uint32_t model_addr) {
 	int ercode = 0;
 
 	if (_arm_npu_init(security_enable, privilege_enable) != 0)
 		return -1;
 
 #if (FLASH_XIP_MODEL == 1)
-	static const tflite::Model *model = tflite::GetModel((const void *)0x3A180000);
+	static const tflite::Model *model = tflite::GetModel((const void *)model_addr);
 #else
 	static const tflite::Model *model = tflite::GetModel((const void *)g_person_detect_model_data_vela);
 #endif

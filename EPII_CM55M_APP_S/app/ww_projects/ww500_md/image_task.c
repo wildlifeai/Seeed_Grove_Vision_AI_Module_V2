@@ -696,7 +696,7 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
 
 			if (outCategories[1] > 0) {
 				XP_LT_GREEN;
-				xprintf("PERSON DETECTED!\n");
+				xprintf("TARGET ANIMAL DETECTED!\n");
 				// NOTE this only works if CATEGORIESCOUNT == 2
 	        	fatfs_incrementOperationalParameter(OP_PARAMETER_NUM_POSITIVE_NN_ANALYSES);
 	        	nnPositive = true;
@@ -707,7 +707,7 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
 			}
 			else {
 				XP_LT_RED;
-				xprintf("No person detected.\n");
+				xprintf("No target animal detected.\n");
 				XP_WHITE;
 			}
 			XP_WHITE;

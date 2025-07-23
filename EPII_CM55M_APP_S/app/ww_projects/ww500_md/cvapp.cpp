@@ -268,25 +268,25 @@ TfLiteStatus cv_run(int8_t * outCategories, uint16_t categoriesCount) {
 //	}
 #if ORIGINAL
 	// retrieve output data
-	int8_t person_score = output->data.int8[1];
-	// CGP not used int8_t no_person_score = output->data.int8[0];
+	int8_t model_score = output->data.int8[1];
+	// CGP not used int8_t no_model_score = output->data.int8[0];
 
 	// CGP add some colour to highlight this message
-	if (person_score > 0) {
+	if (model_score > 0) {
 		XP_LT_GREEN;
-		xprintf("PERSON DETECTED!\n\n");
+		xprintf("TARGET ANIMAL DETECTED!\n\n");
 	}
 	else {
 		XP_LT_RED;
-		xprintf("No person detected.\n\n");
+		xprintf("No target animal detected.\n\n");
 	}
 	XP_WHITE;
 
-	xprintf("Person_score: %d\n", person_score);
+	xprintf("model_score: %d\n", model_score);
 
 	// error_reporter not declared...
 	//	error_reporter->Report(
-	//		   "   person score: %d, no person score: %d\n", person_score, no_person_score);
+	//		   "   model score: %d, no model score: %d\n", model_score, no_model_score);
 #else
 	if (categoriesCount != 2) {
 		return kTfLiteError;	// error

@@ -47,6 +47,7 @@ typedef enum {
 	OP_PARAMETER_LED_FLASH_DUTY,	// 9 in percent (0 inhibits)
 	OP_PARAMETER_CAMERA_ENABLED,	// 10 0 = disabled, 1 = enabled
 	OP_PARAMETER_MD_INTERVAL,		// 11 Interval (ms) between frames in MD mode (0 inhibits)
+	OP_PARAMETER_MODEL_NUMBER,      // 12 Model number used for the NN model
 	OP_PARAMETER_NUM_ENTRIES		// Count of entries above here
 } OP_PARAMETERS_E;
 

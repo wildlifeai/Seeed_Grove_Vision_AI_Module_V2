@@ -32,7 +32,32 @@
 
 #define CONFIG_DIR "/config"
 
+// #define MAX_TRACKED_DIRS 5
+// #define MAX_DIR_NAME_LEN 64
+
 /**************************************** Type declarations  *************************************/
+
+// typedef enum {
+//     DIR_CONFIG,
+//     DIR_IMAGES,
+//     DIR_TFLITE,
+//     DIR_LOGS,
+//     DIR_MODELS,
+//     DIR_COUNT  
+// } DirectoryType;
+
+// typedef struct {
+//     FIL file;                     
+//     FRESULT res;                  
+//     bool isOpen;                  
+//     char path[MAX_DIR_NAME_LEN]; 
+// } DirectoryEntry;
+
+// typedef struct {
+//     DirectoryEntry dirs[DIR_COUNT]; // One entry per tracked directory
+//     int imageDirIdx;                
+//     char baseDir[MAX_DIR_NAME_LEN]; // Base mount path (e.g., "")
+// } DirectoryManager;
 
 typedef struct
 {

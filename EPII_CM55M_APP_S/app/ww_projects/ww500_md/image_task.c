@@ -1301,7 +1301,7 @@ static void vImageTask(void *pvParameters) {
     flashLEDPWMInit();
 
     // Computer vision init
-    if (cv_init(true, true, MODEL_ADDR) < 0)  {
+    if (cv_init(true, true) < 0)  {
     	xprintf("cv init fail\n");
         configASSERT(0);
     }

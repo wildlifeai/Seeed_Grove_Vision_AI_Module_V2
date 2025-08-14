@@ -16,8 +16,15 @@
  *		use flash memory mapped address to load model.
  *		in this example, model data is pre-burn to flash address: 0x180000
  * **/
-#define FLASH_XIP_MODEL             0
-#define MEM_FREE_POS                (BOOT2NDLOADER_BASE)
+
+#define MODEL_FROM_C_FILE 0
+#define MODEL_FROM_FLASH 1
+#define MODEL_FROM_SD_CARD 2
+
+#define MODEL_LOAD_MODE MODEL_FROM_SD_CARD
+// #define FLASH_XIP_MODEL             0
+
+#define MEM_FREE_POS (BOOT2NDLOADER_BASE)
 
 #define SUPPORT_FATFS               1       // 0 : send images via SPI, 1 : save images to SD card
 #define ENTER_SLEEP_MODE			0		// 0 : always on, 1 : enter Sleep mode
@@ -29,6 +36,6 @@
 
 // Address set at virtual address: 0x3A200000 and called as physical memory region parameter: 0x200000
 // Default from Himax's GetModel function was 0x3A180000
-#define MODEL_ADDR 0x3A200000
+#define MODEL_ADDR 0x3A3BB000
 
 #endif /* APP_SCENARIO_ALLON_SENSOR_TFLM_COMMON_CONFIG_H_ */

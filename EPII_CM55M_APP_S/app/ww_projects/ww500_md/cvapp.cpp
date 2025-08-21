@@ -18,7 +18,7 @@
 #include "FreeRTOS.h"
 #include "hx_drv_spi.h"
 #include "spi_eeprom_comm.h"
-// #include "../../scenario_app/edge_impulse_firmware/firmware-sdk/ei_device_info_lib.h"
+#include "task.h"
 
 #include "WE2_core.h"
 #include "WE2_device.h"
@@ -62,26 +62,23 @@ __attribute__((section(".bss.NoInit"))) uint8_t tensor_arena_buf[TENSOR_ARENA_BU
 
 using namespace std;
 
-
-static const tflite::Model *GetModelFromSdCard(void);
-uint32_t read_data(uint8_t *data, uint32_t address, uint32_t num_bytes);
-uint32_t erase_data(uint32_t address, uint32_t num_bytes);
-uint32_t write_data_local(const uint8_t *data, uint32_t address, uint32_t num_bytes);
-
-bool is_model_in_flash(void);
-int load_model_from_sd_to_flash(void);
-const tflite::Model* load_model_from_flash(void);
+int load_model_cli_command(int model_selection);
+bool is_model_in_flash(char* filename);
+int load_model_from_sd_to_flash(char* filename);
+static const tflite::Model* load_model_from_flash(void);
+int erase_model_flash_area(uint32_t model_size);
+void cleanup_model_buffer(void);
 
 // SPI EEPROM configuration
 static USE_DW_SPI_MST_E spi_id = USE_DW_SPI_MST_Q;
 static bool flash_initialized = false;
 
-uint32_t memory_size;
-const int BLOCK_SIZE = 1024;
-const int MEMORY_BLOCKS = 50;
-static uint8_t ram_memory[MEMORY_BLOCKS * BLOCK_SIZE];
+// Global pointer to hold dynamically allocated model
+static uint8_t* global_model_buffer = nullptr;
+
 // Add a flag to track if we've already loaded from SD card
 static bool model_loaded_from_sd = false;
+int model_number = 2;
 
 namespace
 {
@@ -194,7 +191,6 @@ static int _arm_npu_init(bool security_enable, bool privilege_enable)
 }
 
 int cv_init(bool security_enable, bool privilege_enable) {
-    int ercode = 0;
     
     if (_arm_npu_init(security_enable, privilege_enable) != 0) {
         return -1;
@@ -211,37 +207,37 @@ int cv_init(bool security_enable, bool privilege_enable) {
 #elif (MODEL_LOAD_MODE == MODEL_FROM_SD_CARD)
     // Check if we need to load from SD card
     if (!model_loaded_from_sd) {
-        printf("First boot with SD card mode\n");
+        char filename[1];
+        xprintf("First boot with SD card mode\n");
         
         // Check if model exists in flash
-        if (!is_model_in_flash()) {
-			printf("No model in flash, loading from SD card...\n");
-			if (load_model_from_sd_to_flash() == 0) {
+        if (!is_model_in_flash(filename)) {
+			xprintf("No model in flash, loading from SD card...\n");
+			if (load_model_from_sd_to_flash(filename) == 0) {
 				model_loaded_from_sd = true;
-				printf("Model loaded from SD card, rebooting to reinitialize...\n");
-				// Give time for printf to complete
+				xprintf("Model loaded from SD card, rebooting to reinitialize...\n");
+				// Give time for xprintf to complete
 				for (volatile int i = 0; i < 1000000; i++);
 				NVIC_SystemReset(); // Reboot to reinitialize with new model
 			} else {
-				printf("Failed to load model from SD card\n");
+				xprintf("Failed to load model from SD card\n");
 				return -1;
 			}
         } else {
-            printf("Model already exists in flash, skipping SD load\n");
+            xprintf("Model already exists in flash, skipping SD load\n");
             model_loaded_from_sd = true;
         }
     }
-    
     // Load the model from flash
     model = load_model_from_flash();
 #endif
     
     if (!model) {
-        printf("Failed to load model\n");
+        xprintf("Failed to load model\n");
         return -1;
     }
     
-    printf("Model loaded successfully\n");
+    xprintf("Model loaded successfully\n");
 
 	if (model->version() != TFLITE_SCHEMA_VERSION) {
 		xprintf("[ERROR] Model's schema version %d is not equal to supported version %d\n",
@@ -260,14 +256,14 @@ int cv_init(bool security_enable, bool privilege_enable) {
 		xprintf("Failed to add Arm NPU support to op resolver.\n");
 		return -1;
 	}
-
+    
 	static tflite::MicroInterpreter static_interpreter(
 		model,
 		op_resolver,
 		(uint8_t *)tensor_arena,
 		tensor_arena_size,
 		&micro_error_reporter);
-
+        
 	if (static_interpreter.AllocateTensors() != kTfLiteOk) {
 		xprintf("Failed to allocate tensors\n");
 		return -1;
@@ -275,26 +271,25 @@ int cv_init(bool security_enable, bool privilege_enable) {
 	int_ptr = &static_interpreter;
 	input = static_interpreter.input(0);
 	output = static_interpreter.output(0);
-
 	return 0;
 }
 
-// Initialize flash if not already done
+// Initialize the flash memory (SPI EEPROM)
 int init_flash(void) {
     if (!flash_initialized) {
         xprintf("Init EEPROM...\r\n");
-        
+
         if (hx_lib_spi_eeprom_open(spi_id) != 0) {
             xprintf("Failed to open SPI EEPROM\n");
             return -1;
         }
-        
+
         uint8_t id_info = 0;
         if (hx_lib_spi_eeprom_read_ID(spi_id, &id_info) != 0) {
             xprintf("Failed to read flash ID\n");
             return -1;
         }
-        
+        xprintf("Flash ID: 0x%02X\n", id_info);
         flash_initialized = true;
     }
     return 0;
@@ -305,256 +300,245 @@ uint32_t calculate_sectors_needed(uint32_t data_size) {
     return ((data_size + sizeof(uint32_t) + FLASH_SECTOR_SIZE - 1) / FLASH_SECTOR_SIZE);
 }
 
-// Check if there's a valid model in flash memory
-bool is_model_in_flash(void) {
+// Improved model validation with detailed debugging
+bool is_model_in_flash(char* filename) {
     if (init_flash() != 0) {
         return false;
     }
-    
-    // Read model header (magic + model_number + size)
-    uint32_t header[3] = {0}; // [magic, model_number, size]
-    
-    if (hx_lib_spi_eeprom_word_read(spi_id, MODEL_FLASH_ADDR, header, sizeof(header)) != 0) {
-        printf("Failed to read model header from flash\n");
+
+    uint8_t header[16] = {0};
+    if (hx_lib_spi_eeprom_word_read(spi_id, MODEL_FLASH_ADDR, (uint32_t*)header, sizeof(header)) != 0) {
+        xprintf("Failed to read model header from flash\n");
         return false;
     }
-    
-    uint32_t magic = header[0];
-    uint32_t model_number = header[1];
-    uint32_t modelSize = header[2];
-    
-    // Check magic number
-    if (magic != MODEL_MAGIC_HEADER) {
-        printf("No valid model found in flash (invalid magic: 0x%08lX)\n", magic);
-        return false;
+
+    xprintf("Flash header bytes: ");
+    for (int i = 0; i < 16; i++) {
+        xprintf("%02X ", header[i]);
     }
-    
-    // Check model number matches
-    if (model_number != MODEL_NUMBER) {
-        printf("Model in flash has wrong number: %05lu (expected: %05d)\n", model_number, MODEL_NUMBER);
-        return false;
-    }
-    
-    // Basic size validation
-    if (modelSize > 0 && modelSize != 0xFFFFFFFF && modelSize < FLASH_MODEL_AREA_SIZE) {
-        printf("Found correct model in flash: MOD%05lu.tfl (%lu bytes)\n", model_number, modelSize);
-        return true;
-    }
-    
-    printf("Model in flash has invalid size: %lu bytes\n", modelSize);
-    return false;
+    xprintf("\n");
+
+    // Check for "TFL3"
+    xprintf("Checking bytes 4-7: %02X %02X %02X %02X (should be 54 46 4C 33)\n",
+           header[4], header[5], header[6], header[7]);
+
+    return (header[4] == 0x54 && header[5] == 0x46 &&
+            header[6] == 0x4C && header[7] == 0x33);
 }
 
 // Erase flash sectors for model storage
 int erase_model_flash_area(uint32_t model_size) {
+    cleanup_model_buffer();
     if (init_flash() != 0) {
         return -1;
     }
-    
-    uint32_t total_size = sizeof(uint32_t) + model_size; // Size header + model data
+
+    uint32_t total_size = model_size; 
     uint32_t sectors_needed = calculate_sectors_needed(total_size);
-    
-    xprintf("Erasing %lu sectors for %lu bytes of data...\n", sectors_needed, total_size);
-    
+
+    xprintf("Erasing %lu sectors for %lu bytes of model...\n", sectors_needed, total_size);
+
     for (uint32_t i = 0; i < sectors_needed; i++) {
         uint32_t sector_addr = MODEL_FLASH_ADDR + (i * FLASH_SECTOR_SIZE);
-        
         if (hx_lib_spi_eeprom_erase_sector(spi_id, sector_addr, FLASH_SECTOR) != 0) {
             xprintf("Failed to erase sector at address 0x%08lX\n", sector_addr);
             return -1;
         }
     }
-    
+
     return 0;
 }
 
-// Load model from SD card to flash memory (returns success/failure)
-int load_model_from_sd_to_flash(void) {
+// Load model from SD to flash at MODEL_FLASH_ADDR
+int load_model_from_sd_to_flash(char *filename) {
     FRESULT res;
     FIL file;
     UINT bytesRead;
-    uint8_t buffer[512];
-    char filename[16];
-    
-    // Generate filename based on MODEL_NUMBER: MOD00001.tfl
-    snprintf(filename, sizeof(filename), "MOD%05d.tfl", MODEL_NUMBER);
-    
-    printf("Loading model %s from SD card to flash...\n", filename);
-    
+    uint8_t buffer[512] __attribute__((aligned(4)));
+
     if (init_flash() != 0) {
         return -1;
     }
-    
+
     res = f_open(&file, filename, FA_READ);
     if (res != FR_OK) {
-        printf("Failed to open model file %s (error: %d)\n", filename, res);
+        xprintf("Failed to open model file %s (error: %d)\n", filename, res);
         return -1;
     }
-    
-    printf("Successfully opened model file %s\n", filename);
-    
-    // Get file size
+
     DWORD fileSize = f_size(&file);
     if (fileSize == 0) {
-        printf("Model file is empty\n");
+        xprintf("Model file is empty\n");
         f_close(&file);
         return -1;
     }
-    
-    printf("Model file size: %lu bytes\n", fileSize);
-    
-    // Erase flash sectors before writing (account for header + model data)
-    uint32_t total_data_size = sizeof(uint32_t) * 3 + fileSize; // header + model
-    if (erase_model_flash_area(total_data_size) != 0) {
-        printf("Failed to erase flash for model\n");
+    xprintf("Model file size: %lu bytes\n", fileSize);
+
+    if (erase_model_flash_area(fileSize) != 0) {
+        xprintf("Failed to erase flash for model\n");
         f_close(&file);
         return -1;
     }
-    
-    // Write the model header: [magic, model_number, size]
-    uint32_t header[3] = {MODEL_MAGIC_HEADER, MODEL_NUMBER, (uint32_t)fileSize};
-    if (hx_lib_spi_eeprom_word_write(spi_id, MODEL_FLASH_ADDR, header, sizeof(header)) != 0) {
-        printf("Failed to write model header\n");
-        f_close(&file);
-        return -1;
-    }
-    
-    printf("Written model header: magic=0x%08lX, number=%05lu, size=%lu bytes\n", 
-           header[0], header[1], header[2]);
-    
-    // Write the model data after the header
-    uint32_t flash_address = MODEL_FLASH_ADDR + sizeof(header);
-    uint32_t totalBytesWritten = 0;
-    
-    while (totalBytesWritten < fileSize) {
+
+    uint32_t flash_address = MODEL_FLASH_ADDR;
+    uint32_t virt_address  = phys_to_virt(MODEL_FLASH_ADDR);
+
+    uint32_t totalBytesRead = 0;
+    while (totalBytesRead < fileSize) {
+        memset(buffer, 0x00, sizeof(buffer));
+
         res = f_read(&file, buffer, sizeof(buffer), &bytesRead);
         if (res != FR_OK || bytesRead == 0) {
-            if (res != FR_OK) {
-                printf("File read error: %d\n", res);
-            }
             break;
         }
-        
-        // Write to flash - ensure we write in word-aligned chunks
-        uint32_t write_size = ((bytesRead + 3) / 4) * 4; // Round up to next 4-byte boundary
-        
-        // Pad buffer if necessary
-        if (write_size > bytesRead) {
-            memset(&buffer[bytesRead], 0xFF, write_size - bytesRead);
-        }
-        
+
+        uint32_t write_size = ((bytesRead + 3) / 4) * 4;
+
+        xprintf("Writing %lu bytes (aligned to %lu) at flash addr 0x%08lX\n",
+               bytesRead, write_size, flash_address);
+
         if (hx_lib_spi_eeprom_word_write(spi_id, flash_address, (uint32_t*)buffer, write_size) != 0) {
-            printf("Flash write failed at address 0x%08lX\n", flash_address);
+            xprintf("Flash write failed at 0x%08lX\n", flash_address);
             f_close(&file);
             return -1;
         }
-        
+
+        // Verify via virtual mapping
+        volatile uint32_t *verify_virt = (volatile uint32_t*)(virt_address + totalBytesRead);
+        volatile uint32_t *buffer_check = (volatile uint32_t*)buffer;
+        if (verify_virt[0] != buffer_check[0]) {
+            xprintf("WARNING: Verification mismatch at 0x%08lX (expected 0x%08lX, got 0x%08lX)\n",
+                   virt_address + totalBytesRead, buffer_check[0], verify_virt[0]);
+        }
+
         flash_address += write_size;
-        totalBytesWritten += bytesRead; // Only count actual file bytes, not padding
+        totalBytesRead += bytesRead;
     }
-    
+
     f_close(&file);
-    
-    if (totalBytesWritten == fileSize) {
-        printf("Model successfully written to flash at 0x%08lX (%lu bytes)\n", MODEL_FLASH_ADDR, fileSize);
+
+    if (totalBytesRead == fileSize) {
+        xprintf("Model successfully written to physical 0x%08lX (virtual 0x%08lX)\n",
+               MODEL_FLASH_ADDR, virt_address);
+
+        volatile uint8_t *final_check = (volatile uint8_t*)virt_address;
+        xprintf("Final check at 0x%08lX: ", virt_address);
+        for (int i = 0; i < 16; i++) xprintf("%02X ", final_check[i]);
+        xprintf("\n");
+
         return 0;
-    } else {
-        printf("Incomplete write: %lu/%lu bytes\n", totalBytesWritten, fileSize);
-        return -1;
     }
+
+    xprintf("Incomplete write: %lu/%lu bytes\n", totalBytesRead, fileSize);
+    return -1;
 }
 
-
-// Load model from flash memory and return TFLite model pointer
-const tflite::Model* load_model_from_flash(void) {
+// CLAUDYCLAUD
+// Modified load function - test BOTH SPI and XIP access
+static const tflite::Model *load_model_from_flash(void)
+{
     if (init_flash() != 0) {
+        xprintf("Flash init failed\n");
         return nullptr;
     }
-    
-    // Read model header (magic + model_number + size)
-    uint32_t header[3] = {0}; // [magic, model_number, size]
-    
-    if (hx_lib_spi_eeprom_word_read(spi_id, MODEL_FLASH_ADDR, header, sizeof(header)) != 0) {
-        printf("Failed to read model header from flash\n");
+
+    const uint32_t phys = MODEL_FLASH_ADDR;     // 0x00200000
+    const uint32_t virt = phys_to_virt(phys);   // 0x3A200000
+
+    // Step 1: Read via SPI to confirm data exists
+    uint8_t spi_hdr[16] = {0};
+    if (hx_lib_spi_eeprom_word_read(spi_id, phys, (uint32_t*)spi_hdr, sizeof(spi_hdr)) != 0) {
+        xprintf("SPI read failed at 0x%08lX\n", phys);
         return nullptr;
     }
-    
-    uint32_t magic = header[0];
-    uint32_t model_number = header[1];
-    uint32_t modelSize = header[2];
-    
-    // Validate header
-    if (magic != MODEL_MAGIC_HEADER || model_number != MODEL_NUMBER) {
-        printf("Invalid model in flash (magic: 0x%08lX, number: %05lu)\n", magic, model_number);
+
+    xprintf("SPI@0x%08lX: ", phys);
+    for (int i = 0; i < 16; i++) xprintf("%02X ", spi_hdr[i]);
+    xprintf("\n");
+
+    // Check if we have valid TFLite header via SPI
+    if (spi_hdr[4] != 0x54 || spi_hdr[5] != 0x46 || 
+        spi_hdr[6] != 0x4C || spi_hdr[7] != 0x33) {
+        xprintf("No valid TFLite model in flash (SPI check)\n");
         return nullptr;
     }
+
+    // Step 2: Try XIP access (may not work without proper config)
+    volatile uint8_t *xip_hdr = (volatile uint8_t*)virt;
+    xprintf("XIP@0x%08lX: ", virt);
+    for (int i = 0; i < 16; i++) xprintf("%02X ", xip_hdr[i]);
+    xprintf("\n");
+
+    // Step 3: Check if XIP matches SPI data
+    bool xip_matches = (memcmp((const void*)spi_hdr, (const void*)xip_hdr, 16) == 0);
     
-    if (modelSize == 0 || modelSize == 0xFFFFFFFF) {
-        printf("No valid model found in flash\n");
-        return nullptr;
-    }
-    
-    printf("Loading model MOD%05lu.tfl from flash (%lu bytes) using XIP mode\n", model_number, modelSize);
-    
-    // Calculate physical address where model data starts (after header)
-    uint32_t model_data_phys_addr = MODEL_FLASH_ADDR + sizeof(header);
-    
-    // Convert physical address to virtual address for XIP access
-    uint32_t model_data_virt_addr = FLASH_PHYS_TO_VIRT(model_data_phys_addr);
-    
-    printf("model_data_phys_addr: 0x%08lX\n", model_data_phys_addr);
-    printf("model_data_virt_addr: 0x%08lX\n", model_data_virt_addr);
-    
-    // Cast virtual address to void pointer for XIP access
-    const void* model_data = (const void*)model_data_virt_addr;
-    
-    // Create TFLite model directly from flash memory (XIP)
-    const tflite::Model* model = tflite::GetModel(model_data);
-    if (!model) {
-        printf("Failed to parse TFLite model from flash XIP data\n");
-        
-        // Fallback: try reading into RAM if XIP doesn't work
-        printf("Attempting fallback: loading model into RAM\n");
-        
-        // Allocate memory for model data
-        static uint8_t* model_buffer = nullptr;
-        if (model_buffer) {
-            free(model_buffer);
-        }
-        
-        // Allocate word-aligned buffer
-        uint32_t aligned_size = ((modelSize + 3) / 4) * 4;
-        model_buffer = (uint8_t*)malloc(aligned_size);
-        if (!model_buffer) {
-            printf("Failed to allocate memory for model (%lu bytes)\n", aligned_size);
-            return nullptr;
-        }
-        
-        // Read model data from flash into RAM using physical address
-        if (hx_lib_spi_eeprom_word_read(spi_id, model_data_phys_addr, (uint32_t*)model_buffer, aligned_size) != 0) {
-            printf("Failed to read model data from flash\n");
-            free(model_buffer);
-            model_buffer = nullptr;
-            return nullptr;
-        }
-        
-        // Try creating model from RAM buffer
-        model = tflite::GetModel(model_buffer);
-        if (!model) {
-            printf("Failed to parse TFLite model from RAM buffer\n");
-            free(model_buffer);
-            model_buffer = nullptr;
-            return nullptr;
-        }
-        
-        printf("Model successfully loaded from flash via RAM fallback\n");
+    if (xip_matches) {
+        xprintf("XIP mapping works! Using virtual address\n");
+        static const tflite::Model* model = tflite::GetModel((const void *)virt);
+        return model;
     } else {
-        printf("Model successfully loaded from flash using XIP mode: MOD%05lu.tfl\n", model_number);
+        xprintf("XIP mapping broken - trying to enable XIP mode...\n");
+        
+        // Try to enable basic XIP mode
+        if (hx_lib_spi_eeprom_enable_XIP(spi_id, true, FLASH_SINGLE, true) == 0) {
+            xprintf("XIP enabled, checking again...\n");
+            
+            // Re-check XIP access
+            xprintf("XIP retry@0x%08lX: ", virt);
+            for (int i = 0; i < 16; i++) xprintf("%02X ", xip_hdr[i]);
+            xprintf("\n");
+            
+            if (memcmp((const void*)spi_hdr, (const void*)xip_hdr, 16) == 0) {
+                xprintf("XIP now works! Loading model\n");
+                static const tflite::Model* model = tflite::GetModel((const void *)virt);
+                return model;
+            }
+        }
+        
+        xprintf("XIP still not working - this hardware may not support memory-mapped flash\n");
+        return nullptr;
     }
-    
-    return model;
 }
 
+// Clean up function (call when switching models)
+void cleanup_model_buffer(void) {
+    if (global_model_buffer) {
+        vPortFree(global_model_buffer); 
+        global_model_buffer = nullptr;
+        model_loaded_from_sd = false;
+        xprintf("Model buffer cleaned up\n");
+    }
+}
+
+int load_model_cli_command(int model_selection){
+    model_number = model_selection;
+    static const tflite::Model* model;
+    char filename[16];
+    snprintf(filename, sizeof(filename), "MOD0000%01d.tfl", model_number);
+    xprintf("filename: %s\n", filename);
+
+    if (model_number > 0){
+        // Check if model exists in flash
+        if (!is_model_in_flash(filename)) {
+            xprintf("No model in flash, loading from SD card...\n");
+            if (load_model_from_sd_to_flash(filename) == 0) {
+                model_loaded_from_sd = true;
+                xprintf("Model loaded from SD card, rebooting to reinitialize...\n");
+                // Give time for xprintf to complete
+                for (volatile int i = 0; i < 1000000; i++);
+                NVIC_SystemReset(); // Reboot to reinitialize with new model
+            } else {
+                xprintf("Failed to load model from SD card\n");
+                return -1;
+            }
+        } else { 
+            xprintf("Model already exists in flash, skipping SD load\n");
+            model_loaded_from_sd = true;
+        }
+    }
+    // Load the model from flash
+    model = load_model_from_flash();
+}
 
 /**
  * This runs the neural network processing.

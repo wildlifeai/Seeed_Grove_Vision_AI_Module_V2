@@ -122,6 +122,7 @@
 #include "exif_utc.h"
 #include "hx_drv_rtc.h"
 #include "ww500_md.h"
+#include "cvapp.h"
 
 /*************************************** Definitions *******************************************/
 
@@ -235,6 +236,7 @@ static BaseType_t prvCapture(char *pcWriteBuffer, size_t xWriteBufferLen, const 
 static BaseType_t prvSetgps(char *pcWriteBuffer, size_t writeBufferLen, const char *pcCommandString);
 static BaseType_t prvGetgps(char *writeBuffer, size_t writeBufferLen, const char *commandString);
 static BaseType_t prvExifGpsTests(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
+static BaseType_t prvModelLoadTest(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 
 static BaseType_t prvSetOpParam(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 static BaseType_t prvGetOpParam(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
@@ -377,6 +379,14 @@ static const CLI_Command_Definition_t xGpsTests = {
 	"gpstests:\r\n Runs exif_gps tests\n",
 	prvExifGpsTests, /* The function to run. */
 	0			/* No parameters expected */
+};
+
+/* Structure that defines the "gpstests" command line command. */
+static const CLI_Command_Definition_t xModelLoadTest = {
+	"modeltest", /* The command string to type. */
+	"modeltest <filename>:\r\n Specify what model you wish to load from the SD card.\n",
+	prvModelLoadTest, /* The function to run. */
+	1			/* No parameters expected */
 };
 
 /* Structure that defines the "int" command line command. */
@@ -1333,6 +1343,35 @@ static BaseType_t prvExifGpsTests(char *pcWriteBuffer, size_t xWriteBufferLen, c
 	return pdFALSE;
 }
 
+/**
+ * Runs exif_gps tests from within the CLI
+ *
+ */
+static BaseType_t prvModelLoadTest(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) {
+	const char *pcParameter;
+	BaseType_t lParameterStringLength;
+	int model_selection;
+	char fileName[FNAMELEN];	// File name to load
+	UINT result = 0;
+
+	/* Get parameter */
+	pcParameter = FreeRTOS_CLIGetParameter(pcCommandString, 1, &lParameterStringLength);
+	if ((pcParameter != NULL) && (lParameterStringLength <= FNAMELEN))
+	{
+		model_selection = atoi(pcParameter);
+		result = load_model_cli_command(model_selection);
+		if (result == 0) {
+			snprintf(pcWriteBuffer, xWriteBufferLen, "Model %d loaded successfully", model_selection);
+		}
+		else {
+			snprintf(pcWriteBuffer, xWriteBufferLen, "Error loading model %d: %d", model_selection, result);
+		}
+	}
+
+	/* There is no more data to return after this single string, so return pdFALSE. */
+	return pdFALSE;
+}
+
 
 
 /********************************** Private Functions - Other *************************************/
@@ -1764,6 +1803,7 @@ static void vRegisterCLICommands(void)
 	FreeRTOS_CLIRegisterCommand(&xSetGps);
 	FreeRTOS_CLIRegisterCommand(&xGetGps);
 	FreeRTOS_CLIRegisterCommand(&xGpsTests); // Runs several UTC tests
+	FreeRTOS_CLIRegisterCommand(&xModelLoadTest); // Runs several UTC tests
 
 	FreeRTOS_CLIRegisterCommand(&xSetUtc);		// Sets time from a UTC string
 	FreeRTOS_CLIRegisterCommand(&xGetUtc);	// Prints UTC time (once)

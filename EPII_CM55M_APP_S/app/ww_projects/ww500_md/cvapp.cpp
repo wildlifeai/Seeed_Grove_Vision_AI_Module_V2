@@ -19,6 +19,7 @@
 #include "hx_drv_spi.h"
 #include "spi_eeprom_comm.h"
 #include "task.h"
+#include "memory_manage.h"
 
 #include "WE2_core.h"
 #include "WE2_device.h"
@@ -31,6 +32,8 @@
 #include "tensorflow/lite/micro/micro_error_reporter.h"
 
 #include "xprintf.h"
+#include "ff.h"// Compare model in flash with file in chunks to avoid large allocations
+#define VERIFY_CHUNK_SIZE 512
 
 // Required for the app_get_xxx() functions
 //#include "cisdp_cfg.h"
@@ -58,9 +61,17 @@
 #endif
 
 #define TENSOR_ARENA_BUFSIZE (125 * 1024)
-__attribute__((section(".bss.NoInit"))) uint8_t tensor_arena_buf[TENSOR_ARENA_BUFSIZE] __ALIGNED(32);
 
 using namespace std;
+namespace
+{
+    constexpr int tensor_arena_size = 1053*1024;
+    static uint32_t tensor_arena=0;
+
+	struct ethosu_driver ethosu_drv; /* Default Ethos-U device driver */
+	tflite::MicroInterpreter *int_ptr = nullptr;
+	TfLiteTensor *input, *output;
+};
 
 int load_model_cli_command(int model_selection);
 bool is_model_in_flash(char* filename);
@@ -68,6 +79,7 @@ int load_model_from_sd_to_flash(char* filename);
 static const tflite::Model* load_model_from_flash(void);
 int erase_model_flash_area(uint32_t model_size);
 void cleanup_model_buffer(void);
+void compare_sd_spi_xip_chunked(const char* filename);
 
 // SPI EEPROM configuration
 static USE_DW_SPI_MST_E spi_id = USE_DW_SPI_MST_Q;
@@ -79,17 +91,6 @@ static uint8_t* global_model_buffer = nullptr;
 // Add a flag to track if we've already loaded from SD card
 static bool model_loaded_from_sd = false;
 int model_number = 2;
-
-namespace
-{
-
-	constexpr int tensor_arena_size = TENSOR_ARENA_BUFSIZE;
-	uint32_t tensor_arena = (uint32_t)tensor_arena_buf;
-
-	struct ethosu_driver ethosu_drv; /* Default Ethos-U device driver */
-	tflite::MicroInterpreter *int_ptr = nullptr;
-	TfLiteTensor *input, *output;
-};
 
 void img_rescale(
 	const uint8_t *in_image,
@@ -191,6 +192,8 @@ static int _arm_npu_init(bool security_enable, bool privilege_enable)
 }
 
 int cv_init(bool security_enable, bool privilege_enable) {
+    tensor_arena = mm_reserve_align(tensor_arena_size, 0x20);
+	xprintf("TA[%x]\r\n",tensor_arena);
     
     if (_arm_npu_init(security_enable, privilege_enable) != 0) {
         return -1;
@@ -203,35 +206,39 @@ int cv_init(bool security_enable, bool privilege_enable) {
     
 #elif (MODEL_LOAD_MODE == MODEL_FROM_FLASH)
     model = load_model_from_flash();
-    
+
 #elif (MODEL_LOAD_MODE == MODEL_FROM_SD_CARD)
+    char filename[16];    
+    snprintf(filename, sizeof(filename), "MOD0000%01d.tfl", model_number);
+
     // Check if we need to load from SD card
     if (!model_loaded_from_sd) {
-        char filename[1];
         xprintf("First boot with SD card mode\n");
+        xprintf("Target model filename: %s\n", filename);
         
         // Check if model exists in flash
         if (!is_model_in_flash(filename)) {
-			xprintf("No model in flash, loading from SD card...\n");
-			if (load_model_from_sd_to_flash(filename) == 0) {
-				model_loaded_from_sd = true;
-				xprintf("Model loaded from SD card, rebooting to reinitialize...\n");
-				// Give time for xprintf to complete
-				for (volatile int i = 0; i < 1000000; i++);
-				NVIC_SystemReset(); // Reboot to reinitialize with new model
-			} else {
-				xprintf("Failed to load model from SD card\n");
-				return -1;
-			}
+            xprintf("No model in flash, loading from SD card...\n");
+            if (load_model_from_sd_to_flash(filename) == 0) {
+                model_loaded_from_sd = true;
+                xprintf("Model loaded from SD card, rebooting to reinitialize...\n");
+                // Give time for xprintf to complete
+                for (volatile int i = 0; i < 1000000; i++);
+                NVIC_SystemReset(); // Reboot to reinitialize with new model
+            } else {
+                xprintf("Failed to load model from SD card\n");
+                return -1;
+            }
         } else {
             xprintf("Model already exists in flash, skipping SD load\n");
             model_loaded_from_sd = true;
         }
     }
     // Load the model from flash
-    model = load_model_from_flash();
+    model = load_model_from_flash();  
+    compare_sd_spi_xip_chunked(filename);       
 #endif
-    
+
     if (!model) {
         xprintf("Failed to load model\n");
         return -1;
@@ -256,7 +263,7 @@ int cv_init(bool security_enable, bool privilege_enable) {
 		xprintf("Failed to add Arm NPU support to op resolver.\n");
 		return -1;
 	}
-    
+
 	static tflite::MicroInterpreter static_interpreter(
 		model,
 		op_resolver,
@@ -295,6 +302,59 @@ int init_flash(void) {
     return 0;
 }
 
+void compare_sd_spi_xip_chunked(const char *filename)
+{
+    FIL file;
+    FRESULT res = f_open(&file, filename, FA_READ);
+    if (res != FR_OK) {
+        xprintf("Failed to open model file %s (error: %d)\n", filename, res);
+        return;
+    }
+
+    DWORD fileSize = f_size(&file);
+    xprintf("Model file size: %lu bytes\n", fileSize);
+
+    UINT bytesRead = 0;
+    uint8_t sd_buf[VERIFY_CHUNK_SIZE] = {0};
+    uint8_t spi_buf[VERIFY_CHUNK_SIZE] __attribute__((aligned(4))) = {0};
+    uint8_t xip_buf[VERIFY_CHUNK_SIZE] = {0};
+
+    DWORD offset = 0;
+    int any_mismatch = 0;
+    while (offset < fileSize) {
+        UINT to_read = (fileSize - offset > VERIFY_CHUNK_SIZE) ? VERIFY_CHUNK_SIZE : (fileSize - offset);
+        // Read SD
+        f_lseek(&file, offset);
+        res = f_read(&file, sd_buf, to_read, &bytesRead);
+        if (res != FR_OK || bytesRead != to_read) {
+            xprintf("Failed to read model file at offset %lu\n", offset);
+            break;
+        }
+        // Read SPI
+        if (hx_lib_spi_eeprom_word_read(spi_id, MODEL_FLASH_ADDR + offset, (uint32_t*)spi_buf, ((to_read+3)/4)*4) != 0) {
+            xprintf("Failed to read SPI at offset %lu\n", offset);
+            break;
+        }
+        // Read XIP
+        uint32_t virt_address = phys_to_virt(MODEL_FLASH_ADDR + offset);
+        memcpy(xip_buf, (void*)virt_address, to_read);
+
+        // Print mismatches for this chunk
+        for (UINT i = 0; i < to_read; i++) {
+            if (sd_buf[i] != spi_buf[i] || sd_buf[i] != xip_buf[i] || spi_buf[i] != xip_buf[i]) {
+                xprintf("Mismatch at offset %lu (+%u): SD=0x%02X SPI=0x%02X XIP=0x%02X\n",
+                        offset, i, sd_buf[i], spi_buf[i], xip_buf[i]);
+                any_mismatch = 1;
+            }
+        }
+        offset += to_read;
+    }
+    if (!any_mismatch) {
+        xprintf("Model in flash (SPI/XIP) matches SD file!\n");
+    }
+    f_close(&file);
+}
+
 // Calculate number of sectors needed for given size
 uint32_t calculate_sectors_needed(uint32_t data_size) {
     return ((data_size + sizeof(uint32_t) + FLASH_SECTOR_SIZE - 1) / FLASH_SECTOR_SIZE);
@@ -306,7 +366,8 @@ bool is_model_in_flash(char* filename) {
         return false;
     }
 
-    uint8_t header[16] = {0};
+    // Read enough header to include filename (assume filename is stored at offset 0x10, length 16)
+    uint8_t header[32] = {0};
     if (hx_lib_spi_eeprom_word_read(spi_id, MODEL_FLASH_ADDR, (uint32_t*)header, sizeof(header)) != 0) {
         xprintf("Failed to read model header from flash\n");
         return false;
@@ -322,8 +383,7 @@ bool is_model_in_flash(char* filename) {
     xprintf("Checking bytes 4-7: %02X %02X %02X %02X (should be 54 46 4C 33)\n",
            header[4], header[5], header[6], header[7]);
 
-    return (header[4] == 0x54 && header[5] == 0x46 &&
-            header[6] == 0x4C && header[7] == 0x33);
+    return (header[4] == 0x54 && header[5] == 0x46 && header[6] == 0x4C && header[7] == 0x33);
 }
 
 // Erase flash sectors for model storage
@@ -345,7 +405,7 @@ int erase_model_flash_area(uint32_t model_size) {
             return -1;
         }
     }
-
+    
     return 0;
 }
 
@@ -354,7 +414,8 @@ int load_model_from_sd_to_flash(char *filename) {
     FRESULT res;
     FIL file;
     UINT bytesRead;
-    uint8_t buffer[512] __attribute__((aligned(4)));
+    // Use 4-byte aligned buffer, size multiple of 4 for SPI writes
+    uint8_t buffer[256] __attribute__((aligned(4)));
 
     if (init_flash() != 0) {
         return -1;
@@ -385,30 +446,46 @@ int load_model_from_sd_to_flash(char *filename) {
 
     uint32_t totalBytesRead = 0;
     while (totalBytesRead < fileSize) {
-        memset(buffer, 0x00, sizeof(buffer));
+        // Zero buffer before each read
+        memset(buffer, 0, sizeof(buffer));
 
+        // Read from SD
         res = f_read(&file, buffer, sizeof(buffer), &bytesRead);
         if (res != FR_OK || bytesRead == 0) {
             break;
         }
 
+        // Write size must be a multiple of 4
         uint32_t write_size = ((bytesRead + 3) / 4) * 4;
 
-        xprintf("Writing %lu bytes (aligned to %lu) at flash addr 0x%08lX\n",
-               bytesRead, write_size, flash_address);
+        // Zero pad the end if needed
+        if (write_size > bytesRead) {
+            memset(buffer + bytesRead, 0, write_size - bytesRead);
+        }
 
-        if (hx_lib_spi_eeprom_word_write(spi_id, flash_address, (uint32_t*)buffer, write_size) != 0) {
+        xprintf("Writing %lu bytes (aligned to %lu) at flash addr 0x%08lX\n",
+               (unsigned long)bytesRead, (unsigned long)write_size, flash_address);
+
+        // Write to SPI flash (word count)
+        if (hx_lib_spi_eeprom_word_write(spi_id,
+                                        flash_address,
+                                        (uint32_t*)buffer,
+                                        write_size / 4) != 0) {
             xprintf("Flash write failed at 0x%08lX\n", flash_address);
             f_close(&file);
             return -1;
         }
 
-        // Verify via virtual mapping
-        volatile uint32_t *verify_virt = (volatile uint32_t*)(virt_address + totalBytesRead);
-        volatile uint32_t *buffer_check = (volatile uint32_t*)buffer;
-        if (verify_virt[0] != buffer_check[0]) {
-            xprintf("WARNING: Verification mismatch at 0x%08lX (expected 0x%08lX, got 0x%08lX)\n",
-                   virt_address + totalBytesRead, buffer_check[0], verify_virt[0]);
+        // Verify via XIP mapping
+        volatile uint32_t *verify_virt = (volatile uint32_t*)(phys_to_virt(flash_address));
+        for (size_t i = 0; i < write_size/4; i++) {
+            if (verify_virt[i] != ((uint32_t*)buffer)[i]) {
+                xprintf("Mismatch at 0x%08lX (expected 0x%08lX, got 0x%08lX)\n",
+                        flash_address + i*4,
+                        ((uint32_t*)buffer)[i],
+                        verify_virt[i]);
+                break;
+            }
         }
 
         flash_address += write_size;
@@ -429,11 +506,11 @@ int load_model_from_sd_to_flash(char *filename) {
         return 0;
     }
 
-    xprintf("Incomplete write: %lu/%lu bytes\n", totalBytesRead, fileSize);
+    xprintf("Incomplete write: %lu/%lu bytes\n", (unsigned long)totalBytesRead, (unsigned long)fileSize);
     return -1;
 }
 
-// CLAUDYCLAUD
+// CLAUDYCLAUD OG
 // Modified load function - test BOTH SPI and XIP access
 static const tflite::Model *load_model_from_flash(void)
 {
@@ -445,6 +522,22 @@ static const tflite::Model *load_model_from_flash(void)
     const uint32_t phys = MODEL_FLASH_ADDR;     // 0x00200000
     const uint32_t virt = phys_to_virt(phys);   // 0x3A200000
 
+    // Print SD model header for comparison
+    uint8_t sd_hdr[200] = {0};
+    FIL sd_file;
+    FRESULT sd_res = f_open(&sd_file, "MOD00002.tfl", FA_READ);
+    if (sd_res == FR_OK) {
+        UINT sd_bytes_read = 0;
+        f_read(&sd_file, sd_hdr, sizeof(sd_hdr), &sd_bytes_read);
+        xprintf("SD@%s: ", "MOD00002.tfl");
+        for (int i = 0; i < sd_bytes_read; i++) xprintf("%02X ", sd_hdr[i]);
+        xprintf("\n");
+        f_close(&sd_file);
+    } else {
+        xprintf("Failed to open SD model file %s (error: %d)\n", "MOD00002.tfl", sd_res);
+    }
+
+
     // Step 1: Read via SPI to confirm data exists
     uint8_t spi_hdr[16] = {0};
     if (hx_lib_spi_eeprom_word_read(spi_id, phys, (uint32_t*)spi_hdr, sizeof(spi_hdr)) != 0) {
@@ -453,7 +546,7 @@ static const tflite::Model *load_model_from_flash(void)
     }
 
     xprintf("SPI@0x%08lX: ", phys);
-    for (int i = 0; i < 16; i++) xprintf("%02X ", spi_hdr[i]);
+    for (int i = 0; i < 200; i++) xprintf("%02X ", spi_hdr[i]);
     xprintf("\n");
 
     // Check if we have valid TFLite header via SPI
@@ -463,40 +556,26 @@ static const tflite::Model *load_model_from_flash(void)
         return nullptr;
     }
 
-    // Step 2: Try XIP access (may not work without proper config)
-    volatile uint8_t *xip_hdr = (volatile uint8_t*)virt;
-    xprintf("XIP@0x%08lX: ", virt);
-    for (int i = 0; i < 16; i++) xprintf("%02X ", xip_hdr[i]);
-    xprintf("\n");
+    if (hx_lib_spi_eeprom_enable_XIP(spi_id, true, FLASH_SINGLE, true) == 0) {
+        // Step 2: Try XIP access (may not work without proper config)
+        volatile uint8_t *xip_hdr = (volatile uint8_t*)virt;
+        xprintf("XIP@0x%08lX: ", virt);
+        for (int i = 0; i < 200; i++) xprintf("%02X ", xip_hdr[i]);
+        xprintf("\n");
 
-    // Step 3: Check if XIP matches SPI data
-    bool xip_matches = (memcmp((const void*)spi_hdr, (const void*)xip_hdr, 16) == 0);
-    
-    if (xip_matches) {
-        xprintf("XIP mapping works! Using virtual address\n");
-        static const tflite::Model* model = tflite::GetModel((const void *)virt);
-        return model;
-    } else {
-        xprintf("XIP mapping broken - trying to enable XIP mode...\n");
+        // Step 3: Check if XIP matches SPI data
+        bool xip_matches = (memcmp((const void*)spi_hdr, (const void*)xip_hdr, 16) == 0);
         
-        // Try to enable basic XIP mode
-        if (hx_lib_spi_eeprom_enable_XIP(spi_id, true, FLASH_SINGLE, true) == 0) {
-            xprintf("XIP enabled, checking again...\n");
-            
-            // Re-check XIP access
-            xprintf("XIP retry@0x%08lX: ", virt);
-            for (int i = 0; i < 16; i++) xprintf("%02X ", xip_hdr[i]);
-            xprintf("\n");
-            
-            if (memcmp((const void*)spi_hdr, (const void*)xip_hdr, 16) == 0) {
-                xprintf("XIP now works! Loading model\n");
-                static const tflite::Model* model = tflite::GetModel((const void *)virt);
-                return model;
-            }
+        if (xip_matches) {
+            xprintf("XIP mapping works! Using virtual address\n");
+            static const tflite::Model* model = tflite::GetModel((const void *)0x3A200000);
+            // static const tflite::Model* model = tflite::GetModel((const void *)virt);
+            return model;
+        } else {
+            xprintf("XIP mapping broken - trying to enable XIP mode...\n");            
+            xprintf("XIP still not working - this hardware may not support memory-mapped flash\n");
+            return nullptr;
         }
-        
-        xprintf("XIP still not working - this hardware may not support memory-mapped flash\n");
-        return nullptr;
     }
 }
 

@@ -80,6 +80,20 @@ static const tflite::Model* load_model_from_flash(void);
 int erase_model_flash_area(uint32_t model_size);
 void cleanup_model_buffer(void);
 void compare_sd_spi_xip_chunked(const char* filename);
+void debug_sd_model_integrity(const char* filename);
+
+//--- claude 03/09
+// Convert byte count to number of 32-bit words
+static inline uint32_t bytes_to_words(uint32_t nbytes);
+
+// Round down address to sector boundary
+static inline uint32_t align_down(uint32_t addr, uint32_t align);
+// Round up size to align
+static inline uint32_t align_up(uint32_t size, uint32_t align);
+// Compute how many sectors are needed for data_size bytes
+static inline uint32_t calculate_sectors_needed(uint32_t data_size);
+void debug_flash_status();
+void test_basic_spi_operations();
 
 // SPI EEPROM configuration
 static USE_DW_SPI_MST_E spi_id = USE_DW_SPI_MST_Q;
@@ -215,7 +229,8 @@ int cv_init(bool security_enable, bool privilege_enable) {
     if (!model_loaded_from_sd) {
         xprintf("First boot with SD card mode\n");
         xprintf("Target model filename: %s\n", filename);
-        
+        debug_sd_model_integrity(filename);
+
         // Check if model exists in flash
         if (!is_model_in_flash(filename)) {
             xprintf("No model in flash, loading from SD card...\n");
@@ -270,7 +285,7 @@ int cv_init(bool security_enable, bool privilege_enable) {
 		(uint8_t *)tensor_arena,
 		tensor_arena_size,
 		&micro_error_reporter);
-        
+    xprintf("Yup\n");
 	if (static_interpreter.AllocateTensors() != kTfLiteOk) {
 		xprintf("Failed to allocate tensors\n");
 		return -1;
@@ -330,8 +345,9 @@ void compare_sd_spi_xip_chunked(const char *filename)
             xprintf("Failed to read model file at offset %lu\n", offset);
             break;
         }
-        // Read SPI
-        if (hx_lib_spi_eeprom_word_read(spi_id, MODEL_FLASH_ADDR + offset, (uint32_t*)spi_buf, ((to_read+3)/4)*4) != 0) {
+        // // Read SPI
+        if (hx_lib_spi_eeprom_word_read(spi_id, MODEL_FLASH_ADDR + offset, (uint32_t*)spi_buf, to_read) != 0) {
+        // if (hx_lib_spi_eeprom_word_read(spi_id, MODEL_FLASH_ADDR + offset, (uint32_t*)spi_buf, (to_read + 3) / 4) != 0) {
             xprintf("Failed to read SPI at offset %lu\n", offset);
             break;
         }
@@ -356,19 +372,22 @@ void compare_sd_spi_xip_chunked(const char *filename)
 }
 
 // Calculate number of sectors needed for given size
-uint32_t calculate_sectors_needed(uint32_t data_size) {
-    return ((data_size + sizeof(uint32_t) + FLASH_SECTOR_SIZE - 1) / FLASH_SECTOR_SIZE);
-}
+// uint32_t calculate_sectors_needed(uint32_t data_size) {
+//     return ((data_size + sizeof(uint32_t) + FLASH_SECTOR_SIZE - 1) / FLASH_SECTOR_SIZE);
+// }
 
 // Improved model validation with detailed debugging
 bool is_model_in_flash(char* filename) {
     if (init_flash() != 0) {
         return false;
     }
+    
+    debug_flash_status();
+    test_basic_spi_operations();
 
     // Read enough header to include filename (assume filename is stored at offset 0x10, length 16)
     uint8_t header[32] = {0};
-    if (hx_lib_spi_eeprom_word_read(spi_id, MODEL_FLASH_ADDR, (uint32_t*)header, sizeof(header)) != 0) {
+    if (hx_lib_spi_eeprom_word_read(spi_id, MODEL_FLASH_ADDR, (uint32_t*)header, sizeof(header)/4) != 0) {
         xprintf("Failed to read model header from flash\n");
         return false;
     }
@@ -386,131 +405,6 @@ bool is_model_in_flash(char* filename) {
     return (header[4] == 0x54 && header[5] == 0x46 && header[6] == 0x4C && header[7] == 0x33);
 }
 
-// Erase flash sectors for model storage
-int erase_model_flash_area(uint32_t model_size) {
-    cleanup_model_buffer();
-    if (init_flash() != 0) {
-        return -1;
-    }
-
-    uint32_t total_size = model_size; 
-    uint32_t sectors_needed = calculate_sectors_needed(total_size);
-
-    xprintf("Erasing %lu sectors for %lu bytes of model...\n", sectors_needed, total_size);
-
-    for (uint32_t i = 0; i < sectors_needed; i++) {
-        uint32_t sector_addr = MODEL_FLASH_ADDR + (i * FLASH_SECTOR_SIZE);
-        if (hx_lib_spi_eeprom_erase_sector(spi_id, sector_addr, FLASH_SECTOR) != 0) {
-            xprintf("Failed to erase sector at address 0x%08lX\n", sector_addr);
-            return -1;
-        }
-    }
-    
-    return 0;
-}
-
-// Load model from SD to flash at MODEL_FLASH_ADDR
-int load_model_from_sd_to_flash(char *filename) {
-    FRESULT res;
-    FIL file;
-    UINT bytesRead;
-    // Use 4-byte aligned buffer, size multiple of 4 for SPI writes
-    uint8_t buffer[256] __attribute__((aligned(4)));
-
-    if (init_flash() != 0) {
-        return -1;
-    }
-
-    res = f_open(&file, filename, FA_READ);
-    if (res != FR_OK) {
-        xprintf("Failed to open model file %s (error: %d)\n", filename, res);
-        return -1;
-    }
-
-    DWORD fileSize = f_size(&file);
-    if (fileSize == 0) {
-        xprintf("Model file is empty\n");
-        f_close(&file);
-        return -1;
-    }
-    xprintf("Model file size: %lu bytes\n", fileSize);
-
-    if (erase_model_flash_area(fileSize) != 0) {
-        xprintf("Failed to erase flash for model\n");
-        f_close(&file);
-        return -1;
-    }
-
-    uint32_t flash_address = MODEL_FLASH_ADDR;
-    uint32_t virt_address  = phys_to_virt(MODEL_FLASH_ADDR);
-
-    uint32_t totalBytesRead = 0;
-    while (totalBytesRead < fileSize) {
-        // Zero buffer before each read
-        memset(buffer, 0, sizeof(buffer));
-
-        // Read from SD
-        res = f_read(&file, buffer, sizeof(buffer), &bytesRead);
-        if (res != FR_OK || bytesRead == 0) {
-            break;
-        }
-
-        // Write size must be a multiple of 4
-        uint32_t write_size = ((bytesRead + 3) / 4) * 4;
-
-        // Zero pad the end if needed
-        if (write_size > bytesRead) {
-            memset(buffer + bytesRead, 0, write_size - bytesRead);
-        }
-
-        xprintf("Writing %lu bytes (aligned to %lu) at flash addr 0x%08lX\n",
-               (unsigned long)bytesRead, (unsigned long)write_size, flash_address);
-
-        // Write to SPI flash (word count)
-        if (hx_lib_spi_eeprom_word_write(spi_id,
-                                        flash_address,
-                                        (uint32_t*)buffer,
-                                        write_size / 4) != 0) {
-            xprintf("Flash write failed at 0x%08lX\n", flash_address);
-            f_close(&file);
-            return -1;
-        }
-
-        // Verify via XIP mapping
-        volatile uint32_t *verify_virt = (volatile uint32_t*)(phys_to_virt(flash_address));
-        for (size_t i = 0; i < write_size/4; i++) {
-            if (verify_virt[i] != ((uint32_t*)buffer)[i]) {
-                xprintf("Mismatch at 0x%08lX (expected 0x%08lX, got 0x%08lX)\n",
-                        flash_address + i*4,
-                        ((uint32_t*)buffer)[i],
-                        verify_virt[i]);
-                break;
-            }
-        }
-
-        flash_address += write_size;
-        totalBytesRead += bytesRead;
-    }
-
-    f_close(&file);
-
-    if (totalBytesRead == fileSize) {
-        xprintf("Model successfully written to physical 0x%08lX (virtual 0x%08lX)\n",
-               MODEL_FLASH_ADDR, virt_address);
-
-        volatile uint8_t *final_check = (volatile uint8_t*)virt_address;
-        xprintf("Final check at 0x%08lX: ", virt_address);
-        for (int i = 0; i < 16; i++) xprintf("%02X ", final_check[i]);
-        xprintf("\n");
-
-        return 0;
-    }
-
-    xprintf("Incomplete write: %lu/%lu bytes\n", (unsigned long)totalBytesRead, (unsigned long)fileSize);
-    return -1;
-}
-
-// CLAUDYCLAUD OG
 // Modified load function - test BOTH SPI and XIP access
 static const tflite::Model *load_model_from_flash(void)
 {
@@ -539,15 +433,12 @@ static const tflite::Model *load_model_from_flash(void)
 
 
     // Step 1: Read via SPI to confirm data exists
-    uint8_t spi_hdr[16] = {0};
-    if (hx_lib_spi_eeprom_word_read(spi_id, phys, (uint32_t*)spi_hdr, sizeof(spi_hdr)) != 0) {
-        xprintf("SPI read failed at 0x%08lX\n", phys);
-        return nullptr;
-    }
-
-    xprintf("SPI@0x%08lX: ", phys);
-    for (int i = 0; i < 200; i++) xprintf("%02X ", spi_hdr[i]);
-    xprintf("\n");
+    uint8_t spi_hdr[200] = {0};
+    hx_lib_spi_eeprom_word_read(spi_id, phys, (uint32_t*)spi_hdr, sizeof(spi_hdr));
+    // hx_lib_spi_eeprom_word_read(spi_id, phys,
+    //                         (uint32_t*)spi_hdr, (sizeof(spi_hdr)+3)/4);
+    xprintf("SPI@: ");
+    for (size_t i = 0; i < sizeof(spi_hdr); i++) xprintf("%02X ", spi_hdr[i]);
 
     // Check if we have valid TFLite header via SPI
     if (spi_hdr[4] != 0x54 || spi_hdr[5] != 0x46 || 
@@ -559,7 +450,7 @@ static const tflite::Model *load_model_from_flash(void)
     if (hx_lib_spi_eeprom_enable_XIP(spi_id, true, FLASH_SINGLE, true) == 0) {
         // Step 2: Try XIP access (may not work without proper config)
         volatile uint8_t *xip_hdr = (volatile uint8_t*)virt;
-        xprintf("XIP@0x%08lX: ", virt);
+        xprintf("\nXIP@0x%08lX: ", virt);
         for (int i = 0; i < 200; i++) xprintf("%02X ", xip_hdr[i]);
         xprintf("\n");
 
@@ -705,4 +596,262 @@ int cv_deinit()
 {
 	// TODO: add more deinit items here if need.
 	return 0;
+}
+
+
+//----
+// claude 3/09
+
+// --------------------- Utilities / Helpers ---------------------
+
+// Convert byte count to number of 32-bit words
+static inline uint32_t bytes_to_words(uint32_t nbytes) {
+    return (nbytes + 3) / 4;
+}
+
+// Round down address to sector boundary
+static inline uint32_t align_down(uint32_t addr, uint32_t align) {
+    return addr & ~(align - 1);
+}
+// Round up size to align
+static inline uint32_t align_up(uint32_t size, uint32_t align) {
+    return (size + align - 1) & ~(align - 1);
+}
+
+// Compute how many sectors are needed for data_size bytes
+static inline uint32_t calculate_sectors_needed(uint32_t data_size) {
+    return (data_size + FLASH_SECTOR_SIZE - 1) / FLASH_SECTOR_SIZE;
+}
+
+// --------------------- Erase (aligned) ---------------------
+int erase_model_flash_area(uint32_t model_size) {
+    cleanup_model_buffer();
+    if (init_flash() != 0) {
+        return -1;
+    }
+
+    // Align erase region to sector boundaries
+    uint32_t start_addr = align_down(MODEL_FLASH_ADDR, FLASH_SECTOR_SIZE);
+    uint32_t erase_size = align_up(model_size, FLASH_SECTOR_SIZE);
+    uint32_t sectors_needed = erase_size / FLASH_SECTOR_SIZE;
+
+    xprintf("Erasing %lu sectors from 0x%08lX for %lu bytes...\n",
+           (unsigned long)sectors_needed, start_addr, (unsigned long)model_size);
+
+    for (uint32_t i = 0; i < sectors_needed; i++) {
+        uint32_t sector_addr = start_addr + (i * FLASH_SECTOR_SIZE);
+        int er = hx_lib_spi_eeprom_erase_sector(spi_id, sector_addr, FLASH_SECTOR);
+        xprintf("  Erase sector %lu addr 0x%08lX -> result %d\n",
+               (unsigned long)i, sector_addr, er);
+        if (er != 0) {
+            xprintf("Failed to erase sector at address 0x%08lX\n", sector_addr);
+            return -1;
+        }
+    }
+
+    return 0;
+}
+
+
+// --------------------- Page-wise write + verify ---------------------
+// Constants tuned to typical SPI NOR chips.
+// Use page size 256 if unsure — many NOR flash pages are 256 bytes.
+#ifndef FLASH_PROGRAM_PAGE_SIZE
+#define FLASH_PROGRAM_PAGE_SIZE 256
+#endif
+
+int load_model_from_sd_to_flash(char *filename) {
+    FRESULT res;
+    FIL file;
+    UINT bytesRead;
+    // aligned buffers
+    uint8_t write_buf[FLASH_PROGRAM_PAGE_SIZE] __attribute__((aligned(4)));
+    uint8_t verify_buf[FLASH_PROGRAM_PAGE_SIZE] __attribute__((aligned(4)));
+
+    if (init_flash() != 0) {
+        return -1;
+    }
+
+    res = f_open(&file, filename, FA_READ);
+    if (res != FR_OK) {
+        xprintf("Failed to open model file %s (error: %d)\n", filename, res);
+        return -1;
+    }
+
+    DWORD fileSize = f_size(&file);
+    if (fileSize == 0) {
+        xprintf("Model file is empty\n");
+        f_close(&file);
+        return -1;
+    }
+    xprintf("Model file size: %lu bytes\n", fileSize);
+
+    if (erase_model_flash_area(fileSize) != 0) {
+        xprintf("Failed to erase flash for model\n");
+        f_close(&file);
+        return -1;
+    }
+
+    uint32_t flash_address = MODEL_FLASH_ADDR;
+    uint32_t totalBytesRead = 0;
+
+    // Read SD in page-sized blocks (last block smaller)
+    while (totalBytesRead < fileSize) {
+
+        // compute chunk size for this iteration (<= page size)
+        UINT to_read = (fileSize - totalBytesRead > FLASH_PROGRAM_PAGE_SIZE)
+                        ? FLASH_PROGRAM_PAGE_SIZE
+                        : (fileSize - totalBytesRead);
+
+        // read from SD
+        res = f_read(&file, write_buf, to_read, &bytesRead);
+        if (res != FR_OK || bytesRead == 0) {
+            xprintf("SD read error at offset %lu (res=%d, read=%u)\n",
+                    (unsigned long)totalBytesRead, res, bytesRead);
+            break;
+        }
+
+        // pad to 4-byte boundary if needed
+        uint32_t write_size = ((bytesRead + 3) / 4) * 4;
+        if (write_size > bytesRead) {
+            memset(write_buf + bytesRead, 0x00, write_size - bytesRead);
+        }
+
+        // Write to flash: word count is write_size / 4
+        int wr = hx_lib_spi_eeprom_word_write(spi_id,
+                                             flash_address,
+                                             (uint32_t*)write_buf,
+                                             write_size / 4);
+        xprintf("Writing %u bytes (aligned %u) to 0x%08lX -> result %d\n",
+               (unsigned)bytesRead, (unsigned)write_size, (unsigned long)flash_address, wr);
+        if (wr != 0) {
+            xprintf("Flash write failed at 0x%08lX (ret=%d)\n", flash_address, wr);
+            f_close(&file);
+            return -1;
+        }
+
+        // Small delay/poll to allow the device to complete programming.
+        for (volatile int d = 0; d < 10000; ++d) { asm volatile("nop"); }
+
+        // Verify page via SPI read-back
+        int rr = hx_lib_spi_eeprom_word_read(spi_id,
+                                            flash_address,
+                                            (uint32_t*)verify_buf,
+                                            write_size / 4);
+        xprintf("  Verify read result: %d\n", rr);
+        if (rr != 0) {
+            xprintf("Flash verify read failed at 0x%08lX (ret=%d)\n", flash_address, rr);
+            f_close(&file);
+            return -1;
+        }
+
+        if (memcmp(write_buf, verify_buf, write_size) != 0) {
+            xprintf("Verify FAIL at 0x%08lX (first mismatch):\n", flash_address);
+            // print first 16 bytes of expected vs actual to help debug
+            xprintf("  Expected: ");
+            for (int i = 0; i < 200 && i < (int)write_size; ++i) xprintf("%02X ", write_buf[i]);
+            xprintf("\n  Read:     ");
+            for (int i = 0; i < 200 && i < (int)write_size; ++i) xprintf("%02X ", verify_buf[i]);
+            xprintf("\n");
+            f_close(&file);
+            return -1;
+        }
+
+        flash_address  += write_size;
+        totalBytesRead += bytesRead;
+    }
+
+    f_close(&file);
+
+    if (totalBytesRead == fileSize) {
+        xprintf("Model successfully written to physical 0x%08lX (%lu bytes)\n",
+               (unsigned long)MODEL_FLASH_ADDR, (unsigned long)fileSize);
+
+        // Final XIP check: enable XIP and dump header
+        if (hx_lib_spi_eeprom_enable_XIP(spi_id, true, FLASH_SINGLE, true) == 0) {
+            uint32_t virt = phys_to_virt(MODEL_FLASH_ADDR);
+            volatile uint8_t *final_check = (volatile uint8_t*)virt;
+            xprintf("Final XIP header @0x%08lX: ", virt);
+            for (int i = 0; i < 32; i++) xprintf("%02X ", final_check[i]);
+            xprintf("\n");
+        } else {
+            xprintf("Warning: failed to enable XIP for final check\n");
+        }
+
+        return 0;
+    }
+
+    xprintf("Incomplete write: %lu/%lu bytes\n", (unsigned long)totalBytesRead, (unsigned long)fileSize);
+    return -1;
+}
+
+//// debuggers
+
+void debug_flash_status() {
+    xprintf("=== FLASH DEBUG STATUS ===\n");
+    xprintf("Flash initialized: %s\n", flash_initialized ? "YES" : "NO");
+    xprintf("SPI ID: %d\n", (int)spi_id);
+    
+    uint8_t id_info = 0;
+    int result = hx_lib_spi_eeprom_read_ID(spi_id, &id_info);
+    xprintf("Flash ID read result: %d, ID: 0x%02X\n", result, id_info);
+}
+
+void test_basic_spi_operations() {
+    xprintf("=== TESTING BASIC SPI OPS ===\n");
+
+    // pick a scratch sector: align to sector and keep away from model header
+    uint32_t test_addr = (MODEL_FLASH_ADDR + 4*FLASH_SECTOR_SIZE) & ~(FLASH_SECTOR_SIZE - 1);
+
+    // erase the sector before programming
+    int er = hx_lib_spi_eeprom_erase_sector(spi_id, test_addr, FLASH_SECTOR);
+    xprintf("Erase result: %d at 0x%08lX\n", er, test_addr);
+
+    uint32_t test_data[4] = {0xDEADBEEF, 0x12345678, 0xABCDEF00, 0x11223344};
+    uint32_t read_data[4] = {0};
+
+    int wr = hx_lib_spi_eeprom_word_write(spi_id, test_addr, test_data, 4);
+    xprintf("Test write result: %d\n", wr);
+
+    int rr = hx_lib_spi_eeprom_word_read(spi_id, test_addr, read_data, 4);  // 4 words, not 16
+    xprintf("Test read result: %d\n", rr);
+
+    for (int i = 0; i < 4; i++) {
+        xprintf("Test[%d]: W=0x%08lX R=0x%08lX %s\n",
+                i, test_data[i], read_data[i],
+                (test_data[i] == read_data[i]) ? "OK" : "FAIL");
+    }
+}
+
+void debug_sd_model_integrity(const char* filename) {
+    xprintf("=== SD MODEL INTEGRITY CHECK ===\n");
+    
+    FIL file;
+    FRESULT res = f_open(&file, filename, FA_READ);
+    if (res != FR_OK) {
+        xprintf("FAIL: Cannot open SD file %s (error: %d)\n", filename, res);
+        return;
+    }
+    
+    DWORD fileSize = f_size(&file);
+    xprintf("SD Model size: %lu bytes\n", fileSize);
+
+    // Read and print first 16 bytes
+    uint8_t header[16];
+    UINT bytesRead;
+    res = f_read(&file, header, sizeof(header), &bytesRead);
+    if (res == FR_OK && bytesRead == sizeof(header)) {
+        xprintf("SD TFLite header (first 16 bytes): ");
+        for (int i = 0; i < 16; ++i) xprintf("%02X ", header[i]);
+        xprintf("\n");
+        // Check for 'T','F','L','3' at header[4..7]
+        if (header[4] == 'T' && header[5] == 'F' && header[6] == 'L' && header[7] == '3') {
+            xprintf("Header magic OK: TFL3\n");
+        } else {
+            xprintf("Header magic NOT OK: expected TFL3 at bytes 4-7\n");
+        }
+    } else {
+        xprintf("Failed to read SD header for integrity check\n");
+    }
+    f_close(&file);
 }

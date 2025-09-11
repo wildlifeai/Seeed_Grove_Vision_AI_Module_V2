@@ -90,6 +90,14 @@ SECTIONS
         *(.noinit*)
     } > CM55M_S_SRAM
 
+    /* Reserve a fixed block for TensorFlow Lite arena */
+    .tensor_arena (NOLOAD) :
+    {
+        __tensor_arena_start__ = .;
+        . = . + 512K;   /* reserve 512 KB */
+        __tensor_arena_end__ = .;
+    } > CM55M_S_SRAM
+
     .text : ALIGN(4)
     {
        *(.text*)

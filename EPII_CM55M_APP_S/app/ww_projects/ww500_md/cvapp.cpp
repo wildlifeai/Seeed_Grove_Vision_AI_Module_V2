@@ -20,7 +20,8 @@
 #include "hx_drv_spi.h"
 #include "spi_eeprom_comm.h"
 #include "task.h"
-#include "memory_manage.h"
+
+#include "FreeRTOS.h"
 
 #include "WE2_core.h"
 #include "WE2_device.h"
@@ -61,14 +62,20 @@
 #endif
 #endif
 
-#define TENSOR_ARENA_BUFSIZE (125 * 1024)
-__attribute__(( section(".bss.NoInit"))) uint8_t tensor_arena_buf[TENSOR_ARENA_BUFSIZE] __ALIGNED(32);
+extern uint8_t __tensor_arena_start__;
+extern uint8_t __tensor_arena_end__;
+
+static uint8_t* tensor_arena_buf = &__tensor_arena_start__;
+static size_t tensor_arena_size  = &__tensor_arena_end__ - &__tensor_arena_start__;
+
+// #define TENSOR_ARENA_BUFSIZE (125 * 1024)
+// __attribute__(( section(".bss.NoInit"))) uint8_t tensor_arena_buf[TENSOR_ARENA_BUFSIZE] __ALIGNED(32);
 
 using namespace std;
 namespace
 {
-    constexpr int tensor_arena_size = TENSOR_ARENA_BUFSIZE;
-    static uint32_t tensor_arena= (uint32_t)tensor_arena_buf;
+    // constexpr int tensor_arena_size = TENSOR_ARENA_BUFSIZE;
+    // static uint32_t tensor_arena= (uint32_t)tensor_arena_buf;
 
 	struct ethosu_driver ethosu_drv; /* Default Ethos-U device driver */
 	tflite::MicroInterpreter *int_ptr = nullptr;
@@ -83,7 +90,7 @@ static uint8_t* global_model_buffer = nullptr;
 
 // Add a flag to track if we've already loaded from SD card
 static bool model_loaded_from_sd = false;
-int model_number = 2;
+int model_number = 4;
 
 // ------------------- Declarations -------------------
 
@@ -282,21 +289,41 @@ int cv_init(bool security_enable, bool privilege_enable) {
 		return -1;
 	}
 
-	static tflite::MicroInterpreter static_interpreter(
-		model,
-		op_resolver,
-		(uint8_t *)tensor_arena,
-		tensor_arena_size,
-		&micro_error_reporter);
-        
-	if (static_interpreter.AllocateTensors() != kTfLiteOk) {
+    xprintf("Tensor arena at %p, size = %lu bytes\n",
+        tensor_arena_buf,
+        (unsigned long)tensor_arena_size);
+
+    tflite::MicroInterpreter* interpreter = new tflite::MicroInterpreter(
+    model,
+    op_resolver,
+    tensor_arena_buf,
+    tensor_arena_size,
+    &micro_error_reporter);
+
+    if (interpreter->AllocateTensors() != kTfLiteOk) {
 		xprintf("Failed to allocate tensors\n");
 		return -1;
 	}
-	int_ptr = &static_interpreter;
-	input = static_interpreter.input(0);
-	output = static_interpreter.output(0);
+	int_ptr = interpreter;
+	input = interpreter->input(0);
+	output = interpreter->output(0);
 	return 0;
+
+	// static tflite::MicroInterpreter static_interpreter(
+	// 	model,
+	// 	op_resolver,
+	// 	(uint8_t *)tensor_arena,
+	// 	tensor_arena_size,
+	// 	&micro_error_reporter);
+        
+	// if (static_interpreter.AllocateTensors() != kTfLiteOk) {
+	// 	xprintf("Failed to allocate tensors\n");
+	// 	return -1;
+	// }
+	// int_ptr = &static_interpreter;
+	// input = static_interpreter.input(0);
+	// output = static_interpreter.output(0);
+	// return 0;
 }
 
 // Initialize the flash memory (SPI EEPROM)

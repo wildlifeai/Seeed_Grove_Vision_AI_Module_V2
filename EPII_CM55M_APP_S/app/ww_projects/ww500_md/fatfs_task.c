@@ -844,7 +844,7 @@ static void vFatFsTask(void *pvParameters) {
     //op_parameter[OP_PARAMETER_CAMERA_ENABLED] = 0;	// disabled
     op_parameter[OP_PARAMETER_CAMERA_ENABLED] = 1;	// enabled
     op_parameter[OP_PARAMETER_MD_INTERVAL] = DPDINTERVAL; // Interval (ms) between frames in MD mode (0 inhibits)
-	op_parameter[OP_PARAMETER_MODEL_NUMBER] = model_number; // Model number of the device
+	op_parameter[OP_PARAMETER_MODEL_NUMBER] = get_model_number(); // Model number of the device
 
 	// One-off initialisation here...
 	startTime = xTaskGetTickCount();

@@ -1,4 +1,3 @@
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
@@ -140,6 +139,7 @@ static APP_MSG_DEST_T handleEventForInit(APP_MSG_T img_recv_msg);
 static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T rxMessage);
 static APP_MSG_DEST_T handleEventForNNProcessing(APP_MSG_T img_recv_msg);
 static APP_MSG_DEST_T handleEventForWaitForTimer(APP_MSG_T img_recv_msg);
+static APP_MSG_DEST_T handleEventForNNUpdate(APP_MSG_T img_recv_msg);
 static APP_MSG_DEST_T handleEventForSaveState(APP_MSG_T img_recv_msg);
 
 // This is to process an unexpected event
@@ -232,6 +232,7 @@ const char *imageTaskStateString[APP_IMAGE_TASK_STATE_NUMSTATES] = {
     "NN Processing",
     "Wait For Timer",
 	"Save State",
+    "Updating NN",
 };
 
 // Strings for expected messages. Values must match messages directed to image Task in app_msg.h
@@ -244,6 +245,8 @@ const char *imageTaskEventString[APP_MSG_IMAGETASK_LAST - APP_MSG_IMAGETASK_FIRS
     "Image Event Done",
     "Image Event Disk Write Complete",
     "Image Event Change Enable",
+    "Image Event NN Update Model",
+    "Image Event NN Model Updated",
     "Image Event Error",
 };
 
@@ -621,6 +624,11 @@ static APP_MSG_DEST_T handleEventForInit(APP_MSG_T img_recv_msg) {
 
 		break;
 
+	case APP_MSG_IMAGETASK_NN_UPDATE_MODEL:
+        image_task_state = APP_IMAGE_TASK_STATE_UPDATING_NN;
+        send_msg = handleEventForNNUpdate(img_recv_msg);
+        break;
+
 	default:
 		flagUnexpectedEvent(img_recv_msg);
 
@@ -938,6 +946,48 @@ static APP_MSG_DEST_T handleEventForNNProcessing(APP_MSG_T img_recv_msg) {
         break;
     }
 
+    return send_msg;
+}
+
+// Handles APP_IMAGE_TASK_STATE_UPDATING_NN: loads a new NN model and returns to INIT state
+static APP_MSG_DEST_T handleEventForNNUpdate(APP_MSG_T img_recv_msg)
+{
+    APP_MSG_DEST_T send_msg;
+    send_msg.destination = NULL;
+    int model_number = (int)img_recv_msg.msg_data;
+    xprintf("Requested to update NN model to %d\n", model_number);
+
+    int result_not = cv_deinit();
+    if (result_not != 0)
+    {
+        xprintf("Failed to deinit cv\n");
+    }
+
+    // Try to load the new model
+    int result = cv_init(true, true, model_number);
+    if (result == 0)
+    {
+        // Model loaded successfully - no need to send event, just continue
+        XP_GREEN;
+        xprintf("------------MODEL UPDATE SUCCESS\n");
+        XP_WHITE;
+        // Don't send any message - state is already set to INIT
+        send_msg.destination = NULL;
+    }
+    else
+    {
+        // Model load failed, send error event
+        XP_RED;
+        xprintf("------------MODEL UPDATE FAILED, sending ERROR event\n");
+        XP_WHITE;
+        send_msg.message.msg_event = APP_MSG_IMAGETASK_ERROR;
+        send_msg.message.msg_data = model_number; // Include model number in error
+        send_msg.message.msg_parameter = 0;
+        send_msg.destination = xImageTaskQueue;
+    }
+
+    // Set state back to INIT
+    image_task_state = APP_IMAGE_TASK_STATE_INIT;
     return send_msg;
 }
 
@@ -1300,8 +1350,9 @@ static void vImageTask(void *pvParameters) {
 
     flashLEDPWMInit();
 
-    // Computer vision init
-    if (cv_init(true, true) < 0)  {
+    // Gets default model to load
+    int model_number = get_model_number();
+    if (cv_init(true, true, model_number) < 0)  {
     	xprintf("cv init fail\n");
         configASSERT(0);
     }
@@ -1380,6 +1431,10 @@ static void vImageTask(void *pvParameters) {
 
             case APP_IMAGE_TASK_STATE_SAVE_STATE:
                 send_msg = handleEventForSaveState(img_recv_msg);
+                break;
+
+            case APP_IMAGE_TASK_STATE_UPDATING_NN:
+                send_msg = handleEventForNNUpdate(img_recv_msg);
                 break;
 
             default:

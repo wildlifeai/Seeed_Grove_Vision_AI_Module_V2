@@ -34,12 +34,12 @@ static inline uint32_t phys_to_virt(uint32_t phys) {
     return phys - FLASH_PHYSICAL_BASE + FLASH_VIRTUAL_BASE;
 }
 
-extern int model_number; // Model number used for the NN model
-int cv_init(bool security_enable, bool privilege_enable);
+int cv_init(bool security_enable, bool privilege_enable, int model_number);
+int get_model_number();
 
 // CGP I am asking the NN processing to return an array
 TfLiteStatus cv_run(int8_t * outCategories, uint16_t categoriesCount);
-int load_model_cli_command(int model_selection);
+// int load_model_cli_command(int model_selection);
 
 int cv_deinit();
 #ifdef __cplusplus

@@ -1343,33 +1343,60 @@ static BaseType_t prvExifGpsTests(char *pcWriteBuffer, size_t xWriteBufferLen, c
 	return pdFALSE;
 }
 
-/**
- * Runs exif_gps tests from within the CLI
- *
- */
+// /**
+//  * Runs exif_gps tests from within the CLI
+//  *
+//  */
+// static BaseType_t prvModelLoadTest(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) {
+// 	const char *pcParameter;
+// 	BaseType_t lParameterStringLength;
+// 	int model_selection;
+// 	char fileName[FNAMELEN];	// File name to load
+// 	UINT result = 0;
+
+// 	/* Get parameter */
+// 	pcParameter = FreeRTOS_CLIGetParameter(pcCommandString, 1, &lParameterStringLength);
+// 	if ((pcParameter != NULL) && (lParameterStringLength <= FNAMELEN))
+// 	{
+// 		model_selection = atoi(pcParameter);
+// 		result = load_model_cli_command(model_selection);
+// 		if (result == 0) {
+// 			snprintf(pcWriteBuffer, xWriteBufferLen, "Model %d loaded successfully", model_selection);
+// 		}
+// 		else {
+// 			snprintf(pcWriteBuffer, xWriteBufferLen, "Error loading model %d: %d", model_selection, result);
+// 		}
+// 	}
+
+// 	/* There is no more data to return after this single string, so return pdFALSE. */
+// 	return pdFALSE;
+// }
+
 static BaseType_t prvModelLoadTest(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) {
-	const char *pcParameter;
-	BaseType_t lParameterStringLength;
-	int model_selection;
-	char fileName[FNAMELEN];	// File name to load
-	UINT result = 0;
+    const char *pcParameter;
+    BaseType_t lParameterStringLength;
+    int model_selection;
+    APP_MSG_T send_msg;
 
-	/* Get parameter */
-	pcParameter = FreeRTOS_CLIGetParameter(pcCommandString, 1, &lParameterStringLength);
-	if ((pcParameter != NULL) && (lParameterStringLength <= FNAMELEN))
-	{
-		model_selection = atoi(pcParameter);
-		result = load_model_cli_command(model_selection);
-		if (result == 0) {
-			snprintf(pcWriteBuffer, xWriteBufferLen, "Model %d loaded successfully", model_selection);
-		}
-		else {
-			snprintf(pcWriteBuffer, xWriteBufferLen, "Error loading model %d: %d", model_selection, result);
-		}
-	}
+    /* Get parameter */
+    pcParameter = FreeRTOS_CLIGetParameter(pcCommandString, 1, &lParameterStringLength);
+    if ((pcParameter != NULL) && (lParameterStringLength > 0)) {
+        model_selection = atoi(pcParameter);
 
-	/* There is no more data to return after this single string, so return pdFALSE. */
-	return pdFALSE;
+        send_msg.msg_event = APP_MSG_IMAGETASK_NN_UPDATE_MODEL;
+        send_msg.msg_data = model_selection;
+        send_msg.msg_parameter = 0;
+
+        if (xQueueSend(xImageTaskQueue, (void *)&send_msg, __QueueSendTicksToWait) == pdTRUE) {
+            snprintf(pcWriteBuffer, xWriteBufferLen, "Requested model update to %d", model_selection);
+        } else {
+            snprintf(pcWriteBuffer, xWriteBufferLen, "Failed to send model update request");
+        }
+    } else {
+        snprintf(pcWriteBuffer, xWriteBufferLen, "Error: Must supply a model number");
+    }
+
+    return pdFALSE;
 }
 
 

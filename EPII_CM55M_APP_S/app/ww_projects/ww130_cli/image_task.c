@@ -557,20 +557,62 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg)
     // get, set and send info to fatfs task
     case APP_MSG_IMAGETASK_DONE:
         g_cur_jpegenc_frame++; // The number in this sequence
-        g_frames_total++;      // The number since the start of time.
-        cisdp_get_jpginfo(&jpeg_sz, &jpeg_addr);
-        // set_jpeginfo(jpeg_sz, jpeg_addr, g_cur_jpegenc_frame);
-        set_jpeginfo(jpeg_sz, jpeg_addr, g_frames_total);
+        cisdp_get_jpginfo(&jpeg_sz, &jpeg_addr); // Get current tile info
 
-        dbg_printf(DBG_LESS_INFO, "Wrote frame to %s, data size = %d, addr = 0x%x\n",
-                   fileOp->fileName, fileOp->length, jpeg_addr);
-        send_msg.destination = xFatTaskQueue;
-        send_msg.message.msg_event = APP_MSG_FATFSTASK_WRITE_FILE;
-        send_msg.message.msg_data = (uint32_t)&fileOp;
+        // NEW MERGE LOGIC
+        if (g_cur_jpegenc_frame == 1) {
+            // This is the first tile.
+            g_frames_total++;
+
+            // 1. Prepare the master header in a new buffer or in-place if safe.
+            // This function would find SOF0 and change 640x480 to 1280x960.
+            uint32_t master_header_size = prepare_master_header(jpeg_addr, jpeg_sz, 1280, 960);
+
+            // 2. Open the single final file.
+            // This would be a new event for fatfs_task.
+            send_msg.destination = xFatTaskQueue;
+            send_msg.message.msg_event = APP_MSG_FATFSTASK_OPEN_MERGE_FILE;
+            // ... set filename, etc.
+            // After opening, fatfs_task would send back a confirmation.
+            // For simplicity, let's assume we proceed directly.
+
+            // 3. Write the master header.
+            // This would be another new event, e.g., APP_MSG_FATFSTASK_APPEND_DATA
+            // For now, let's conceptualize the data flow.
+            // fileOp would point to the header data.
+            setFileOpForAppend(jpeg_addr, master_header_size);
+            // ... send to fatfs_task
+
+            // 4. Write the first tile's entropy data.
+            uint32_t entropy_addr;
+            uint32_t entropy_size = extract_entropy_data(jpeg_addr, jpeg_sz, &entropy_addr);
+            setFileOpForAppend(entropy_addr, entropy_size);
+            // ... send to fatfs_task
+        } else {
+            // This is for tiles 2, 3, or 4.
+            // 1. Extract *only* the entropy data from the current JPEG buffer.
+            uint32_t entropy_addr;
+            uint32_t entropy_size = extract_entropy_data(jpeg_addr, jpeg_sz, &entropy_addr);
+
+            // 2. Append this entropy data to the already open file.
+            setFileOpForAppend(entropy_addr, entropy_size);
+            send_msg.destination = xFatTaskQueue;
+            send_msg.message.msg_event = APP_MSG_FATFSTASK_APPEND_DATA; // New event
+            send_msg.message.msg_data = (uint32_t)&fileOp;
+        }
+
+        if (g_cur_jpegenc_frame == 4) { // Assuming 4 tiles
+            // Last tile is done, tell fatfs_task to write EOI and close.
+            // This would be another new event, e.g., APP_MSG_FATFSTASK_FINISH_MERGE_FILE
+        }
+
+        // The state machine would need to be more complex to handle the multiple steps.
+        // This is a simplified representation.
         break;
 
     // returned from fatfs task
     case APP_MSG_IMAGETASK_DISK_WRITE_COMPLETE:
+    case APP_MSG_IMAGETASK_DISK_APPEND_COMPLETE: // A new return message
         send_msg.destination = xImageTaskQueue;
         image_task_state = APP_IMAGE_TASK_STATE_INIT;
         send_msg.message.msg_event = APP_MSG_IMAGETASK_STARTCAPTURE;

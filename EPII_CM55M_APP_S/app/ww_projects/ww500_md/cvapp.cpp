@@ -1,4 +1,3 @@
-
 /*
  * cvapp.cpp
  *
@@ -33,7 +32,10 @@
 #include "tensorflow/lite/micro/micro_error_reporter.h"
 
 #include "xprintf.h"
-#include "ff.h"// Compare model in flash with file in chunks to avoid large allocations
+#include "ff.h"
+#include "fatfs_task.h"  // For fatfs_load_labels and fatfs_unzip_manifest
+
+// Compare model in flash with file in chunks to avoid large allocations
 #define VERIFY_CHUNK_SIZE 512
 
 // Required for the app_get_xxx() functions
@@ -65,7 +67,7 @@ extern uint8_t __tensor_arena_start__;
 extern uint8_t __tensor_arena_end__;
 
 static uint8_t* tensor_arena_buf = &__tensor_arena_start__;
-static size_t tensor_arena_size  = &__tensor_arena_end__ - &__tensor_arena_start__;
+static size_t tensor_arena_size  = 0;  // Will be calculated at runtime in cv_init()
 
 // #define TENSOR_ARENA_BUFSIZE (125 * 1024)
 // __attribute__(( section(".bss.NoInit"))) uint8_t tensor_arena_buf[TENSOR_ARENA_BUFSIZE] __ALIGNED(32);
@@ -80,6 +82,13 @@ namespace
 	tflite::MicroInterpreter *int_ptr = nullptr;
 	tflite::MicroMutableOpResolver<1> *op_resolver_ptr = nullptr;
 	TfLiteTensor *input, *output;
+    
+    // Labels loaded from SD (one per line) – used for printing class names
+    static const int MAX_LABELS = 64;           // Adjust if needed
+    static const int MAX_LABEL_LEN = 48;        // Adjust if needed
+    static char g_labels[MAX_LABELS][MAX_LABEL_LEN];
+    static int g_label_count = 0;
+    static bool g_labels_loaded = false;
 };
 // SPI EEPROM configuration
 static USE_DW_SPI_MST_E spi_id = USE_DW_SPI_MST_Q;
@@ -110,6 +119,7 @@ static inline uint32_t align_down(uint32_t addr, uint32_t align);
 static inline uint32_t align_up(uint32_t size, uint32_t align);
 int read_persisted_model_number();
 int write_persisted_model_number(int model_num);
+static bool file_exists(const char* path);
 
 // --------------------- Utilities / Helpers ---------------------
 
@@ -120,6 +130,13 @@ static inline uint32_t align_down(uint32_t addr, uint32_t align) {
 // Round up size to align
 static inline uint32_t align_up(uint32_t size, uint32_t align) {
     return (size + align - 1) & ~(align - 1);
+}
+
+// Check if a file exists on SD
+static bool file_exists(const char* path) {
+    FILINFO finfo;
+    FRESULT res = f_stat(path, &finfo);
+    return (res == FR_OK);
 }
 
 // Read the persisted model number from flash (stored at header - 4 bytes)
@@ -305,133 +322,185 @@ int get_model_number() {
 }
 
 // Optional model number parameter, default to 1
-int cv_init(bool security_enable, bool privilege_enable, int model_number) {
+int cv_init(bool security_enable, bool privilege_enable, int model_number)
+{
     xprintf("cv_init called with model_number: %d\n", model_number);
-    
+
+    // Calculate tensor arena size at runtime (must be done here, not at static init)
+    if (tensor_arena_size == 0)
+    {
+        tensor_arena_size = (size_t)(&__tensor_arena_end__ - &__tensor_arena_start__);
+        xprintf("Calculated tensor arena size: %lu bytes\n", (unsigned long)tensor_arena_size);
+    }
+
     // On first boot (model_loaded == 0), read the persisted model number from flash
-    if (model_loaded == 0) {
+    if (model_loaded == 0)
+    {
         model_loaded = read_persisted_model_number();
         xprintf("First boot: loaded persisted model number %d from flash\n", model_loaded);
-    } else if (model_number != model_loaded){
+    }
+    else if (model_number != model_loaded)
+    {
         model_loaded = model_number;
         model_loaded_from_sd = false; // reset flag to allow reloading
         xprintf("------------------------Model number changed to %d, resetting load flag\n", model_number);
     }
 
     xprintf("cv_init now loading with model number: %d\n", model_loaded);
-    
-    if (_arm_npu_init(security_enable, privilege_enable) != 0) {
+
+    if (_arm_npu_init(security_enable, privilege_enable) != 0)
+    {
         return -1;
     }
-    
+
     static const tflite::Model *model = nullptr;
-    
+
 #if (MODEL_LOAD_MODE == MODEL_FROM_C_FILE)
     model = tflite::GetModel((const void *)g_person_detect_model_data_vela);
-    
+
 #elif (MODEL_LOAD_MODE == MODEL_FROM_FLASH)
     model = load_model_from_flash();
 
 #elif (MODEL_LOAD_MODE == MODEL_FROM_SD_CARD)
-    char filename[16];    
+    // New layout: models are delivered as manifest.zip -> contains ./Manifest/labels.txt and ./Manifest/MOD0000X.tfl
+    // We assume the unzip step has extracted to /Manifest on SD. We'll prefer files under /Manifest.
+    char filename[16];
     snprintf(filename, sizeof(filename), "MOD0000%01d.tfl", model_loaded);
+    char manifest_model_path[64];
+    char manifest_labels_path[64];
+    snprintf(manifest_model_path, sizeof(manifest_model_path), "/Manifest/%s", filename);
+    snprintf(manifest_labels_path, sizeof(manifest_labels_path), "/Manifest/labels.txt");
+    snprintf(manifest_model_path, sizeof(filename), filename);
+    snprintf(manifest_labels_path, sizeof(manifest_labels_path), "/Manifest/labels.txt");
+    
+    // If a manifest.zip exists but /Manifest is missing, extract it (STORE method only - no compression)
+    if (!file_exists(manifest_model_path) && !file_exists(filename)) {
+        if (file_exists("/Manifest.zip")) {
+            xprintf("manifest.zip found; extracting required files (uncompressed STORE method only)...\n");
+            // fatfs_unzip_manifest();
+        }
+    }
+    
+    // Attempt to load labels if present using FatFS task
+    if (file_exists(manifest_labels_path)) {
+        fatfs_load_labels(manifest_labels_path, g_labels, &g_label_count, MAX_LABELS, MAX_LABEL_LEN);
+        g_labels_loaded = (g_label_count > 0);
+    }
     xprintf("flash_init status: %s\n", flash_initialized ? "initialized" : "not initialized");
     xprintf("model_loaded_from_sd status: %s\n", model_loaded_from_sd ? "true" : "false");
 
-
     // Check if we need to load from SD card
-    if (!model_loaded_from_sd) {
+    if (!model_loaded_from_sd)
+    {
         xprintf("First boot with SD card mode\n");
-        xprintf("Target model filename: %s\n", filename);
-        debug_sd_model_integrity(filename);
+    const char* load_name = file_exists(manifest_model_path) ? manifest_model_path : filename;
+    xprintf("Target model filename: %s\n", load_name);
+    debug_sd_model_integrity(load_name);
 
         // Check if model exists in flash
-        if (!is_model_in_flash(filename)) {
+        if (!is_model_in_flash(filename))
+        {
             xprintf("No model in flash, loading from SD card...\n");
-            if (load_model_from_sd_to_flash(filename) == 0) {
+            // We always write only the filename header (16 bytes) before model in flash, so pass the 8.3 filename.
+            // Source file can be from /Manifest or SD root.
+            const char* src_path = file_exists(manifest_model_path) ? manifest_model_path : filename;
+            // if (load_model_from_sd_to_flash((char*)src_path) == 0)
+            if (load_model_from_sd_to_flash(filename) == 0)
+            {
                 model_loaded_from_sd = true;
                 xprintf("Model written to flash successfully, continuing with load...\n");
                 // No reboot needed - XIP is already re-enabled, just continue
-            } else {
+            }
+            else
+            {
                 xprintf("Failed to load model from SD card\n");
                 return -1;
             }
-        } else {
+        }
+        else
+        {
             xprintf("Model already exists in flash, skipping SD load\n");
             model_loaded_from_sd = true;
         }
     }
     // Load the model from flash
-    model = load_model_from_flash();  
-    // compare_sd_spi_xip_chunked(filename);       
+    model = load_model_from_flash();
+    // compare_sd_spi_xip_chunked(filename);
 #endif
 
-    if (!model) {
+    if (!model)
+    {
         xprintf("Failed to load model\n");
         return -1;
     }
-    
+
     xprintf("Model loaded successfully\n");
 
-	if (model->version() != TFLITE_SCHEMA_VERSION) {
-		xprintf("[ERROR] Model's schema version %d is not equal to supported version %d\n",
-				model->version(), TFLITE_SCHEMA_VERSION);
-		return -1;
-	} else {
-		xprintf("Model schema version: %d\n", model->version());
-		xprintf("Input: %d x %d NN: %d x %d\n",
-				app_get_raw_width(), app_get_raw_height(), INPUT_SIZE_X, INPUT_SIZE_X);
-	}
+    if (model->version() != TFLITE_SCHEMA_VERSION)
+    {
+        xprintf("[ERROR] Model's schema version %d is not equal to supported version %d\n",
+                model->version(), TFLITE_SCHEMA_VERSION);
+        return -1;
+    }
+    else
+    {
+        xprintf("Model schema version: %d\n", model->version());
+        xprintf("Input: %d x %d NN: %d x %d\n",
+                app_get_raw_width(), app_get_raw_height(), INPUT_SIZE_X, INPUT_SIZE_X);
+    }
 
-	static tflite::MicroErrorReporter micro_error_reporter;
-	
-	// Allocate op_resolver on heap so it persists beyond cv_init() scope
-	// The interpreter keeps a reference to it, so it must live as long as the interpreter
-	if (op_resolver_ptr != nullptr) {
-		delete op_resolver_ptr;
-	}
-	op_resolver_ptr = new tflite::MicroMutableOpResolver<1>();
+    static tflite::MicroErrorReporter micro_error_reporter;
 
-	if (kTfLiteOk != op_resolver_ptr->AddEthosU()) {
-		xprintf("Failed to add Arm NPU support to op resolver.\n");
-		return -1;
-	}
+    // Allocate op_resolver on heap so it persists beyond cv_init() scope
+    // The interpreter keeps a reference to it, so it must live as long as the interpreter
+    if (op_resolver_ptr != nullptr)
+    {
+        delete op_resolver_ptr;
+    }
+    op_resolver_ptr = new tflite::MicroMutableOpResolver<1>();
+
+    if (kTfLiteOk != op_resolver_ptr->AddEthosU())
+    {
+        xprintf("Failed to add Arm NPU support to op resolver.\n");
+        return -1;
+    }
 
     xprintf("Tensor arena at %p, size = %lu bytes\n",
+            tensor_arena_buf,
+            (unsigned long)tensor_arena_size);
+
+    tflite::MicroInterpreter *interpreter = new tflite::MicroInterpreter(
+        model,
+        *op_resolver_ptr,
         tensor_arena_buf,
-        (unsigned long)tensor_arena_size);
+        tensor_arena_size,
+        &micro_error_reporter);
 
-    tflite::MicroInterpreter* interpreter = new tflite::MicroInterpreter(
-    model,
-    *op_resolver_ptr,
-    tensor_arena_buf,
-    tensor_arena_size,
-    &micro_error_reporter);
+    if (interpreter->AllocateTensors() != kTfLiteOk)
+    {
+        xprintf("Failed to allocate tensors\n");
+        return -1;
+    }
+    int_ptr = interpreter;
+    input = interpreter->input(0);
+    output = interpreter->output(0);
+    return 0;
 
-    if (interpreter->AllocateTensors() != kTfLiteOk) {
-		xprintf("Failed to allocate tensors\n");
-		return -1;
-	}
-	int_ptr = interpreter;
-	input = interpreter->input(0);
-	output = interpreter->output(0);
-	return 0;
+    // static tflite::MicroInterpreter static_interpreter(
+    // 	model,
+    // 	op_resolver,
+    // 	(uint8_t *)tensor_arena,
+    // 	tensor_arena_size,
+    // 	&micro_error_reporter);
 
-	// static tflite::MicroInterpreter static_interpreter(
-	// 	model,
-	// 	op_resolver,
-	// 	(uint8_t *)tensor_arena,
-	// 	tensor_arena_size,
-	// 	&micro_error_reporter);
-        
-	// if (static_interpreter.AllocateTensors() != kTfLiteOk) {
-	// 	xprintf("Failed to allocate tensors\n");
-	// 	return -1;
-	// }
-	// int_ptr = &static_interpreter;
-	// input = static_interpreter.input(0);
-	// output = static_interpreter.output(0);
-	// return 0;
+    // if (static_interpreter.AllocateTensors() != kTfLiteOk) {
+    // 	xprintf("Failed to allocate tensors\n");
+    // 	return -1;
+    // }
+    // int_ptr = &static_interpreter;
+    // input = static_interpreter.input(0);
+    // output = static_interpreter.output(0);
+    // return 0;
 }
 
 // Initialize the flash memory (SPI EEPROM)
@@ -542,13 +611,20 @@ int load_model_from_sd_to_flash(char *filename) {
     uint8_t write_buf[256] __attribute__((aligned(4)));
     uint8_t verify_buf[256] __attribute__((aligned(4)));
 
+    // If 'filename' includes a path, use it to open the file but only store the 8.3 basename in flash header
+    const char* src_path = filename;
+    const char* base = filename;
+    for (const char* p = filename; *p; ++p) {
+        if (*p == '/' || *p == '\\') base = p + 1;
+    }
+    
     if (init_flash() != 0) {
         return -1;
     }
-
-    res = f_open(&file, filename, FA_READ);
+    xprintf("Yep Passed init\n");
+    res = f_open(&file, src_path, FA_READ);
     if (res != FR_OK) {
-        xprintf("Failed to open model file %s (error: %d)\n", filename, res);
+        xprintf("Failed to open model file %s (error: %d)\n", src_path, res);
         return -1;
     }
 
@@ -582,7 +658,7 @@ int load_model_from_sd_to_flash(char *filename) {
     hx_lib_spi_eeprom_enable_XIP(spi_id, false, FLASH_SINGLE, false);
 
     memset(fname_header.bytes, 0, sizeof(fname_header.bytes));
-    strncpy((char*)fname_header.bytes, filename, sizeof(fname_header.bytes) - 1);
+    strncpy((char*)fname_header.bytes, base, sizeof(fname_header.bytes) - 1);
     xprintf("Writing filename header: %s\n", fname_header.bytes);
 
     // write header via SPI (4 words)
@@ -870,16 +946,23 @@ TfLiteStatus cv_run(int8_t * outCategories, uint16_t categoriesCount) {
     //print generic results
     // For int8 output tensor
     int8_t* results = output->data.int8;
-    for (int i = 0; i < output->dims->data[1]; ++i) {
+    int classes = (output->dims->size >= 2) ? output->dims->data[1] : output->dims->data[0];
+    for (int i = 0; i < classes; ++i) {
+        const char* label = (g_labels_loaded && i < g_label_count) ? g_labels[i] : nullptr;
         if (results[i] > 0) {
-		    XP_LT_GREEN;
-            xprintf("----------------POSITIVE DETECTION------------------------\n");
-            xprintf("Result[%d]: %d\n", i, results[i]);
-        }
-        else{
+            XP_LT_GREEN;
+            if (label) {
+                xprintf("POSITIVE: %s (%d)\n", label, results[i]);
+            } else {
+                xprintf("POSITIVE: class %d (%d)\n", i, results[i]);
+            }
+        } else {
             XP_LT_RED;
-            xprintf("----------------NEGATIVE DETECTION----------------------\n");
-            xprintf("Result[%d]: %d\n", i, results[i]);
+            if (label) {
+                xprintf("NEGATIVE: %s (%d)\n", label, results[i]);
+            } else {
+                xprintf("NEGATIVE: class %d (%d)\n", i, results[i]);
+            }
         }
     }
     XP_WHITE;

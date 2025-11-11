@@ -969,7 +969,7 @@ static APP_MSG_DEST_T handleEventForNNUpdate(APP_MSG_T img_recv_msg)
     {
         // Model loaded successfully - no need to send event, just continue
         XP_GREEN;
-        xprintf("------------MODEL UPDATE SUCCESS\n");
+        xprintf("---------MODEL UPDATE SUCCESS---------\n");
         XP_WHITE;
         // Don't send any message - state is already set to INIT
         send_msg.destination = NULL;

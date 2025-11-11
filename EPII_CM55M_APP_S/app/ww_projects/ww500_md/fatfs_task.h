@@ -24,73 +24,91 @@
 #include "FreeRTOS.h"
 #include "queue.h"
 
+#ifdef __cplusplus
+extern "C"
+{
+#endif
+
 /**************************************** Global Defines  *************************************/
 
 // TODO Experimental: set a limit on the name of files
-#define	FNAMELEN 16
+#define FNAMELEN 16
 
-/**************************************** Type declarations  *************************************/
+	/**************************************** Type declarations  *************************************/
 
-// Operational parameters to get/set.
-// Typically the values are saved to SD card before entering DPD
-// OP_PARAMETER_NUM_ENTRIES is only used to establish the number of entries
-typedef enum {
-	OP_PARAMETER_SEQUENCE_NUMBER,	// 0 Image file number
-	OP_PARAMETER_NUM_NN_ANALYSES,	// 1 # times the NN model has run
-	OP_PARAMETER_NUM_POSITIVE_NN_ANALYSES,	// 2 # times the NN model says "yes"
-	OP_PARAMETER_NUM_COLD_BOOTS,	// 3 # of AI processor cold boots
-	OP_PARAMETER_NUM_WARM_BOOTS,	// 4 # of AI processor warm boots
-	OP_PARAMETER_NUM_PICTURES,		// 5 Num pics when triggered
-	OP_PARAMETER_PICTURE_INTERVAL,	// 6 Pic interval when triggered (ms)
-	OP_PARAMETER_TIMELAPSE_INTERVAL,// 7 Interval (s) (0 inhibits)
-	OP_PARAMETER_INTERVAL_BEFORE_DPD, // 8 Delay before DPD (ms)
-	OP_PARAMETER_LED_FLASH_DUTY,	// 9 in percent (0 inhibits)
-	OP_PARAMETER_CAMERA_ENABLED,	// 10 0 = disabled, 1 = enabled
-	OP_PARAMETER_MD_INTERVAL,		// 11 Interval (ms) between frames in MD mode (0 inhibits)
-	OP_PARAMETER_MODEL_NUMBER,      // 12 Model number used for the NN model
-	OP_PARAMETER_NUM_ENTRIES		// Count of entries above here
-} OP_PARAMETERS_E;
+	// Operational parameters to get/set.
+	// Typically the values are saved to SD card before entering DPD
+	// OP_PARAMETER_NUM_ENTRIES is only used to establish the number of entries
+	typedef enum
+	{
+		OP_PARAMETER_SEQUENCE_NUMBER,		   // 0 Image file number
+		OP_PARAMETER_NUM_NN_ANALYSES,		   // 1 # times the NN model has run
+		OP_PARAMETER_NUM_POSITIVE_NN_ANALYSES, // 2 # times the NN model says "yes"
+		OP_PARAMETER_NUM_COLD_BOOTS,		   // 3 # of AI processor cold boots
+		OP_PARAMETER_NUM_WARM_BOOTS,		   // 4 # of AI processor warm boots
+		OP_PARAMETER_NUM_PICTURES,			   // 5 Num pics when triggered
+		OP_PARAMETER_PICTURE_INTERVAL,		   // 6 Pic interval when triggered (ms)
+		OP_PARAMETER_TIMELAPSE_INTERVAL,	   // 7 Interval (s) (0 inhibits)
+		OP_PARAMETER_INTERVAL_BEFORE_DPD,	   // 8 Delay before DPD (ms)
+		OP_PARAMETER_LED_FLASH_DUTY,		   // 9 in percent (0 inhibits)
+		OP_PARAMETER_CAMERA_ENABLED,		   // 10 0 = disabled, 1 = enabled
+		OP_PARAMETER_MD_INTERVAL,			   // 11 Interval (ms) between frames in MD mode (0 inhibits)
+		OP_PARAMETER_MODEL_NUMBER,			   // 12 Model number used for the NN model
+		OP_PARAMETER_NUM_ENTRIES			   // Count of entries above here
+	} OP_PARAMETERS_E;
 
-// The states for the fatfs_task
-// APP_FATFS_STATE_NUMSTATES is only used to establish the number of states
-typedef enum {
-	APP_FATFS_STATE_UNINIT						=0x0000,
-	APP_FATFS_STATE_IDLE						=0x0001,
-	APP_FATFS_STATE_BUSY						=0x0002,
-	APP_FATFS_STATE_NUMSTATES					=0x0003
-} APP_FATFS_STATE_E;
+	// The states for the fatfs_task
+	// APP_FATFS_STATE_NUMSTATES is only used to establish the number of states
+	typedef enum
+	{
+		APP_FATFS_STATE_UNINIT = 0x0000,
+		APP_FATFS_STATE_IDLE = 0x0001,
+		APP_FATFS_STATE_BUSY = 0x0002,
+		APP_FATFS_STATE_NUMSTATES = 0x0003
+	} APP_FATFS_STATE_E;
 
-// Structure to use for file operations:
-// Initially for reading and writing a file
-typedef struct {
-	char *		fileName;
-	uint8_t *	buffer;		// Pointer to the buffer containing file contents
-	uint32_t 	length;		// Number of bytes to write or read
-	FRESULT 	res;		// Result code returned from fatFs
-	bool		closeWhenDone;	// If true the file is closed when the operation completes
-	bool		unmountWhenDone;	// If true the SD card is unmounted when the operation completed
-	QueueHandle_t senderQueue;	// FreeRTOS queue that will get the response
-} fileOperation_t;
+	// Structure to use for file operations:
+	// Initially for reading and writing a file
+	typedef struct
+	{
+		char *fileName;
+		uint8_t *buffer;		   // Pointer to the buffer containing file contents
+		uint32_t length;		   // Number of bytes to write or read
+		FRESULT res;			   // Result code returned from fatFs
+		bool closeWhenDone;		   // If true the file is closed when the operation completes
+		bool unmountWhenDone;	   // If true the SD card is unmounted when the operation completed
+		QueueHandle_t senderQueue; // FreeRTOS queue that will get the response
+	} fileOperation_t;
 
-/**************************************** Global routine declarations  *************************************/
+	/**************************************** Global routine declarations  *************************************/
 
-TaskHandle_t fatfs_createTask(int8_t priority, APP_WAKE_REASON_E wakeReason);
+	TaskHandle_t fatfs_createTask(int8_t priority, APP_WAKE_REASON_E wakeReason);
 
-uint16_t fatfs_getState(void);
+	uint16_t fatfs_getState(void);
 
-bool fatfs_mounted(void);
+	bool fatfs_mounted(void);
 
-const char * fatfs_getStateString(void);
+	const char *fatfs_getStateString(void);
 
-// Get one of the Operational Parameters
-uint16_t fatfs_getOperationalParameter(OP_PARAMETERS_E parameter);
+	// Get one of the Operational Parameters
+	uint16_t fatfs_getOperationalParameter(OP_PARAMETERS_E parameter);
 
-// Set one of the operational parameters
-void fatfs_setOperationalParameter(OP_PARAMETERS_E parameter, int16_t value);
+	// Set one of the operational parameters
+	void fatfs_setOperationalParameter(OP_PARAMETERS_E parameter, int16_t value);
 
-uint16_t fatfs_getImageSequenceNumber(void);
+	uint16_t fatfs_getImageSequenceNumber(void);
 
-// Increment one of the Operational Parameters
-void fatfs_incrementOperationalParameter(OP_PARAMETERS_E parameter);
+	// Increment one of the Operational Parameters
+	void fatfs_incrementOperationalParameter(OP_PARAMETERS_E parameter);
+
+	// Load labels from SD card text file
+	int fatfs_load_labels(const char *path, char labels[][48], int *label_count, int max_labels, int max_label_len);
+
+	// Unzip Manifest.zip (method 0 STORE only - no compression)
+	int fatfs_unzip_manifest(void);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* APP_WW_PROJECTS_WW500_MD_FATFS_TASK_H_ */

@@ -44,12 +44,17 @@
 #include "ww500_md.h"
 
 #include "cis_file.h"
-#include "c_api_types.h"	// Tensorflow errors
+#include "c_api_types.h" // Tensorflow errors
 #include "hx_drv_scu.h"
 
 #include "hm0360_md.h"
 #include "hm0360_regs.h"
 
+// Enable/disable writing per-class confidence/label EXIF tags (0xF300+)
+// Set to 0 to quickly rule out EXIF confidence as a cause of runtime issues
+#ifndef ENABLE_EXIF_CONFIDENCE
+#define ENABLE_EXIF_CONFIDENCE 1
+#endif
 
 /*************************************** Definitions *******************************************/
 
@@ -73,61 +78,67 @@
 #ifdef USE_HM0360
 // Name of file containing extra HM0360 register settings
 #define CAMERA_EXTRA_FILE "HM0360EX.BIN"
-#elif defined (USE_RP2)
+#elif defined(USE_RP2)
 // Name of file containing extra RP2 register settings
 #define CAMERA_EXTRA_FILE "RPV2_EX.BIN"
-#elif defined (USE_RP3)
+#elif defined(USE_RP3)
 // Name of file containing extra RP3 register settings
 #define CAMERA_EXTRA_FILE "RPV3_EX.BIN"
 #else
 // Should not happen. Add something anyway
 #define CAMERA_EXTRA_FILE "CAMERA_EX.BIN"
-#endif	// USE_HM0360
+#endif // USE_HM0360
 
-
-#define EXIF_MAX_LEN 512	// I have seen 350 used...
+#define EXIF_MAX_LEN 512 // I have seen 350 used...
+// Limit how many dynamic class entries we will write to EXIF to avoid buffer growth
+#define EXIF_MAX_DYNAMIC_CLASSES 4
+// Limit label length copied into EXIF to keep data small
+#define EXIF_MAX_LABEL_LEN 20
 
 // The number of IFD entries in build_exif_segment()
-#define IFD0_ENTRY_COUNT 		9
+#define IFD0_ENTRY_COUNT 9
 // The number of IFD entries in create_gps_ifd()
-#define GPS_IFD_ENTRY_COUNT 	6
+#define GPS_IFD_ENTRY_COUNT 6
 #define GPS_IFD_SIZE (2 + GPS_IFD_ENTRY_COUNT * 12 + 4)
 
 // Tag IDs enum
-typedef enum {
-    TAG_X_RESOLUTION       = 0x011A,
-    TAG_Y_RESOLUTION       = 0x011B,
-    TAG_RESOLUTION_UNIT    = 0x0128,
-    TAG_DATETIME_ORIGINAL  = 0x9003,
-    TAG_CREATE_DATE        = 0x9004,
-    TAG_MAKE               = 0x010F,
-    TAG_MODEL              = 0x0110,
-	TAG_GPS_IFD_POINTER    = 0x8825,
-    TAG_GPS_LATITUDE_REF   = 0x0001,
-    TAG_GPS_LATITUDE       = 0x0002,
-    TAG_GPS_LONGITUDE_REF  = 0x0003,
-    TAG_GPS_LONGITUDE      = 0x0004,
-    TAG_GPS_ALTITUDE_REF   = 0x0005,
-    TAG_GPS_ALTITUDE       = 0x0006,
-    TAG_NN_DATA        	   = 0xC000   // Neural network output array - arbitrary custom tag ID
+typedef enum
+{
+    TAG_X_RESOLUTION = 0x011A,
+    TAG_Y_RESOLUTION = 0x011B,
+    TAG_RESOLUTION_UNIT = 0x0128,
+    TAG_DATETIME_ORIGINAL = 0x9003,
+    TAG_CREATE_DATE = 0x9004,
+    TAG_MAKE = 0x010F,
+    TAG_MODEL = 0x0110,
+    TAG_GPS_IFD_POINTER = 0x8825,
+    TAG_GPS_LATITUDE_REF = 0x0001,
+    TAG_GPS_LATITUDE = 0x0002,
+    TAG_GPS_LONGITUDE_REF = 0x0003,
+    TAG_GPS_LONGITUDE = 0x0004,
+    TAG_GPS_ALTITUDE_REF = 0x0005,
+    TAG_GPS_ALTITUDE = 0x0006,
+    TAG_NN_DATA = 0xC000,     // Neural network output array - arbitrary custom tag ID
+    TAG_USER_COMMENT = 0x9286 // Standard EXIF UserComment tag for model results
 } ExifTagID;
 
 // EXIF data types
-typedef enum {
-    TYPE_BYTE      = 1,
-    TYPE_ASCII     = 2,
-    TYPE_SHORT     = 3,
-    TYPE_LONG      = 4,
-    TYPE_RATIONAL  = 5,
-	UNDEFINED 		= 7,
-    SLONG			= 9,
-    SRATIONAL		= 10
+typedef enum
+{
+    TYPE_BYTE = 1,
+    TYPE_ASCII = 2,
+    TYPE_SHORT = 3,
+    TYPE_LONG = 4,
+    TYPE_RATIONAL = 5,
+    UNDEFINED = 7,
+    SLONG = 9,
+    SRATIONAL = 10
 } ExifDataType;
 
 // If using the code that has a duplicate buffer then define SECOND_JPEG_BUFSIZE
 // Must by a multiple of 32 bytes.
-//#define JPEG_BUFSIZE  76800 //640*480/4
-#define SECOND_JPEG_BUFSIZE  20000	// jpeg files seem to be about 9k-20k
+// #define JPEG_BUFSIZE  76800 //640*480/4
+#define SECOND_JPEG_BUFSIZE 20000 // jpeg files seem to be about 9k-20k
 
 /*************************************** Local Function Declarations *****************************/
 
@@ -148,7 +159,7 @@ static APP_MSG_DEST_T flagUnexpectedEvent(APP_MSG_T rxMessage);
 static bool configure_image_sensor(CAMERA_CONFIG_E operation, uint8_t flashDutyCycle);
 
 // Send unsolicited message to the master
-static void sendMsgToMaster(char * str);
+static void sendMsgToMaster(char *str);
 
 static void generateImageFileName(uint16_t number);
 static void setFileOpFromJpeg(uint32_t jpeg_sz, uint32_t jpeg_addr);
@@ -169,21 +180,21 @@ static void changeEnableState(bool setEnabled);
 /*************************************** Local EXIF-related Declarations *****************************/
 
 // Insert the EXIF metadata into the jpeg buffer
-static uint16_t insertExif(uint32_t jpeg_sz, uint32_t jpeg_addr, int8_t * outCategories, uint8_t categoriesCount);
+static uint16_t insertExif(uint32_t jpeg_sz, uint32_t jpeg_addr, int8_t *outCategories, uint8_t categoriesCount);
 
 static void write16_le(uint8_t *ptr, uint16_t val);
 static void write32_le(uint8_t *ptr, uint32_t val);
 static void write16_be(uint8_t *ptr, uint16_t val);
-//static void write32_be(uint8_t *ptr, uint32_t val);
+// static void write32_be(uint8_t *ptr, uint32_t val);
 static void addIFD(ExifTagID tagID, uint8_t *entry_ptr, void *tagData);
-static uint16_t build_exif_segment(int8_t * outCategories, uint8_t categoriesCount);
+static uint16_t build_exif_segment(int8_t *outCategories, uint8_t categoriesCount);
 static void create_gps_ifd(uint8_t *gps_ifd_start);
 static size_t get_gps_ifd_size(void);
 
 /*************************************** External variables *******************************************/
 
 extern QueueHandle_t xFatTaskQueue;
-extern QueueHandle_t     xIfTaskQueue;
+extern QueueHandle_t xIfTaskQueue;
 
 extern SemaphoreHandle_t xFatCanSleepSemaphore;
 extern SemaphoreHandle_t xIfCanSleepSemaphore;
@@ -191,8 +202,8 @@ extern SemaphoreHandle_t xIfCanSleepSemaphore;
 /*************************************** Local variables *******************************************/
 
 #ifdef SECOND_JPEG_BUFSIZE
-__attribute__(( section(".bss.NoInit"))) uint8_t jpeg_exif_buf[SECOND_JPEG_BUFSIZE] __ALIGNED(32);
-#endif	// SECOND_JPEG_BUFSIZE
+__attribute__((section(".bss.NoInit"))) uint8_t jpeg_exif_buf[SECOND_JPEG_BUFSIZE] __ALIGNED(32);
+#endif // SECOND_JPEG_BUFSIZE
 
 static APP_WAKE_REASON_E woken;
 
@@ -209,12 +220,12 @@ static uint32_t g_captures_to_take;
 // For the accumulative total captures
 // TODO perhaps it should be reset at the start of each day? It is only used in filenames
 static uint32_t g_frames_total;
-static uint32_t g_timer_period;	// Interval between pictures in ms
+static uint32_t g_timer_period; // Interval between pictures in ms
 
 #ifndef USE_HM0360
 // TODO check out this function: sensordplib_set_rtc_start(SENDPLIB_PERIODIC_TIMER_MS);
 static TimerHandle_t captureTimer;
-#endif	// USE_HM0360
+#endif // USE_HM0360
 
 static fileOperation_t fileOp;
 
@@ -231,7 +242,7 @@ const char *imageTaskStateString[APP_IMAGE_TASK_STATE_NUMSTATES] = {
     "Capturing",
     "NN Processing",
     "Wait For Timer",
-	"Save State",
+    "Save State",
     "Updating NN",
 };
 
@@ -263,7 +274,7 @@ static char msgToMaster[MSGTOMASTERLEN];
 static bool nnPositive;
 
 // True means we capture images and run NN processing and report results.
-static uint8_t nnSystemEnabled;	// 0 = disabled 1 = enabled
+static uint8_t nnSystemEnabled; // 0 = disabled 1 = enabled
 
 // Support for EXIF
 static uint8_t exif_buffer[EXIF_MAX_LEN];
@@ -283,18 +294,20 @@ static uint8_t *tiff_start;
  *
  * This sends a APP_MSG_IMAGETASK_RECAPTURE event
  */
-static void capture_timer_callback(TimerHandle_t xTimer) {
-	APP_MSG_T send_msg;
+static void capture_timer_callback(TimerHandle_t xTimer)
+{
+    APP_MSG_T send_msg;
 
-	// Send back to our own queue
-	send_msg.msg_data = 0;
-	send_msg.msg_parameter = 0;
-	send_msg.msg_event = APP_MSG_IMAGETASK_RECAPTURE;
+    // Send back to our own queue
+    send_msg.msg_data = 0;
+    send_msg.msg_parameter = 0;
+    send_msg.msg_event = APP_MSG_IMAGETASK_RECAPTURE;
 
-	// Timer callbacks run in the context of a task, so the non ISR version can be used
-	if (xQueueSend(xImageTaskQueue, (void *)&send_msg, __QueueSendTicksToWait) != pdTRUE) {
-		xprintf("send_msg=0x%x fail\r\n", send_msg.msg_event);
-	}
+    // Timer callbacks run in the context of a task, so the non ISR version can be used
+    if (xQueueSend(xImageTaskQueue, (void *)&send_msg, __QueueSendTicksToWait) != pdTRUE)
+    {
+        xprintf("send_msg=0x%x fail\r\n", send_msg.msg_event);
+    }
 }
 #endif // USE_HM0360
 
@@ -305,23 +318,26 @@ static void capture_timer_callback(TimerHandle_t xTimer) {
  *
  * @param number - this forms part of the file name
  */
-static void generateImageFileName(uint16_t number) {
+static void generateImageFileName(uint16_t number)
+{
 #if FF_USE_LFN
     // Create a file name
-	// file name: 'image_1234_2025-02-03.jpg' = 25 characters, plus trailing '\0'
-	rtc_time time;
-	exif_utc_get_rtc_as_time(&time);
+    // file name: 'image_1234_2025-02-03.jpg' = 25 characters, plus trailing '\0'
+    rtc_time time;
+    exif_utc_get_rtc_as_time(&time);
     snprintf(imageFileName, IMAGEFILENAMELEN, "image_%04d_%d-%02d-%02d.jpg",
              (uint16_t)frame_num, time.tm_year, time.tm_mon, time.tm_mday);
 #else
     // Must use 8.3 file name: upper case alphanumeric
-    if (woken == APP_WAKE_REASON_MD)  {
-    	// Motion has woken us
-    	snprintf(imageFileName, IMAGEFILENAMELEN, "MD%06d.JPG", (uint16_t) number);
+    if (woken == APP_WAKE_REASON_MD)
+    {
+        // Motion has woken us
+        snprintf(imageFileName, IMAGEFILENAMELEN, "MD%06d.JPG", (uint16_t)number);
     }
-    else {
-    	// Must be a time lapse event
-    	snprintf(imageFileName, IMAGEFILENAMELEN, "TL%06d.JPG", (uint16_t) number);
+    else
+    {
+        // Must be a time lapse event
+        snprintf(imageFileName, IMAGEFILENAMELEN, "TL%06d.JPG", (uint16_t)number);
     }
 
 #endif // FF_USE_LFN
@@ -334,7 +350,8 @@ static void generateImageFileName(uint16_t number) {
  *
  * Parameters: uint32_t - jpeg_sz, jpeg_addr, frame_num
  */
-static void setFileOpFromJpeg(uint32_t jpeg_sz, uint32_t jpeg_addr) {
+static void setFileOpFromJpeg(uint32_t jpeg_sz, uint32_t jpeg_addr)
+{
 
     fileOp.fileName = imageFileName;
     fileOp.buffer = (uint8_t *)jpeg_addr;
@@ -352,7 +369,8 @@ static void setFileOpFromJpeg(uint32_t jpeg_sz, uint32_t jpeg_addr) {
  * The common event is SENSORDPLIB_STATUS_XDMA_FRAME_READY which results in a
  * APP_MSG_DPEVENT_XDMA_FRAME_READY message in dp_task queue
  */
-void os_app_dplib_cb(SENSORDPLIB_STATUS_E event) {
+void os_app_dplib_cb(SENSORDPLIB_STATUS_E event)
+{
     APP_MSG_T dp_msg;
     BaseType_t xHigherPriorityTaskWoken;
 
@@ -361,9 +379,10 @@ void os_app_dplib_cb(SENSORDPLIB_STATUS_E event) {
 
     dp_msg.msg_event = APP_MSG_DPEVENT_UNKOWN;
 
-    //dbg_printf(DBG_LESS_INFO, "os_app_dplib_cb event = %d\n", event);
+    // dbg_printf(DBG_LESS_INFO, "os_app_dplib_cb event = %d\n", event);
 
-    switch (event) {
+    switch (event)
+    {
     case SENSORDPLIB_STATUS_ERR_FS_HVSIZE:
     case SENSORDPLIB_STATUS_ERR_FE_TOGGLE:
     case SENSORDPLIB_STATUS_ERR_FD_TOGGLE:
@@ -517,11 +536,12 @@ void os_app_dplib_cb(SENSORDPLIB_STATUS_E event) {
     }
 
     dp_msg.msg_data = 0;
-//    dbg_printf(DBG_LESS_INFO, "Received event 0x%04x from Sensor Datapath. Sending 0x%04x  to Image Task\r\n",
-//    		dp_msg.msg_event, dp_msg.msg_data);
+    //    dbg_printf(DBG_LESS_INFO, "Received event 0x%04x from Sensor Datapath. Sending 0x%04x  to Image Task\r\n",
+    //    		dp_msg.msg_event, dp_msg.msg_data);
     xQueueSendFromISR(xImageTaskQueue, &dp_msg, &xHigherPriorityTaskWoken);
 
-    if (xHigherPriorityTaskWoken)  {
+    if (xHigherPriorityTaskWoken)
+    {
         taskYIELD();
     }
 }
@@ -538,103 +558,111 @@ void os_app_dplib_cb(SENSORDPLIB_STATUS_E event) {
  * @param APP_MSG_T img_recv_msg
  * @return APP_MSG_DEST_T send_msg
  */
-static APP_MSG_DEST_T handleEventForInit(APP_MSG_T img_recv_msg) {
-	APP_MSG_DEST_T send_msg;
-	APP_MSG_EVENT_E event;
-	uint16_t requested_captures;
-	uint16_t requested_period;
-	bool setEnabled;
-	uint8_t dutyCycle;
+static APP_MSG_DEST_T handleEventForInit(APP_MSG_T img_recv_msg)
+{
+    APP_MSG_DEST_T send_msg;
+    APP_MSG_EVENT_E event;
+    uint16_t requested_captures;
+    uint16_t requested_period;
+    bool setEnabled;
+    uint8_t dutyCycle;
 
     APP_MSG_T internal_msg;
 
-	event = img_recv_msg.msg_event;
-	send_msg.destination = NULL;
+    event = img_recv_msg.msg_event;
+    send_msg.destination = NULL;
 
-	switch (event)  {
+    switch (event)
+    {
 
-	case APP_MSG_IMAGETASK_STARTCAPTURE:
-		// MD or timer or the CLI task has asked us to start capturing
-		requested_captures = (uint16_t) img_recv_msg.msg_data;
-		requested_period = img_recv_msg.msg_parameter;
+    case APP_MSG_IMAGETASK_STARTCAPTURE:
+        // MD or timer or the CLI task has asked us to start capturing
+        requested_captures = (uint16_t)img_recv_msg.msg_data;
+        requested_period = img_recv_msg.msg_parameter;
 
-		// Check parameters are acceptable
-		if ((requested_captures < MIN_IMAGE_CAPTURES) || (requested_captures > MAX_IMAGE_CAPTURES) ||
-				(requested_period < MIN_IMAGE_INTERVAL) || (requested_period > MAX_IMAGE_INTERVAL) ) {
-			xprintf("Invalid parameter values %d or %d\n", requested_captures, requested_period);
-		}
-		else {
-			g_captures_to_take = requested_captures;
-			g_timer_period = requested_period;
-			XP_LT_GREEN
-			xprintf("Images to capture: %d\n", g_captures_to_take);
-			xprintf("Interval: %dms\n", g_timer_period);
+        // Check parameters are acceptable
+        if ((requested_captures < MIN_IMAGE_CAPTURES) || (requested_captures > MAX_IMAGE_CAPTURES) ||
+            (requested_period < MIN_IMAGE_INTERVAL) || (requested_period > MAX_IMAGE_INTERVAL))
+        {
+            xprintf("Invalid parameter values %d or %d\n", requested_captures, requested_period);
+        }
+        else
+        {
+            g_captures_to_take = requested_captures;
+            g_timer_period = requested_period;
+            XP_LT_GREEN
+            xprintf("Images to capture: %d\n", g_captures_to_take);
+            xprintf("Interval: %dms\n", g_timer_period);
 
-			xLastWakeTime = xTaskGetTickCount();
+            xLastWakeTime = xTaskGetTickCount();
 
-	    	// Turn on the PWM that determines the flash intensity
-	    	dutyCycle = (uint8_t) fatfs_getOperationalParameter(OP_PARAMETER_LED_FLASH_DUTY);
-	    	//xprintf("Flash duty cycle %d%%\n", dutyCycle);
-			XP_WHITE;
+            // Turn on the PWM that determines the flash intensity
+            dutyCycle = (uint8_t)fatfs_getOperationalParameter(OP_PARAMETER_LED_FLASH_DUTY);
+            // xprintf("Flash duty cycle %d%%\n", dutyCycle);
+            XP_WHITE;
 
-			flashLEDPWMOn(dutyCycle);
+            flashLEDPWMOn(dutyCycle);
 
-			// Now start the image sensor.
-			configure_image_sensor(CAMERA_CONFIG_RUN, dutyCycle);
+            // Now start the image sensor.
+            configure_image_sensor(CAMERA_CONFIG_RUN, dutyCycle);
 
-			// The next thing we expect is a frame ready message: APP_MSG_IMAGETASK_FRAME_READY
-			image_task_state = APP_IMAGE_TASK_STATE_CAPTURING;
-		}
-		break;
+            // The next thing we expect is a frame ready message: APP_MSG_IMAGETASK_FRAME_READY
+            image_task_state = APP_IMAGE_TASK_STATE_CAPTURING;
+        }
+        break;
 
-	case APP_MSG_IMAGETASK_CHANGE_ENABLE:
-		// We have received an instruction to enable or disable the NN processing system
-		setEnabled = (bool) img_recv_msg.msg_data;
-		changeEnableState(setEnabled);	// 0 means disabled; 1 means enabled
-		if (setEnabled) {
-			xprintf("DEBUG: Time to start capturing images!\n");
-	    	// Pass the parameters in the ImageTask message queue
-	    	internal_msg.msg_data = fatfs_getOperationalParameter(OP_PARAMETER_NUM_PICTURES);
-	    	internal_msg.msg_parameter = fatfs_getOperationalParameter(OP_PARAMETER_PICTURE_INTERVAL);
-	    	internal_msg.msg_event = APP_MSG_IMAGETASK_STARTCAPTURE;
+    case APP_MSG_IMAGETASK_CHANGE_ENABLE:
+        // We have received an instruction to enable or disable the NN processing system
+        setEnabled = (bool)img_recv_msg.msg_data;
+        changeEnableState(setEnabled); // 0 means disabled; 1 means enabled
+        if (setEnabled)
+        {
+            xprintf("DEBUG: Time to start capturing images!\n");
+            // Pass the parameters in the ImageTask message queue
+            internal_msg.msg_data = fatfs_getOperationalParameter(OP_PARAMETER_NUM_PICTURES);
+            internal_msg.msg_parameter = fatfs_getOperationalParameter(OP_PARAMETER_PICTURE_INTERVAL);
+            internal_msg.msg_event = APP_MSG_IMAGETASK_STARTCAPTURE;
 
-	    	if (xQueueSend(xImageTaskQueue, (void *)&internal_msg, __QueueSendTicksToWait) != pdTRUE) {
-	    		xprintf("Failed to send 0x%x to imageTask\r\n", internal_msg.msg_event);
-	    	}
-		}
-		break;
+            if (xQueueSend(xImageTaskQueue, (void *)&internal_msg, __QueueSendTicksToWait) != pdTRUE)
+            {
+                xprintf("Failed to send 0x%x to imageTask\r\n", internal_msg.msg_event);
+            }
+        }
+        break;
 
-	case APP_MSG_IMAGETASK_INACTIVITY:
-		// Inactivity detected. Prepare to enter DPD
-		configure_image_sensor(CAMERA_CONFIG_STOP, 0); // run some sensordplib_stop functions then run HM0360_stream_off commands to the HM0360
+    case APP_MSG_IMAGETASK_INACTIVITY:
+        // Inactivity detected. Prepare to enter DPD
+        configure_image_sensor(CAMERA_CONFIG_STOP, 0); // run some sensordplib_stop functions then run HM0360_stream_off commands to the HM0360
 
-		if (fatfs_getImageSequenceNumber() > 0) {
-			// TODO - can we call this without the if() and expect fatfs_task to handle it?
-			// Ask the FatFS task to save state onto the SD card
-			send_msg.destination = xFatTaskQueue;
-			send_msg.message.msg_event = APP_MSG_FATFSTASK_SAVE_STATE;
-			send_msg.message.msg_data = 0;
-			image_task_state = APP_IMAGE_TASK_STATE_SAVE_STATE;
-		}
-		else {
-			// No SD card therefore can't save state
-	    	// Wait till the IF Task is also ready, then sleep
-	    	sleepWhenPossible();	// does not return
-		}
+        if (fatfs_getImageSequenceNumber() > 0)
+        {
+            // TODO - can we call this without the if() and expect fatfs_task to handle it?
+            // Ask the FatFS task to save state onto the SD card
+            send_msg.destination = xFatTaskQueue;
+            send_msg.message.msg_event = APP_MSG_FATFSTASK_SAVE_STATE;
+            send_msg.message.msg_data = 0;
+            image_task_state = APP_IMAGE_TASK_STATE_SAVE_STATE;
+        }
+        else
+        {
+            // No SD card therefore can't save state
+            // Wait till the IF Task is also ready, then sleep
+            sleepWhenPossible(); // does not return
+        }
 
-		break;
+        break;
 
-	case APP_MSG_IMAGETASK_NN_UPDATE_MODEL:
+    case APP_MSG_IMAGETASK_NN_UPDATE_MODEL:
         image_task_state = APP_IMAGE_TASK_STATE_UPDATING_NN;
         send_msg = handleEventForNNUpdate(img_recv_msg);
         break;
 
-	default:
-		flagUnexpectedEvent(img_recv_msg);
+    default:
+        flagUnexpectedEvent(img_recv_msg);
 
-	}	// switch
+    } // switch
 
-	return send_msg;
+    return send_msg;
 }
 
 /**
@@ -649,94 +677,100 @@ static APP_MSG_DEST_T handleEventForInit(APP_MSG_T img_recv_msg) {
  * @param APP_MSG_T img_recv_msg
  * @return APP_MSG_DEST_T send_msg
  */
-static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
+static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg)
+{
     APP_MSG_DEST_T send_msg;
     APP_MSG_EVENT_E event;
     uint32_t jpeg_addr;
     uint32_t jpeg_sz;
 
-	TickType_t startTime;
-	TickType_t elapsedTime;
-	uint32_t elapsedMs;
-	TfLiteStatus ret;
-	bool setEnabled;
-	uint16_t exif_len;
+    TickType_t startTime;
+    TickType_t elapsedTime;
+    uint32_t elapsedMs;
+    TfLiteStatus ret;
+    bool setEnabled;
+    uint16_t exif_len;
 
-	// Signed integers
+    // Signed integers
     int8_t outCategories[CATEGORIESCOUNT];
 
     event = img_recv_msg.msg_event;
     send_msg.destination = NULL;
     HM0360_GAIN_T gain;
 
-    switch (event)  {
+    switch (event)
+    {
 
     case APP_MSG_IMAGETASK_FRAME_READY:
-    	// Here when the image sub-system has captured an image.
+        // Here when the image sub-system has captured an image.
 
 #if defined(USE_HM0360) || defined(USE_HM0360_MD)
-    	// By deferring the clearing of the interrupt til her we can measure the latency of interrupt to image captured.
-		// This writes to register 0x2065 - we could put this into the big config file?
-		hm0360_md_clearInterrupt(0xff);		// clear all bits
+        // By deferring the clearing of the interrupt til her we can measure the latency of interrupt to image captured.
+        // This writes to register 0x2065 - we could put this into the big config file?
+        hm0360_md_clearInterrupt(0xff); // clear all bits
 #endif
 
-    	// Turn off the Flash LED PWN signal
-    	//flashLEDPWMOff();
+        // Turn off the Flash LED PWN signal
+        // flashLEDPWMOff();
 
-    	// frame ready event received from os_app_dplib_cb
-        g_cur_jpegenc_frame++;	// The number in this sequence
-        g_frames_total++;		// The number since the start of time.
+        // frame ready event received from os_app_dplib_cb
+        g_cur_jpegenc_frame++; // The number in this sequence
+        g_frames_total++;      // The number since the start of time.
 
         // run NN processing
         // This gets the input image address and dimensions from:
         // app_get_raw_addr(), app_get_raw_width(), app_get_raw_height()
 
-		startTime = xTaskGetTickCount();
+        startTime = xTaskGetTickCount();
 
-		ret = cv_run(outCategories, CATEGORIESCOUNT);
+        ret = cv_run(outCategories, CATEGORIESCOUNT);
 
-		elapsedTime = xTaskGetTickCount() - startTime;
-		elapsedMs = (elapsedTime * 1000) / configTICK_RATE_HZ;
+        elapsedTime = xTaskGetTickCount() - startTime;
+        elapsedMs = (elapsedTime * 1000) / configTICK_RATE_HZ;
 
-		if (ret == kTfLiteOk) {
-			// OK
-        	fatfs_incrementOperationalParameter(OP_PARAMETER_NUM_NN_ANALYSES);
+        if (ret == kTfLiteOk)
+        {
+            // OK
+            fatfs_incrementOperationalParameter(OP_PARAMETER_NUM_NN_ANALYSES);
 
-			if (outCategories[1] > 0) {
-				XP_LT_GREEN;
-				xprintf("TARGET ANIMAL DETECTED!\n");
-				// NOTE this only works if CATEGORIESCOUNT == 2
-	        	fatfs_incrementOperationalParameter(OP_PARAMETER_NUM_POSITIVE_NN_ANALYSES);
-	        	nnPositive = true;
+            if (outCategories[1] > 0)
+            {
+                XP_LT_GREEN;
+                xprintf("TARGET ANIMAL DETECTED!\n");
+                // NOTE this only works if CATEGORIESCOUNT == 2
+                fatfs_incrementOperationalParameter(OP_PARAMETER_NUM_POSITIVE_NN_ANALYSES);
+                nnPositive = true;
 
-	        	// Send a message to the BLE processor so it can inform the user on the app immediately
-				snprintf(msgToMaster, MSGTOMASTERLEN, "NN+");
-				sendMsgToMaster(msgToMaster);
-			}
-			else {
-				XP_LT_RED;
-				xprintf("No target animal detected.\n");
-				XP_WHITE;
-			}
-			XP_WHITE;
-			xprintf("Score %d/128. NN processing took %dms\n\n", outCategories[1], elapsedMs);
-		}
-		else {
-			// NN error.
-			// What do we do here?
-			XP_RED;
-			xprintf("NN error %d. NN processing took %dms\n\n", ret, elapsedMs);
-			XP_WHITE;
-		}
-#if defined (USE_HM0360) || defined (USE_HM0360_MD)
-		// This is a test to see if/how these change with illumination
-		hm0360_md_getGainRegs(&gain);
+                // Send a message to the BLE processor so it can inform the user on the app immediately
+                snprintf(msgToMaster, MSGTOMASTERLEN, "NN+");
+                sendMsgToMaster(msgToMaster);
+            }
+            else
+            {
+                XP_LT_RED;
+                xprintf("No target animal detected.\n");
+                XP_WHITE;
+            }
+            XP_WHITE;
+            xprintf("Score %d/128. NN processing took %dms\n\n", outCategories[1], elapsedMs);
+        }
+        else
+        {
+            // NN error.
+            // What do we do here?
+            XP_RED;
+            xprintf("NN error %d. NN processing took %dms\n\n", ret, elapsedMs);
+            XP_WHITE;
+        }
+#if defined(USE_HM0360) || defined(USE_HM0360_MD)
+        // This is a test to see if/how these change with illumination
+        hm0360_md_getGainRegs(&gain);
 #endif
 
-		XP_LT_GREY;
-		xprintf("Gain regs: Int = 0x%04x, Analog = 0x%02x, Digital = 0x%04x, AEMean = 0x%02x, AEConverge = 0x%02x\n",
-				gain.integration, gain.analogGain, gain.digitalGain, gain.aeMean, gain.aeConverged);
-		XP_WHITE;
+        XP_LT_GREY;
+        xprintf("Gain regs: Int = 0x%04x, Analog = 0x%02x, Digital = 0x%04x, AEMean = 0x%02x, AEConverge = 0x%02x\n",
+                gain.integration, gain.analogGain, gain.digitalGain, gain.aeMean, gain.aeConverged);
+        XP_WHITE;
 
 #if 0
 		// This is a test of reading and printing the MD registers
@@ -756,13 +790,13 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
 		XP_WHITE;
 #endif // 0
 
-		// Proceed to write the jpeg file, even if there is no SD card
-		// since the fatfs_task will handle that.
+        // Proceed to write the jpeg file, even if there is no SD card
+        // since the fatfs_task will handle that.
 
-        cisdp_get_jpginfo(&jpeg_sz, &jpeg_addr);	// Revised size after inserting EIF
+        cisdp_get_jpginfo(&jpeg_sz, &jpeg_addr); // Revised size after inserting EIF
 
-		// JPEF buffer exists but this will insert EXIF data and increase jpeg_sz
-    	exif_len = insertExif(jpeg_sz, jpeg_addr, outCategories, CATEGORIESCOUNT);
+        // JPEF buffer exists but this will insert EXIF data and increase jpeg_sz
+        exif_len = insertExif(jpeg_sz, jpeg_addr, outCategories, CATEGORIESCOUNT);
 
 #if 0
     	// Check by printing some of the buffer that includes the EXIF
@@ -784,85 +818,89 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
         g_imageSeqNum = fatfs_getImageSequenceNumber();
         generateImageFileName(g_imageSeqNum);
 
-		setFileOpFromJpeg((jpeg_sz + exif_len), (uint32_t) jpeg_exif_buf);
+        setFileOpFromJpeg((jpeg_sz + exif_len), (uint32_t)jpeg_exif_buf);
 
-		dbg_printf(DBG_LESS_INFO, "Writing %d bytes (%d + %d) to '%s' from 0x%08x\n",
-				fileOp.length, jpeg_sz, exif_len, fileOp.fileName, fileOp.buffer);
+        dbg_printf(DBG_LESS_INFO, "Writing %d bytes (%d + %d) to '%s' from 0x%08x\n",
+                   fileOp.length, jpeg_sz, exif_len, fileOp.fileName, fileOp.buffer);
 
-		// Save the file name as the most recent image
-		snprintf(lastImageFileName, IMAGEFILENAMELEN, "%s", fileOp.fileName);
+        // Save the file name as the most recent image
+        snprintf(lastImageFileName, IMAGEFILENAMELEN, "%s", fileOp.fileName);
 
-		send_msg.destination = xFatTaskQueue;
-		send_msg.message.msg_event = APP_MSG_FATFSTASK_WRITE_FILE;
-		send_msg.message.msg_data = (uint32_t)&fileOp;
+        send_msg.destination = xFatTaskQueue;
+        send_msg.message.msg_event = APP_MSG_FATFSTASK_WRITE_FILE;
+        send_msg.message.msg_data = (uint32_t)&fileOp;
 
-		// Also see if it is appropriate to send a "Event" message to the BLE processor
-		// TODO this won't work if the preceding 'NN+' message is being sent!
-		if ((g_cur_jpegenc_frame == g_captures_to_take) && nnPositive) {
+        // Also see if it is appropriate to send a "Event" message to the BLE processor
+        // TODO this won't work if the preceding 'NN+' message is being sent!
+        if ((g_cur_jpegenc_frame == g_captures_to_take) && nnPositive)
+        {
 
-			// TODO DREADFUL HACK!!!
+            // TODO DREADFUL HACK!!!
 
-			// This should be replaced with semaphores that delay until preceding messages have been sent!
-			// Instead as a quick hack I am adding a delay here in the hope that the preceding "NN+" message
-			// will get through
+            // This should be replaced with semaphores that delay until preceding messages have been sent!
+            // Instead as a quick hack I am adding a delay here in the hope that the preceding "NN+" message
+            // will get through
 
-			vTaskDelay(pdMS_TO_TICKS(100));
+            vTaskDelay(pdMS_TO_TICKS(100));
 
-			// Inform BLE processor
-			// For the moment the message body is identical to the "Sleep " message but we might chnage this later
-			snprintf(msgToMaster, MSGTOMASTERLEN, "Event ");
+            // Inform BLE processor
+            // For the moment the message body is identical to the "Sleep " message but we might chnage this later
+            snprintf(msgToMaster, MSGTOMASTERLEN, "Event ");
 
-			for (uint8_t i=0; i < OP_PARAMETER_NUM_ENTRIES; i++) {
-				uint8_t next = strlen(msgToMaster);	// points to the place where we should write the next parameter
-				snprintf(&msgToMaster[next], sizeof(msgToMaster), "%d ", fatfs_getOperationalParameter(i));
-			}
-			sendMsgToMaster(msgToMaster);
-		}
+            for (uint8_t i = 0; i < OP_PARAMETER_NUM_ENTRIES; i++)
+            {
+                uint8_t next = strlen(msgToMaster); // points to the place where we should write the next parameter
+                snprintf(&msgToMaster[next], sizeof(msgToMaster), "%d ", fatfs_getOperationalParameter(i));
+            }
+            sendMsgToMaster(msgToMaster);
+        }
 
-		// Wait in this state till the disk write completes - expect APP_MSG_IMAGETASK_DISK_WRITE_COMPLETE
-    	image_task_state = APP_IMAGE_TASK_STATE_NN_PROCESSING;
+        // Wait in this state till the disk write completes - expect APP_MSG_IMAGETASK_DISK_WRITE_COMPLETE
+        image_task_state = APP_IMAGE_TASK_STATE_NN_PROCESSING;
 
-    	break;
+        break;
 
-	case APP_MSG_IMAGETASK_CHANGE_ENABLE:
-		// We have received an instruction to enable or disable the NN processing system
-		setEnabled = (bool) img_recv_msg.msg_data;
-		changeEnableState(setEnabled);	// 0 means disabled; 1 means enabled
-		break;
+    case APP_MSG_IMAGETASK_CHANGE_ENABLE:
+        // We have received an instruction to enable or disable the NN processing system
+        setEnabled = (bool)img_recv_msg.msg_data;
+        changeEnableState(setEnabled); // 0 means disabled; 1 means enabled
+        break;
 
     case APP_MSG_IMAGETASK_INACTIVITY:
-    	// I have seen this, followed soon after by
-    	dbg_printf(DBG_LESS_INFO, "Inactive - expect WDT timeout?\n");
-    	break;
+        // I have seen this, followed soon after by
+        dbg_printf(DBG_LESS_INFO, "Inactive - expect WDT timeout?\n");
+        break;
 
     case APP_MSG_DPEVENT_EDM_WDT1_TIMEOUT:
     case APP_MSG_DPEVENT_EDM_WDT2_TIMEOUT:
     case APP_MSG_DPEVENT_EDM_WDT3_TIMEOUT:
     case APP_MSG_DPEVENT_SENSORCTRL_WDT_OUT:
-    	// Unfortunately I see this. EDM WDT2 Timeout = 0x011c
-    	// probably if HM0360 is not receiving I2C commands...
-    	dbg_printf(DBG_LESS_INFO, "Received a timeout event. TODO - re-initialise camera?\n");
+        // Unfortunately I see this. EDM WDT2 Timeout = 0x011c
+        // probably if HM0360 is not receiving I2C commands...
+        dbg_printf(DBG_LESS_INFO, "Received a timeout event. TODO - re-initialise camera?\n");
 
-    	// Fault detected. Prepare to enter DPD
-		configure_image_sensor(CAMERA_CONFIG_STOP, 0); // run some sensordplib_stop functions then run HM0360_stream_off commands to the HM0360
+        // Fault detected. Prepare to enter DPD
+        configure_image_sensor(CAMERA_CONFIG_STOP, 0); // run some sensordplib_stop functions then run HM0360_stream_off commands to the HM0360
 
-		if (fatfs_getImageSequenceNumber() > 0) {
-			// TODO - can we call this without the if() and expect fatfs_task to handle it?
-			// Ask the FatFS task to save state onto the SD card
-			send_msg.destination = xFatTaskQueue;
-			send_msg.message.msg_event = APP_MSG_FATFSTASK_SAVE_STATE;
-			send_msg.message.msg_data = 0;
-			image_task_state = APP_IMAGE_TASK_STATE_SAVE_STATE;
-		}
-		else {
-			// No SD card therefore can't save state
-	    	// Wait till the IF Task is also ready, then sleep
-	    	sleepWhenPossible();	// does not return
-		};
-		break;
+        if (fatfs_getImageSequenceNumber() > 0)
+        {
+            // TODO - can we call this without the if() and expect fatfs_task to handle it?
+            // Ask the FatFS task to save state onto the SD card
+            send_msg.destination = xFatTaskQueue;
+            send_msg.message.msg_event = APP_MSG_FATFSTASK_SAVE_STATE;
+            send_msg.message.msg_data = 0;
+            image_task_state = APP_IMAGE_TASK_STATE_SAVE_STATE;
+        }
+        else
+        {
+            // No SD card therefore can't save state
+            // Wait till the IF Task is also ready, then sleep
+            sleepWhenPossible(); // does not return
+        };
+        break;
 
     default:
-    	flagUnexpectedEvent(img_recv_msg);
+        flagUnexpectedEvent(img_recv_msg);
     }
 
     return send_msg;
@@ -879,67 +917,75 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
  * @param APP_MSG_T img_recv_msg
  * @return APP_MSG_DEST_T send_msg
  */
-static APP_MSG_DEST_T handleEventForNNProcessing(APP_MSG_T img_recv_msg) {
+static APP_MSG_DEST_T handleEventForNNProcessing(APP_MSG_T img_recv_msg)
+{
     APP_MSG_DEST_T send_msg;
     APP_MSG_EVENT_E event;
     uint32_t diskStatus;
 
-	bool setEnabled;
+    bool setEnabled;
 
     event = img_recv_msg.msg_event;
     send_msg.destination = NULL;
     diskStatus = img_recv_msg.msg_data;
 
-    switch (event) {
+    switch (event)
+    {
 
     case APP_MSG_IMAGETASK_DISK_WRITE_COMPLETE:
-        if ( diskStatus == 0) {
-        	fatfs_incrementOperationalParameter(OP_PARAMETER_SEQUENCE_NUMBER);
+        if (diskStatus == 0)
+        {
+            fatfs_incrementOperationalParameter(OP_PARAMETER_SEQUENCE_NUMBER);
         }
-        else {
+        else
+        {
             dbg_printf(DBG_LESS_INFO, "Image not written. Error: %d\n", diskStatus);
         }
 
         // This represents the point at which an image has been captured and processed.
 
-		if (g_cur_jpegenc_frame == g_captures_to_take) {
-			captureSequenceComplete();
-			image_task_state = APP_IMAGE_TASK_STATE_INIT;
-		}
+        if (g_cur_jpegenc_frame == g_captures_to_take)
+        {
+            captureSequenceComplete();
+            image_task_state = APP_IMAGE_TASK_STATE_INIT;
+        }
 #ifdef USE_HM0360
-        else {
-			// The HM0360 uses an internal timer to determine the time for the next image
-        	// Re-start the image sensor.
-			configure_image_sensor(CAMERA_CONFIG_CONTINUE, 0);
-        	// Expect another frame ready event
-        	image_task_state = APP_IMAGE_TASK_STATE_CAPTURING;
+        else
+        {
+            // The HM0360 uses an internal timer to determine the time for the next image
+            // Re-start the image sensor.
+            configure_image_sensor(CAMERA_CONFIG_CONTINUE, 0);
+            // Expect another frame ready event
+            image_task_state = APP_IMAGE_TASK_STATE_CAPTURING;
         }
 #else
-        else {
-        	// Start a timer that delays for the defined interval.
-        	// When it expires, switch to CAPTURUNG state and request another image
-            if (captureTimer != NULL)  {
+        else
+        {
+            // Start a timer that delays for the defined interval.
+            // When it expires, switch to CAPTURUNG state and request another image
+            if (captureTimer != NULL)
+            {
                 // Change the period and start the timer
-            	// The callback issues a APP_MSG_IMAGETASK_RECAPTURE event
+                // The callback issues a APP_MSG_IMAGETASK_RECAPTURE event
                 xTimerChangePeriod(captureTimer, pdMS_TO_TICKS(g_timer_period), 0);
                 // Expect a APP_MSG_IMAGETASK_RECAPTURE event from the capture_timer
                 image_task_state = APP_IMAGE_TASK_STATE_WAIT_FOR_TIMER;
             }
-            else {
-            	// error
-            	flagUnexpectedEvent(img_recv_msg);
+            else
+            {
+                // error
+                flagUnexpectedEvent(img_recv_msg);
                 image_task_state = APP_IMAGE_TASK_STATE_INIT;
             }
         }
 #endif // USE_HM0360
         break;
 
-
-	case APP_MSG_IMAGETASK_CHANGE_ENABLE:
-		// We have received an instruction to enable or disable the NN processing system
-		setEnabled = (bool) img_recv_msg.msg_data;
-		changeEnableState(setEnabled);	// 0 means disabled; 1 means enabled
-		break;
+    case APP_MSG_IMAGETASK_CHANGE_ENABLE:
+        // We have received an instruction to enable or disable the NN processing system
+        setEnabled = (bool)img_recv_msg.msg_data;
+        changeEnableState(setEnabled); // 0 means disabled; 1 means enabled
+        break;
 
     default:
         flagUnexpectedEvent(img_recv_msg);
@@ -954,8 +1000,9 @@ static APP_MSG_DEST_T handleEventForNNUpdate(APP_MSG_T img_recv_msg)
 {
     APP_MSG_DEST_T send_msg;
     send_msg.destination = NULL;
-    int model_number = (int)img_recv_msg.msg_data;
-    xprintf("Requested to update NN model to %d\n", model_number);
+    int project_id = (int)img_recv_msg.msg_data;
+    int deploy_version = (int)img_recv_msg.msg_parameter;
+    xprintf("Requested to update NN model to %dV%d.tfl (Project ID: %d)\n", project_id, deploy_version, project_id);
 
     int result_not = cv_deinit();
     if (result_not != 0)
@@ -963,13 +1010,13 @@ static APP_MSG_DEST_T handleEventForNNUpdate(APP_MSG_T img_recv_msg)
         xprintf("Failed to deinit cv\n");
     }
 
-    // Try to load the new model
-    int result = cv_init(true, true, model_number);
+    // Try to load the new model with project_id and deploy_version
+    int result = cv_init(true, true, project_id, deploy_version);
     if (result == 0)
     {
         // Model loaded successfully - no need to send event, just continue
         XP_GREEN;
-        xprintf("---------MODEL UPDATE SUCCESS---------\n");
+        xprintf("---------MODEL UPDATE SUCCESS: %dV%d.tfl---------\n", project_id, deploy_version);
         XP_WHITE;
         // Don't send any message - state is already set to INIT
         send_msg.destination = NULL;
@@ -978,11 +1025,11 @@ static APP_MSG_DEST_T handleEventForNNUpdate(APP_MSG_T img_recv_msg)
     {
         // Model load failed, send error event
         XP_RED;
-        xprintf("------------MODEL UPDATE FAILED, sending ERROR event\n");
+        xprintf("------------MODEL UPDATE FAILED for %dV%d.tfl, sending ERROR event\n", project_id, deploy_version);
         XP_WHITE;
         send_msg.message.msg_event = APP_MSG_IMAGETASK_ERROR;
-        send_msg.message.msg_data = model_number; // Include model number in error
-        send_msg.message.msg_parameter = 0;
+        send_msg.message.msg_data = project_id;
+        send_msg.message.msg_parameter = deploy_version;
         send_msg.destination = xImageTaskQueue;
     }
 
@@ -1002,35 +1049,37 @@ static APP_MSG_DEST_T handleEventForNNUpdate(APP_MSG_T img_recv_msg)
  * @param APP_MSG_T img_recv_msg
  * @return APP_MSG_DEST_T send_msg
  */
-static APP_MSG_DEST_T handleEventForWaitForTimer(APP_MSG_T img_recv_msg) {
+static APP_MSG_DEST_T handleEventForWaitForTimer(APP_MSG_T img_recv_msg)
+{
     APP_MSG_DEST_T send_msg;
     APP_MSG_EVENT_E event;
 
-	bool setEnabled;
-	uint8_t dutyCycle;
+    bool setEnabled;
+    uint8_t dutyCycle;
 
     event = img_recv_msg.msg_event;
     send_msg.destination = NULL;
 
-    switch (event) {
+    switch (event)
+    {
 
     case APP_MSG_IMAGETASK_RECAPTURE:
-    	// here when the capture_timer expires
+        // here when the capture_timer expires
 
-    	// Turn on the PWM that determines the flash intensity
-    	dutyCycle = (uint8_t) fatfs_getOperationalParameter(OP_PARAMETER_LED_FLASH_DUTY);
-    	//xprintf("Flash duty cycle %d%% (Timer)\n", dutyCycle);
-    	flashLEDPWMOn(dutyCycle);
+        // Turn on the PWM that determines the flash intensity
+        dutyCycle = (uint8_t)fatfs_getOperationalParameter(OP_PARAMETER_LED_FLASH_DUTY);
+        // xprintf("Flash duty cycle %d%% (Timer)\n", dutyCycle);
+        flashLEDPWMOn(dutyCycle);
 
         sensordplib_retrigger_capture();
         image_task_state = APP_IMAGE_TASK_STATE_CAPTURING;
         break;
 
-	case APP_MSG_IMAGETASK_CHANGE_ENABLE:
-		// We have received an instruction to enable or disable the NN processing system
-		setEnabled = (bool) img_recv_msg.msg_data;
-		changeEnableState(setEnabled);	// 0 means disabled; 1 means enabled
-		break;
+    case APP_MSG_IMAGETASK_CHANGE_ENABLE:
+        // We have received an instruction to enable or disable the NN processing system
+        setEnabled = (bool)img_recv_msg.msg_data;
+        changeEnableState(setEnabled); // 0 means disabled; 1 means enabled
+        break;
 
     default:
         flagUnexpectedEvent(img_recv_msg);
@@ -1051,28 +1100,30 @@ static APP_MSG_DEST_T handleEventForWaitForTimer(APP_MSG_T img_recv_msg) {
  * @param APP_MSG_T img_recv_msg
  * @return APP_MSG_DEST_T send_msg
  */
-static APP_MSG_DEST_T handleEventForSaveState(APP_MSG_T img_recv_msg) {
+static APP_MSG_DEST_T handleEventForSaveState(APP_MSG_T img_recv_msg)
+{
     APP_MSG_DEST_T send_msg;
     APP_MSG_EVENT_E event;
 
-	bool setEnabled;
+    bool setEnabled;
 
     event = img_recv_msg.msg_event;
     send_msg.destination = NULL;
 
-    switch (event) {
+    switch (event)
+    {
 
     case APP_MSG_IMAGETASK_DISK_WRITE_COMPLETE:
-    	// Here when the FatFS task has saved state
-    	// Wait till the IF Task is also ready, then sleep
-    	sleepWhenPossible();	// does not return
+        // Here when the FatFS task has saved state
+        // Wait till the IF Task is also ready, then sleep
+        sleepWhenPossible(); // does not return
         break;
 
-	case APP_MSG_IMAGETASK_CHANGE_ENABLE:
-		// We have received an instruction to enable or disable the NN processing system
-		setEnabled = (bool) img_recv_msg.msg_data;
-		changeEnableState(setEnabled);	// 0 means disabled; 1 means enabled
-		break;
+    case APP_MSG_IMAGETASK_CHANGE_ENABLE:
+        // We have received an instruction to enable or disable the NN processing system
+        setEnabled = (bool)img_recv_msg.msg_data;
+        changeEnableState(setEnabled); // 0 means disabled; 1 means enabled
+        break;
 
     default:
         flagUnexpectedEvent(img_recv_msg);
@@ -1090,7 +1141,8 @@ static APP_MSG_DEST_T handleEventForSaveState(APP_MSG_T img_recv_msg) {
  * Parameters: APP_MSG_T img_recv_msg
  * Returns: APP_MSG_DEST_T send_msg
  */
-static APP_MSG_DEST_T flagUnexpectedEvent(APP_MSG_T img_recv_msg) {
+static APP_MSG_DEST_T flagUnexpectedEvent(APP_MSG_T img_recv_msg)
+{
     APP_MSG_EVENT_E event;
     APP_MSG_DEST_T send_msg;
 
@@ -1098,10 +1150,12 @@ static APP_MSG_DEST_T flagUnexpectedEvent(APP_MSG_T img_recv_msg) {
     send_msg.destination = NULL;
 
     XP_LT_RED;
-    if ((event >= APP_MSG_IMAGETASK_FIRST) && (event < APP_MSG_IMAGETASK_LAST)) {
+    if ((event >= APP_MSG_IMAGETASK_FIRST) && (event < APP_MSG_IMAGETASK_LAST))
+    {
         xprintf("IMAGE task unhandled event '%s' in '%s'\r\n", imageTaskEventString[event - APP_MSG_IMAGETASK_FIRST], imageTaskStateString[image_task_state]);
     }
-    else  {
+    else
+    {
         xprintf("IMAGE task unhandled event 0x%04x in '%s'\r\n", event, imageTaskStateString[image_task_state]);
     }
     XP_WHITE;
@@ -1115,22 +1169,23 @@ static APP_MSG_DEST_T flagUnexpectedEvent(APP_MSG_T img_recv_msg) {
  *
  * Placed here as a separate routine as it is called from 2 places.
  */
-static void captureSequenceComplete(void) {
+static void captureSequenceComplete(void)
+{
     // Current captures sequence completed
-     XP_GREEN;
-     xprintf("Current captures completed: %d\n", g_captures_to_take);
-     xprintf("Total frames captured since last reset: %d\n", g_frames_total);
-     XP_WHITE;
+    XP_GREEN;
+    xprintf("Current captures completed: %d\n", g_captures_to_take);
+    xprintf("Total frames captured since last reset: %d\n", g_frames_total);
+    XP_WHITE;
 
-     // Inform BLE processor
-     snprintf(msgToMaster, MSGTOMASTERLEN, "Captured %d images. Last is %s",
-     		(int) g_captures_to_take, lastImageFileName);
-     sendMsgToMaster(msgToMaster);
+    // Inform BLE processor
+    snprintf(msgToMaster, MSGTOMASTERLEN, "Captured %d images. Last is %s",
+             (int)g_captures_to_take, lastImageFileName);
+    sendMsgToMaster(msgToMaster);
 
-     // Reset counters
-     g_captures_to_take = 0;
-     g_cur_jpegenc_frame = 0;
-     flashLEDPWMOff();
+    // Reset counters
+    g_captures_to_take = 0;
+    g_cur_jpegenc_frame = 0;
+    flashLEDPWMOff();
 }
 
 // Three function that control the behaviour of the GPIO pin that produces the PWM signal for LED brightness
@@ -1142,41 +1197,46 @@ static void captureSequenceComplete(void) {
  *
  * TODO move to pinmux_init()?
  */
-static void flashLEDPWMInit(void) {
+static void flashLEDPWMInit(void)
+{
 #if 1
-	// for now inhibit
-	xprintf("flashLED inhibited\n");
+    // for now inhibit
+    xprintf("flashLED inhibited\n");
 #else
-	// Uncomment this if PB9 is to be used as the green LED.
-	// Otherwise it can be PWM for the Flash LED
+    // Uncomment this if PB9 is to be used as the green LED.
+    // Otherwise it can be PWM for the Flash LED
 #ifdef PB9ISLEDGREEN
-	XP_LT_RED;
-	xprintf("Warning: PB9 in use for LED\n");
+    XP_LT_RED;
+    xprintf("Warning: PB9 in use for LED\n");
 #else
 
-	PWM_ERROR_E ret;
+    PWM_ERROR_E ret;
 
-	// The output pin of PWM1 is routed to PB9
-	ret = hx_drv_scu_set_PB9_pinmux(SCU_PB9_PINMUX_PWM1, 1);
+    // The output pin of PWM1 is routed to PB9
+    ret = hx_drv_scu_set_PB9_pinmux(SCU_PB9_PINMUX_PWM1, 1);
 
-	XP_LT_BLUE;
-	if (ret == PWM_NO_ERROR) {
-		xprintf("Initialised PB9 for PWM output\n");
-		// initializes the PWM1
-		ret = hx_drv_pwm_init(PWM1, HW_PWM1_BASEADDR);
+    XP_LT_BLUE;
+    if (ret == PWM_NO_ERROR)
+    {
+        xprintf("Initialised PB9 for PWM output\n");
+        // initializes the PWM1
+        ret = hx_drv_pwm_init(PWM1, HW_PWM1_BASEADDR);
 
-		if (ret == PWM_NO_ERROR) {
-			xprintf("Initialised flash LED on PB9\n");
-		}
-		else {
-			xprintf("Flash LED initialisation on PB9 fails: %d\n", ret);
-		}
-	}
-	else {
-		xprintf("PB9 init for PWM output fails: %d\n", ret);
-	}
+        if (ret == PWM_NO_ERROR)
+        {
+            xprintf("Initialised flash LED on PB9\n");
+        }
+        else
+        {
+            xprintf("Flash LED initialisation on PB9 fails: %d\n", ret);
+        }
+    }
+    else
+    {
+        xprintf("PB9 init for PWM output fails: %d\n", ret);
+    }
 
-	XP_WHITE;
+    XP_WHITE;
 #endif //  PB9ISLEDGREEN
 #endif
 }
@@ -1186,7 +1246,8 @@ static void flashLEDPWMInit(void) {
  *
  * @param duty - value between 1 and 99 representing duty cycle in percent
  */
-static void flashLEDPWMOn(uint8_t duty) {
+static void flashLEDPWMOn(uint8_t duty)
+{
 #if 0
 	// for now inhibit
 #ifdef PB9ISLEDGREEN
@@ -1220,7 +1281,8 @@ static void flashLEDPWMOn(uint8_t duty) {
  * Turns off the PWM signal.
  *
  */
-static void flashLEDPWMOff(void) {
+static void flashLEDPWMOff(void)
+{
 #if 0
 		// for now inhibit
 #ifdef PB9ISLEDGREEN
@@ -1243,16 +1305,19 @@ static void flashLEDPWMOff(void) {
  *
  * @param setEnabled enable if true
  */
-static void changeEnableState(bool setEnabled) {
+static void changeEnableState(bool setEnabled)
+{
 
-	if (setEnabled) {
-		nnSystemEnabled = 1;
-		fatfs_setOperationalParameter(OP_PARAMETER_CAMERA_ENABLED, 1);
-	}
-	else{
-		nnSystemEnabled = 0;
-		fatfs_setOperationalParameter(OP_PARAMETER_CAMERA_ENABLED, 0);
-	}
+    if (setEnabled)
+    {
+        nnSystemEnabled = 1;
+        fatfs_setOperationalParameter(OP_PARAMETER_CAMERA_ENABLED, 1);
+    }
+    else
+    {
+        nnSystemEnabled = 0;
+        fatfs_setOperationalParameter(OP_PARAMETER_CAMERA_ENABLED, 0);
+    }
 }
 
 /********************************** FreeRTOS Task  *************************************/
@@ -1266,7 +1331,8 @@ static void changeEnableState(bool setEnabled) {
  * After some one-off activities it waits for events to arrive in its xImageTaskQueue
  *
  */
-static void vImageTask(void *pvParameters) {
+static void vImageTask(void *pvParameters)
+{
     APP_MSG_T img_recv_msg;
     APP_MSG_T internal_msg;
     APP_MSG_DEST_T send_msg;
@@ -1282,26 +1348,35 @@ static void vImageTask(void *pvParameters) {
     g_captures_to_take = 0;
     g_timer_period = 0;
     g_img_data = 0;
-    g_imageSeqNum = 0;	// 0 indicates no SD card
+    g_imageSeqNum = 0; // 0 indicates no SD card
 
     // True means we capture images and run NN processing and report results.
     nnSystemEnabled = fatfs_getOperationalParameter(OP_PARAMETER_CAMERA_ENABLED);
 
-    nnPositive = false;	// true if the NN analysis detects something
+    nnPositive = false; // true if the NN analysis detects something
 
     XP_CYAN;
     // Observing these messages confirms the initialisation sequence
     xprintf("Starting Image Task\n");
     XP_WHITE;
 
+    // Report whether dynamic EXIF confidence tags are enabled at build time
+#if ENABLE_EXIF_CONFIDENCE
+    xprintf("EXIF confidence tags: ENABLED\n");
+#else
+    xprintf("EXIF confidence tags: DISABLED\n");
+#endif
+
     // Should initialise the camera but not start taking images
 #ifdef USE_HM0360
     hm0360_md_setIsMainCamera(true);
-    if (woken == APP_WAKE_REASON_COLD)  {
-    	cameraInitialised = configure_image_sensor(CAMERA_CONFIG_INIT_COLD, 0);
+    if (woken == APP_WAKE_REASON_COLD)
+    {
+        cameraInitialised = configure_image_sensor(CAMERA_CONFIG_INIT_COLD, 0);
     }
-    else {
-    	cameraInitialised = configure_image_sensor(CAMERA_CONFIG_INIT_WARM, 0);
+    else
+    {
+        cameraInitialised = configure_image_sensor(CAMERA_CONFIG_INIT_WARM, 0);
     }
 
 #else
@@ -1310,24 +1385,26 @@ static void vImageTask(void *pvParameters) {
     cameraInitialised = configure_image_sensor(CAMERA_CONFIG_INIT_COLD, 0);
 #endif // USE_HM0360
 
-    if (!cameraInitialised) {
-    	xprintf("\nEnter DPD mode because there is no camera!\n\n");
-    	sleep_mode_enter_dpd(SLEEPMODE_WAKE_SOURCE_WAKE_PIN, 0, false);	// Does not return
+    if (!cameraInitialised)
+    {
+        xprintf("\nEnter DPD mode because there is no camera!\n\n");
+        sleep_mode_enter_dpd(SLEEPMODE_WAKE_SOURCE_WAKE_PIN, 0, false); // Does not return
     }
 
 #ifndef USE_HM0360
 #ifdef USE_HM0360_MD
     // The HM0360 is not our main camera but we are using it for motion detection.
     // There is some more initialisation required.
-    if (woken == APP_WAKE_REASON_COLD) {
-    	hm0360_md_init();
-     }
-#endif	// USE_HM0360_MD
-#endif	// USE_HM0360
+    if (woken == APP_WAKE_REASON_COLD)
+    {
+        hm0360_md_init();
+    }
+#endif // USE_HM0360_MD
+#endif // USE_HM0360
 
 #if 0
 	// This is a test of reading and printing the MD registers
-#if defined (USE_HM0360) || defined (USE_HM0360_MD)
+#if defined(USE_HM0360) || defined(USE_HM0360_MD)
 
 	uint8_t roiOut[ROIOUTENTRIES];
 
@@ -1345,18 +1422,20 @@ static void vImageTask(void *pvParameters) {
     }
 	XP_WHITE;
 
-#endif	// USE_HM0360_MD
+#endif // USE_HM0360_MD
 #endif // 0
 
     flashLEDPWMInit();
 
-    // Gets default model to load
-    int model_number = get_model_number();
-    if (cv_init(true, true, model_number) < 0)  {
-    	xprintf("cv init fail\n");
+    // Initialize with default project_id from common_config.h and version 1
+    // The actual values will be loaded from flash if available, or use these defaults
+    if (cv_init(true, true, PROJECT_ID, 1) < 0)
+    {
+        xprintf("cv init fail\n");
         configASSERT(0);
     }
-    else {
+    else
+    {
         xprintf("Initialised neural network.\n");
     }
 
@@ -1371,29 +1450,35 @@ static void vImageTask(void *pvParameters) {
 
     // But only if nnSystemEnabled!
 
-    if ((nnSystemEnabled == 1) &&((woken == APP_WAKE_REASON_MD) || (woken == APP_WAKE_REASON_TIMER))) {
-    	// Pass the parameters in the ImageTask message queue
-    	internal_msg.msg_data = fatfs_getOperationalParameter(OP_PARAMETER_NUM_PICTURES);
-    	internal_msg.msg_parameter = fatfs_getOperationalParameter(OP_PARAMETER_PICTURE_INTERVAL);
-    	internal_msg.msg_event = APP_MSG_IMAGETASK_STARTCAPTURE;
+    if ((nnSystemEnabled == 1) && ((woken == APP_WAKE_REASON_MD) || (woken == APP_WAKE_REASON_TIMER)))
+    {
+        // Pass the parameters in the ImageTask message queue
+        internal_msg.msg_data = fatfs_getOperationalParameter(OP_PARAMETER_NUM_PICTURES);
+        internal_msg.msg_parameter = fatfs_getOperationalParameter(OP_PARAMETER_PICTURE_INTERVAL);
+        internal_msg.msg_event = APP_MSG_IMAGETASK_STARTCAPTURE;
 
-    	if (xQueueSend(xImageTaskQueue, (void *)&internal_msg, __QueueSendTicksToWait) != pdTRUE) {
-    		xprintf("Failed to send 0x%x to imageTask\r\n", internal_msg.msg_event);
-    	}
+        if (xQueueSend(xImageTaskQueue, (void *)&internal_msg, __QueueSendTicksToWait) != pdTRUE)
+        {
+            xprintf("Failed to send 0x%x to imageTask\r\n", internal_msg.msg_event);
+        }
     }
 
     // Loop forever, taking events from xImageTaskQueue as they arrive
-    for (;;)  {
+    for (;;)
+    {
         // Wait for a message in the queue
-        if(xQueueReceive(xImageTaskQueue, &(img_recv_msg), __QueueRecvTicksToWait) == pdTRUE)  {
+        if (xQueueReceive(xImageTaskQueue, &(img_recv_msg), __QueueRecvTicksToWait) == pdTRUE)
+        {
             event = img_recv_msg.msg_event;
             recv_data = img_recv_msg.msg_data;
 
             // convert event to a string
-            if ((event >= APP_MSG_IMAGETASK_FIRST) && (event < APP_MSG_IMAGETASK_LAST))  {
+            if ((event >= APP_MSG_IMAGETASK_FIRST) && (event < APP_MSG_IMAGETASK_LAST))
+            {
                 event_string = imageTaskEventString[event - APP_MSG_IMAGETASK_FIRST];
             }
-            else   {
+            else
+            {
                 event_string = "Unrecognised";
             }
 
@@ -1404,7 +1489,8 @@ static void vImageTask(void *pvParameters) {
 
             old_state = image_task_state;
 
-            switch (image_task_state)  {
+            switch (image_task_state)
+            {
             case APP_IMAGE_TASK_STATE_UNINIT:
                 send_msg = flagUnexpectedEvent(img_recv_msg);
                 break;
@@ -1416,10 +1502,10 @@ static void vImageTask(void *pvParameters) {
             case APP_IMAGE_TASK_STATE_CAPTURING:
                 send_msg = handleEventForCapturing(img_recv_msg);
                 break;
-//
-//            case APP_IMAGE_TASK_STATE_BUSY:
-//                send_msg = handleEventForBusy(img_recv_msg);
-//                break;
+                //
+                //            case APP_IMAGE_TASK_STATE_BUSY:
+                //                send_msg = handleEventForBusy(img_recv_msg);
+                //                break;
 
             case APP_IMAGE_TASK_STATE_NN_PROCESSING:
                 send_msg = handleEventForNNProcessing(img_recv_msg);
@@ -1442,8 +1528,9 @@ static void vImageTask(void *pvParameters) {
                 break;
             }
 
-            if (old_state != image_task_state)   {
-				// state has changed
+            if (old_state != image_task_state)
+            {
+                // state has changed
                 XP_LT_CYAN;
                 xprintf("IMAGE Task state changed ");
                 XP_WHITE;
@@ -1453,12 +1540,15 @@ static void vImageTask(void *pvParameters) {
             }
 
             // Passes message to other tasks if required (commonly fatfs)
-            if (send_msg.destination != NULL)   {
+            if (send_msg.destination != NULL)
+            {
                 target_queue = send_msg.destination;
-                if (xQueueSend(target_queue, (void *)&send_msg, __QueueSendTicksToWait) != pdTRUE) {
+                if (xQueueSend(target_queue, (void *)&send_msg, __QueueSendTicksToWait) != pdTRUE)
+                {
                     xprintf("IMAGE task sending event 0x%x failed\r\n", send_msg.message.msg_event);
                 }
-                else {
+                else
+                {
                     xprintf("IMAGE task sending event 0x%04x. Rx data = 0x%08x\r\n", send_msg.message.msg_event, send_msg.message.msg_data);
                 }
             }
@@ -1488,26 +1578,31 @@ static void vImageTask(void *pvParameters) {
  * @param numFrames - number of frames we ask the HM0360 to take
  * @return true if initialised. false if no working camera
  */
-static bool configure_image_sensor(CAMERA_CONFIG_E operation, uint8_t flashDutyCycle) {
-	bool processedOK = true;
+static bool configure_image_sensor(CAMERA_CONFIG_E operation, uint8_t flashDutyCycle)
+{
+    bool processedOK = true;
 
-	// Print in grey as there is lots of output for some sensors
-	XP_LT_GREY;
+    // Print in grey as there is lots of output for some sensors
+    XP_LT_GREY;
 
-	switch (operation) {
+    switch (operation)
+    {
 
-	case CAMERA_CONFIG_INIT_COLD:
-        if (cisdp_sensor_init(true) != 0) {
+    case CAMERA_CONFIG_INIT_COLD:
+        if (cisdp_sensor_init(true) != 0)
+        {
             xprintf("\r\nCIS Init fail\r\n");
             processedOK = false;
         }
-        else {
-        	// Initialise extra registers from file
-        	cis_file_process(CAMERA_EXTRA_FILE);
+        else
+        {
+            // Initialise extra registers from file
+            cis_file_process(CAMERA_EXTRA_FILE);
 
             // if wdma variable is zero when not init yet, then this step is a must be to retrieve wdma address
             //  Datapath events give callbacks to os_app_dplib_cb() in dp_task
-            if (cisdp_dp_init(true, SENSORDPLIB_PATH_INT_INP_HW5X5_JPEG, os_app_dplib_cb, g_img_data, APP_DP_RES_YUV640x480_INP_SUBSAMPLE_1X) < 0) {
+            if (cisdp_dp_init(true, SENSORDPLIB_PATH_INT_INP_HW5X5_JPEG, os_app_dplib_cb, g_img_data, APP_DP_RES_YUV640x480_INP_SUBSAMPLE_1X) < 0)
+            {
                 xprintf("\r\nDATAPATH Init fail\r\n");
                 return false;
             }
@@ -1515,17 +1610,20 @@ static bool configure_image_sensor(CAMERA_CONFIG_E operation, uint8_t flashDutyC
         XP_LT_BLUE;
         xprintf("Image sensor and data path initialised.\r\n");
         XP_WHITE;
-		break;
+        break;
 
-	case CAMERA_CONFIG_INIT_WARM:
-        if (cisdp_sensor_init(false) != 0) {
+    case CAMERA_CONFIG_INIT_WARM:
+        if (cisdp_sensor_init(false) != 0)
+        {
             xprintf("\r\nCIS Init fail\r\n");
             processedOK = false;
         }
-        else {
+        else
+        {
             // if wdma variable is zero when not init yet, then this step is a must be to retrieve wdma address
             //  Datapath events give callbacks to os_app_dplib_cb() in dp_task
-            if (cisdp_dp_init(true, SENSORDPLIB_PATH_INT_INP_HW5X5_JPEG, os_app_dplib_cb, g_img_data, APP_DP_RES_YUV640x480_INP_SUBSAMPLE_1X) < 0) {
+            if (cisdp_dp_init(true, SENSORDPLIB_PATH_INT_INP_HW5X5_JPEG, os_app_dplib_cb, g_img_data, APP_DP_RES_YUV640x480_INP_SUBSAMPLE_1X) < 0)
+            {
                 xprintf("\r\nDATAPATH Init fail\r\n");
                 return false;
             }
@@ -1533,59 +1631,63 @@ static bool configure_image_sensor(CAMERA_CONFIG_E operation, uint8_t flashDutyC
         XP_LT_BLUE;
         xprintf("Image sensor and data path initialised.\r\n");
         XP_WHITE;
-		break;
+        break;
 
-	case CAMERA_CONFIG_RUN:
-        if (cisdp_dp_init(true, SENSORDPLIB_PATH_INT_INP_HW5X5_JPEG, os_app_dplib_cb, g_img_data, APP_DP_RES_YUV640x480_INP_SUBSAMPLE_1X) < 0) {
+    case CAMERA_CONFIG_RUN:
+        if (cisdp_dp_init(true, SENSORDPLIB_PATH_INT_INP_HW5X5_JPEG, os_app_dplib_cb, g_img_data, APP_DP_RES_YUV640x480_INP_SUBSAMPLE_1X) < 0)
+        {
             xprintf("\r\nDATAPATH Init fail\r\n");
             processedOK = false;
         }
-        else {
-        	//xprintf("DEBUG: starting sensor\n");
+        else
+        {
+            // xprintf("DEBUG: starting sensor\n");
         }
-#if defined (USE_HM0360) || defined (USE_HM0360_MD)
-    	// Overide HM0360 STROBE setting
-    	if (flashDutyCycle == 0) {
-    		hm0360_md_configureStrobe(0);
-    	}
+#if defined(USE_HM0360) || defined(USE_HM0360_MD)
+        // Overide HM0360 STROBE setting
+        if (flashDutyCycle == 0)
+        {
+            hm0360_md_configureStrobe(0);
+        }
 #endif
 
 #ifdef USE_HM0360
-    	hm0360_md_setMode(CONTEXT_A, MODE_SW_NFRAMES_SLEEP, 1, g_timer_period);
+        hm0360_md_setMode(CONTEXT_A, MODE_SW_NFRAMES_SLEEP, 1, g_timer_period);
 #endif // USE_HM0360
 
-		cisdp_sensor_start(); // Starts data path sensor control block
-		break;
+        cisdp_sensor_start(); // Starts data path sensor control block
+        break;
 
-	case CAMERA_CONFIG_CONTINUE:
-        if (cisdp_dp_init(true, SENSORDPLIB_PATH_INT_INP_HW5X5_JPEG, os_app_dplib_cb, g_img_data, APP_DP_RES_YUV640x480_INP_SUBSAMPLE_1X) < 0) {
+    case CAMERA_CONFIG_CONTINUE:
+        if (cisdp_dp_init(true, SENSORDPLIB_PATH_INT_INP_HW5X5_JPEG, os_app_dplib_cb, g_img_data, APP_DP_RES_YUV640x480_INP_SUBSAMPLE_1X) < 0)
+        {
             xprintf("\r\nDATAPATH Init fail\r\n");
             processedOK = false;
         }
-		cisdp_sensor_start(); // Starts data path sensor control block
-		break;
+        cisdp_sensor_start(); // Starts data path sensor control block
+        break;
 
-	case CAMERA_CONFIG_STOP:
+    case CAMERA_CONFIG_STOP:
         xprintf("Stopping sensor\n");
-        cisdp_sensor_stop();	// run some sensordplib_stop functions then run HM0360_stream_off commands to the HM0360
-		break;
+        cisdp_sensor_stop(); // run some sensordplib_stop functions then run HM0360_stream_off commands to the HM0360
+        break;
 
 #ifdef USE_HM0360
-	case CAMERA_CONFIG_MD:
-		// Now we can ask the HM0360 to get ready for DPD
-		hm0360_md_enableMD(fatfs_getOperationalParameter(OP_PARAMETER_MD_INTERVAL)); // select CONTEXT_B registers
-		// Do some configuration of MD parameters
-		//hm0360_x_set_threshold(10);
-		break;
+    case CAMERA_CONFIG_MD:
+        // Now we can ask the HM0360 to get ready for DPD
+        hm0360_md_enableMD(fatfs_getOperationalParameter(OP_PARAMETER_MD_INTERVAL)); // select CONTEXT_B registers
+        // Do some configuration of MD parameters
+        // hm0360_x_set_threshold(10);
+        break;
 #endif // USEHM0360
 
-	default:
-		// should not happen
+    default:
+        // should not happen
         processedOK = false;
-		break;
-	}
+        break;
+    }
 
-	XP_WHITE;
+    XP_WHITE;
 
     return processedOK;
 }
@@ -1595,17 +1697,19 @@ static bool configure_image_sensor(CAMERA_CONFIG_E operation, uint8_t flashDutyC
  *
  * This is experimental...
  */
-static void sendMsgToMaster(char * str) {
-	APP_MSG_T send_msg;
+static void sendMsgToMaster(char *str)
+{
+    APP_MSG_T send_msg;
 
-	// Send back to MKL62BA - msg_data is the string
-	send_msg.msg_data = (uint32_t)str;
-	send_msg.msg_parameter = strnlen(str, MSGTOMASTERLEN);
-	send_msg.msg_event = APP_MSG_IFTASK_MSG_TO_MASTER;
+    // Send back to MKL62BA - msg_data is the string
+    send_msg.msg_data = (uint32_t)str;
+    send_msg.msg_parameter = strnlen(str, MSGTOMASTERLEN);
+    send_msg.msg_event = APP_MSG_IFTASK_MSG_TO_MASTER;
 
-	if (xQueueSend(xIfTaskQueue, (void *)&send_msg, __QueueSendTicksToWait) != pdTRUE) {
-		xprintf("send_msg=0x%x fail\r\n", send_msg.msg_event);
-	}
+    if (xQueueSend(xIfTaskQueue, (void *)&send_msg, __QueueSendTicksToWait) != pdTRUE)
+    {
+        xprintf("send_msg=0x%x fail\r\n", send_msg.msg_event);
+    }
 }
 
 /**
@@ -1614,12 +1718,13 @@ static void sendMsgToMaster(char * str) {
  * A message has also been sent to the If Tasks asking it to send its final message.
  * When complete it will give its semaphore.
  */
-static void sleepWhenPossible(void) {
+static void sleepWhenPossible(void)
+{
 
-	xprintf("Waiting for IF task to finish.\n");
-	xSemaphoreTake(xIfCanSleepSemaphore, portMAX_DELAY);
+    xprintf("Waiting for IF task to finish.\n");
+    xSemaphoreTake(xIfCanSleepSemaphore, portMAX_DELAY);
 
-	sleepNow();
+    sleepNow();
 }
 
 /**
@@ -1627,39 +1732,43 @@ static void sleepWhenPossible(void) {
  *
  * This is a separate routine from sleepWhenPossible since it is called from 2 places
  */
-static void sleepNow(void) {
-	uint32_t timelapseDelay;
+static void sleepNow(void)
+{
+    uint32_t timelapseDelay;
 
 #ifdef USE_HM0360
-	if (nnSystemEnabled) {
-		xprintf("Preparing HM0360 for MD\n");
-		configure_image_sensor(CAMERA_CONFIG_MD, 0);
-	}
-	else {
-		// camera system is not enabled.
-		// I think something else has already set its mode to SLEEP
-	}
-#endif	// USE_HM0360
-
+    if (nnSystemEnabled)
+    {
+        xprintf("Preparing HM0360 for MD\n");
+        configure_image_sensor(CAMERA_CONFIG_MD, 0);
+    }
+    else
+    {
+        // camera system is not enabled.
+        // I think something else has already set its mode to SLEEP
+    }
+#endif // USE_HM0360
 
 #ifdef USE_HM0360_MD
-	xprintf("Preparing HM0360 for MD\n");
-	hm0360_md_prepare();	 // select CONTEXT_B registers
-#endif	// USE_HM0360_MD
+    xprintf("Preparing HM0360 for MD\n");
+    hm0360_md_prepare(); // select CONTEXT_B registers
+#endif                   // USE_HM0360_MD
 
-	xprintf("\nEnter DPD mode!\n\n");
+    xprintf("\nEnter DPD mode!\n\n");
 
-	timelapseDelay = fatfs_getOperationalParameter(OP_PARAMETER_TIMELAPSE_INTERVAL);
+    timelapseDelay = fatfs_getOperationalParameter(OP_PARAMETER_TIMELAPSE_INTERVAL);
 
-	if (timelapseDelay > 0) {
-		// Enable wakeup on WAKE pin and timer
-		sleep_mode_enter_dpd(SLEEPMODE_WAKE_SOURCE_WAKE_PIN | SLEEPMODE_WAKE_SOURCE_RTC,
-				timelapseDelay, false);	// Does not return
-	}
-	else {
-		// If the OP_PARAMETER_TIMELAPSE_INTERVAL setting is 0 then we don't enable a timer wakeup
-		sleep_mode_enter_dpd(SLEEPMODE_WAKE_SOURCE_WAKE_PIN, 0, false);	// Does not return
-	}
+    if (timelapseDelay > 0)
+    {
+        // Enable wakeup on WAKE pin and timer
+        sleep_mode_enter_dpd(SLEEPMODE_WAKE_SOURCE_WAKE_PIN | SLEEPMODE_WAKE_SOURCE_RTC,
+                             timelapseDelay, false); // Does not return
+    }
+    else
+    {
+        // If the OP_PARAMETER_TIMELAPSE_INTERVAL setting is 0 then we don't enable a timer wakeup
+        sleep_mode_enter_dpd(SLEEPMODE_WAKE_SOURCE_WAKE_PIN, 0, false); // Does not return
+    }
 }
 
 /*************************************** Local EXIF-related Definitions *****************************/
@@ -1717,28 +1826,30 @@ static void sleepNow(void) {
  */
 // Copy of what is in cisdp_sensor
 
-
 static uint16_t insertExif(uint32_t jpeg_sz, uint32_t jpeg_addr,
-		int8_t * outCategories, uint8_t categoriesCount) {
+                           int8_t *outCategories, uint8_t categoriesCount)
+{
     uint16_t exif_len = 0;
-    uint8_t * jpeg_buf;
+    uint8_t *jpeg_buf;
 
-    jpeg_buf = (uint8_t *) jpeg_addr;
+    jpeg_buf = (uint8_t *)jpeg_addr;
 
-	// Sanity check: must start with FFD8 and then FFE0
-	if (jpeg_buf[0] != 0xFF || jpeg_buf[1] != 0xD8 || jpeg_buf[2] != 0xFF || jpeg_buf[3] != 0xE0) {
-	    // Handle error: unexpected JPEG structure
-		return 0;
-	}
+    // Sanity check: must start with FFD8 and then FFE0
+    if (jpeg_buf[0] != 0xFF || jpeg_buf[1] != 0xD8 || jpeg_buf[2] != 0xFF || jpeg_buf[3] != 0xE0)
+    {
+        // Handle error: unexpected JPEG structure
+        return 0;
+    }
 
-	// Build EXIF segment - placed in exif_buffer[] and size in exif_len
-	exif_len = build_exif_segment(outCategories, categoriesCount);
+    // Build EXIF segment - placed in exif_buffer[] and size in exif_len
+    exif_len = build_exif_segment(outCategories, categoriesCount);
 
-	// Check for enough space (depends on your memory layout)
-	if (jpeg_sz + exif_len > SECOND_JPEG_BUFSIZE) {
-	    // TODO Handle error: buffer too small
-		return 0;
-	}
+    // Check for enough space (depends on your memory layout)
+    if (jpeg_sz + exif_len > SECOND_JPEG_BUFSIZE)
+    {
+        // TODO Handle error: buffer too small
+        return 0;
+    }
 
 #if 0
 	// Check by printing EXIF buffer
@@ -1755,14 +1866,14 @@ static uint16_t insertExif(uint32_t jpeg_sz, uint32_t jpeg_addr,
 #endif
 
 #ifdef SECOND_JPEG_BUFSIZE
-	jpeg_exif_buf[0] = 0xff;	// Add the JPEG marker 0xffd8
-	jpeg_exif_buf[1] = 0xd8;
+    jpeg_exif_buf[0] = 0xff; // Add the JPEG marker 0xffd8
+    jpeg_exif_buf[1] = 0xd8;
 
-	// Now copy in the EXIF
-	memcpy(&jpeg_exif_buf[2], exif_buffer, exif_len);
+    // Now copy in the EXIF
+    memcpy(&jpeg_exif_buf[2], exif_buffer, exif_len);
 
-	// Finally copy in the original JPEG data (excluding 0xffd8
-	memcpy(&jpeg_exif_buf[exif_len + 2], &jpeg_buf[2], jpeg_sz - 2);
+    // Finally copy in the original JPEG data (excluding 0xffd8
+    memcpy(&jpeg_exif_buf[exif_len + 2], &jpeg_buf[2], jpeg_sz - 2);
 
 #if 0
 	// Check by printing some of jpeg_exif_buf buffer
@@ -1777,27 +1888,29 @@ static uint16_t insertExif(uint32_t jpeg_sz, uint32_t jpeg_addr,
 #endif
 
 #else
-	// earlier code - try this again
-	// Shift data (move APP0 and onward forward to make room for EXIF)
-	memmove(&jpeg_buf[2] + exif_len, &jpeg_buf[2], jpeg_sz - 2);
-	//memmove((uint8_t *) jpeg_addr + 2 + exif_len, (uint8_t *) jpeg_addr + 2, jpeg_sz - 2);
+    // earlier code - try this again
+    // Shift data (move APP0 and onward forward to make room for EXIF)
+    memmove(&jpeg_buf[2] + exif_len, &jpeg_buf[2], jpeg_sz - 2);
+    // memmove((uint8_t *) jpeg_addr + 2 + exif_len, (uint8_t *) jpeg_addr + 2, jpeg_sz - 2);
 
-	// Insert EXIF after SOI (at jpeg_buf[2])
-	//memcpy((uint8_t *) jpeg_addr + 2, exif_buffer, exif_len);
-	memcpy(&jpeg_buf[2], exif_buffer, exif_len);
+    // Insert EXIF after SOI (at jpeg_buf[2])
+    // memcpy((uint8_t *) jpeg_addr + 2, exif_buffer, exif_len);
+    memcpy(&jpeg_buf[2], exif_buffer, exif_len);
 
 #endif // SECOND_JPEG_BUFSIZE
 
-	return exif_len;
+    return exif_len;
 }
 
 // Helper to write 2- and 4-byte little endian values
-static void write16_le(uint8_t *ptr, uint16_t val) {
+static void write16_le(uint8_t *ptr, uint16_t val)
+{
     ptr[0] = val & 0xFF;
     ptr[1] = val >> 8;
 }
 
-static void write32_le(uint8_t *ptr, uint32_t val) {
+static void write32_le(uint8_t *ptr, uint32_t val)
+{
     ptr[0] = val & 0xFF;
     ptr[1] = (val >> 8) & 0xFF;
     ptr[2] = (val >> 16) & 0xFF;
@@ -1805,7 +1918,8 @@ static void write32_le(uint8_t *ptr, uint32_t val) {
 }
 
 // Helper to write 2- and 4-byte big endian values
-static void write16_be(uint8_t *ptr, uint16_t val) {
+static void write16_be(uint8_t *ptr, uint16_t val)
+{
     ptr[1] = val & 0xFF;
     ptr[0] = val >> 8;
 }
@@ -1820,108 +1934,130 @@ static void write32_be(uint8_t *ptr, uint32_t val) {
 */
 
 // Add an IFD entry
-static void addIFD(ExifTagID tagID, uint8_t *entry_ptr, void *tagData) {
-	switch (tagID) {
-	case TAG_X_RESOLUTION:
-	case TAG_Y_RESOLUTION:{
-		uint32_t *rational = (uint32_t *)tagData;
-		write16_le(entry_ptr, tagID);
-		write16_le(entry_ptr + 2, TYPE_RATIONAL);
-		write32_le(entry_ptr + 4, 1);
-		write32_le(entry_ptr + 8, (uint32_t)(next_data_ptr - tiff_start));
-		write32_le(next_data_ptr, rational[0]); next_data_ptr += 4;
-		write32_le(next_data_ptr, rational[1]); next_data_ptr += 4;
-		break;
-	}
-	case TAG_RESOLUTION_UNIT: {
-		uint16_t value = *(uint16_t *)tagData;
-		write16_le(entry_ptr, tagID);
-		write16_le(entry_ptr + 2, TYPE_SHORT);
-		write32_le(entry_ptr + 4, 1);
-		write16_le(entry_ptr + 8, value);
-		write16_le(entry_ptr +10, 0);
-		break;
-	}
-	case TAG_DATETIME_ORIGINAL:
-	case TAG_CREATE_DATE:
-	case TAG_MAKE:
-	case TAG_MODEL:
-	case TAG_GPS_LATITUDE_REF:
-	case TAG_GPS_LONGITUDE_REF: {
-		char *ascii = (char *)tagData;
-		uint32_t length = strlen(ascii) + 1;  // include null terminator
-		write16_le(entry_ptr, tagID);
-		write16_le(entry_ptr + 2, TYPE_ASCII);
-		write32_le(entry_ptr + 4, length);
+static void addIFD(ExifTagID tagID, uint8_t *entry_ptr, void *tagData)
+{
+    switch (tagID)
+    {
+    case TAG_X_RESOLUTION:
+    case TAG_Y_RESOLUTION:
+    {
+        uint32_t *rational = (uint32_t *)tagData;
+        write16_le(entry_ptr, tagID);
+        write16_le(entry_ptr + 2, TYPE_RATIONAL);
+        write32_le(entry_ptr + 4, 1);
+        write32_le(entry_ptr + 8, (uint32_t)(next_data_ptr - tiff_start));
+        write32_le(next_data_ptr, rational[0]);
+        next_data_ptr += 4;
+        write32_le(next_data_ptr, rational[1]);
+        next_data_ptr += 4;
+        break;
+    }
+    case TAG_RESOLUTION_UNIT:
+    {
+        uint16_t value = *(uint16_t *)tagData;
+        write16_le(entry_ptr, tagID);
+        write16_le(entry_ptr + 2, TYPE_SHORT);
+        write32_le(entry_ptr + 4, 1);
+        write16_le(entry_ptr + 8, value);
+        write16_le(entry_ptr + 10, 0);
+        break;
+    }
+    case TAG_DATETIME_ORIGINAL:
+    case TAG_CREATE_DATE:
+    case TAG_MAKE:
+    case TAG_MODEL:
+    case TAG_USER_COMMENT:
+    case TAG_GPS_LATITUDE_REF:
+    case TAG_GPS_LONGITUDE_REF:
+    {
+        char *ascii = (char *)tagData;
+        uint32_t length = strlen(ascii) + 1; // include null terminator
+        write16_le(entry_ptr, tagID);
+        write16_le(entry_ptr + 2, TYPE_ASCII);
+        write32_le(entry_ptr + 4, length);
 
-		if (length <= 4) {
-			// Data will fit into the next 4 bytes
-		    memset(entry_ptr + 8, 0, 4);
-		    memcpy(entry_ptr + 8, ascii, length);
-		}
-		else {
-			// Data needs to go elsewhere and we write the pointer to it here
-		    write32_le(entry_ptr + 8, (uint32_t)(next_data_ptr - tiff_start));
-		    memcpy(next_data_ptr, ascii, length);
-		    next_data_ptr += length;
-		}
-		break;
-	}
-	case TAG_GPS_LATITUDE:
-	case TAG_GPS_LONGITUDE: {
-		uint32_t *dms = (uint32_t *)tagData; // 3 pairs of (numerator, denominator)
-		write16_le(entry_ptr, tagID);
-		write16_le(entry_ptr + 2, TYPE_RATIONAL);
-		write32_le(entry_ptr + 4, 3);
-		write32_le(entry_ptr + 8, (uint32_t)(next_data_ptr - tiff_start));
-		for (int i = 0; i < 3; ++i) {
-			write32_le(next_data_ptr, dms[i * 2]);     next_data_ptr += 4;
-			write32_le(next_data_ptr, dms[i * 2 + 1]); next_data_ptr += 4;
-		}
-		break;
-	}
-	case TAG_GPS_ALTITUDE: {
-		uint32_t *rational = (uint32_t *)tagData;
-		write16_le(entry_ptr, tagID);
-		write16_le(entry_ptr + 2, TYPE_RATIONAL);
-		write32_le(entry_ptr + 4, 1);
-		write32_le(entry_ptr + 8, (uint32_t)(next_data_ptr - tiff_start));
-		write32_le(next_data_ptr, rational[0]); next_data_ptr += 4;
-		write32_le(next_data_ptr, rational[1]); next_data_ptr += 4;
-		break;
-	}
-	case TAG_GPS_ALTITUDE_REF: {
-		uint8_t value = *(uint8_t *)tagData;
-		write16_le(entry_ptr, tagID);
-		write16_le(entry_ptr + 2, TYPE_BYTE);
-		write32_le(entry_ptr + 4, 1);
-		memset(entry_ptr + 8, 0, 4);
-		entry_ptr[8] = value;
-		break;
-	}
-	case TAG_NN_DATA: {
-		// For NN output we use a byte array, with the first entry being the number of bytes that follow
-		uint8_t *bytes = (uint8_t *)tagData;
-		uint32_t length = bytes[0]; // First byte is the length of the following data
-		write16_le(entry_ptr, tagID);
-		write16_le(entry_ptr + 2, TYPE_BYTE);
-		write32_le(entry_ptr + 4, length);
-		write32_le(entry_ptr + 8, (uint32_t)(next_data_ptr - tiff_start));
+        if (length <= 4)
+        {
+            // Data will fit into the next 4 bytes
+            memset(entry_ptr + 8, 0, 4);
+            memcpy(entry_ptr + 8, ascii, length);
+        }
+        else
+        {
+            // Data needs to go elsewhere and we write the pointer to it here
+            write32_le(entry_ptr + 8, (uint32_t)(next_data_ptr - tiff_start));
+            memcpy(next_data_ptr, ascii, length);
+            next_data_ptr += length;
+        }
+        break;
+    }
+    case TAG_GPS_LATITUDE:
+    case TAG_GPS_LONGITUDE:
+    {
+        uint32_t *dms = (uint32_t *)tagData; // 3 pairs of (numerator, denominator)
+        write16_le(entry_ptr, tagID);
+        write16_le(entry_ptr + 2, TYPE_RATIONAL);
+        write32_le(entry_ptr + 4, 3);
+        write32_le(entry_ptr + 8, (uint32_t)(next_data_ptr - tiff_start));
+        for (int i = 0; i < 3; ++i)
+        {
+            write32_le(next_data_ptr, dms[i * 2]);
+            next_data_ptr += 4;
+            write32_le(next_data_ptr, dms[i * 2 + 1]);
+            next_data_ptr += 4;
+        }
+        break;
+    }
+    case TAG_GPS_ALTITUDE:
+    {
+        uint32_t *rational = (uint32_t *)tagData;
+        write16_le(entry_ptr, tagID);
+        write16_le(entry_ptr + 2, TYPE_RATIONAL);
+        write32_le(entry_ptr + 4, 1);
+        write32_le(entry_ptr + 8, (uint32_t)(next_data_ptr - tiff_start));
+        write32_le(next_data_ptr, rational[0]);
+        next_data_ptr += 4;
+        write32_le(next_data_ptr, rational[1]);
+        next_data_ptr += 4;
+        break;
+    }
+    case TAG_GPS_ALTITUDE_REF:
+    {
+        uint8_t value = *(uint8_t *)tagData;
+        write16_le(entry_ptr, tagID);
+        write16_le(entry_ptr + 2, TYPE_BYTE);
+        write32_le(entry_ptr + 4, 1);
+        memset(entry_ptr + 8, 0, 4);
+        entry_ptr[8] = value;
+        break;
+    }
+    case TAG_NN_DATA:
+    {
+        // For NN output we use a byte array, with the first entry being the number of bytes that follow
+        uint8_t *bytes = (uint8_t *)tagData;
+        uint32_t length = bytes[0]; // First byte is the length of the following data
+        write16_le(entry_ptr, tagID);
+        write16_le(entry_ptr + 2, TYPE_BYTE);
+        write32_le(entry_ptr + 4, length);
+        write32_le(entry_ptr + 8, (uint32_t)(next_data_ptr - tiff_start));
 
-		if (length <= 4) {
-			// Data will fit into the next 4 bytes
-		    memset(entry_ptr + 8, 0, 4);	// pre-fill with zeros
-		    memcpy(entry_ptr + 8, &bytes[1], length);
-		}
-		else {
-			// Data needs to go elsewhere and we write the pointer to it here
-		    write32_le(entry_ptr + 8, (uint32_t)(next_data_ptr - tiff_start));
-		    memcpy(next_data_ptr, &bytes[1], length);
-		    next_data_ptr += length;
-		}
-		break;
-	}
-    case TAG_GPS_IFD_POINTER: {
+        if (length <= 4)
+        {
+            // Data will fit into the next 4 bytes
+            memset(entry_ptr + 8, 0, 4); // pre-fill with zeros
+            memcpy(entry_ptr + 8, &bytes[1], length);
+        }
+        else
+        {
+            // Data needs to go elsewhere and we write the pointer to it here
+            write32_le(entry_ptr + 8, (uint32_t)(next_data_ptr - tiff_start));
+            memcpy(next_data_ptr, &bytes[1], length);
+            next_data_ptr += length;
+        }
+        break;
+    }
+    case TAG_GPS_IFD_POINTER:
+    {
         uint32_t offset = *(uint32_t *)tagData;
         write16_le(entry_ptr, tagID);
         write16_le(entry_ptr + 2, TYPE_LONG);
@@ -1929,7 +2065,51 @@ static void addIFD(ExifTagID tagID, uint8_t *entry_ptr, void *tagData) {
         write32_le(entry_ptr + 8, offset);
         break;
     }
-    }	// switch
+    default:
+    {
+        // Handle dynamic confidence tags (0xF300 range)
+        // Even tags (0xF300, 0xF302, ...) are SHORT (confidence percentage)
+        // Odd tags (0xF301, 0xF303, ...) are ASCII (labels)
+        if (tagID >= TAG_USER_COMMENT && tagID < (TAG_USER_COMMENT + MAX_CLASSES * 2))
+        {
+            if ((tagID - TAG_USER_COMMENT) % 2 == 0)
+            {
+                // Even offset: confidence value (SHORT)
+                uint16_t value = *(uint16_t *)tagData;
+                write16_le(entry_ptr, tagID);
+                write16_le(entry_ptr + 2, TYPE_SHORT);
+                write32_le(entry_ptr + 4, 1);
+                write16_le(entry_ptr + 8, value);
+                write16_le(entry_ptr + 10, 0);
+            }
+            else
+            {
+                // Odd offset: label string (ASCII)
+                char *ascii = (char *)tagData;
+                uint32_t length = strlen(ascii) + 1; // include null terminator
+                write16_le(entry_ptr, tagID);
+                write16_le(entry_ptr + 2, TYPE_ASCII);
+                write32_le(entry_ptr + 4, length);
+
+                if (length <= 4)
+                {
+                    // Data will fit into the next 4 bytes
+                    memset(entry_ptr + 8, 0, 4);
+                    memcpy(entry_ptr + 8, ascii, length);
+                }
+                else
+                {
+                    // Data needs to go elsewhere and we write the pointer to it here
+                    write32_le(entry_ptr + 8, (uint32_t)(next_data_ptr - tiff_start));
+                    memcpy(next_data_ptr, ascii, length);
+                    next_data_ptr += length;
+                }
+            }
+        }
+        // If tag is not in expected range, do nothing (could add error handling)
+        break;
+    }
+    } // switch
 }
 
 /**
@@ -1937,7 +2117,8 @@ static void addIFD(ExifTagID tagID, uint8_t *entry_ptr, void *tagData) {
  *
  * If the altitude is present it is 78 bytes
  */
-static size_t get_gps_ifd_size(void) {
+static size_t get_gps_ifd_size(void)
+{
     return GPS_IFD_SIZE;
 }
 
@@ -1950,31 +2131,33 @@ static size_t get_gps_ifd_size(void) {
  *
  * @param gps_ifd_start - pointer to where the buffer should be
  */
-static void create_gps_ifd(uint8_t *gps_ifd_start) {
+static void create_gps_ifd(uint8_t *gps_ifd_start)
+{
     uint8_t *p = gps_ifd_start;
 
-    write16_le(p, GPS_IFD_ENTRY_COUNT); p += 2;
+    write16_le(p, GPS_IFD_ENTRY_COUNT);
+    p += 2;
 
     uint8_t *ifd = p;
     p += GPS_IFD_ENTRY_COUNT * 12;
-    write32_le(p, 0); p += 4;	// write terminating 4 x 0 (indictes the end of the IFDs
+    write32_le(p, 0);
+    p += 4; // write terminating 4 x 0 (indictes the end of the IFDs
 
     char latRef[] = "N";
     char lonRef[] = "E";
-    uint32_t lat[6] = { 37, 1, 48, 1, 3000, 100 }; // 37°48'30.00"
-    uint32_t lon[6] = { 122, 1, 25, 1, 1500, 100 }; // 122°25'15.00"
-    uint8_t altRef = 0;                          // 0 = above sea level
-    uint32_t alt[2] = { 5000, 100 };             // 50.00 meters
+    uint32_t lat[6] = {37, 1, 48, 1, 3000, 100};  // 37°48'30.00"
+    uint32_t lon[6] = {122, 1, 25, 1, 1500, 100}; // 122°25'15.00"
+    uint8_t altRef = 0;                           // 0 = above sea level
+    uint32_t alt[2] = {5000, 100};                // 50.00 meters
 
     // Now write 6 IFDs
-    addIFD(TAG_GPS_LATITUDE_REF,   ifd + 0*12, latRef);
-    addIFD(TAG_GPS_LATITUDE,       ifd + 1*12, lat);
-    addIFD(TAG_GPS_LONGITUDE_REF,  ifd + 2*12, lonRef);
-    addIFD(TAG_GPS_LONGITUDE,      ifd + 3*12, lon);
-    addIFD(TAG_GPS_ALTITUDE_REF,   ifd + 4*12, &altRef);
-    addIFD(TAG_GPS_ALTITUDE,       ifd + 5*12, alt);
+    addIFD(TAG_GPS_LATITUDE_REF, ifd + 0 * 12, latRef);
+    addIFD(TAG_GPS_LATITUDE, ifd + 1 * 12, lat);
+    addIFD(TAG_GPS_LONGITUDE_REF, ifd + 2 * 12, lonRef);
+    addIFD(TAG_GPS_LONGITUDE, ifd + 3 * 12, lon);
+    addIFD(TAG_GPS_ALTITUDE_REF, ifd + 4 * 12, &altRef);
+    addIFD(TAG_GPS_ALTITUDE, ifd + 5 * 12, alt);
 }
-
 
 /**
  * Builds a valid EXIF data structure, including APP1 tag
@@ -1982,36 +2165,91 @@ static void create_gps_ifd(uint8_t *gps_ifd_start) {
  * This particular example has hard-coded tags to add, including the X&Y resilutions.
  *
  */
-static uint16_t build_exif_segment(int8_t * outCategories, uint8_t categoriesCount) {
-    char timestamp[EXIFSTRINGLENGTH] = {0}; //22:20:36 2025:07:06 = 19 characters plus trailing \0
+static uint16_t build_exif_segment(int8_t *outCategories, uint8_t categoriesCount)
+{
+    char timestamp[EXIFSTRINGLENGTH] = {0}; // 22:20:36 2025:07:06 = 19 characters plus trailing \0
     uint16_t exif_len;
 
     uint8_t nnData[CATEGORIESCOUNT + 2];
 
-    // Insert the NN data
-    if (categoriesCount > CATEGORIESCOUNT) {
-    	// error
-    	nnData[0] = 1;
-    	nnData[1] = 0;
+    // Insert the NN data (raw scores for backwards compatibility)
+    if (categoriesCount > CATEGORIESCOUNT)
+    {
+        // error
+        nnData[0] = 1;
+        nnData[1] = 0;
     }
-    else {
-    	// First byte is the number of bytes following
-    	nnData[0] = categoriesCount + 1;
-    	// Second byte is the number of categories
-    	nnData[1] = categoriesCount;
-    	// Subsequent bytes are the NN outputs
-    	for (uint8_t i=0; i < categoriesCount; i++) {
-    		nnData[i + 2] = outCategories[i];
-    	}
+    else
+    {
+        // First byte is the number of bytes following
+        nnData[0] = categoriesCount + 1;
+        // Second byte is the number of categories
+        nnData[1] = categoriesCount;
+        // Subsequent bytes are the NN outputs
+        for (uint8_t i = 0; i < categoriesCount; i++)
+        {
+            nnData[i + 2] = outCategories[i];
+        }
+    }
+
+    // Get confidence data from CV module (optional)
+    // Use static variables to avoid consuming ~164 bytes of stack space.
+    // This prevents stack overflow during memory-intensive operations like manifest unzip.
+    static ClassConfidenceData confidence_data;
+    static char user_comment[256]; // Buffer for UserComment string
+
+    memset(&confidence_data, 0, sizeof(confidence_data));
+    memset(user_comment, 0, sizeof(user_comment));
+
+#if ENABLE_EXIF_CONFIDENCE
+    cv_get_confidence_data(&confidence_data);
+    bool has_confidence_data = (confidence_data.class_count > 0 && confidence_data.class_count <= MAX_CLASSES);
+
+    // Build UserComment string with model results
+    if (has_confidence_data)
+    {
+        char *ptr = user_comment;
+        int remaining = sizeof(user_comment) - 1;
+
+        xprintf("EXIF: Building UserComment with %d classes\n", confidence_data.class_count);
+
+        for (uint8_t i = 0; i < confidence_data.class_count && i < EXIF_MAX_DYNAMIC_CLASSES; i++)
+        {
+            const char *label = confidence_data.labels[i] ? confidence_data.labels[i] : "Unknown";
+            int conf = confidence_data.confidence_percent[i];
+
+            // Format: "Class: label (conf%); "
+            int written = snprintf(ptr, remaining, "%s: %d%%; ", label, conf);
+
+            if (written > 0 && written < remaining)
+            {
+                ptr += written;
+                remaining -= written;
+            }
+            else
+            {
+                break; // Buffer full
+            }
+        }
+    }
+#else
+    bool has_confidence_data = false;
+#endif
+
+    // IFD count: base entries (9) + UserComment (1 if has confidence data)
+    uint16_t dynamic_ifd_count = IFD0_ENTRY_COUNT;
+    if (has_confidence_data && user_comment[0] != '\0')
+    {
+        dynamic_ifd_count += 1; // Add one entry for UserComment
     }
 
     // Prepare the timestamp
     exif_utc_get_rtc_as_exif_string(timestamp, sizeof(timestamp));
 
     // Prepare the resolution entries
-    uint32_t xres_rational[2] = { app_get_raw_width(), 1 };
-    uint32_t yres_rational[2] = { app_get_raw_height(), 1 };
-    uint16_t res_unit = 2;		// TODO check this
+    uint32_t xres_rational[2] = {app_get_raw_width(), 1};
+    uint32_t yres_rational[2] = {app_get_raw_height(), 1};
+    uint16_t res_unit = 2; // TODO check this
 
     uint8_t *p = exif_buffer;
 
@@ -2024,28 +2262,34 @@ static uint16_t build_exif_segment(int8_t * outCategories, uint8_t categoriesCou
     p += 2;
 
     // "Exif\0\0"
-    memcpy(p, "Exif\0\0", 6); p += 6;
+    memcpy(p, "Exif\0\0", 6);
+    p += 6;
 
     // TIFF header: Intel (II), magic 0x002A, IFD0 offset = 8
     tiff_start = p;
-    memcpy(p, "II", 2); p += 2;
-    write16_le(p, 0x002A);  p += 2;
-    write32_le(p, 0x00000008); p += 4;
+    memcpy(p, "II", 2);
+    p += 2;
+    write16_le(p, 0x002A);
+    p += 2;
+    write32_le(p, 0x00000008);
+    p += 4;
 
-    // The number of IFD0 entries goes here
-    write16_le(p, IFD0_ENTRY_COUNT); p += 2;
+    // The number of IFD0 entries goes here (dynamic based on class count)
+    write16_le(p, dynamic_ifd_count);
+    p += 2;
 
     // Keep a note of this location, which is where the IFD entries start
     uint8_t *ifd_start = p;
 
-    p += IFD0_ENTRY_COUNT * 12;  // Skip past the IFD entries
+    p += dynamic_ifd_count * 12; // Skip past the IFD entries
 
     // Next IFD offset (0)
     // This is writing the offset to the next IFD (Image File Directory) after IFD0.
     // EXIF's TIFF format can chain multiple IFDs.
     // After the IFD0 entry list, there's a 4-byte field indicating the offset (from the TIFF header start) of the next IFD (like IFD1 or the EXIF SubIFD).
     // If there is no next IFD, it must be 0.
-    write32_le(p, 0); p += 4;
+    write32_le(p, 0);
+    p += 4;
 
     // Set pointer to first data location (after IFD)
     next_data_ptr = p;
@@ -2053,25 +2297,50 @@ static uint16_t build_exif_segment(int8_t * outCategories, uint8_t categoriesCou
     // Reserve space for the GPS IFD block before writing tag data
     uint8_t *gps_ifd_start = next_data_ptr;
     uint32_t gps_ifd_offset = (uint32_t)(gps_ifd_start - tiff_start);
-    next_data_ptr += get_gps_ifd_size();	// add 78 bytes.
+    // Ensure we don't exceed buffer when reserving GPS IFD
+    size_t gps_size = get_gps_ifd_size();
+    if ((size_t)(next_data_ptr - exif_buffer) + gps_size > EXIF_MAX_LEN)
+    {
+        // If GPS won't fit, reduce gps_size to 0 (skip GPS)
+        gps_size = 0;
+    }
+    next_data_ptr += gps_size; // reserve
 
-    // Add IFD entries - these must match IFD0_ENTRY_COUNT
+    // Add IFD entries - base entries (9) + dynamic class entries
     uint8_t entry = 0;
-    addIFD(TAG_MAKE, 			  ifd_start + (entry++ * 12), "Wildlife.ai");
-    addIFD(TAG_MODEL, 			  ifd_start + (entry++ * 12), "WW500");
-    addIFD(TAG_RESOLUTION_UNIT,   ifd_start + (entry++ * 12), &res_unit);
-    addIFD(TAG_X_RESOLUTION,      ifd_start + (entry++ * 12), xres_rational);
-    addIFD(TAG_Y_RESOLUTION,      ifd_start + (entry++ * 12), yres_rational);
+    addIFD(TAG_MAKE, ifd_start + (entry++ * 12), "Wildlife.ai");
+    addIFD(TAG_MODEL, ifd_start + (entry++ * 12), "WW500");
+    addIFD(TAG_RESOLUTION_UNIT, ifd_start + (entry++ * 12), &res_unit);
+    addIFD(TAG_X_RESOLUTION, ifd_start + (entry++ * 12), xres_rational);
+    addIFD(TAG_Y_RESOLUTION, ifd_start + (entry++ * 12), yres_rational);
     addIFD(TAG_DATETIME_ORIGINAL, ifd_start + (entry++ * 12), timestamp);
-    addIFD(TAG_CREATE_DATE, 	  ifd_start + (entry++ * 12), timestamp);
-    addIFD(TAG_NN_DATA, 	  	  ifd_start + (entry++ * 12), nnData);	// Neural network output
-    // GPS:
-    addIFD(TAG_GPS_IFD_POINTER, 	ifd_start + (entry++ * 12), &gps_ifd_offset);
+    addIFD(TAG_CREATE_DATE, ifd_start + (entry++ * 12), timestamp);
+    addIFD(TAG_NN_DATA, ifd_start + (entry++ * 12), nnData); // Neural network output (raw, for backwards compatibility)
 
-    // Now write the GPS IFD structure
-    create_gps_ifd(gps_ifd_start);
+#if ENABLE_EXIF_CONFIDENCE
+    // Add UserComment with model results if available
+    if (has_confidence_data && user_comment[0] != '\0')
+    {
+        xprintf("EXIF: Adding UserComment: %s\n", user_comment);
+        addIFD(TAG_USER_COMMENT, ifd_start + (entry++ * 12), user_comment);
+    }
+#endif
+
+    // GPS:
+    addIFD(TAG_GPS_IFD_POINTER, ifd_start + (entry++ * 12), &gps_ifd_offset);
+
+    // Now write the GPS IFD structure if we reserved space
+    if (gps_size > 0)
+    {
+        create_gps_ifd(gps_ifd_start);
+    }
 
     // Fill in length field (BE!)
+    // Protect against exceeding EXIF_MAX_LEN
+    if ((size_t)(next_data_ptr - exif_buffer) > EXIF_MAX_LEN)
+    {
+        next_data_ptr = exif_buffer + EXIF_MAX_LEN;
+    }
     uint16_t len = (next_data_ptr - exif_buffer) - 2; // exclude 0xFFE1 marker
     write16_be(len_ptr, len);
 
@@ -2087,9 +2356,11 @@ static uint16_t build_exif_segment(int8_t * outCategories, uint8_t categoriesCou
  *
  * The task itself initialises the Image sensor and then manages requests to access it.
  */
-TaskHandle_t image_createTask(int8_t priority, APP_WAKE_REASON_E wakeReason) {
+TaskHandle_t image_createTask(int8_t priority, APP_WAKE_REASON_E wakeReason)
+{
 
-    if (priority < 0)  {
+    if (priority < 0)
+    {
         priority = 0;
     }
 
@@ -2099,7 +2370,8 @@ TaskHandle_t image_createTask(int8_t priority, APP_WAKE_REASON_E wakeReason) {
     image_task_state = APP_IMAGE_TASK_STATE_UNINIT;
 
     xImageTaskQueue = xQueueCreate(IMAGE_TASK_QUEUE_LEN, sizeof(APP_MSG_T));
-    if (xImageTaskQueue == 0) {
+    if (xImageTaskQueue == 0)
+    {
         xprintf("Failed to create xImageTaskQueue\n");
         configASSERT(0); // TODO add debug messages?
     }
@@ -2107,12 +2379,13 @@ TaskHandle_t image_createTask(int8_t priority, APP_WAKE_REASON_E wakeReason) {
     // Using HM0360 so no need for captureTimer
 #else
     captureTimer = xTimerCreate("CaptureTimer",
-            pdMS_TO_TICKS(1000),    // initial dummy period
-            pdFALSE,                // one-shot timer
-            NULL,                   // timer ID (optional)
-			capture_timer_callback);
+                                pdMS_TO_TICKS(1000), // initial dummy period
+                                pdFALSE,             // one-shot timer
+                                NULL,                // timer ID (optional)
+                                capture_timer_callback);
 
-    if (captureTimer == NULL) {
+    if (captureTimer == NULL)
+    {
         xprintf("Failed to create captureTimer\n");
         configASSERT(0); // TODO add debug messages?
     }
@@ -2121,7 +2394,8 @@ TaskHandle_t image_createTask(int8_t priority, APP_WAKE_REASON_E wakeReason) {
     if (xTaskCreate(vImageTask, /*(const char *)*/ "IMAGE",
                     3 * configMINIMAL_STACK_SIZE,
                     NULL, priority,
-                    &image_task_id) != pdPASS) {
+                    &image_task_id) != pdPASS)
+    {
         xprintf("Failed to create vImageTask\n");
         configASSERT(0); // TODO add debug messages?
     }
@@ -2141,7 +2415,7 @@ uint16_t image_getState(void)
 /**
  * Returns the internal state as a string
  */
-const char * image_getStateString(void)
+const char *image_getStateString(void)
 {
     return *&imageTaskStateString[image_task_state];
 }
@@ -2149,7 +2423,8 @@ const char * image_getStateString(void)
 /**
  * Returns the name of the most recently written file as a string
  */
-const char * image_getLastImageFile(void) {
+const char *image_getLastImageFile(void)
+{
     return lastImageFileName;
 }
 
@@ -2157,21 +2432,22 @@ const char * image_getLastImageFile(void) {
 // Temporary until I can make this work through the state machine
 // Call back when inactivity is sensed and we want to enter DPD
 // TODO this should really be done using the state machine events!
-void image_hackInactive(void) {
+void image_hackInactive(void)
+{
 
-	XP_LT_GREEN;
-	xprintf("Inactive - in image_hackInactive() Remove this!\n");
-	XP_WHITE;
+    XP_LT_GREEN;
+    xprintf("Inactive - in image_hackInactive() Remove this!\n");
+    XP_WHITE;
 
-	configure_image_sensor(CAMERA_CONFIG_STOP, 0); // run some sensordplib_stop functions then run HM0360_stream_off commands to the HM0360
+    configure_image_sensor(CAMERA_CONFIG_STOP, 0); // run some sensordplib_stop functions then run HM0360_stream_off commands to the HM0360
 
-	sleepNow();
+    sleepNow();
 }
 
-bool image_nnDetected(void) {
-	return nnPositive;
+bool image_nnDetected(void)
+{
+    return nnPositive;
 }
-
 
 /**
  * Returns whether the camera system is enabled.
@@ -2180,11 +2456,14 @@ bool image_nnDetected(void) {
  * There is no explicit "setter" - this is done by sending messages to the image task queue.
  *
  */
-bool image_getEnabled(void) {
-	if (nnSystemEnabled == 0) {
-		return false;
-	}
-	else {
-		return true;
-	}
+bool image_getEnabled(void)
+{
+    if (nnSystemEnabled == 0)
+    {
+        return false;
+    }
+    else
+    {
+        return true;
+    }
 }

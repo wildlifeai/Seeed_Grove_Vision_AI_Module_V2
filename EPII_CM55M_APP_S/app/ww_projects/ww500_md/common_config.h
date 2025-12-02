@@ -38,4 +38,16 @@
 // Default from Himax's GetModel function was 0x3A180000
 #define MODEL_ADDR 0x3A3BB000
 
+// Project ID (last 4 digits only) for model naming convention: <last4digits>V<version>.tfl
+// Example: for project ID 2782, the model file would be named 2782V24.tfl (where 24 is the version)
+// Set this value to match your Edge Impulse project's last 4 digits
+
+#ifndef PROJECT_ID
+#define PROJECT_ID 0
+#endif
+
+#if (PROJECT_ID > 9999)
+#error "PROJECT_ID must be the last 4 digits (0-9999)."
+#endif
+
 #endif /* APP_SCENARIO_ALLON_SENSOR_TFLM_COMMON_CONFIG_H_ */

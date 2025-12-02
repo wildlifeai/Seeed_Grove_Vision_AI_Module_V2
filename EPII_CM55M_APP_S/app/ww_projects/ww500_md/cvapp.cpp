@@ -6,6 +6,7 @@
  */
 
 #include <cstdio>
+#include <cmath>
 #include <assert.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -30,6 +31,8 @@
 #include "tensorflow/lite/schema/schema_generated.h"
 #include "tensorflow/lite/c/common.h"
 #include "tensorflow/lite/micro/micro_error_reporter.h"
+#include "tensorflow/lite/kernels/internal/reference/softmax.h"
+#include "tensorflow/lite/kernels/internal/types.h"
 
 #include "xprintf.h"
 #include "ff.h"
@@ -95,12 +98,15 @@ static USE_DW_SPI_MST_E spi_id = USE_DW_SPI_MST_Q;
 static bool flash_initialized = false;
 static SemaphoreHandle_t xSPIMutex = NULL;
 
-// Global pointer to hold dynamically allocated model
-static uint8_t *global_model_buffer = nullptr;
-
 // Add a flag to track if we've already loaded from SD card
 static bool model_loaded_from_sd = false;
-int model_loaded = 0; // Will be read from flash or default to 1
+
+// Globals to hold the current model identifiers
+static int g_project_id = 0;
+static int g_deploy_version = 0;
+
+// Global to store the last confidence data for EXIF
+static ClassConfidenceData g_last_confidence_data = {0};
 
 // ------------------- Declarations -------------------
 
@@ -117,10 +123,11 @@ int cv_deinit();
 int init_flash();
 static inline uint32_t align_down(uint32_t addr, uint32_t align);
 static inline uint32_t align_up(uint32_t size, uint32_t align);
-int read_persisted_model_number();
-int write_persisted_model_number(int model_num);
+int read_persisted_model_info();
+int write_persisted_model_info();
 static bool file_exists(const char *path);
 static void load_labels_from_manifest_or_root(void);
+void cv_get_model_info(int *project_id, int *deploy_version);
 
 // --------------------- Utilities / Helpers ---------------------
 
@@ -143,7 +150,7 @@ static bool file_exists(const char *path)
     return (res == FR_OK);
 }
 
-// Helper: load labels from /Manifest/labels.txt first, then fallback to labels.txt
+// Helper: load labels from /Manifest/labels.txt first
 static void load_labels_from_manifest_or_root(void)
 {
     g_labels_loaded = false;
@@ -164,77 +171,98 @@ static void load_labels_from_manifest_or_root(void)
             xprintf("Labels load failed from %s\n", labels_path);
         }
     }
-
-    // Fallback to root labels.txt
-    if (file_exists("labels.txt"))
-    {
-        int count = 0;
-        if (fatfs_load_labels("labels.txt", g_labels, &count, MAX_LABELS, MAX_LABEL_LEN) == 0)
-        {
-            g_label_count = count;
-            g_labels_loaded = (g_label_count > 0);
-            xprintf("Loaded %d labels from labels.txt\n", g_label_count);
-            return;
-        }
-        else
-        {
-            xprintf("Labels load failed from labels.txt\n");
-        }
-    }
     xprintf("No labels found on SD\n");
 }
 
-// Read the persisted model number from flash (stored at header - 4 bytes)
-// Flash layout: [model_number(4 bytes)][filename(16 bytes)][model data...]
-int read_persisted_model_number()
+int get_model_id()
+{
+    return g_project_id;
+}
+
+// Public getter for other modules to know the current model
+void cv_get_model_info(int *project_id, int *deploy_version)
+{
+    *project_id = g_project_id;
+    *deploy_version = g_deploy_version;
+}
+
+// Public setter for current model info
+void cv_set_model_info(int project_id, int deploy_version)
+{
+    // Only log when values actually change
+    if (g_project_id != project_id || g_deploy_version != deploy_version)
+    {
+        xprintf("cv_set_model_info: Project %d -> %d, Version %d -> %d\n",
+                g_project_id, project_id, g_deploy_version, deploy_version);
+        g_project_id = project_id;
+        g_deploy_version = deploy_version;
+    }
+}
+
+// Public getter for confidence data (for EXIF)
+bool cv_get_confidence_data(ClassConfidenceData *data)
+{
+    if (data != nullptr)
+    {
+        memcpy(data, &g_last_confidence_data, sizeof(ClassConfidenceData));
+        return true;
+    }
+    return false;
+}
+
+// Read the persisted model info from flash
+// Flash layout: [project_id(4 bytes)][deploy_version(4 bytes)][filename(16 bytes)][model data...]
+int read_persisted_model_info()
 {
     if (init_flash() != 0)
     {
-        xprintf("Flash init failed, defaulting to model 1\n");
-        return 1; // Default to model 1 if flash not available
+        xprintf("Flash init failed, using default model info\n");
+        return -1;
     }
 
     // Take semaphore
     if (xSemaphoreTake(xSPIMutex, portMAX_DELAY) != pdTRUE)
     {
-        xprintf("Failed to take SPI mutex for read_persisted_model_number\n");
-        return 1;
+        xprintf("Failed to take SPI mutex for read_persisted_model_info\n");
+        return -1;
     }
 
     // Disable XIP before SPI read
     hx_lib_spi_eeprom_enable_XIP(spi_id, false, FLASH_SINGLE, false);
 
-    // Model number is stored 20 bytes before the model data
-    // (4 bytes for model number + 16 bytes for filename header)
+    // Model info is stored 24 bytes before the model data
+    // (4 bytes project_id + 4 bytes version + 16 bytes filename header)
     uint32_t model_xip_addr = 0x3A200000;
-    uint32_t model_num_xip_addr = model_xip_addr - 20;
-    uint32_t model_num_phys_addr = virt_to_phys(model_num_xip_addr);
+    uint32_t model_info_xip_addr = model_xip_addr - 24;
+    uint32_t model_info_phys_addr = virt_to_phys(model_info_xip_addr);
 
-    uint32_t stored_model_num = 0;
-    if (hx_lib_spi_eeprom_word_read(spi_id, model_num_phys_addr, &stored_model_num, 4) != 0)
+    uint32_t stored_info[2] = {0}; // [0] = project_id, [1] = deploy_version
+    if (hx_lib_spi_eeprom_word_read(spi_id, model_info_phys_addr, stored_info, 8) != 0)
     {
-        xprintf("Failed to read persisted model number, defaulting to 1\n");
+        xprintf("Failed to read persisted model info, using defaults\n");
         xSemaphoreGive(xSPIMutex);
-        return 1;
+        return -1;
     }
 
     xSemaphoreGive(xSPIMutex);
 
-    // Validate the model number (should be 1-9, otherwise flash is uninitialized)
-    if (stored_model_num >= 1 && stored_model_num <= 9)
+    // Basic validation: check if values are not 0xFFFFFFFF (uninitialized)
+    if (stored_info[0] != 0xFFFFFFFF && stored_info[1] != 0xFFFFFFFF)
     {
-        xprintf("Persisted model number from flash: %d\n", (int)stored_model_num);
-        return (int)stored_model_num;
+        g_project_id = stored_info[0];
+        g_deploy_version = stored_info[1];
+        xprintf("Read persisted model info from flash: Project=%d, Version=%d\n", g_project_id, g_deploy_version);
+        return 0;
     }
     else
     {
-        xprintf("Invalid persisted model number (0x%08lX), defaulting to 1\n", stored_model_num);
-        return 1;
+        xprintf("Invalid persisted model info (0x%08lX, 0x%08lX), using defaults\n", stored_info[0], stored_info[1]);
+        return -1;
     }
 }
 
-// Write the model number to flash (stored at header - 4 bytes)
-int write_persisted_model_number(int model_num)
+// Write the model info to flash
+int write_persisted_model_info()
 {
     if (init_flash() != 0)
     {
@@ -244,7 +272,7 @@ int write_persisted_model_number(int model_num)
     // Take semaphore
     if (xSemaphoreTake(xSPIMutex, portMAX_DELAY) != pdTRUE)
     {
-        xprintf("Failed to take SPI mutex for write_persisted_model_number\n");
+        xprintf("Failed to take SPI mutex for write_persisted_model_info\n");
         return -1;
     }
 
@@ -252,15 +280,13 @@ int write_persisted_model_number(int model_num)
     hx_lib_spi_eeprom_enable_XIP(spi_id, false, FLASH_SINGLE, false);
 
     uint32_t model_xip_addr = 0x3A200000;
-    uint32_t model_num_xip_addr = model_xip_addr - 20;
-    uint32_t model_num_phys_addr = virt_to_phys(model_num_xip_addr);
+    uint32_t model_info_xip_addr = model_xip_addr - 24;
+    uint32_t model_info_phys_addr = virt_to_phys(model_info_xip_addr);
 
-    // Note: We don't erase here because this location is part of the same sector
-    // that gets erased when we write a new model. We just update the value.
-    uint32_t model_num_word = (uint32_t)model_num;
-    if (hx_lib_spi_eeprom_word_write(spi_id, model_num_phys_addr, &model_num_word, 4) != 0)
+    uint32_t info_to_write[2] = {(uint32_t)g_project_id, (uint32_t)g_deploy_version};
+    if (hx_lib_spi_eeprom_word_write(spi_id, model_info_phys_addr, info_to_write, 8) != 0)
     {
-        xprintf("Failed to write persisted model number\n");
+        xprintf("Failed to write persisted model info\n");
         xSemaphoreGive(xSPIMutex);
         return -1;
     }
@@ -272,7 +298,7 @@ int write_persisted_model_number(int model_num)
     }
 
     xSemaphoreGive(xSPIMutex);
-    xprintf("Persisted model number %d to flash\n", model_num);
+    xprintf("Persisted model info to flash: Project=%d, Version=%d\n", g_project_id, g_deploy_version);
     return 0;
 }
 
@@ -375,15 +401,10 @@ static int _arm_npu_init(bool security_enable, bool privilege_enable)
     return 0;
 }
 
-int get_model_number()
-{
-    return model_loaded;
-}
-
 // Optional model number parameter, default to 1
-int cv_init(bool security_enable, bool privilege_enable, int model_number)
+int cv_init(bool security_enable, bool privilege_enable, int project_id, int deploy_version)
 {
-    xprintf("cv_init called with model_number: %d\n", model_number);
+    xprintf("cv_init called with ProjectID: %d, Version: %d\n", project_id, deploy_version);
 
     // Calculate tensor arena size at runtime (must be done here, not at static init)
     if (tensor_arena_size == 0)
@@ -392,20 +413,26 @@ int cv_init(bool security_enable, bool privilege_enable, int model_number)
         xprintf("Calculated tensor arena size: %lu bytes\n", (unsigned long)tensor_arena_size);
     }
 
-    // On first boot (model_loaded == 0), read the persisted model number from flash
-    if (model_loaded == 0)
+    // On first boot (g_project_id == 0), read the persisted model info from flash
+    if (g_project_id == 0)
     {
-        model_loaded = read_persisted_model_number();
-        xprintf("First boot: loaded persisted model number %d from flash\n", model_loaded);
+        if (read_persisted_model_info() != 0)
+        {
+            // If flash is empty or invalid, use the values passed to init
+            g_project_id = project_id;
+            g_deploy_version = deploy_version;
+            xprintf("First boot: No valid info in flash, using provided: Project=%d, Version=%d\n", g_project_id, g_deploy_version);
+        }
     }
-    else if (model_number != model_loaded)
+    else if (project_id != g_project_id || deploy_version != g_deploy_version)
     {
-        model_loaded = model_number;
+        g_project_id = project_id;
+        g_deploy_version = deploy_version;
         model_loaded_from_sd = false; // reset flag to allow reloading
-        xprintf("------------------------Model number changed to %d, resetting load flag\n", model_number);
+        xprintf("------------------------Model changed to Project=%d, Version=%d. Resetting load flag.\n", g_project_id, g_deploy_version);
     }
 
-    xprintf("cv_init now loading with model number: %d\n", model_loaded);
+    xprintf("cv_init now loading with Project: %d, Version: %d\n", g_project_id, g_deploy_version);
 
     if (_arm_npu_init(security_enable, privilege_enable) != 0)
     {
@@ -422,29 +449,38 @@ int cv_init(bool security_enable, bool privilege_enable, int model_number)
 
 #elif (MODEL_LOAD_MODE == MODEL_FROM_SD_CARD)
     {
-        const tflite::Model *loaded = nullptr; // local pointer prevents stale reuse
-        char filename[16];
-        snprintf(filename, sizeof(filename), "MOD0000%01d.tfl", model_loaded);
+        const tflite::Model *loaded = nullptr;
 
-        if (is_model_in_flash(filename))
+        // ALWAYS unzip manifest.zip on each boot to ensure fresh extraction
+        xprintf("Unzipping manifest.zip...\n");
+        int uz = fatfs_unzip_manifest();
+        xprintf("Unzip result: %d\n", uz);
+
+        // After unzip, the extractor may have updated g_project_id/g_deploy_version from the filename
+        xprintf("After unzip: g_project_id=%d, g_deploy_version=%d\n", g_project_id, g_deploy_version);
+
+        // Build the expected filename and path
+        char filename[16];
+        snprintf(filename, sizeof(filename), "%uV%u.tfl", (unsigned int)(g_project_id % 10000), (unsigned int)g_deploy_version);
+
+        char manifest_path[48];
+        snprintf(manifest_path, sizeof(manifest_path), "/Manifest/%s", filename);
+
+        // Check if the model from manifest matches what's in flash
+        bool flash_has_same_model = is_model_in_flash(filename);
+
+        if (flash_has_same_model)
         {
             xprintf("Flash already contains '%s'; loading from flash.\n", filename);
             loaded = load_model_from_flash();
         }
         else
         {
-            char manifest_path[48];
-            snprintf(manifest_path, sizeof(manifest_path), "/Manifest/%s", filename);
-            bool have_manifest_file = file_exists(manifest_path);
-            if (!have_manifest_file)
-            {
-                xprintf("Manifest file %s not found; attempting unzip...\n", manifest_path);
-                int uz = fatfs_unzip_manifest();
-                xprintf("Unfatfs_unzip_manifestresult: %d\n", uz);
-                have_manifest_file = file_exists(manifest_path);
-            }
-            const char *src_path = have_manifest_file ? manifest_path : filename;
-            xprintf("Source chosen: %s (%s)\n", src_path, have_manifest_file ? "manifest" : "root");
+            xprintf("Flash model differs or missing; copying '%s' to flash...\n", filename);
+            // Try manifest path first, then fallback to root
+            const char *src_path = file_exists(manifest_path) ? manifest_path : filename;
+            xprintf("Source chosen: %s\n", src_path);
+
             if (load_model_from_sd_to_flash((char *)src_path) == 0)
             {
                 xprintf("Copied %s to flash OK; loading from flash...\n", src_path);
@@ -455,7 +491,7 @@ int cv_init(bool security_enable, bool privilege_enable, int model_number)
                 xprintf("SD->flash copy failed for %s\n", src_path);
             }
         }
-        model = loaded; // assign after operations
+        model = loaded;
     }
 #endif
 
@@ -590,7 +626,7 @@ int init_flash(void)
     return 0;
 }
 
-// Erase the flash region covering the 16-byte header PLUS the model data.
+// Erase the flash region covering the model info, header, AND the model data.
 int erase_model_flash_area(uint32_t model_size)
 {
     if (init_flash() != 0)
@@ -610,20 +646,18 @@ int erase_model_flash_area(uint32_t model_size)
 
     // Addresses (XIP virtual used as reference)
     const uint32_t model_xip_addr = 0x3A200000;
-    const uint32_t header_xip_addr = model_xip_addr - 16;
-    const uint32_t model_num_xip_addr = model_xip_addr - 20; // 4 bytes for model number before filename header
+    const uint32_t model_info_xip_addr = model_xip_addr - 24; // 8 bytes for model info before filename header
 
     // Convert to physical addresses
-    const uint32_t model_phys_addr = virt_to_phys(model_xip_addr);         // e.g. 0x00200000
-    const uint32_t header_phys_addr = virt_to_phys(header_xip_addr);       // e.g. 0x001FFFF0
-    const uint32_t model_num_phys_addr = virt_to_phys(model_num_xip_addr); // e.g. 0x001FFFEC
+    const uint32_t model_phys_addr = virt_to_phys(model_xip_addr);           // e.g. 0x00200000
+    const uint32_t model_info_phys_addr = virt_to_phys(model_info_xip_addr); // e.g. 0x001FFFE8
 
-    // Compute erase region such that it covers model_number + header + model_size
-    uint32_t erase_start = align_down(model_num_phys_addr, FLASH_SECTOR_SIZE);
-    uint32_t total_length = (model_phys_addr + model_size) - erase_start + 20;
+    // Compute erase region such that it covers model_info + header + model_size
+    uint32_t erase_start = align_down(model_info_phys_addr, FLASH_SECTOR_SIZE);
+    uint32_t total_length = (model_phys_addr + model_size) - erase_start;
     uint32_t sectors_needed = align_up(total_length, FLASH_SECTOR_SIZE) / FLASH_SECTOR_SIZE;
 
-    xprintf("Erasing %lu sectors from 0x%08lX to cover header+model (%lu bytes)...\n",
+    xprintf("Erasing %lu sectors from 0x%08lX to cover info+header+model (%lu bytes)...\n",
             (unsigned long)sectors_needed, erase_start, (unsigned long)total_length);
 
     int ret = 0;
@@ -830,8 +864,8 @@ int load_model_from_sd_to_flash(char *filename)
         xprintf("Model successfully written to physical 0x%08lX (%lu bytes)\n",
                 (unsigned long)MODEL_FLASH_ADDR, (unsigned long)fileSize);
 
-        // Persist the model number to flash so it survives reboots
-        write_persisted_model_number(model_loaded);
+        // Persist the model info to flash so it survives reboots
+        write_persisted_model_info();
 
         // Re-enable XIP mode after all writes complete
         if (xSemaphoreTake(xSPIMutex, portMAX_DELAY) == pdTRUE)
@@ -1043,32 +1077,70 @@ TfLiteStatus cv_run(int8_t *outCategories, uint16_t categoriesCount)
     //  For int8 output tensor
     int8_t *results = output->data.int8;
     int classes = (output->dims->size >= 2) ? output->dims->data[1] : output->dims->data[0];
+
+    // Use TFLite's reference softmax implementation
+    // Convert int8 logits to float for processing
+    float logits_float[classes];
+    float probabilities[classes];
+
+    // Dequantize int8 logits to float
+    // Typical quantization for logits: scale = 0.00390625 (1/256), zero_point = 0
+    const float scale = output->params.scale;
+    const int32_t zero_point = output->params.zero_point;
+
     for (int i = 0; i < classes; ++i)
     {
+        logits_float[i] = (static_cast<float>(results[i]) - static_cast<float>(zero_point)) * scale;
+    }
+
+    // Apply softmax using TFLite's reference implementation
+    tflite::SoftmaxParams softmax_params;
+    softmax_params.beta = 1.0f; // Standard softmax temperature
+
+    tflite::RuntimeShape shape({1, classes});
+    tflite::reference_ops::Softmax(softmax_params, shape, logits_float, shape, probabilities);
+
+    // Store results and display
+    g_last_confidence_data.class_count = (classes > MAX_CLASSES) ? MAX_CLASSES : classes;
+
+    for (int i = 0; i < classes; ++i)
+    {
+        float confidence = probabilities[i] * 100.0f;                                     // Convert to percentage
+        int confidence_int = (int)(confidence + 0.5f);                                    // Round to nearest integer
+        int confidence_frac = (int)((confidence - (float)confidence_int) * 10.0f + 0.5f); // Get decimal part
+        if (confidence_frac < 0)
+            confidence_frac = 0; // Handle rounding edge cases
+
         const char *label = (g_labels_loaded && i < g_label_count) ? g_labels[i] : nullptr;
-        if (results[i] > 0)
+
+        // Store confidence data for EXIF (if within bounds)
+        if (i < MAX_CLASSES)
         {
-            XP_LT_GREEN;
-            if (label)
-            {
-                xprintf("POSITIVE: %s (%d)\n", label, results[i]);
-            }
-            else
-            {
-                xprintf("POSITIVE: class %d (%d)\n", i, results[i]);
-            }
+            g_last_confidence_data.confidence_percent[i] = confidence_int;
+            g_last_confidence_data.labels[i] = label;
+        }
+
+        // Color code based on confidence level
+        if (confidence >= 50.0f)
+        {
+            XP_LT_GREEN; // High confidence
+        }
+        else if (confidence >= 20.0f)
+        {
+            XP_YELLOW; // Medium confidence
         }
         else
         {
-            XP_LT_RED;
-            if (label)
-            {
-                xprintf("NEGATIVE: %s (%d)\n", label, results[i]);
-            }
-            else
-            {
-                xprintf("NEGATIVE: class %d (%d)\n", i, results[i]);
-            }
+            XP_LT_RED; // Low confidence
+        }
+
+        if (label)
+        {
+            xprintf("Class '%s': %d.%d%% (raw: %d)\n", label, confidence_int, confidence_frac, results[i]);
+        }
+        else
+        {
+            xprintf("Class %d: %d.%d%% (raw: %d)\n", i, confidence_int, confidence_frac, results[i]);
         }
     }
     XP_WHITE;

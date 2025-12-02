@@ -943,90 +943,6 @@ static int fatfs_load_labels_from_sd(const char *path, char labels[][48], int *l
 }
 
 /**
- * Helper to extract one entry from a ZIP file given its local header offset.
- * Only supports method 0 (STORE - uncompressed).
- *
- * @param zf_ptr Pointer to open ZIP file handle
- * @param lofs Local header offset
- * @param out_path Output file path
- * @return 0 on success, -1 on failure
- */
-// Extended extractor that accepts a compressed-size hint from the Central Directory
-// to handle cases where the local header size fields are zero (data descriptor).
-static int fatfs_extract_entry(FIL *zf_ptr, uint32_t lofs, uint32_t csize_hint, const char *out_path)
-{
-	FIL *zf_local = zf_ptr;
-	if (f_lseek(zf_local, lofs) != FR_OK)
-		return -1;
-
-	uint8_t lfh[30];
-	UINT r = 0;
-	if (f_read(zf_local, lfh, sizeof(lfh), &r) != FR_OK || r != sizeof(lfh))
-		return -1;
-	if (!(lfh[0] == 0x50 && lfh[1] == 0x4b && lfh[2] == 0x03 && lfh[3] == 0x04))
-	{
-		xprintf("Local header signature mismatch at 0x%08lX\n", (unsigned long)lofs);
-		return -1;
-	}
-
-	uint16_t method = lfh[8] | (lfh[9] << 8);
-	uint32_t csize_lfh = lfh[18] | (lfh[19] << 8) | (lfh[20] << 16) | (lfh[21] << 24);
-	uint32_t usize = lfh[22] | (lfh[23] << 8) | (lfh[24] << 16) | (lfh[25] << 24);
-	uint16_t fnlen = lfh[26] | (lfh[27] << 8);
-	uint16_t xlen = lfh[28] | (lfh[29] << 8);
-
-	// Only support STORE (method 0)
-	if (method != 0)
-	{
-		xprintf("Zip entry %s uses compression method %u (only STORE/method 0 is supported).\n", out_path, method);
-		return -1;
-	}
-
-	// Skip filename + extra to data
-	if (f_lseek(zf_local, lofs + 30 + fnlen + xlen) != FR_OK)
-		return -1;
-
-	// Ensure /Manifest directory exists
-	f_mkdir("/Manifest");
-
-	FIL out;
-	if (f_open(&out, out_path, FA_WRITE | FA_CREATE_ALWAYS) != FR_OK)
-		return -1;
-
-	int ret = 0;
-
-	// STORE: simple copy
-	uint8_t copybuf[256]; // smaller buffer to reduce stack usage
-	// Prefer size from Central Directory if provided (handles data-descriptor case)
-	UINT togo = (csize_hint != 0) ? csize_hint : csize_lfh;
-	UINT rw = 0;
-	while (togo > 0)
-	{
-		UINT chunk = (togo > sizeof(copybuf)) ? sizeof(copybuf) : togo;
-		if (f_read(zf_local, copybuf, chunk, &rw) != FR_OK || rw != chunk)
-		{
-			ret = -1;
-			break;
-		}
-		UINT bw = 0;
-		if (f_write(&out, copybuf, chunk, &bw) != FR_OK || bw != chunk)
-		{
-			ret = -1;
-			break;
-		}
-		togo -= chunk;
-	}
-
-	f_close(&out);
-
-	if (ret == 0)
-	{
-		xprintf("Extracted %s (%lu bytes, stored)\n", out_path, (unsigned long)usize);
-	}
-	return ret;
-}
-
-/**
  * Minimal unzipper: extract manifest/labels.txt and manifest/MOD0000X.tfl
  * Only supports method 0 (STORE, no compression).
  *
@@ -1046,192 +962,132 @@ static int fatfs_unzip_manifest_zip(void)
 	DWORD fsize = f_size(&zf);
 	xprintf("manifest.zip size=%lu bytes\n", (unsigned long)fsize);
 
-	// Backward scan for EOCD (0x06054b50) up to 64KB
-	const uint32_t max_scan = (fsize > 0x10000U) ? 0x10000U : fsize;
-	const uint32_t chunk = 256U; // smaller chunk to reduce stack usage
-	uint8_t buf[chunk];
-	uint32_t eocd_offset = 0;
-	for (uint32_t scanned = 0; scanned < max_scan; scanned += chunk)
+	f_mkdir("/Manifest");
+
+	if (f_lseek(&zf, 0) != FR_OK)
 	{
-		// Position start of this chunk
-		uint32_t off = (fsize > scanned + chunk) ? (fsize - scanned - chunk) : 0; // clamp at 0
-		if (f_lseek(&zf, off) != FR_OK)
-		{
-			xprintf("EOCD scan: seek fail at off=%lu\n", (unsigned long)off);
-			break;
-		}
+		f_close(&zf);
+		return -1;
+	}
+
+	int models_extracted = 0;
+	bool labels_extracted = false;
+
+	// First pass: Extract all files
+	while (f_tell(&zf) < fsize)
+	{
+		uint32_t lofs = f_tell(&zf);
+		uint8_t lfh[30];
 		UINT br = 0;
-		if (f_read(&zf, buf, chunk, &br) != FR_OK)
+
+		if (f_read(&zf, lfh, sizeof(lfh), &br) != FR_OK || br != sizeof(lfh))
 		{
-			xprintf("EOCD scan: read fail\n");
 			break;
 		}
-		if (br < 22) // minimal EOCD length
-			continue;
-		for (int i = (int)br - 4; i >= 0; --i)
+
+		if (!(lfh[0] == 0x50 && lfh[1] == 0x4b && lfh[2] == 0x03 && lfh[3] == 0x04))
 		{
-			if (buf[i] == 0x50 && buf[i + 1] == 0x4b && buf[i + 2] == 0x05 && buf[i + 3] == 0x06)
-			{
-				eocd_offset = off + (uint32_t)i;
-				xprintf("EOCD found at offset %lu (scanned %lu bytes)\n", (unsigned long)eocd_offset, (unsigned long)scanned + chunk);
-				goto have_eocd;
-			}
-		}
-	}
-have_eocd:
-	if (eocd_offset == 0)
-	{
-		xprintf("EOCD not found in manifest.zip\n");
-		f_close(&zf);
-		return -1;
-	}
-
-	// Parse EOCD (we need central directory size + offset). EOCD layout:
-	// signature(4) disk_num(2) cd_start_disk(2) entries_this_disk(2) entries_total(2) cd_size(4) cd_offset(4) comment_len(2)
-	if (f_lseek(&zf, eocd_offset + 12) != FR_OK) // move to cd_size field (offset 12 from start)
-	{
-		f_close(&zf);
-		return -1;
-	}
-	uint8_t eocd_fields[8];
-	UINT br = 0;
-	if (f_read(&zf, eocd_fields, sizeof(eocd_fields), &br) != FR_OK || br != sizeof(eocd_fields))
-	{
-		f_close(&zf);
-		return -1;
-	}
-	uint32_t cd_size = eocd_fields[0] | (eocd_fields[1] << 8) | (eocd_fields[2] << 16) | (eocd_fields[3] << 24);
-	uint32_t cd_offset = eocd_fields[4] | (eocd_fields[5] << 8) | (eocd_fields[6] << 16) | (eocd_fields[7] << 24);
-
-	xprintf("Central Directory: size=%lu offset=%lu\n", (unsigned long)cd_size, (unsigned long)cd_offset);
-
-	if (cd_offset + cd_size > fsize)
-	{
-		xprintf("Central directory out of range\n");
-		f_close(&zf);
-		return -1;
-	}
-
-	if (f_lseek(&zf, cd_offset) != FR_OK)
-	{
-		f_close(&zf);
-		return -1;
-	}
-
-	uint32_t labels_lhofs = 0, model_lhofs = 0;
-	bool labels_found = false, model_found = false;
-	uint32_t model_csize_cd = 0; // compressed size from Central Directory for model
-	char model_target_name[32] = {0};
-	uint32_t processed = 0;
-	uint32_t entry_index = 0;
-	bool saw_compressed = false; // track if we encountered any compressed entries
-	uint16_t first_compressed_method = 0;
-	while (processed < cd_size)
-	{
-		uint8_t cdhdr[46];
-		br = 0;
-		if (f_read(&zf, cdhdr, sizeof(cdhdr), &br) != FR_OK || br != sizeof(cdhdr))
-		{
-			xprintf("CD read break at processed=%lu\n", (unsigned long)processed);
 			break;
 		}
-		if (!(cdhdr[0] == 0x50 && cdhdr[1] == 0x4b && cdhdr[2] == 0x01 && cdhdr[3] == 0x02))
-		{
-			xprintf("CD signature mismatch at entry %lu\n", (unsigned long)entry_index);
-			break; // stop parsing
-		}
-		uint16_t fnlen = cdhdr[28] | (cdhdr[29] << 8);
-		uint16_t xlen = cdhdr[30] | (cdhdr[31] << 8);
-		uint16_t clen = cdhdr[32] | (cdhdr[33] << 8);
-		uint16_t method = cdhdr[10] | (cdhdr[11] << 8);
-		uint32_t csize_cd = cdhdr[20] | (cdhdr[21] << 8) | (cdhdr[22] << 16) | (cdhdr[23] << 24);
-		uint32_t lhofs = cdhdr[42] | (cdhdr[43] << 8) | (cdhdr[44] << 16) | (cdhdr[45] << 24);
+
+		uint16_t method = lfh[8] | (lfh[9] << 8);
+		uint32_t csize = lfh[18] | (lfh[19] << 8) | (lfh[20] << 16) | (lfh[21] << 24);
+		uint16_t fnlen = lfh[26] | (lfh[27] << 8);
+		uint16_t xlen = lfh[28] | (lfh[29] << 8);
 
 		char name[128];
 		if (fnlen >= sizeof(name))
 			fnlen = sizeof(name) - 1;
-		br = 0;
 		if (f_read(&zf, name, fnlen, &br) != FR_OK || br != fnlen)
-		{
-			xprintf("Filename read fail at entry %lu\n", (unsigned long)entry_index);
 			break;
-		}
 		name[fnlen] = '\0';
 
-		if (xlen && f_lseek(&zf, f_tell(&zf) + xlen) != FR_OK)
+		if (xlen > 0)
 		{
-			xprintf("Skip extra fail\n");
-			break;
+			if (f_lseek(&zf, f_tell(&zf) + xlen) != FR_OK)
+				break;
 		}
-		if (clen && f_lseek(&zf, f_tell(&zf) + clen) != FR_OK)
-		{
-			xprintf("Skip comment fail\n");
-			break;
-		}
-
-		processed += 46 + fnlen + xlen + clen;
-		entry_index++;
-
-		xprintf("ZIP entry[%lu]: '%s' method=%u local_ofs=%lu\n", (unsigned long)entry_index, name, (unsigned)method, (unsigned long)lhofs);
 
 		if (method != 0)
 		{
-			xprintf("  Skipping (compressed method %u not supported)\n", (unsigned)method);
-			if (!saw_compressed)
-			{
-				saw_compressed = true;
-				first_compressed_method = method;
-			}
+			if (f_lseek(&zf, f_tell(&zf) + csize) != FR_OK)
+				break;
 			continue;
 		}
 
-		// Case-insensitive match
-		char name_lower[128];
-		size_t name_len = strlen(name);
-		for (size_t i = 0; i < name_len && i < sizeof(name_lower) - 1; i++)
-			name_lower[i] = (name[i] >= 'A' && name[i] <= 'Z') ? (name[i] + 32) : name[i];
-		name_lower[name_len] = '\0';
-
-		if (strcmp(name_lower, "manifest/labels.txt") == 0)
-		{
-			labels_lhofs = lhofs;
-			labels_found = true;
-		}
-		else if (strncmp(name_lower, "manifest/mod0000", 16) == 0 && strstr(name_lower, ".tfl"))
-		{
-			model_lhofs = lhofs;
-			model_csize_cd = csize_cd;
-			const char *slash = strrchr(name, '/');
-			strncpy(model_target_name, slash ? slash + 1 : name, sizeof(model_target_name) - 1);
-			model_found = true;
-		}
-	}
-
-	xprintf("ZIP scan complete: labels_offset=%lu, model_offset=%lu, model_name='%s'\n",
-			(unsigned long)labels_lhofs, (unsigned long)model_lhofs, model_target_name);
-
-	// If we saw compressed entries and couldn't locate uncompressed targets, give a clear hint
-	if ((model_lhofs == 0) && saw_compressed)
-	{
-		XP_LT_RED;
-		xprintf("Manifest.zip uses compression (method %u). This firmware only supports STORE (method 0).\n", (unsigned)first_compressed_method);
-		xprintf("Please repackage with no compression, e.g.: 'zip -0 -r Manifest.zip Manifest',\n");
-		xprintf("or place unzipped files on the SD at /Manifest/MODxxxxx.tfl and /Manifest/labels.txt.\n");
-		XP_WHITE;
-	}
-
-	int ok = -1;
-	if (labels_found)
-		fatfs_extract_entry(&zf, labels_lhofs, 0, "/Manifest/labels.txt");
-	if (model_found && model_target_name[0])
-	{
+		const char *slash = strrchr(name, '/');
+		const char *base = slash ? slash + 1 : name;
 		char outpath[64];
-		snprintf(outpath, sizeof(outpath), "/Manifest/%s", model_target_name);
-		xprintf("Attempting extract: name='%s' lofs=%lu csize=%lu\n", model_target_name, (unsigned long)model_lhofs, (unsigned long)model_csize_cd);
-		ok = fatfs_extract_entry(&zf, model_lhofs, model_csize_cd, outpath);
+		snprintf(outpath, sizeof(outpath), "/Manifest/%s", base);
+
+		xprintf("Extracting '%s' to '%s'\n", name, outpath);
+
+		FIL out;
+		if (f_open(&out, outpath, FA_WRITE | FA_CREATE_ALWAYS) != FR_OK)
+		{
+			if (f_lseek(&zf, f_tell(&zf) + csize) != FR_OK)
+				break;
+			continue;
+		}
+
+		uint8_t buf[256];
+		UINT togo = csize;
+		bool copy_ok = true;
+		while (togo > 0)
+		{
+			UINT chunk = (togo > sizeof(buf)) ? sizeof(buf) : togo;
+			UINT rr = 0, bw = 0;
+			if (f_read(&zf, buf, chunk, &rr) != FR_OK || rr != chunk ||
+				f_write(&out, buf, chunk, &bw) != FR_OK || bw != chunk)
+			{
+				copy_ok = false;
+				break;
+			}
+			togo -= chunk;
+		}
+		f_close(&out);
+
+		if (!copy_ok)
+		{
+			if (f_lseek(&zf, f_tell(&zf) + togo) != FR_OK)
+				break;
+		}
+		else
+		{
+			// After successful extraction, check what file it was
+			if (strcasecmp(base, "labels.txt") == 0)
+			{
+				xprintf("  Found and extracted labels.txt\n");
+				labels_extracted = true;
+			}
+
+			// Parse and update model info for .tfl files
+			int pid = 0, ver = 0;
+			const char *extension = strrchr(base, '.');
+			if (extension && (strcasecmp(extension, ".tfl") == 0))
+			{
+				if (sscanf(base, "%4dV%d", &pid, &ver) == 2)
+				{
+					xprintf("  Parsed: ProjectID=%d, Version=%d\n", pid, ver);
+					cv_set_model_info(pid, ver);
+					models_extracted++;
+				}
+				else
+				{
+					xprintf("  Parse FAILED for '%s'\n", base);
+				}
+			}
+		}
 	}
+
+	// Second pass: Check if labels.txt was extracted
+	if (!labels_extracted)
+	{
+		xprintf("Warning: labels.txt was not found in the zip archive.\n");
+	}
+
 	f_close(&zf);
-	return ok;
+	return (models_extracted > 0) ? 0 : -1;
 }
 
 /********************************** FreeRTOS Task  *************************************/
@@ -1280,9 +1136,9 @@ static void vFatFsTask(void *pvParameters)
 	op_parameter[OP_PARAMETER_NUM_WARM_BOOTS] = 0;
 	// why would we want the  default (no SD card) to be disabled?
 	// op_parameter[OP_PARAMETER_CAMERA_ENABLED] = 0;	// disabled
-	op_parameter[OP_PARAMETER_CAMERA_ENABLED] = 1;				  // enabled
-	op_parameter[OP_PARAMETER_MD_INTERVAL] = DPDINTERVAL;		  // Interval (ms) between frames in MD mode (0 inhibits)
-	op_parameter[OP_PARAMETER_MODEL_NUMBER] = get_model_number(); // Model number of the device
+	op_parameter[OP_PARAMETER_CAMERA_ENABLED] = 1;			  // enabled
+	op_parameter[OP_PARAMETER_MD_INTERVAL] = DPDINTERVAL;	  // Interval (ms) between frames in MD mode (0 inhibits)
+	op_parameter[OP_PARAMETER_MODEL_NUMBER] = get_model_id(); // CV model ID
 
 	// One-off initialisation here...
 	startTime = xTaskGetTickCount();

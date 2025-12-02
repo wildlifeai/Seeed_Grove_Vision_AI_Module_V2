@@ -22,6 +22,7 @@ EXIF_TAGS = {
     0x9003: "Datetime Original",
     0x9004: "Datetime Create",
     0x0132: "DateTime",
+    0x9286: "UserComment",
     0xC000: "Custom Data",
     0x8769: "ExifIFDPointer",
     0x8825: "GPSInfoIFDPointer",

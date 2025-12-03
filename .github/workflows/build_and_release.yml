@@ -18,6 +18,13 @@ jobs:
       # Optional: Override storage bucket name (default: firmware)
       # For different environments, you can set: firmware-staging, firmware-prod, etc.
       # BUCKET_NAME: firmware
+      # Optional: Provide system user ID for modified_by field
+      # If not provided, script will query database for system user
+      # SYSTEM_USER_ID: 00000000-0000-0000-0000-000000000000
+      # Optional: Email address to query for system user
+      SYSTEM_EMAIL: ${{ secrets.SYSTEM_EMAIL }}
+      # Optional: Fallback user ID if database queries fail
+      FALLBACK_USER_ID: ${{ secrets.FALLBACK_USER_ID }}
       # Path to the generated image. Adjust if the output folder name changes.
       # Based on project_case1_blp_wlcsp.json: "output_folder": "output_case1_sec_wlcsp"
       # And the makefile APPL name: EPII_CM55M

@@ -19,6 +19,9 @@ These can be configured in the workflow file or as repository/environment variab
 |----------|---------|-------------|----------|
 | `FIRMWARE_TYPE` | `himax` | Type of firmware being built | Set to `ble`, `config`, etc. for different firmware types |
 | `BUCKET_NAME` | `firmware` | Supabase Storage bucket name | Use different buckets for staging/production (e.g., `firmware-staging`, `firmware-prod`) |
+| `SYSTEM_USER_ID` | *auto-detect* | User ID for `modified_by` field | Explicitly set for different environments if system user differs |
+| `SYSTEM_EMAIL` | `system@wildlife.ai` | Email to query for system user | Override system user email for different environments |
+| `FALLBACK_USER_ID` | `00000000-0000-0000-0000-000000000000` | Fallback user ID if queries fail | Set environment-specific fallback user |
 
 ## Usage Examples
 
@@ -78,6 +81,7 @@ These are automatically set by the workflow:
    env:
      FIRMWARE_TYPE: ble
      BUCKET_NAME: firmware-staging
+     SYSTEM_USER_ID: your-system-user-id
    ```
 
 2. **Repository variables**: Settings → Secrets and variables → Actions → Variables tab
@@ -86,3 +90,46 @@ These are automatically set by the workflow:
 3. **Environment-specific**: Settings → Environments → Create environment
    - Define different variables for staging vs production
    - Requires approval rules for production deployments
+
+## System User ID Resolution
+
+The `SYSTEM_USER_ID` is used for the `modified_by` field in database records. The script uses a multi-tier fallback strategy:
+
+### Resolution Order:
+1. **Environment Variable**: If `SYSTEM_USER_ID` is set, use it directly
+2. **Database Query (Email)**: Query for user with email from `SYSTEM_EMAIL` (default: `system@wildlife.ai`)
+3. **Database Query (Role)**: Query for any user with `ww_admin` system role
+4. **Configured Fallback**: Use `FALLBACK_USER_ID` (default: `00000000-0000-0000-0000-000000000000`) with warning
+
+### Security Best Practices:
+- **Secrets**: Store `SYSTEM_EMAIL` and `FALLBACK_USER_ID` as GitHub Secrets for production
+- **Production**: Set `SYSTEM_USER_ID` explicitly as environment variable
+- **Development**: Let auto-detection find the system user
+- **Multiple Environments**: Use different system users/emails for staging/production
+
+### Example (Using Secrets):
+```yaml
+# In GitHub Secrets, add:
+# SYSTEM_EMAIL_PROD: admin@your-production-domain.com
+# FALLBACK_USER_ID_PROD: your-production-fallback-uuid
+
+# In workflow:
+env:
+  SYSTEM_EMAIL: ${{ secrets.SYSTEM_EMAIL_PROD }}
+  FALLBACK_USER_ID: ${{ secrets.FALLBACK_USER_ID_PROD }}
+```
+
+### Example (Environment-Specific):
+```yaml
+# Staging environment
+env:
+  SYSTEM_USER_ID: aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa
+  SYSTEM_EMAIL: system@staging.wildlife.ai
+  FALLBACK_USER_ID: staging-fallback-user-id
+
+# Production environment  
+env:
+  SYSTEM_USER_ID: bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb
+  SYSTEM_EMAIL: system@production.wildlife.ai
+  FALLBACK_USER_ID: production-fallback-user-id
+```

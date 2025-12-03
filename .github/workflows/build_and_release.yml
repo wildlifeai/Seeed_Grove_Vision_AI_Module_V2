@@ -13,6 +13,11 @@ jobs:
     env:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      # Optional: Override firmware type (default: himax)
+      # FIRMWARE_TYPE: himax
+      # Optional: Override storage bucket name (default: firmware)
+      # For different environments, you can set: firmware-staging, firmware-prod, etc.
+      # BUCKET_NAME: firmware
       # Path to the generated image. Adjust if the output folder name changes.
       # Based on project_case1_blp_wlcsp.json: "output_folder": "output_case1_sec_wlcsp"
       # And the makefile APPL name: EPII_CM55M

@@ -8,12 +8,13 @@ const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const FIRMWARE_PATH = process.env.FIRMWARE_PATH; // Path to the generated .img file
 const FIRMWARE_VERSION = process.env.FIRMWARE_VERSION || `commit-${process.env.GITHUB_SHA?.substring(0, 7)}`; // Use semantic version if available, fallback to commit hash
 const RELEASE_NOTES = process.env.RELEASE_NOTES || `Automated build from commit ${process.env.GITHUB_SHA}`;
-const FIRMWARE_TYPE = 'himax';
-const BUCKET_NAME = 'firmware';
+const FIRMWARE_TYPE = process.env.FIRMWARE_TYPE || 'himax'; // Configurable firmware type (himax, ble, config, etc.)
+const BUCKET_NAME = process.env.BUCKET_NAME || 'firmware'; // Configurable bucket name for different environments
 
 if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !FIRMWARE_PATH) {
   console.error('Error: Missing required environment variables.');
   console.error('Required: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, FIRMWARE_PATH');
+  console.error('Optional: FIRMWARE_TYPE (default: himax), BUCKET_NAME (default: firmware)');
   process.exit(1);
 }
 

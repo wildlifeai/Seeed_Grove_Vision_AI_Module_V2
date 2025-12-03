@@ -70,7 +70,7 @@ async function uploadFirmware() {
       const { data: systemUser, error: userError } = await supabase
         .from('users')
         .select('id')
-        .eq('email', 'system@wildlife.ai')
+        .eq('email', SYSTEM_EMAIL)
         .is('deleted_at', null)
         .limit(1)
         .single();
@@ -94,7 +94,7 @@ async function uploadFirmware() {
           console.log(`Found system user via ww_admin role: ${systemUserId}`);
         } else {
           // Strategy 3: Fallback to hardcoded UUID (with warning)
-          systemUserId = '00000000-0000-0000-0000-000000000000';
+          systemUserId = FALLBACK_USER_ID;
           console.warn(`⚠️  WARNING: Using hardcoded system user ID as fallback: ${systemUserId}`);
           console.warn('Consider setting SYSTEM_USER_ID environment variable or ensuring a system user exists.');
         }

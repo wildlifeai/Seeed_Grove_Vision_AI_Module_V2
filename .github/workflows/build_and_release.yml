@@ -25,6 +25,46 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Fetch all history for semantic versioning
+
+      - name: Calculate Semantic Version
+        id: semver
+        uses: mathieudutour/github-tag-action@v6.2
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          default_bump: patch
+          release_branches: main
+          dry_run: true # Don't create tag yet, just calculate version
+          tag_prefix: v
+          initial_version: 0.0.0
+          
+      - name: Generate Release Notes
+        id: release_notes
+        shell: pwsh
+        run: |
+          # Get commits since last tag
+          try {
+            $lastTag = git describe --tags --abbrev=0 2>$null
+          } catch {
+            $lastTag = $null
+          }
+          
+          if ([string]::IsNullOrEmpty($lastTag)) {
+            # No previous tags, get all commits
+            $commits = git log --pretty=format:"- %s (%h)" --no-merges
+          } else {
+            # Get commits since last tag
+            $commits = git log "$lastTag..HEAD" --pretty=format:"- %s (%h)" --no-merges
+          }
+          
+          # Save to environment variable
+          "RELEASE_NOTES<<EOF" | Out-File -FilePath $env:GITHUB_ENV -Append
+          $commits | Out-File -FilePath $env:GITHUB_ENV -Append
+          "EOF" | Out-File -FilePath $env:GITHUB_ENV -Append
+          
+          Write-Host "Generated release notes:"
+          Write-Host $commits
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -84,4 +124,14 @@ jobs:
 
       - name: Upload to Supabase
         working-directory: ./scripts
+        env:
+          FIRMWARE_VERSION: ${{ steps.semver.outputs.new_tag }}
         run: node upload_firmware.js
+        
+      - name: Create Git Tag
+        if: success()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a ${{ steps.semver.outputs.new_tag }} -m "Release ${{ steps.semver.outputs.new_tag }}"
+          git push origin ${{ steps.semver.outputs.new_tag }}

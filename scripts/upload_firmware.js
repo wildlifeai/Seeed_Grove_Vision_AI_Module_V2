@@ -6,12 +6,14 @@ const path = require('path');
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const FIRMWARE_PATH = process.env.FIRMWARE_PATH; // Path to the generated .img file
-const GITHUB_SHA = process.env.GITHUB_SHA; // Commit hash
+const FIRMWARE_VERSION = process.env.FIRMWARE_VERSION || `commit-${process.env.GITHUB_SHA?.substring(0, 7)}`; // Use semantic version if available, fallback to commit hash
+const RELEASE_NOTES = process.env.RELEASE_NOTES || `Automated build from commit ${process.env.GITHUB_SHA}`;
 const FIRMWARE_TYPE = 'himax';
 const BUCKET_NAME = 'firmware';
 
-if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !FIRMWARE_PATH || !GITHUB_SHA) {
+if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !FIRMWARE_PATH) {
   console.error('Error: Missing required environment variables.');
+  console.error('Required: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, FIRMWARE_PATH');
   process.exit(1);
 }
 
@@ -35,8 +37,9 @@ async function uploadFirmware() {
     // 2. Upload file
     const fileName = path.basename(FIRMWARE_PATH);
     const fileContent = fs.readFileSync(FIRMWARE_PATH);
-    // Use commit hash in filename to ensure uniqueness and easy identification
-    const storagePath = `${FIRMWARE_TYPE}/${GITHUB_SHA.substring(0, 7)}_${fileName}`;
+    // Use semantic version in filename for easy identification
+    const versionTag = FIRMWARE_VERSION.replace(/^v/, ''); // Remove 'v' prefix if present
+    const storagePath = `${FIRMWARE_TYPE}/${versionTag}_${fileName}`;
 
     console.log(`Uploading ${fileName} to ${storagePath}...`);
     const { data: uploadData, error: uploadError } = await supabase.storage
@@ -49,10 +52,9 @@ async function uploadFirmware() {
     if (uploadError) throw uploadError;
 
     // 3. Insert record into database
-    const version = `commit-${GITHUB_SHA.substring(0, 7)}`;
     const fileSize = fs.statSync(FIRMWARE_PATH).size;
 
-    console.log(`Registering firmware version ${version} in database...`);
+    console.log(`Registering firmware version ${FIRMWARE_VERSION} in database...`);
 
     // We need a user ID for 'modified_by'. 
     // Ideally, this should be a system user or the service role user.
@@ -68,13 +70,13 @@ async function uploadFirmware() {
     const { data: insertData, error: insertError } = await supabase
       .from('firmware')
       .insert({
-        name: `Himax Firmware (${version})`,
-        version: version,
+        name: `Himax Firmware ${FIRMWARE_VERSION}`,
+        version: FIRMWARE_VERSION,
         type: FIRMWARE_TYPE,
         location_path: storagePath,
         file_size_bytes: fileSize,
-        release_notes: `Automated build from commit ${GITHUB_SHA}`,
-        is_active: true, // Set as active by default? Or false? Let's say true for now.
+        release_notes: RELEASE_NOTES,
+        is_active: true,
         modified_by: SYSTEM_USER_ID
       })
       .select();
@@ -82,6 +84,8 @@ async function uploadFirmware() {
     if (insertError) throw insertError;
 
     console.log('Firmware uploaded and registered successfully!');
+    console.log(`Version: ${FIRMWARE_VERSION}`);
+    console.log(`Storage Path: ${storagePath}`);
     console.log(insertData);
 
   } catch (error) {

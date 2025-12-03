@@ -70,7 +70,7 @@ async function uploadFirmware() {
       const { data: systemUser, error: userError } = await supabase
         .from('users')
         .select('id')
-        .eq('email', 'system@wildlife.ai')
+        .eq('email', SYSTEM_EMAIL)
         .is('deleted_at', null)
         .limit(1)
         .single();

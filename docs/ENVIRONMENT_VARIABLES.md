@@ -66,7 +66,7 @@ These are automatically set by the workflow:
 | `FIRMWARE_VERSION` | Semantic version (e.g., `v0.1.0`) | github-tag-action |
 | `RELEASE_NOTES` | Commit messages since last tag | Release notes generation step |
 | `FIRMWARE_PATH` | Path to generated .img file | Find image step |
-| `GITHUB_SHA` | Git commit hash | GitHub Actions (fallback for version) |
+| `GITHUB_SHA` | Git commit hash (used as fallback for version/notes if semantic versioning unavailable) | GitHub Actions |
 
 ## Setting Variables
 

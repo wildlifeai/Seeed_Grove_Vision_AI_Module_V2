@@ -86,6 +86,7 @@ async function uploadFirmware() {
           .eq('role', 'ww_admin')
           .eq('scope_type', 'system')
           .is('deleted_at', null)
+          .order('created_at', { ascending: true }) // Ensure deterministic selection
           .limit(1)
           .single();
 

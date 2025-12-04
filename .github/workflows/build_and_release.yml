@@ -1,0 +1,149 @@
+name: Build and Release Himax Firmware
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch: # Allow manual triggering
+
+jobs:
+  build-and-deploy:
+    runs-on: windows-latest
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      # Optional: Override firmware type (default: himax)
+      # FIRMWARE_TYPE: himax
+      # Optional: Override storage bucket name (default: firmware)
+      # For different environments, you can set: firmware-staging, firmware-prod, etc.
+      # BUCKET_NAME: firmware
+      # Optional: Provide system user ID for modified_by field
+      # If not provided, script will query database for system user
+      # SYSTEM_USER_ID: 00000000-0000-0000-0000-000000000000
+      # Optional: Email address to query for system user
+      SYSTEM_EMAIL: ${{ secrets.SYSTEM_EMAIL }}
+      # Optional: Fallback user ID if database queries fail
+      FALLBACK_USER_ID: ${{ secrets.FALLBACK_USER_ID }}
+      # Path to the generated image. Adjust if the output folder name changes.
+      # Based on project_case1_blp_wlcsp.json: "output_folder": "output_case1_sec_wlcsp"
+      # And the makefile APPL name: EPII_CM55M
+      # The final image name usually follows a pattern. Checking directory listing...
+      # "Seeed_SenseCraft_AI_2023_12_19T183401_402.img" was in the root.
+      # But the tool generates it in the output folder.
+      # We will assume the output is in we2_image_gen_local/output_case1_sec_wlcsp/
+      # We might need to find the .img file dynamically.
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Fetch all history for semantic versioning
+
+      - name: Calculate Semantic Version
+        id: semver
+        uses: mathieudutour/github-tag-action@v6.2
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          default_bump: patch
+          release_branches: main
+          dry_run: true # Don't create tag yet, just calculate version
+          tag_prefix: v
+          initial_version: 0.0.0
+          
+      - name: Generate Release Notes
+        id: release_notes
+        shell: pwsh
+        run: |
+          # Get commits since last tag
+          try {
+            $lastTag = git describe --tags --abbrev=0 2>$null
+          } catch {
+            $lastTag = $null
+          }
+          
+          if ([string]::IsNullOrEmpty($lastTag)) {
+            # No previous tags, get all commits
+            $commits = git log --pretty=format:"- %s (%h)" --no-merges
+          } else {
+            # Get commits since last tag
+            $commits = git log "$lastTag..HEAD" --pretty=format:"- %s (%h)" --no-merges
+          }
+          
+          # Save to environment variable
+          "RELEASE_NOTES<<EOF" | Out-File -FilePath $env:GITHUB_ENV -Append
+          $commits | Out-File -FilePath $env:GITHUB_ENV -Append
+          "EOF" | Out-File -FilePath $env:GITHUB_ENV -Append
+          
+          Write-Host "Generated release notes:"
+          Write-Host $commits
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Node Dependencies
+        run: npm install @supabase/supabase-js
+        working-directory: ./scripts # We'll create package.json here or run in root
+
+      - name: Install Arm GNU Toolchain
+        uses: armada-project/arm-none-eabi-gcc-action@v1
+        with:
+          release: '13.2.Rel1' # Use a recent compatible version
+
+      - name: Find GCC Path
+        id: find_gcc
+        shell: pwsh
+        run: |
+          $gccPath = Get-Command arm-none-eabi-gcc | Select-Object -ExpandProperty Source
+          $binDir = Split-Path $gccPath -Parent
+          Write-Host "GCC Bin Dir: $binDir"
+          # The makefile expects forward slashes or escaped backslashes
+          $binDir = $binDir -replace '\\', '/'
+          echo "GNU_TOOLPATH=$binDir" >> $env:GITHUB_ENV
+
+      - name: Build Firmware (Make)
+        working-directory: ./EPII_CM55M_APP_S
+        run: |
+          # Use the discovered toolchain path
+          make -j4 GNU_TOOLPATH="${{ env.GNU_TOOLPATH }}"
+
+      - name: Generate Firmware Image
+        working-directory: ./we2_image_gen_local
+        run: |
+          # Ensure the tool has .exe extension for Windows execution
+          if (Test-Path we2_local_image_gen -PathType Leaf) {
+            Write-Host "Renaming binary to .exe"
+            Rename-Item we2_local_image_gen we2_local_image_gen.exe
+          }
+          # Run the image generation tool
+          .\we2_local_image_gen.exe project_case1_blp_wlcsp.json
+
+      - name: Find Generated Image
+        id: find_image
+        shell: pwsh
+        run: |
+          # Find the .img file in the output directory
+          $imgFile = Get-ChildItem -Path ".\we2_image_gen_local\output_case1_sec_wlcsp" -Filter "*.img" -Recurse | Select-Object -First 1
+          if ($imgFile) {
+            Write-Host "Found image: $($imgFile.FullName)"
+            echo "FIRMWARE_PATH=$($imgFile.FullName)" >> $env:GITHUB_ENV
+          } else {
+            Write-Error "No .img file found in output directory!"
+            exit 1
+          }
+
+      - name: Upload to Supabase
+        working-directory: ./scripts
+        env:
+          FIRMWARE_VERSION: ${{ steps.semver.outputs.new_tag }}
+        run: node upload_firmware.js
+        
+      - name: Create Git Tag
+        if: success()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a ${{ steps.semver.outputs.new_tag }} -m "Release ${{ steps.semver.outputs.new_tag }}"
+          git push origin ${{ steps.semver.outputs.new_tag }}

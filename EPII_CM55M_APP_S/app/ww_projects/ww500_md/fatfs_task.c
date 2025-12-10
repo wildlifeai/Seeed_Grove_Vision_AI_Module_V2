@@ -77,6 +77,9 @@
 #include "ww500_md.h"
 #include "inactivity.h"
 #include "directory_manager.h"
+
+#include "barrier.h"
+#include "selfTest.h"
 #include "cvapp.h"
 
 /*************************************** Definitions *******************************************/
@@ -133,7 +136,11 @@ extern directoryManager_t dirManager;
 extern QueueHandle_t xIfTaskQueue;
 extern QueueHandle_t xImageTaskQueue;
 
+extern Barrier_t startupBarrier; // Object that calls a function when all tasks are ready
+
 /*************************************** Local variables *******************************************/
+
+SemaphoreHandle_t xSDInitDoneSemaphore;
 
 static APP_WAKE_REASON_E woken;
 
@@ -172,8 +179,23 @@ uint32_t numPicturesToGrab = NUMPICTURESTOGRAB;
 // Interval between pictures (for now seconds, but let's change this to ms later
 uint32_t pictureInterval = PICTUREINTERVAL;
 
-// Values to read from the configuration.txt file
-uint16_t op_parameter[OP_PARAMETER_NUM_ENTRIES];
+// Values to read from the CONFIG.TXT file
+uint16_t op_parameter[OP_PARAMETER_NUM_ENTRIES] = {
+	1,				   // 0 Image file number (0 indicates no SD card)
+	0,				   // 1 # times the NN model has run
+	0,				   // 2 # times the NN model says "yes"
+	0,				   // 3 # of AI processor cold boots
+	0,				   // 4 # of AI processor warm boots
+	NUMPICTURESTOGRAB, // 5 Num pics when triggered
+	PICTUREINTERVAL,   // 6 Pic interval when triggered (ms)
+	TIMELAPSEINTERVAL, // 7 Interval (s) (0 inhibits)
+	INACTIVITYTIMEOUT, // 8 Delay before DPD (ms)
+	FLASHLEDDUTY,	   // 9 in percent (0 inhibits)
+	1,				   // 10 0 = disabled, 1 = enabled
+	DPDINTERVAL,	   // 11 Interval (ms) between frames in MD mode (0 inhibits)
+	FLASHDURATION,	   // 12 Duration (ms) that LED Flash is on
+	0				   // 13 LED bit mask: vis=1, IR=2, none=0)
+};
 
 /********************************** Private Function definitions  *************************************/
 
@@ -187,8 +209,8 @@ static FRESULT fileWrite(fileOperation_t *fileOp)
 	UINT bw;	 // Bytes written
 
 	// TODO omit this soon as it might not handle long files or binary files
-	xprintf("DEBUG: writing %d bytes to '%s' from address 0x%08x. Contents:\n%s\n",
-			fileOp->length, fileOp->fileName, fileOp->buffer, fileOp->buffer);
+	// xprintf("DEBUG: writing %d bytes to '%s' from address 0x%08x. Contents:\n%s\n",
+	//		fileOp->length, fileOp->fileName, fileOp->buffer, fileOp->buffer );
 
 	res = f_open(&fdst, fileOp->fileName, FA_WRITE | FA_CREATE_ALWAYS);
 	if (res)
@@ -240,6 +262,8 @@ static FRESULT fileWrite(fileOperation_t *fileOp)
 }
 
 /** Image writing function, will primarily be called from the image task
+ *
+ * Called when APP_MSG_FATFSTASK_WRITE_FILE message arrives in fatfs task queue
  * 		parameters: fileOperation_t fileOp
  * 		returns: FRESULT res
  */
@@ -247,18 +271,26 @@ static FRESULT fileWriteImage(fileOperation_t *fileOp, directoryManager_t *dirMa
 {
 	FRESULT res;
 	rtc_time time;
-	res = f_chdir(dirManager->current_capture_dir);
-	if (res != FR_OK)
-		return res;
+
+	// Move to fastfs_write_image()
+	//	res = f_chdir(dirManager->current_capture_dir);
+	//	if (res != FR_OK) {
+	//		return res;
+	//	}
 
 	// fastfs_write_image() expects filename is a uint8_t array
 	// TODO resolve this warning! "warning: passing argument 1 of 'fastfs_write_image' makes integer from pointer without a cast"
 	res = fastfs_write_image((uint32_t)(fileOp->buffer), fileOp->length, (uint8_t *)fileOp->fileName, dirManager);
+
 	if (res != FR_OK)
 	{
 		xprintf("Error writing file %s\n", fileOp->fileName);
 		fileOp->length = 0;
 		fileOp->res = res;
+
+		// Restore base dir
+		// f_chdir(dirManager->base_dir);
+
 		return res;
 	}
 
@@ -272,8 +304,9 @@ static FRESULT fileWriteImage(fileOperation_t *fileOp, directoryManager_t *dirMa
 			time.tm_hour, time.tm_min, time.tm_sec,
 			time.tm_mday, time.tm_mon, time.tm_year);
 
+	// CGP - no need?
 	// Restore base dir
-	res = f_chdir(dirManager->base_dir);
+	// res = f_chdir(dirManager->base_dir);
 	return res;
 }
 
@@ -693,7 +726,7 @@ static FRESULT load_configuration(const char *filename, directoryManager_t *dirM
 		res = f_open(&dirManager->configFile, filename, FA_READ);
 		if (res != FR_OK)
 		{
-			printf("Failed to open config file: %d\n", res);
+			xprintf("Failed to open config file: %d\n", res);
 			dirManager->configRes = res;
 			return dirManager->configRes;
 		}
@@ -749,7 +782,7 @@ static FRESULT load_configuration(const char *filename, directoryManager_t *dirM
 	res = f_close(&dirManager->configFile);
 	if (res != FR_OK)
 	{
-		printf("Failed to close config file: %d\n", res);
+		xprintf("Failed to close config file: %d\n", res);
 	}
 	else
 	{
@@ -819,7 +852,7 @@ static FRESULT save_configuration(const char *filename, directoryManager_t *dirM
 			res = f_close(&dirManager->configFile);
 			if (res != FR_OK)
 			{
-				printf("Failed to close config file: %d\n", res);
+				xprintf("Failed to close config file: %d\n", res);
 			}
 			else
 			{
@@ -859,7 +892,7 @@ static FRESULT save_configuration(const char *filename, directoryManager_t *dirM
 		res = f_close(&dirManager->configFile);
 		if (res != FR_OK)
 		{
-			printf("Failed to close config file: %d\n", res);
+			xprintf("Failed to close config file: %d\n", res);
 		}
 		else
 		{
@@ -1124,21 +1157,24 @@ static void vFatFsTask(void *pvParameters)
 	xprintf("Starting FatFS Task\n");
 	XP_WHITE;
 
-	// Initialise the configuration[] array
-	op_parameter[OP_PARAMETER_SEQUENCE_NUMBER] = 0; // 0 indicates no SD card
-	op_parameter[OP_PARAMETER_NUM_PICTURES] = NUMPICTURESTOGRAB;
-	op_parameter[OP_PARAMETER_PICTURE_INTERVAL] = PICTUREINTERVAL;
-	op_parameter[OP_PARAMETER_TIMELAPSE_INTERVAL] = TIMELAPSEINTERVAL;
-	op_parameter[OP_PARAMETER_INTERVAL_BEFORE_DPD] = INACTIVITYTIMEOUT;
-	op_parameter[OP_PARAMETER_LED_FLASH_DUTY] = FLASHLEDDUTY;
-	op_parameter[OP_PARAMETER_NUM_NN_ANALYSES] = 0;
-	op_parameter[OP_PARAMETER_NUM_COLD_BOOTS] = 0;
-	op_parameter[OP_PARAMETER_NUM_WARM_BOOTS] = 0;
-	// why would we want the  default (no SD card) to be disabled?
-	// op_parameter[OP_PARAMETER_CAMERA_ENABLED] = 0;	// disabled
-	op_parameter[OP_PARAMETER_CAMERA_ENABLED] = 1;			  // enabled
-	op_parameter[OP_PARAMETER_MD_INTERVAL] = DPDINTERVAL;	  // Interval (ms) between frames in MD mode (0 inhibits)
-	op_parameter[OP_PARAMETER_MODEL_NUMBER] = get_model_id(); // CV model ID
+	//	// Initialise the configuration[] array
+	//    // TODO use default C array initialisation syntax
+	//	op_parameter[OP_PARAMETER_SEQUENCE_NUMBER] = 0; // 0 indicates no SD card
+	//	op_parameter[OP_PARAMETER_NUM_PICTURES] = NUMPICTURESTOGRAB;
+	//	op_parameter[OP_PARAMETER_PICTURE_INTERVAL] = PICTUREINTERVAL;
+	//	op_parameter[OP_PARAMETER_TIMELAPSE_INTERVAL] = TIMELAPSEINTERVAL;
+	//	op_parameter[OP_PARAMETER_INTERVAL_BEFORE_DPD] = INACTIVITYTIMEOUT;
+	//	op_parameter[OP_PARAMETER_LED_BRIGHTNESS_PERCENT] = FLASHLEDDUTY;
+	//	op_parameter[OP_PARAMETER_NUM_NN_ANALYSES] = 0;
+	//	op_parameter[OP_PARAMETER_NUM_COLD_BOOTS] = 0;
+	//	op_parameter[OP_PARAMETER_NUM_WARM_BOOTS] = 0;
+	//	// why would we want the  default (no SD card) to be disabled?
+	//	// op_parameter[OP_PARAMETER_CAMERA_ENABLED] = 0;	// disabled
+	//	op_parameter[OP_PARAMETER_CAMERA_ENABLED] = 1;			  // enabled
+	//	op_parameter[OP_PARAMETER_MD_INTERVAL] = DPDINTERVAL;	  // Interval (ms) between frames in MD mode (0 inhibits)
+	//    op_parameter[OP_PARAMETER_FLASH_DURATION] = FLASHDURATION; // Duration (ms) that LED Flash is on
+	//    op_parameter[OP_PARAMETER_FLASH_LED] = 0; // Neither LED is selected
+	//	op_parameter[OP_PARAMETER_MODEL_NUMBER] = get_model_id(); // CV model ID
 
 	// One-off initialisation here...
 	startTime = xTaskGetTickCount();
@@ -1153,7 +1189,7 @@ static void vFatFsTask(void *pvParameters)
 		// Only if the file system is working should we add CLI commands for FATFS
 		cli_fatfs_init();
 
-		res = init_directories(&dirManager);
+		res = dir_mgr_init_directories(&dirManager);
 		if (res == FR_OK)
 		{
 
@@ -1165,11 +1201,11 @@ static void vFatFsTask(void *pvParameters)
 			{
 				// File exists and op_parameter[] has been initialised
 				enabled = op_parameter[OP_PARAMETER_CAMERA_ENABLED];
-				xprintf("'%s' found. (Next image #%d), camera %senabled. Flash duty cycle %d\%\r\n",
+				xprintf("'%s' found. (Next image #%d), camera %senabled. Flash brightness %d\%\r\n",
 						STATE_FILE,
 						fatfs_getImageSequenceNumber(),
 						(enabled == 1) ? "" : "not ",
-						op_parameter[OP_PARAMETER_LED_FLASH_DUTY]);
+						op_parameter[OP_PARAMETER_LED_BRIGHTNESS_PERCENT]);
 			}
 			else
 			{
@@ -1177,11 +1213,16 @@ static void vFatFsTask(void *pvParameters)
 				xprintf("'%s' NOT found. (Next image #1)\r\n", STATE_FILE);
 			}
 		}
+		else
+		{
+			// TODO what? Is this an error we must deal with?
+		}
 	}
 	else
 	{
 		// Failure.
 		xprintf("SD card initialisation failed (reason %d)\r\n", res);
+		selfTest_setErrorBits(1 << SELF_TEST_AI_NO_SD_CARD);
 	}
 
 	elapsedTime = xTaskGetTickCount() - startTime;
@@ -1220,6 +1261,12 @@ static void vFatFsTask(void *pvParameters)
 	{
 		xprintf("sendMsg=0x%x fail\r\n", sendMsg.msg_event);
 	}
+
+	// The semaphore lets the Image Task proceed
+	// xprintf("DEBUG: giving semaphore so Image Task can proceed\n");
+	xSemaphoreGive(xSDInitDoneSemaphore);
+
+	barrier_ready(&startupBarrier); // Call a function when every task reaches this point
 
 	// The task loops forever here, waiting for messages to arrive in its input queue
 	for (;;)
@@ -1332,6 +1379,24 @@ TaskHandle_t fatfs_createTask(int8_t priority, APP_WAKE_REASON_E wakeReason)
 					&fatFs_task_id) != pdPASS)
 	{
 		xprintf("Failed to create vFatFsTask\n");
+		configASSERT(0); // TODO add debug messages?
+	}
+
+	// Semaphore to flag that the final message has been sent and we can enter DPD
+	xSDInitDoneSemaphore = xSemaphoreCreateBinary();
+
+	if (xSDInitDoneSemaphore == NULL)
+	{
+		xprintf("Failed to create xSDInitDoneSemaphore\n");
+		configASSERT(0); // TODO add debug messages?
+	}
+
+	// Semaphore to flag that the final message has been sent and we can enter DPD
+	xSDInitDoneSemaphore = xSemaphoreCreateBinary();
+
+	if (xSDInitDoneSemaphore == NULL)
+	{
+		xprintf("Failed to create xSDInitDoneSemaphore\n");
 		configASSERT(0); // TODO add debug messages?
 	}
 

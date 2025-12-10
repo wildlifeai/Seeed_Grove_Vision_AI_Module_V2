@@ -45,7 +45,6 @@
 // #include "cisdp_cfg.h"
 #include "cisdp_sensor.h"
 
-#include "person_detect_model_data_vela.h"
 #include "common_config.h"
 
 #include "printf_x.h" // Print colours
@@ -441,10 +440,11 @@ int cv_init(bool security_enable, bool privilege_enable, int project_id, int dep
 
     static const tflite::Model *model = nullptr;
 
-#if (MODEL_LOAD_MODE == MODEL_FROM_C_FILE)
-    model = tflite::GetModel((const void *)g_person_detect_model_data_vela);
+    // TBP - I've removed the static model data inclusion here and all refernces to the embedded model within the app
+    // #if (MODEL_LOAD_MODE == MODEL_FROM_C_FILE)
+    //     model = tflite::GetModel((const void *)g_person_detect_model_data_vela);
 
-#elif (MODEL_LOAD_MODE == MODEL_FROM_FLASH)
+#if (MODEL_LOAD_MODE == MODEL_FROM_FLASH)
     model = load_model_from_flash();
 
 #elif (MODEL_LOAD_MODE == MODEL_FROM_SD_CARD)

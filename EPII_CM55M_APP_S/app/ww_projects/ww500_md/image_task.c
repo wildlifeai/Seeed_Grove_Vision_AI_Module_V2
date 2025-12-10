@@ -763,7 +763,7 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg)
             else
             {
                 XP_LT_RED;
-                xprintf("No person detected.\n");
+                xprintf("Target animal not detected.\n");
                 XP_WHITE;
 
                 // Send a message to the BLE processor so it can inform the user on the app immediately.

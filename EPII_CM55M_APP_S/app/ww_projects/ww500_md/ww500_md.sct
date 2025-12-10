@@ -58,10 +58,6 @@ LR_ROM3 CM55M_SRAM_BASE  CM55M_SRAM_SIZE{
   	* (.bss.jpg_data)
   	* (.bss.jpg_info_data)                        
   }
-
-  CM55M_SRAMB +0 {
-	person_detect_model_data_vela.o (+RO)                        
-  }
   
   CM55M_SRAMC +0 ALIGN 0x100 {
   	* (.bss.tensor_arena)                        

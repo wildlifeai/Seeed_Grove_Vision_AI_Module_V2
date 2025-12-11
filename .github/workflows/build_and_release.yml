@@ -4,10 +4,13 @@ on:
   push:
     branches:
       - main
+  pull_request:
+    branches:
+      - main
   workflow_dispatch: # Allow manual triggering
 
 jobs:
-  build-and-deploy:
+  build-and-test:
     runs-on: windows-latest
 
     env:
@@ -49,7 +52,6 @@ jobs:
           release_branches: main
           dry_run: true # Don't create tag yet, just calculate version
           tag_prefix: v
-          initial_version: 0.0.0
           
       - name: Generate Release Notes
         id: release_notes
@@ -88,9 +90,23 @@ jobs:
         working-directory: ./scripts # We'll create package.json here or run in root
 
       - name: Install Arm GNU Toolchain
-        uses: armada-project/arm-none-eabi-gcc-action@v1
-        with:
-          release: '13.2.Rel1' # Use a recent compatible version
+        shell: pwsh
+        run: |
+          $version = "13.2.rel1"
+          $url = "https://developer.arm.com/-/media/Files/downloads/gnu/13.2.rel1/binrel/arm-gnu-toolchain-13.2.rel1-mingw-w64-i686-arm-none-eabi.zip"
+          
+          Write-Host "Downloading ARM toolchain..."
+          Invoke-WebRequest -Uri $url -OutFile "arm-toolchain.zip"
+          
+          Write-Host "Extracting toolchain..."
+          Expand-Archive -Path "arm-toolchain.zip" -DestinationPath "C:\arm-toolchain" -Force
+          
+          # Find the bin directory
+          $binPath = Get-ChildItem -Path "C:\arm-toolchain" -Recurse -Directory -Filter "bin" | Select-Object -First 1
+          $toolchainPath = $binPath.Parent.FullName
+          
+          Write-Host "Toolchain installed at: $toolchainPath"
+          echo "$($binPath.FullName)" >> $env:GITHUB_PATH
 
       - name: Find GCC Path
         id: find_gcc
@@ -102,12 +118,13 @@ jobs:
           # The makefile expects forward slashes or escaped backslashes
           $binDir = $binDir -replace '\\', '/'
           echo "GNU_TOOLPATH=$binDir" >> $env:GITHUB_ENV
+          echo "gnu_toolpath=$binDir" >> $env:GITHUB_OUTPUT
 
       - name: Build Firmware (Make)
         working-directory: ./EPII_CM55M_APP_S
         run: |
           # Use the discovered toolchain path
-          make -j4 GNU_TOOLPATH="${{ env.GNU_TOOLPATH }}"
+          make -j4 GNU_TOOLPATH="${{ steps.find_gcc.outputs.gnu_toolpath }}"
 
       - name: Generate Firmware Image
         working-directory: ./we2_image_gen_local
@@ -129,10 +146,91 @@ jobs:
           if ($imgFile) {
             Write-Host "Found image: $($imgFile.FullName)"
             echo "FIRMWARE_PATH=$($imgFile.FullName)" >> $env:GITHUB_ENV
+            echo "firmware_path=$($imgFile.FullName)" >> $env:GITHUB_OUTPUT
           } else {
             Write-Error "No .img file found in output directory!"
             exit 1
           }
+
+      - name: Upload Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: firmware-image
+          path: ${{ steps.find_image.outputs.firmware_path }}
+          retention-days: 30
+
+  upload-to-supabase:
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      SYSTEM_EMAIL: ${{ secrets.SYSTEM_EMAIL }}
+      FALLBACK_USER_ID: ${{ secrets.FALLBACK_USER_ID }}
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download Build Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: firmware-image
+          path: ./firmware
+
+      - name: Calculate Semantic Version
+        id: semver
+        uses: mathieudutour/github-tag-action@v6.2
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          default_bump: patch
+          release_branches: main
+          dry_run: true
+          tag_prefix: v
+
+      - name: Generate Release Notes
+        id: release_notes
+        shell: bash
+        run: |
+          # Get commits since last tag
+          lastTag=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          
+          if [ -z "$lastTag" ]; then
+            # No previous tags, get all commits
+            commits=$(git log --pretty=format:"- %s (%h)" --no-merges)
+          else
+            # Get commits since last tag
+            commits=$(git log "$lastTag..HEAD" --pretty=format:"- %s (%h)" --no-merges)
+          fi
+          
+          # Save to environment variable
+          {
+            echo "RELEASE_NOTES<<EOF"
+            echo "$commits"
+            echo "EOF"
+          } >> "$GITHUB_ENV"
+          
+          echo "Generated release notes:"
+          echo "$commits"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Node Dependencies
+        run: npm install @supabase/supabase-js
+        working-directory: ./scripts
+
+      - name: Set Firmware Path
+        run: |
+          FIRMWARE_FILE=$(find ./firmware -name "*.img" -type f | head -n 1)
+          echo "FIRMWARE_PATH=$FIRMWARE_FILE" >> "$GITHUB_ENV"
+          echo "Found firmware at: $FIRMWARE_FILE"
 
       - name: Upload to Supabase
         working-directory: ./scripts

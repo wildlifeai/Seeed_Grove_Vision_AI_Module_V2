@@ -1,9 +1,8 @@
-name: Build and Release Himax Firmware
-
 on:
   push:
     branches:
       - main
+      - 'fix/firmware-upload-ci'
   workflow_dispatch: # Allow manual triggering
 
 jobs:
@@ -68,9 +67,10 @@ jobs:
         working-directory: ./scripts # We'll create package.json here or run in root
 
       - name: Install Arm GNU Toolchain
-        uses: armada-project/arm-none-eabi-gcc-action@v1
-        with:
-          release: '13.2.Rel1' # Use a recent compatible version
+        run: |
+          wget "https://developer.arm.com/-/media/Files/downloads/gnu/13.2.rel1/binrel/arm-gnu-toolchain-13.2.rel1-x86_64-arm-none-eabi.tar.xz"
+          tar -xf arm-gnu-toolchain-13.2.rel1-x86_64-arm-none-eabi.tar.xz
+          echo "$PWD/arm-gnu-toolchain-13.2.rel1-x86_64-arm-none-eabi/bin" >> $GITHUB_PATH
 
       - name: Find GCC Path
         id: find_gcc

@@ -76,7 +76,11 @@ jobs:
         id: find_gcc
         shell: bash
         run: |
-          GCC_PATH=$(which arm-none-eabi-gcc)
+          GCC_PATH=$(find $PWD -name "arm-none-eabi-gcc" -type f | head -n 1)
+          if [ -z "$GCC_PATH" ]; then
+            echo "Error: Could not find arm-none-eabi-gcc"
+            exit 1
+          fi
           BIN_DIR=$(dirname "$GCC_PATH")
           echo "GCC Bin Dir: $BIN_DIR"
           echo "GNU_TOOLPATH=$BIN_DIR/" >> $GITHUB_ENV

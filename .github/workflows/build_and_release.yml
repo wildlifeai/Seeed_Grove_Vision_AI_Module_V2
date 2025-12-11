@@ -115,6 +115,15 @@ jobs:
           make clean
           make -j"$(nproc)"
 
+      - name: Copy ELF to Image Gen Input Directory
+        run: |
+          echo "Copying compiled ELF file to image generation input directory..."
+          cp EPII_CM55M_APP_S/obj_epii_evb_icv30_bdv10/gnu_epii_evb_WLCSP65/EPII_CM55M_gnu_epii_evb_WLCSP65_s.elf \
+             we2_image_gen_local/input_case1_secboot/
+          
+          echo "Verifying ELF file exists:"
+          ls -lh we2_image_gen_local/input_case1_secboot/EPII_CM55M_gnu_epii_evb_WLCSP65_s.elf
+
       - name: Generate Firmware Image
         working-directory: ./we2_image_gen_local
         run: |

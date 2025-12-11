@@ -11,7 +11,7 @@ on:
 
 jobs:
   build-and-test:
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
 
     env:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
@@ -55,30 +55,28 @@ jobs:
           
       - name: Generate Release Notes
         id: release_notes
-        shell: pwsh
+        shell: bash
         run: |
           # Get commits since last tag
-          try {
-            $lastTag = git describe --tags --abbrev=0 2>$null
-          } catch {
-            $lastTag = $null
-          }
+          lastTag=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
           
-          if ([string]::IsNullOrEmpty($lastTag)) {
+          if [ -z "$lastTag" ]; then
             # No previous tags, get all commits
-            $commits = git log --pretty=format:"- %s (%h)" --no-merges
-          } else {
+            commits=$(git log --pretty=format:"- %s (%h)" --no-merges)
+          else
             # Get commits since last tag
-            $commits = git log "$lastTag..HEAD" --pretty=format:"- %s (%h)" --no-merges
-          }
+            commits=$(git log "$lastTag..HEAD" --pretty=format:"- %s (%h)" --no-merges)
+          fi
           
           # Save to environment variable
-          "RELEASE_NOTES<<EOF" | Out-File -FilePath $env:GITHUB_ENV -Append
-          $commits | Out-File -FilePath $env:GITHUB_ENV -Append
-          "EOF" | Out-File -FilePath $env:GITHUB_ENV -Append
+          {
+            echo "RELEASE_NOTES<<EOF"
+            echo "$commits"
+            echo "EOF"
+          } >> "$GITHUB_ENV"
           
-          Write-Host "Generated release notes:"
-          Write-Host $commits
+          echo "Generated release notes:"
+          echo "$commits"
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -90,67 +88,55 @@ jobs:
         working-directory: ./scripts # We'll create package.json here or run in root
 
       - name: Install Arm GNU Toolchain
-        shell: pwsh
         run: |
-          $version = "13.2.rel1"
-          $url = "https://developer.arm.com/-/media/Files/downloads/gnu/13.2.rel1/binrel/arm-gnu-toolchain-13.2.rel1-mingw-w64-i686-arm-none-eabi.zip"
+          COMPILER_VERSION="14.2"
+          TOOLCHAIN_URL="https://developer.arm.com/-/media/Files/downloads/gnu/${COMPILER_VERSION}.rel1/binrel/"
+          TOOL_XZ="arm-gnu-toolchain-${COMPILER_VERSION}.rel1-x86_64-arm-none-eabi.tar.xz"
           
-          Write-Host "Downloading ARM toolchain..."
-          Invoke-WebRequest -Uri $url -OutFile "arm-toolchain.zip"
+          echo "Downloading ARM toolchain..."
+          wget -q "${TOOLCHAIN_URL}${TOOL_XZ}"
           
-          Write-Host "Extracting toolchain..."
-          Expand-Archive -Path "arm-toolchain.zip" -DestinationPath "C:\arm-toolchain" -Force
+          echo "Extracting toolchain..."
+          tar -xf "$TOOL_XZ"
           
-          # Find the bin directory
-          $binPath = Get-ChildItem -Path "C:\arm-toolchain" -Recurse -Directory -Filter "bin" | Select-Object -First 1
-          $toolchainPath = $binPath.Parent.FullName
+          echo "Installing toolchain..."
+          sudo cp -r "arm-gnu-toolchain-${COMPILER_VERSION}.rel1-x86_64-arm-none-eabi" /usr/local/
           
-          Write-Host "Toolchain installed at: $toolchainPath"
-          echo "$($binPath.FullName)" >> $env:GITHUB_PATH
+          echo "Adding to PATH..."
+          echo "/usr/local/arm-gnu-toolchain-${COMPILER_VERSION}.rel1-x86_64-arm-none-eabi/bin" >> "$GITHUB_PATH"
 
-      - name: Find GCC Path
-        id: find_gcc
-        shell: pwsh
+      - name: Verify GCC Installation
         run: |
-          $gccPath = Get-Command arm-none-eabi-gcc | Select-Object -ExpandProperty Source
-          $binDir = Split-Path $gccPath -Parent
-          Write-Host "GCC Bin Dir: $binDir"
-          # The makefile expects forward slashes or escaped backslashes
-          $binDir = $binDir -replace '\\', '/'
-          echo "GNU_TOOLPATH=$binDir" >> $env:GITHUB_ENV
-          echo "gnu_toolpath=$binDir" >> $env:GITHUB_OUTPUT
+          arm-none-eabi-gcc --version
 
       - name: Build Firmware (Make)
         working-directory: ./EPII_CM55M_APP_S
         run: |
-          # Use the discovered toolchain path
-          make -j4 GNU_TOOLPATH="${{ steps.find_gcc.outputs.gnu_toolpath }}"
+          make clean
+          make -j"$(nproc)"
 
       - name: Generate Firmware Image
         working-directory: ./we2_image_gen_local
         run: |
-          # Ensure the tool has .exe extension for Windows execution
-          if (Test-Path we2_local_image_gen -PathType Leaf) {
-            Write-Host "Renaming binary to .exe"
-            Rename-Item we2_local_image_gen we2_local_image_gen.exe
-          }
+          # Make the binary executable
+          chmod +x we2_local_image_gen
+          
           # Run the image generation tool
-          .\we2_local_image_gen.exe project_case1_blp_wlcsp.json
+          ./we2_local_image_gen project_case1_blp_wlcsp.json
 
       - name: Find Generated Image
         id: find_image
-        shell: pwsh
         run: |
           # Find the .img file in the output directory
-          $imgFile = Get-ChildItem -Path ".\we2_image_gen_local\output_case1_sec_wlcsp" -Filter "*.img" -Recurse | Select-Object -First 1
-          if ($imgFile) {
-            Write-Host "Found image: $($imgFile.FullName)"
-            echo "FIRMWARE_PATH=$($imgFile.FullName)" >> $env:GITHUB_ENV
-            echo "firmware_path=$($imgFile.FullName)" >> $env:GITHUB_OUTPUT
-          } else {
-            Write-Error "No .img file found in output directory!"
+          imgFile=$(find ./we2_image_gen_local/output_case1_sec_wlcsp -name "*.img" -type f | head -n 1)
+          if [ -n "$imgFile" ]; then
+            echo "Found image: $imgFile"
+            echo "FIRMWARE_PATH=$imgFile" >> "$GITHUB_ENV"
+            echo "firmware_path=$imgFile" >> "$GITHUB_OUTPUT"
+          else
+            echo "Error: No .img file found in output directory!"
             exit 1
-          }
+          fi
 
       - name: Upload Build Artifact
         uses: actions/upload-artifact@v4

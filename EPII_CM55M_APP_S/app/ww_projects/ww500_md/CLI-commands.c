@@ -843,6 +843,8 @@ static BaseType_t prvLedFlash(char *pcWriteBuffer, size_t xWriteBufferLen, const
 	}
 	brightness = (uint16_t)paramLong;
 
+	// TBP added second parameter for duration
+	pcParameter = FreeRTOS_CLIGetParameter(pcCommandString, 2, &lParameterStringLength);
 	paramLong = strtol(pcParameter, &endptr, 10);
 
 	if (endptr == pcParameter || paramLong < 1 || paramLong > 1000)
@@ -1510,7 +1512,14 @@ static BaseType_t prvLoadModel(char *pcWriteBuffer, size_t xWriteBufferLen, cons
 	pcParameter = FreeRTOS_CLIGetParameter(pcCommandString, 1, &lParameterStringLength);
 	if ((pcParameter != NULL) && (lParameterStringLength > 0))
 	{
-		deploy_version = atoi(pcParameter);
+		// replaced atoi with strtol for better error checking
+		char *endptr;
+		deploy_version = strtol(pcParameter, &endptr, 10);
+		if (endptr == pcParameter || *endptr != '\0')
+		{
+			snprintf(pcWriteBuffer, xWriteBufferLen, "Error: Invalid version number provided.");
+			return pdFALSE;
+		}
 
 		send_msg.msg_event = APP_MSG_IMAGETASK_NN_UPDATE_MODEL;
 		// send_msg.msg_data = PROJECT_ID;			 // Pass project_id in msg_data

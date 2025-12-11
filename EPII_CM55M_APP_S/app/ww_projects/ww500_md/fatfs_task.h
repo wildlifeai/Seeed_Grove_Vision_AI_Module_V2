@@ -62,7 +62,7 @@ extern "C"
 		OP_PARAMETER_MD_INTERVAL,			   // 11 Interval (ms) between frames in motion detect mode (0 inhibits motion detection)
 		OP_PARAMETER_FLASH_DURATION,		   // 12 Duration (ms) that LED flash is on
 		OP_PARAMETER_FLASH_LED,				   // 13 LED bit mask: visible LED used = 1, infra-red LED used =2, none = 0
-		OP_PARAMETER_MODEL_NUMBER,			   // 12 Model number used for the NN model
+		OP_PARAMETER_MODEL_NUMBER,			   // 14 Model number used for the NN model
 		OP_PARAMETER_NUM_ENTRIES			   // Not an Operational Parameters - serves to count the of entries above here
 	} OP_PARAMETERS_E;
 

@@ -136,14 +136,16 @@ jobs:
       - name: Find Generated Image
         id: find_image
         run: |
-          # Find the .img file in the output directory
-          imgFile=$(find ./we2_image_gen_local/output_case1_sec_wlcsp -name "*.img" -type f | head -n 1)
-          if [ -n "$imgFile" ]; then
+          # Look for output.img - the complete firmware image
+          imgFile="./we2_image_gen_local/output_case1_sec_wlcsp/output.img"
+          if [ -f "$imgFile" ]; then
             echo "Found image: $imgFile"
             echo "FIRMWARE_PATH=$imgFile" >> "$GITHUB_ENV"
             echo "firmware_path=$imgFile" >> "$GITHUB_OUTPUT"
           else
-            echo "Error: No .img file found in output directory!"
+            echo "Error: output.img not found in output directory!"
+            echo "Available files:"
+            ls -lh ./we2_image_gen_local/output_case1_sec_wlcsp/
             exit 1
           fi
 
@@ -223,9 +225,18 @@ jobs:
 
       - name: Set Firmware Path
         run: |
-          FIRMWARE_FILE=$(find ./firmware -name "*.img" -type f | head -n 1)
-          echo "FIRMWARE_PATH=$FIRMWARE_FILE" >> "$GITHUB_ENV"
-          echo "Found firmware at: $FIRMWARE_FILE"
+          # The artifact contains output.img
+          FIRMWARE_FILE="./firmware/output.img"
+          if [ -f "$FIRMWARE_FILE" ]; then
+            echo "FIRMWARE_PATH=$FIRMWARE_FILE" >> "$GITHUB_ENV"
+            echo "Found firmware at: $FIRMWARE_FILE"
+            ls -lh "$FIRMWARE_FILE"
+          else
+            echo "Error: firmware file not found!"
+            echo "Available files in ./firmware:"
+            ls -lh ./firmware/
+            exit 1
+          fi
 
       - name: Upload to Supabase
         working-directory: ./scripts

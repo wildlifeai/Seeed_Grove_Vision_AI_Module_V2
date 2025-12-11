@@ -1,3 +1,5 @@
+name: Build and Release Himax Firmware
+
 on:
   push:
     branches:
@@ -91,6 +93,12 @@ jobs:
           # Use the discovered toolchain path
           make -j4 GNU_TOOLPATH="${{ env.GNU_TOOLPATH }}"
 
+      - name: Copy ELF to Image Gen Input Directory
+        run: |
+          echo "Copying compiled ELF file to image generation input directory..."
+          cp EPII_CM55M_APP_S/obj_epii_evb_icv30_bdv10/gnu_epii_evb_WLCSP65/EPII_CM55M_gnu_epii_evb_WLCSP65_s.elf \
+             we2_image_gen_local/input_case1_secboot/ # Destination must exist in repo
+
       - name: Generate Firmware Image
         working-directory: ./we2_image_gen_local
         run: |
@@ -104,15 +112,88 @@ jobs:
         shell: bash
         run: |
           # Find the .img file in the output directory
-          IMG_FILE=$(find ./output_case1_sec_wlcsp -name "*.img" | head -n 1)
+          # Note: working-directory is root here, so we must specify full relative path
+          IMG_FILE=$(find ./we2_image_gen_local/output_case1_sec_wlcsp -name "*.img" | head -n 1)
           
           if [ -n "$IMG_FILE" ]; then
             # Resolve absolute path or make relative to scripts folder if easier
             FULL_PATH=$(readlink -f "$IMG_FILE")
             echo "Found image: $FULL_PATH"
             echo "FIRMWARE_PATH=$FULL_PATH" >> $GITHUB_ENV
+            echo "firmware_path=$FULL_PATH" >> $GITHUB_OUTPUT
           else
             echo "No .img file found in output directory!"
+            echo "Checking we2_image_gen_local content:"
+            ls -R we2_image_gen_local
+            exit 1
+          fi
+
+      - name: Upload Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: firmware-image
+          path: ${{ steps.find_image.outputs.firmware_path }}
+          retention-days: 30
+
+  upload-to-supabase:
+    needs: build-and-deploy
+    runs-on: ubuntu-latest
+    if: success()
+    
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      SYSTEM_EMAIL: ${{ secrets.SYSTEM_EMAIL }}
+      FALLBACK_USER_ID: ${{ secrets.FALLBACK_USER_ID }}
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download Build Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: firmware-image
+          path: ./firmware
+
+      - name: Calculate Semantic Version
+        id: semver
+        uses: mathieudutour/github-tag-action@v6.2
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          default_bump: patch
+          release_branches: main
+          dry_run: true
+          tag_prefix: v
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Node Dependencies
+        run: npm install @supabase/supabase-js
+        working-directory: ./scripts
+
+      - name: Set Firmware Path
+        run: |
+          # The artifact contains output.img
+          FIRMWARE_FILE="./firmware/output.img"
+          
+          # Find actual filename if it's not output.img (e.g. if we uploaded with original name)
+          if [ ! -f "$FIRMWARE_FILE" ]; then
+             FIRMWARE_FILE=$(find ./firmware -name "*.img" | head -n 1)
+          fi
+
+          if [ -n "$FIRMWARE_FILE" ] && [ -f "$FIRMWARE_FILE" ]; then
+            FULL_PATH=$(readlink -f "$FIRMWARE_FILE")
+            echo "FIRMWARE_PATH=$FULL_PATH" >> "$GITHUB_ENV"
+            echo "Found firmware at: $FULL_PATH"
+          else
+            echo "Error: firmware file not found!"
+            ls -R ./firmware/
             exit 1
           fi
 
@@ -123,7 +204,7 @@ jobs:
         run: node upload_firmware.js
         
       - name: Create Git Tag
-        if: success()
+        if: success() && (github.ref == 'refs/heads/main')
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"

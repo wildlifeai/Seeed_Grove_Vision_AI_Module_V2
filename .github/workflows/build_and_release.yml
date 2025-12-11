@@ -4,38 +4,19 @@ on:
   push:
     branches:
       - main
-  pull_request:
-    branches:
-      - main
   workflow_dispatch: # Allow manual triggering
 
 jobs:
-  build-and-test:
+  build-and-deploy:
     runs-on: ubuntu-latest
 
     env:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-      # Optional: Override firmware type (default: himax)
-      # FIRMWARE_TYPE: himax
-      # Optional: Override storage bucket name (default: firmware)
-      # For different environments, you can set: firmware-staging, firmware-prod, etc.
-      # BUCKET_NAME: firmware
-      # Optional: Provide system user ID for modified_by field
-      # If not provided, script will query database for system user
-      # SYSTEM_USER_ID: 00000000-0000-0000-0000-000000000000
       # Optional: Email address to query for system user
       SYSTEM_EMAIL: ${{ secrets.SYSTEM_EMAIL }}
       # Optional: Fallback user ID if database queries fail
       FALLBACK_USER_ID: ${{ secrets.FALLBACK_USER_ID }}
-      # Path to the generated image. Adjust if the output folder name changes.
-      # Based on project_case1_blp_wlcsp.json: "output_folder": "output_case1_sec_wlcsp"
-      # And the makefile APPL name: EPII_CM55M
-      # The final image name usually follows a pattern. Checking directory listing...
-      # "Seeed_SenseCraft_AI_2023_12_19T183401_402.img" was in the root.
-      # But the tool generates it in the output folder.
-      # We will assume the output is in we2_image_gen_local/output_case1_sec_wlcsp/
-      # We might need to find the .img file dynamically.
 
     steps:
       - name: Checkout Repository
@@ -52,31 +33,30 @@ jobs:
           release_branches: main
           dry_run: true # Don't create tag yet, just calculate version
           tag_prefix: v
+          initial_version: 0.0.0
           
       - name: Generate Release Notes
         id: release_notes
         shell: bash
         run: |
           # Get commits since last tag
-          lastTag=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
           
-          if [ -z "$lastTag" ]; then
+          if [ -z "$LAST_TAG" ]; then
             # No previous tags, get all commits
-            commits=$(git log --pretty=format:"- %s (%h)" --no-merges)
+            COMMITS=$(git log --pretty=format:"- %s (%h)" --no-merges)
           else
             # Get commits since last tag
-            commits=$(git log "$lastTag..HEAD" --pretty=format:"- %s (%h)" --no-merges)
+            COMMITS=$(git log "$LAST_TAG..HEAD" --pretty=format:"- %s (%h)" --no-merges)
           fi
           
           # Save to environment variable
-          {
-            echo "RELEASE_NOTES<<EOF"
-            echo "$commits"
-            echo "EOF"
-          } >> "$GITHUB_ENV"
+          echo "RELEASE_NOTES<<EOF" >> $GITHUB_ENV
+          echo "$COMMITS" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
           
           echo "Generated release notes:"
-          echo "$commits"
+          echo "$COMMITS"
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -88,153 +68,47 @@ jobs:
         working-directory: ./scripts # We'll create package.json here or run in root
 
       - name: Install Arm GNU Toolchain
-        run: |
-          COMPILER_VERSION="14.2"
-          TOOLCHAIN_URL="https://developer.arm.com/-/media/Files/downloads/gnu/${COMPILER_VERSION}.rel1/binrel/"
-          TOOL_XZ="arm-gnu-toolchain-${COMPILER_VERSION}.rel1-x86_64-arm-none-eabi.tar.xz"
-          
-          echo "Downloading ARM toolchain..."
-          wget -q "${TOOLCHAIN_URL}${TOOL_XZ}"
-          
-          echo "Extracting toolchain..."
-          tar -xf "$TOOL_XZ"
-          
-          echo "Installing toolchain..."
-          sudo cp -r "arm-gnu-toolchain-${COMPILER_VERSION}.rel1-x86_64-arm-none-eabi" /usr/local/
-          
-          echo "Adding to PATH..."
-          echo "/usr/local/arm-gnu-toolchain-${COMPILER_VERSION}.rel1-x86_64-arm-none-eabi/bin" >> "$GITHUB_PATH"
+        uses: armada-project/arm-none-eabi-gcc-action@v1
+        with:
+          release: '13.2.Rel1' # Use a recent compatible version
 
-      - name: Verify GCC Installation
+      - name: Find GCC Path
+        id: find_gcc
+        shell: bash
         run: |
-          arm-none-eabi-gcc --version
+          GCC_PATH=$(which arm-none-eabi-gcc)
+          BIN_DIR=$(dirname "$GCC_PATH")
+          echo "GCC Bin Dir: $BIN_DIR"
+          echo "GNU_TOOLPATH=$BIN_DIR/" >> $GITHUB_ENV
 
       - name: Build Firmware (Make)
         working-directory: ./EPII_CM55M_APP_S
         run: |
-          make clean
-          make -j"$(nproc)"
-
-      - name: Copy ELF to Image Gen Input Directory
-        run: |
-          echo "Copying compiled ELF file to image generation input directory..."
-          cp EPII_CM55M_APP_S/obj_epii_evb_icv30_bdv10/gnu_epii_evb_WLCSP65/EPII_CM55M_gnu_epii_evb_WLCSP65_s.elf \
-             we2_image_gen_local/input_case1_secboot/
-          
-          echo "Verifying ELF file exists:"
-          ls -lh we2_image_gen_local/input_case1_secboot/EPII_CM55M_gnu_epii_evb_WLCSP65_s.elf
+          # Use the discovered toolchain path
+          make -j4 GNU_TOOLPATH="${{ env.GNU_TOOLPATH }}"
 
       - name: Generate Firmware Image
         working-directory: ./we2_image_gen_local
         run: |
-          # Make the binary executable
+          # Ensure execution permissions
           chmod +x we2_local_image_gen
-          
           # Run the image generation tool
           ./we2_local_image_gen project_case1_blp_wlcsp.json
 
       - name: Find Generated Image
         id: find_image
-        run: |
-          # Look for output.img - the complete firmware image
-          imgFile="./we2_image_gen_local/output_case1_sec_wlcsp/output.img"
-          if [ -f "$imgFile" ]; then
-            echo "Found image: $imgFile"
-            echo "FIRMWARE_PATH=$imgFile" >> "$GITHUB_ENV"
-            echo "firmware_path=$imgFile" >> "$GITHUB_OUTPUT"
-          else
-            echo "Error: output.img not found in output directory!"
-            echo "Available files:"
-            ls -lh ./we2_image_gen_local/output_case1_sec_wlcsp/
-            exit 1
-          fi
-
-      - name: Upload Build Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: firmware-image
-          path: ${{ steps.find_image.outputs.firmware_path }}
-          retention-days: 30
-
-  upload-to-supabase:
-    needs: build-and-test
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    
-    env:
-      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-      SYSTEM_EMAIL: ${{ secrets.SYSTEM_EMAIL }}
-      FALLBACK_USER_ID: ${{ secrets.FALLBACK_USER_ID }}
-
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Download Build Artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: firmware-image
-          path: ./firmware
-
-      - name: Calculate Semantic Version
-        id: semver
-        uses: mathieudutour/github-tag-action@v6.2
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          default_bump: patch
-          release_branches: main
-          dry_run: true
-          tag_prefix: v
-
-      - name: Generate Release Notes
-        id: release_notes
         shell: bash
         run: |
-          # Get commits since last tag
-          lastTag=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          # Find the .img file in the output directory
+          IMG_FILE=$(find ./output_case1_sec_wlcsp -name "*.img" | head -n 1)
           
-          if [ -z "$lastTag" ]; then
-            # No previous tags, get all commits
-            commits=$(git log --pretty=format:"- %s (%h)" --no-merges)
+          if [ -n "$IMG_FILE" ]; then
+            # Resolve absolute path or make relative to scripts folder if easier
+            FULL_PATH=$(readlink -f "$IMG_FILE")
+            echo "Found image: $FULL_PATH"
+            echo "FIRMWARE_PATH=$FULL_PATH" >> $GITHUB_ENV
           else
-            # Get commits since last tag
-            commits=$(git log "$lastTag..HEAD" --pretty=format:"- %s (%h)" --no-merges)
-          fi
-          
-          # Save to environment variable
-          {
-            echo "RELEASE_NOTES<<EOF"
-            echo "$commits"
-            echo "EOF"
-          } >> "$GITHUB_ENV"
-          
-          echo "Generated release notes:"
-          echo "$commits"
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Install Node Dependencies
-        run: npm install @supabase/supabase-js
-        working-directory: ./scripts
-
-      - name: Set Firmware Path
-        run: |
-          # The artifact contains output.img
-          FIRMWARE_FILE="./firmware/output.img"
-          if [ -f "$FIRMWARE_FILE" ]; then
-            echo "FIRMWARE_PATH=$FIRMWARE_FILE" >> "$GITHUB_ENV"
-            echo "Found firmware at: $FIRMWARE_FILE"
-            ls -lh "$FIRMWARE_FILE"
-          else
-            echo "Error: firmware file not found!"
-            echo "Available files in ./firmware:"
-            ls -lh ./firmware/
+            echo "No .img file found in output directory!"
             exit 1
           fi
 

@@ -130,8 +130,9 @@ typedef enum
     TAG_GPS_LONGITUDE = 0x0004,
     TAG_GPS_ALTITUDE_REF = 0x0005,
     TAG_GPS_ALTITUDE = 0x0006,
-    TAG_NN_DATA = 0xC000,     // Neural network output array - arbitrary custom tag ID
-    TAG_USER_COMMENT = 0x9286 // Standard EXIF UserComment tag for model results
+    TAG_NN_DATA = 0xC000,           // Neural network output array - arbitrary custom tag ID
+    TAG_USER_COMMENT = 0x9286,      // Standard EXIF UserComment tag for summary text
+    TAG_WW_CONFIDENCE_BASE = 0xF300 // Private tag range base for confidence data (0xF300-0xF3FF)
 } ExifTagID;
 
 // EXIF data types
@@ -2086,12 +2087,12 @@ static void addIFD(ExifTagID tagID, uint8_t *entry_ptr, void *tagData)
     }
     default:
     {
-        // Handle dynamic confidence tags (0xF300 range)
+        // Handle dynamic confidence tags (private tag range 0xF300-0xF3FF)
         // Even tags (0xF300, 0xF302, ...) are SHORT (confidence percentage)
         // Odd tags (0xF301, 0xF303, ...) are ASCII (labels)
-        if (tagID >= TAG_USER_COMMENT && tagID < (TAG_USER_COMMENT + MAX_CLASSES * 2))
+        if (tagID >= TAG_WW_CONFIDENCE_BASE && tagID < (TAG_WW_CONFIDENCE_BASE + MAX_CLASSES * 2))
         {
-            if ((tagID - TAG_USER_COMMENT) % 2 == 0)
+            if ((tagID - TAG_WW_CONFIDENCE_BASE) % 2 == 0)
             {
                 // Even offset: confidence value (SHORT)
                 uint16_t value = *(uint16_t *)tagData;

@@ -78,16 +78,19 @@ SECTIONS
     {
         *libdriver.*:*(.text* .rodata*)
     } > CM55M_S_SRAM
-
-    .model : ALIGN(4)
-    {
-        *person_detect_model_data_vela.o*(.text* .rodata*)
-    } > CM55M_S_SRAM
   
     .noinit (NOLOAD): ALIGN(4)
     {
         *(.bss.NoInit*)
         *(.noinit*)
+    } > CM55M_S_SRAM
+
+    /* Reserve a fixed block for TensorFlow Lite arena */
+    .tensor_arena (NOLOAD) :
+    {
+        __tensor_arena_start__ = .;
+        . = . + 512K;   /* reserve 512 KB */
+        __tensor_arena_end__ = .;
     } > CM55M_S_SRAM
 
     .text : ALIGN(4)

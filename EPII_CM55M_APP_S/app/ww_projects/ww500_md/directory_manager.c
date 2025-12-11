@@ -22,9 +22,17 @@
 
 /*************************************** Definitions *******************************************/
 
-#define MAXIMAGEDIRECTORIES	999
+#define MAXIMAGEDIRECTORIES 999
 
 /*************************************** Local variables *******************************************/
+
+// const char *folder_defaults[DIR_COUNT] = {
+//     "config/",
+//     "images/2025/08/06/",
+//     "tflite_model/",
+//     "logs/",
+//     "models/"
+// };
 
 /*************************************** Global variables *******************************************/
 
@@ -106,6 +114,18 @@ FRESULT dir_mgr_init_directories(directoryManager_t *dirManager)
 
 	return res;
 }
+
+// FRESULT init_directories(DirectoryManager *manager) {
+//     for (int i = 0; i < DIR_COUNT; i++) {
+//         strncpy(manager->dirs[i].path, folder_defaults[i], MAX_DIR_NAME_LEN);
+//         manager->dirs[i].res = create_path(manager->dirs[i].path);
+//         if (manager->dirs[i].res != FR_OK && manager->dirs[i].res != FR_EXIST) {
+//             printf("Error creating %s: %d\n", manager->dirs[i].path, manager->dirs[i].res);
+//             return manager->dirs[i].res;
+//         }
+//     }
+//     return FR_OK;
+// }
 
 /**
  * Creates a new folder for image captures when threshold met.

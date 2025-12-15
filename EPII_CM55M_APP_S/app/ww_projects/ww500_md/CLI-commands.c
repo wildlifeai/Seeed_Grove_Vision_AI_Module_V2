@@ -248,6 +248,9 @@ static BaseType_t prvGetgps(char *writeBuffer, size_t writeBufferLen, const char
 static BaseType_t prvExifGpsTests(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 static BaseType_t prvLoadModel(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 
+// *** CODE CHANGE: Added function declaration for prvSetDeploymentId ***
+static BaseType_t prvSetDeploymentId(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
+
 static BaseType_t prvSetOpParam(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 static BaseType_t prvGetOpParam(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 
@@ -411,6 +414,14 @@ static const CLI_Command_Definition_t xLoadModel = {
 	1			  /* One parameter expected */
 };
 
+/* Structure that defines the "setdid" command line command. */
+static const CLI_Command_Definition_t xSetDeploymentId = {
+	"setdid",
+	"setdid <id>:\r\n Set Deployment ID\r\n",
+	prvSetDeploymentId,
+	1
+};
+
 /* Structure that defines the "i2c" command line command. */
 static const CLI_Command_Definition_t xI2C = {
 	"i2c", /* The command string to type. */
@@ -538,9 +549,48 @@ static BaseType_t prvTaskStateCmd(char *pcWriteBuffer, size_t xWriteBufferLen, c
 	}
 	else
 	{
-		// Return for more
 		return pdTRUE;
 	}
+}
+
+// *** CODE CHANGE: Added prvSetDeploymentId function implementation ***
+static BaseType_t prvSetDeploymentId(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString)
+{
+	const char *pcParameter;
+	BaseType_t lParameterStringLength;
+	int deployment_id;
+	APP_MSG_T send_msg;
+
+	/* Get parameter - this is the deployment ID */
+	pcParameter = FreeRTOS_CLIGetParameter(pcCommandString, 1, &lParameterStringLength);
+	if ((pcParameter != NULL) && (lParameterStringLength > 0))
+	{
+		char *endptr;
+		deployment_id = strtol(pcParameter, &endptr, 10);
+		if (endptr == pcParameter || *endptr != '\0')
+		{
+			snprintf(pcWriteBuffer, xWriteBufferLen, "Error: Invalid deployment ID provided.");
+			return pdFALSE;
+		}
+
+		send_msg.msg_event = APP_MSG_IMAGETASK_SET_DEPLOYMENT_ID;
+		send_msg.msg_data = deployment_id; // Pass deployment_id in msg_data
+
+		if (xQueueSend(xImageTaskQueue, (void *)&send_msg, __QueueSendTicksToWait) == pdTRUE)
+		{
+			snprintf(pcWriteBuffer, xWriteBufferLen, "Requested deployment ID set to %d", deployment_id);
+		}
+		else
+		{
+			snprintf(pcWriteBuffer, xWriteBufferLen, "Failed to send deployment ID update request");
+		}
+	}
+	else
+	{
+		snprintf(pcWriteBuffer, xWriteBufferLen, "Error: Must supply a deployment ID");
+	}
+
+	return pdFALSE;
 }
 
 //// Set or clear a boolean called verbose (not used at the moment, but could be!
@@ -1991,6 +2041,8 @@ static void vRegisterCLICommands(void)
 	FreeRTOS_CLIRegisterCommand(&xGetGps);
 	FreeRTOS_CLIRegisterCommand(&xGpsTests);  // Runs several UTC tests
 	FreeRTOS_CLIRegisterCommand(&xLoadModel); // Load model by version number
+	// *** CODE CHANGE: Added registration for xSetDeploymentId command ***
+	FreeRTOS_CLIRegisterCommand(&xSetDeploymentId); // Set Deployment ID
 
 	FreeRTOS_CLIRegisterCommand(&xSetUtc);	 // Sets time from a UTC string
 	FreeRTOS_CLIRegisterCommand(&xGetUtc);	 // Prints UTC time (once)

@@ -197,6 +197,9 @@ uint16_t op_parameter[OP_PARAMETER_NUM_ENTRIES] = {
 	0				   // 13 LED bit mask: vis=1, IR=2, none=0)
 };
 
+// Global Deployment ID (default "00001")
+char g_deploymentId[64] = "00001";
+
 /********************************** Private Function definitions  *************************************/
 
 /** Another task asks us to write a file for them
@@ -759,6 +762,24 @@ static FRESULT load_configuration(const char *filename, directoryManager_t *dirM
 				continue;
 			}
 
+			// *** CODE CHANGE: Check for DEPLOYMENT_ID before parsing as index/value ***
+			if (strcmp(token, "DEPLOYMENT_ID") == 0)
+			{
+				token = strtok(NULL, " ");
+				if (token != NULL)
+				{
+					// Remove any trailing newline/cr that might have survived or been part of the token
+					size_t len = strlen(token);
+					if (len > 0 && (token[len-1] == '\r' || token[len-1] == '\n'))
+						token[len-1] = '\0';
+					
+					strncpy(g_deploymentId, token, sizeof(g_deploymentId) - 1);
+					g_deploymentId[sizeof(g_deploymentId) - 1] = '\0';
+					xprintf("Loaded Deployment ID: %s\n", g_deploymentId);
+				}
+				continue;
+			}
+
 			index = (uint8_t)atoi(token);
 
 			token = strtok(NULL, " ");
@@ -887,6 +908,10 @@ static FRESULT save_configuration(const char *filename, directoryManager_t *dirM
 			snprintf(line, sizeof(line), "%d %d\n", i, op_parameter[i]);
 			f_write(&dirManager->configFile, line, strlen(line), &bytesWritten);
 		}
+
+		// *** CODE CHANGE: Write Deployment ID ***
+		snprintf(line, sizeof(line), "DEPLOYMENT_ID %s\n", g_deploymentId);
+		f_write(&dirManager->configFile, line, strlen(line), &bytesWritten);
 
 		// Close file and restore original directory
 		res = f_close(&dirManager->configFile);

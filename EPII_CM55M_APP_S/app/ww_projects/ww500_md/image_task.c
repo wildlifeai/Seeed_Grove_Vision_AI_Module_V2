@@ -2221,16 +2221,18 @@ static uint16_t build_exif_segment(int8_t *outCategories, uint8_t categoriesCoun
     memset(&confidence_data, 0, sizeof(confidence_data));
     memset(user_comment, 0, sizeof(user_comment));
 
+    // Start with Deployment ID
+    int written = snprintf(user_comment, sizeof(user_comment), "Deployment ID: %s; ", g_deploymentId);
+    char *ptr = user_comment + written;
+    int remaining = sizeof(user_comment) - 1 - written;
+
 #if ENABLE_EXIF_CONFIDENCE
     cv_get_confidence_data(&confidence_data);
     bool has_confidence_data = (confidence_data.class_count > 0 && confidence_data.class_count <= MAX_CLASSES);
 
-    // Build UserComment string with model results
-    if (has_confidence_data)
+    // Append model results to UserComment
+    if (has_confidence_data && remaining > 0)
     {
-        char *ptr = user_comment;
-        int remaining = sizeof(user_comment) - 1;
-
         xprintf("EXIF: Building UserComment with %d classes\n", confidence_data.class_count);
 
         for (uint8_t i = 0; i < confidence_data.class_count && i < EXIF_MAX_DYNAMIC_CLASSES; i++)
@@ -2239,7 +2241,7 @@ static uint16_t build_exif_segment(int8_t *outCategories, uint8_t categoriesCoun
             int conf = confidence_data.confidence_percent[i];
 
             // Format: "Class: label (conf%); "
-            int written = snprintf(ptr, remaining, "%s: %d%%; ", label, conf);
+            written = snprintf(ptr, remaining, "%s: %d%%; ", label, conf);
 
             if (written > 0 && written < remaining)
             {
@@ -2256,9 +2258,9 @@ static uint16_t build_exif_segment(int8_t *outCategories, uint8_t categoriesCoun
     bool has_confidence_data = false;
 #endif
 
-    // IFD count: base entries (9) + UserComment (1 if has confidence data)
+    // IFD count: base entries (9) + UserComment (if not empty)
     uint16_t dynamic_ifd_count = IFD0_ENTRY_COUNT;
-    if (has_confidence_data && user_comment[0] != '\0')
+    if (user_comment[0] != '\0')
     {
         dynamic_ifd_count += 1; // Add one entry for UserComment
     }
@@ -2337,14 +2339,12 @@ static uint16_t build_exif_segment(int8_t *outCategories, uint8_t categoriesCoun
     addIFD(TAG_CREATE_DATE, ifd_start + (entry++ * 12), timestamp);
     addIFD(TAG_NN_DATA, ifd_start + (entry++ * 12), nnData); // Neural network output (raw, for backwards compatibility)
 
-#if ENABLE_EXIF_CONFIDENCE
-    // Add UserComment with model results if available
-    if (has_confidence_data && user_comment[0] != '\0')
+    // Add UserComment if not empty
+    if (user_comment[0] != '\0')
     {
         xprintf("EXIF: Adding UserComment: %s\n", user_comment);
         addIFD(TAG_USER_COMMENT, ifd_start + (entry++ * 12), user_comment);
     }
-#endif
 
     // GPS:
     addIFD(TAG_GPS_IFD_POINTER, ifd_start + (entry++ * 12), &gps_ifd_offset);

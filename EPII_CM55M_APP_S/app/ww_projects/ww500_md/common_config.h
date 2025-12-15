@@ -50,4 +50,6 @@
 #error "PROJECT_ID must be the last 4 digits (0-9999)."
 #endif
 
+extern char g_deploymentId[64];
+
 #endif /* APP_SCENARIO_ALLON_SENSOR_TFLM_COMMON_CONFIG_H_ */

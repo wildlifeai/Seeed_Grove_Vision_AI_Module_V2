@@ -102,8 +102,8 @@ jobs:
       - name: Generate Firmware Image
         working-directory: ./we2_image_gen_local_dpd
         run: |
-          # Ensure execution permissions
-          chmod +x we2_local_image_gen
+          # Ensure execution permissions for all tools
+          chmod -R +x .
           # Run the image generation tool
           ./we2_local_image_gen project_case1_blp_wlcsp_rc24m.json
 

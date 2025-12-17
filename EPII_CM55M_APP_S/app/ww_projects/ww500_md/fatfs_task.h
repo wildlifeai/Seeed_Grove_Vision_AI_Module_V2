@@ -63,6 +63,14 @@ extern "C"
 		OP_PARAMETER_FLASH_DURATION,		   // 12 Duration (ms) that LED flash is on
 		OP_PARAMETER_FLASH_LED,				   // 13 LED bit mask: visible LED used = 1, infra-red LED used =2, none = 0
 		OP_PARAMETER_MODEL_NUMBER,			   // 14 Model number used for the NN model
+		OP_PARAMETER_DEPLOYMENT_ID_CHUNK_1 = 20, // 20 Deployment ID Chunk 1 (Hex chars 0-3) - OP15-19 reserved for future use
+		OP_PARAMETER_DEPLOYMENT_ID_CHUNK_2,   // 21 Deployment ID Chunk 2 (Hex chars 4-7)
+		OP_PARAMETER_DEPLOYMENT_ID_CHUNK_3,   // 22 Deployment ID Chunk 3 (Hex chars 8-11)
+		OP_PARAMETER_DEPLOYMENT_ID_CHUNK_4,   // 23 Deployment ID Chunk 4 (Hex chars 12-15)
+		OP_PARAMETER_DEPLOYMENT_ID_CHUNK_5,   // 24 Deployment ID Chunk 5 (Hex chars 16-19)
+		OP_PARAMETER_DEPLOYMENT_ID_CHUNK_6,   // 25 Deployment ID Chunk 6 (Hex chars 20-23)
+		OP_PARAMETER_DEPLOYMENT_ID_CHUNK_7,   // 26 Deployment ID Chunk 7 (Hex chars 24-27)
+		OP_PARAMETER_DEPLOYMENT_ID_CHUNK_8,   // 27 Deployment ID Chunk 8 (Hex chars 28-31)
 		OP_PARAMETER_NUM_ENTRIES			   // Not an Operational Parameters - serves to count the of entries above here
 	} OP_PARAMETERS_E;
 
@@ -123,6 +131,9 @@ extern "C"
 
 	// Increment one of the Operational Parameters
 	void fatfs_incrementOperationalParameter(OP_PARAMETERS_E parameter);
+
+	// Reconstruct deployment ID UUID from OP20-OP27 chunks
+	void fatfs_getDeploymentId(char *deployment_id_buffer, size_t buffer_size);
 
 	// Load labels from SD card text file
 	int fatfs_load_labels(const char *path, char labels[][48], int *label_count, int max_labels, int max_label_len);

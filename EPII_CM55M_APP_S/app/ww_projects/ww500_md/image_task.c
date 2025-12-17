@@ -130,9 +130,9 @@ typedef enum
     TAG_GPS_LONGITUDE = 0x0004,
     TAG_GPS_ALTITUDE_REF = 0x0005,
     TAG_GPS_ALTITUDE = 0x0006,
-    TAG_NN_DATA = 0xC000,           // Neural network output array - arbitrary custom tag ID
-    TAG_USER_COMMENT = 0x9286,      // Standard EXIF UserComment tag for summary text
-    TAG_WW_CONFIDENCE_BASE = 0xF300 // Private tag range base for confidence data (0xF300-0xF3FF)
+    TAG_NN_DATA = 0xF100,
+    TAG_DEPLOYMENT_ID = 0xF200,		   // Deployment ID (matches ww130_cli convention)
+    TAG_WW_CONFIDENCE_BASE = 0xF300	   // Base for confidence tags (0xF300, 0xF301, ...)
 } ExifTagID;
 
 // EXIF data types
@@ -1987,6 +1987,7 @@ static void addIFD(ExifTagID tagID, uint8_t *entry_ptr, void *tagData)
     case TAG_MAKE:
     case TAG_MODEL:
     case TAG_USER_COMMENT:
+    case TAG_DEPLOYMENT_ID:
     case TAG_GPS_LATITUDE_REF:
     case TAG_GPS_LONGITUDE_REF:
     {
@@ -2256,12 +2257,23 @@ static uint16_t build_exif_segment(int8_t *outCategories, uint8_t categoriesCoun
     bool has_confidence_data = false;
 #endif
 
-    // IFD count: base entries (9) + UserComment (1 if has confidence data)
+	// Get deployment ID from operational parameters
+	char deployment_id[37];
+	fatfs_getDeploymentId(deployment_id, sizeof(deployment_id));
+	
+	// Only include in EXIF if not all zeros (i.e., a deployment is active)
+	bool has_deployment_id = (strcmp(deployment_id, "00000000-0000-0000-0000-000000000000") != 0);
+
+    // IFD count: base entries (9) + UserComment (1 if has confidence data) + DeploymentID (1 if has deployment ID)
     uint16_t dynamic_ifd_count = IFD0_ENTRY_COUNT;
     if (has_confidence_data && user_comment[0] != '\0')
     {
         dynamic_ifd_count += 1; // Add one entry for UserComment
     }
+	if (has_deployment_id)
+	{
+		dynamic_ifd_count += 1; // Add one entry for DeploymentID
+	}
 
     // Prepare the timestamp
     exif_utc_get_rtc_as_exif_string(timestamp, sizeof(timestamp));
@@ -2345,6 +2357,13 @@ static uint16_t build_exif_segment(int8_t *outCategories, uint8_t categoriesCoun
         addIFD(TAG_USER_COMMENT, ifd_start + (entry++ * 12), user_comment);
     }
 #endif
+
+	// Add deployment ID if present (not all zeros)
+	if (has_deployment_id)
+	{
+		xprintf("EXIF: Adding DeploymentID: %s\n", deployment_id);
+		addIFD(TAG_DEPLOYMENT_ID, ifd_start + (entry++ * 12), deployment_id);
+	}
 
     // GPS:
     addIFD(TAG_GPS_IFD_POINTER, ifd_start + (entry++ * 12), &gps_ifd_offset);

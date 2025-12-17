@@ -194,7 +194,10 @@ uint16_t op_parameter[OP_PARAMETER_NUM_ENTRIES] = {
 	1,				   // 10 0 = disabled, 1 = enabled
 	DPDINTERVAL,	   // 11 Interval (ms) between frames in MD mode (0 inhibits)
 	FLASHDURATION,	   // 12 Duration (ms) that LED Flash is on
-	0				   // 13 LED bit mask: vis=1, IR=2, none=0)
+	0,				   // 13 LED bit mask: vis=1, IR=2, none=0
+	0,				   // 14 OP_PARAMETER_MODEL_NUMBER
+	0, 0, 0, 0, 0,	   // 15-19 Reserved for future use
+	0, 0, 0, 0, 0, 0, 0, 0  // 20-27 Deployment ID chunks
 };
 
 /********************************** Private Function definitions  *************************************/
@@ -1534,4 +1537,54 @@ int fatfs_load_labels(const char *path, char labels[][48], int *label_count, int
 int fatfs_unzip_manifest(void)
 {
 	return fatfs_unzip_manifest_zip();
+}
+
+/**
+ * Reconstruct deployment ID UUID from operational parameters OP20-OP27
+ * 
+ * Algorithm per FIRMWARE_DEPLOYMENT_ID_SPEC.md:
+ * 1. Read OP20-OP27 (8 uint16_t values)
+ * 2. If all are 0, return "00000000-0000-0000-0000-000000000000"
+ * 3. Convert each to 4-char hex string (with leading zeros)
+ * 4. Insert hyphens at positions 8, 12, 16, 20 (UUID format)
+ * 
+ * @param deployment_id_buffer Output buffer (min 37 bytes for UUID + null)
+ * @param buffer_size Size of output buffer
+ */
+void fatfs_getDeploymentId(char *deployment_id_buffer, size_t buffer_size)
+{
+	if (buffer_size < 37) {
+		// Buffer too small for UUID format
+		deployment_id_buffer[0] = '\0';
+		return;
+	}
+	
+	// Read 8 chunks from OP20-OP27
+	uint16_t chunks[8];
+	bool all_zero = true;
+	
+	for (int i = 0; i < 8; i++) {
+		chunks[i] = fatfs_getOperationalParameter(OP_PARAMETER_DEPLOYMENT_ID_CHUNK_1 + i);
+		if (chunks[i] != 0) {
+			all_zero = false;
+		}
+	}
+	
+	// All zeros = no deployment
+	if (all_zero) {
+		strncpy(deployment_id_buffer, "00000000-0000-0000-0000-000000000000", buffer_size);
+		deployment_id_buffer[buffer_size - 1] = '\0';
+		return;
+	}
+	
+	// Reconstruct UUID: XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX
+	// Chunks map to: 01-2-3-4-567 (each chunk = 4 hex chars)
+	snprintf(deployment_id_buffer, buffer_size,
+			 "%04x%04x-%04x-%04x-%04x-%04x%04x%04x",
+			 chunks[0], chunks[1],  // 8 chars
+			 chunks[2],              // 4 chars
+			 chunks[3],              // 4 chars
+			 chunks[4],              // 4 chars
+			 chunks[5], chunks[6], chunks[7]  // 12 chars
+	);
 }

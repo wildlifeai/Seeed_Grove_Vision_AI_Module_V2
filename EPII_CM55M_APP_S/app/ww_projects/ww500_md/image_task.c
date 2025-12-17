@@ -130,7 +130,7 @@ typedef enum
     TAG_GPS_LONGITUDE = 0x0004,
     TAG_GPS_ALTITUDE_REF = 0x0005,
     TAG_GPS_ALTITUDE = 0x0006,
-    TAG_NN_DATA = 0xF100,
+    TAG_NN_DATA = 0xC000,               // Neural network output array - arbitrary custom tag ID
     TAG_USER_COMMENT = 0x9286,      // Standard EXIF UserComment tag for summary text
     TAG_DEPLOYMENT_ID = 0xF200,		   // Deployment ID (matches ww130_cli convention)
     TAG_WW_CONFIDENCE_BASE = 0xF300	   // Base for confidence tags (0xF300, 0xF301, ...)

@@ -1572,8 +1572,7 @@ void fatfs_getDeploymentId(char *deployment_id_buffer, size_t buffer_size)
 	
 	// All zeros = no deployment
 	if (all_zero) {
-		strncpy(deployment_id_buffer, "00000000-0000-0000-0000-000000000000", buffer_size);
-		deployment_id_buffer[buffer_size - 1] = '\0';
+		snprintf(deployment_id_buffer, buffer_size, "%s", DEPLOYMENT_ID_ZERO_UUID);
 		return;
 	}
 	

@@ -131,6 +131,7 @@ typedef enum
     TAG_GPS_ALTITUDE_REF = 0x0005,
     TAG_GPS_ALTITUDE = 0x0006,
     TAG_NN_DATA = 0xF100,
+    TAG_USER_COMMENT = 0x9286,      // Standard EXIF UserComment tag for summary text
     TAG_DEPLOYMENT_ID = 0xF200,		   // Deployment ID (matches ww130_cli convention)
     TAG_WW_CONFIDENCE_BASE = 0xF300	   // Base for confidence tags (0xF300, 0xF301, ...)
 } ExifTagID;
@@ -2262,7 +2263,7 @@ static uint16_t build_exif_segment(int8_t *outCategories, uint8_t categoriesCoun
 	fatfs_getDeploymentId(deployment_id, sizeof(deployment_id));
 	
 	// Only include in EXIF if not all zeros (i.e., a deployment is active)
-	bool has_deployment_id = (strcmp(deployment_id, "00000000-0000-0000-0000-000000000000") != 0);
+	bool has_deployment_id = (strcmp(deployment_id, DEPLOYMENT_ID_ZERO_UUID) != 0);
 
     // IFD count: base entries (9) + UserComment (1 if has confidence data) + DeploymentID (1 if has deployment ID)
     uint16_t dynamic_ifd_count = IFD0_ENTRY_COUNT;

@@ -135,6 +135,8 @@ extern "C"
 	// Reconstruct deployment ID UUID from OP20-OP27 chunks
 	void fatfs_getDeploymentId(char *deployment_id_buffer, size_t buffer_size);
 
+	#define DEPLOYMENT_ID_ZERO_UUID "00000000-0000-0000-0000-000000000000"
+
 	// Load labels from SD card text file
 	int fatfs_load_labels(const char *path, char labels[][48], int *label_count, int max_labels, int max_label_len);
 

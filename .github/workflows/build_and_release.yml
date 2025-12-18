@@ -99,6 +99,17 @@ jobs:
           cp EPII_CM55M_APP_S/obj_epii_evb_icv30_bdv10/gnu_epii_evb_WLCSP65/EPII_CM55M_gnu_epii_evb_WLCSP65_s.elf \
              we2_image_gen_local_dpd/input_case1_secboot/ # Destination must exist in repo
 
+      - name: Fetch Correct DPD Image Gen Tool
+        run: |
+          echo "Cloning external repository to get correct image gen tool..."
+          git clone --depth 1 https://github.com/stevehuang82/for_wildlife_ai.git temp_tools
+          
+          echo "Replacing we2_local_image_gen with version from external repo..."
+          cp temp_tools/we2_image_gen_local_dpd/we2_local_image_gen we2_image_gen_local_dpd/
+          
+          echo "Cleaning up..."
+          rm -rf temp_tools
+
       - name: Generate Firmware Image
         working-directory: ./we2_image_gen_local_dpd
         run: |

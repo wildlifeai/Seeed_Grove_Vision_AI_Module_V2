@@ -93,10 +93,6 @@ jobs:
           # Use the discovered toolchain path
           make -j4 GNU_TOOLPATH="${{ env.GNU_TOOLPATH }}"
 
-      - name: Copy ELF to Image Gen Input Directory
-        run: |
-          echo "Copying compiled ELF file to image generation input directory..."
-          cp EPII_CM55M_APP_S/obj_epii_evb_icv30_bdv10/gnu_epii_evb_WLCSP65/EPII_CM55M_gnu_epii_evb_WLCSP65_s.elf \
              we2_image_gen_local_dpd/input_case1_secboot/ # Destination must exist in repo
 
       - name: Fetch Correct DPD Image Gen Tool
@@ -104,11 +100,18 @@ jobs:
           echo "Cloning external repository to get correct image gen tool..."
           git clone --depth 1 https://github.com/stevehuang82/for_wildlife_ai.git temp_tools
           
-          echo "Replacing we2_local_image_gen with version from external repo..."
-          cp temp_tools/we2_image_gen_local_dpd/we2_local_image_gen we2_image_gen_local_dpd/
+          echo "Replacing ENTIRE we2_image_gen_local_dpd directory..."
+          rm -rf we2_image_gen_local_dpd
+          cp -r temp_tools/we2_image_gen_local_dpd .
           
           echo "Cleaning up..."
           rm -rf temp_tools
+
+      - name: Copy ELF to Image Gen Input Directory
+        run: |
+          echo "Copying compiled ELF file to image generation input directory..."
+          cp EPII_CM55M_APP_S/obj_epii_evb_icv30_bdv10/gnu_epii_evb_WLCSP65/EPII_CM55M_gnu_epii_evb_WLCSP65_s.elf \
+             we2_image_gen_local_dpd/input_case1_secboot/ # Destination must exist in repo
 
       - name: Generate Firmware Image
         working-directory: ./we2_image_gen_local_dpd
@@ -124,7 +127,7 @@ jobs:
         run: |
           # Find the .img file in the output directory
           # Note: working-directory is root here, so we must specify full relative path
-          IMG_FILE=$(find ./we2_image_gen_local_dpd/output_case1_sec_wlcsp -name "*.img" | head -n 1)
+          IMG_FILE=$(find ./we2_image_gen_local_dpd/output_case1_sec_wlcsp -name "output.img" | head -n 1)
           
           if [ -n "$IMG_FILE" ]; then
             # Resolve absolute path or make relative to scripts folder if easier

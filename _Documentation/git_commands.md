@@ -3,6 +3,87 @@
 
 I am going to add some commands here, for future reference.
 
+## Branching and PR Workflow
+
+Developers should follow this branching strategy for the project:
+
+### 1. Syncing from Upstream (Original Repository)
+When syncing changes from the original upstream repository:
+```
+Upstream (Original) → PR → dev
+```
+1. Create a PR from the upstream repository to the `dev` branch
+2. Review and merge the PR into `dev`
+
+### 2. Feature Development
+When working on new features:
+```
+dev → feature-branch → PR → dev
+```
+1. Create a feature branch from `dev`:
+   ```
+   git checkout dev
+   git pull origin dev
+   git checkout -b feature-branch-name
+   ```
+2. Make your changes and commit them to your feature branch
+3. Push your feature branch to the remote:
+   ```
+   git push origin feature-branch-name
+   ```
+4. Create a PR from your feature branch to `dev`
+5. After review and approval, merge the PR into `dev`
+6. Delete your feature branch (optional but recommended)
+
+### 3. Release Process
+When releasing to production:
+```
+dev → PR → main
+```
+1. Create a PR from `dev` to `main`
+2. Review and merge the PR into `main`
+3. Tag the release on `main` (if applicable)
+
+### Implementation Steps for Developers
+
+To ensure your team doesn't run into "Push Rejected" errors, set up your local environment like this:
+
+#### Step 1: Add Upstream Remote
+If working with a forked repository, add the original upstream repository:
+```bash
+git remote add upstream https://github.com/ORIGINAL_OWNER/ORIGINAL_REPO.git
+```
+
+Verify your remotes:
+```bash
+git remote -v
+```
+You should see both `origin` (your fork) and `upstream` (the original repository).
+
+#### Step 2: Create Feature Branches off dev
+Always create feature branches from the latest `dev` branch:
+```bash
+git checkout dev
+git pull origin dev
+git checkout -b feature/my-new-tool
+```
+
+#### Step 3: Push to Origin (your fork) and Create PR
+Push your feature branch to your fork:
+```bash
+git push origin feature/my-new-tool
+```
+Then open a pull request on GitHub from `feature/my-new-tool` to `dev`.
+
+#### Step 4: Keep Your Fork Synced
+Periodically sync your `dev` branch with upstream changes:
+```bash
+git checkout dev
+git fetch upstream
+git merge upstream/dev
+git push origin dev
+```
+
 ## List local branches
 
 ```

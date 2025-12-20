@@ -274,15 +274,15 @@ ML artifacts remain primarily manual for Beta, with a simplified registry system
 #### Supabase Database Schema [TBC by VA and TP]
 ```sql
 -- ai_models table structure
-{
-  id: uuid,
-  model_name: string,
-  version: string,
-  storage_path: string,
-  labels_path: string,
-  created_at: timestamp,
-  metadata: jsonb
-}
+CREATE TABLE public.ai_models (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  model_name TEXT NOT NULL,
+  version TEXT NOT NULL,
+  storage_path TEXT NOT NULL,
+  labels_path TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  metadata JSONB
+);
 ```
 
 ---

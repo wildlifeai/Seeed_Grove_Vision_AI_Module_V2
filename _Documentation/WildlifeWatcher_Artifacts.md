@@ -209,15 +209,15 @@ All firmware artifacts will be managed through an automated CI/CD pipeline with 
 #### Supabase Database Schema
 ```sql
 -- firmware table structure
-{
-  id: uuid,
-  type: enum('ble', 'himax', 'config'),
-  version: string,
-  storage_path: string,
-  file_size: integer,
-  created_at: timestamp,
-  metadata: jsonb
-}
+CREATE TABLE public.firmware (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  type TEXT NOT NULL CHECK (type IN ('ble', 'himax', 'config')),
+  version TEXT NOT NULL,
+  storage_path TEXT NOT NULL,
+  file_size INTEGER,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  metadata JSONB
+);
 ```
 
 #### BLE and LoRaWAN Firmware

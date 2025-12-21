@@ -167,6 +167,10 @@ These can be seen by typing "help" at the console.
 
 __Notes:__
 1. Set and get Operational Parameters. See [Operational_Parameters.md](Operational_Parameters.md)
+   - **Example (Testing OP19):**
+     - Get value: `AI getop 19`
+     - Set value: `AI setop 19 2`
+     - ❌ **Common mistake:** Omitting the `AI` prefix will result in "Unrecognised" error
 2. See separate document [txfile.md](txfile.md) for the details.
 
 __Other AI Processor Commands__

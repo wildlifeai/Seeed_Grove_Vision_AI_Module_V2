@@ -68,8 +68,8 @@ jobs:
           VERSION="${{ steps.semver.outputs.new_tag }}"
           ZIP_NAME="config-firmware-${VERSION}.zip"
           
-          # Zip all files in the MANIFEST directory
-          zip -r "${ZIP_NAME}" CONFIG.TXT HMSTB1.BIN README.TXT config_file.md
+          # Zip all files in the MANIFEST directory with STORE method (no compression)
+          zip -0 -r "${ZIP_NAME}" CONFIG.TXT HMSTB1.BIN README.TXT config_file.md
           
           # Move to a location accessible to next steps
           mv "${ZIP_NAME}" "$GITHUB_WORKSPACE/"

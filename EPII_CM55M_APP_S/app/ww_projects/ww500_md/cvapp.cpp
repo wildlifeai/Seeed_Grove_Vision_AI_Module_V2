@@ -36,7 +36,9 @@
 
 #include "xprintf.h"
 #include "ff.h"
-#include "fatfs_task.h" // For fatfs_load_labels and fatfs_unzip_manifest
+#include "fatfs_task.h"
+// POSIX string functions (strcasecmp)
+#include <strings.h>
 
 // Compare model in flash with file in chunks to avoid large allocations
 #define VERIFY_CHUNK_SIZE 512
@@ -154,7 +156,7 @@ static void load_labels_from_manifest_or_root(void)
 {
     g_labels_loaded = false;
     g_label_count = 0;
-    const char *labels_path = "/Manifest/labels.txt";
+    const char *labels_path = "/MANIFEST/LABELS.TXT";
     if (file_exists(labels_path))
     {
         int count = 0;
@@ -451,47 +453,74 @@ int cv_init(bool security_enable, bool privilege_enable, int project_id, int dep
     {
         const tflite::Model *loaded = nullptr;
 
-        // ALWAYS unzip manifest.zip on each boot to ensure fresh extraction
-        xprintf("Unzipping manifest.zip...\n");
-        int uz = fatfs_unzip_manifest();
-        xprintf("Unzip result: %d\n", uz);
-
-        // After unzip, the extractor may have updated g_project_id/g_deploy_version from the filename
-        xprintf("After unzip: g_project_id=%d, g_deploy_version=%d\n", g_project_id, g_deploy_version);
+        // Manifest unzip is handled by directory_manager during SD init.
+        // (We expect either /Manifest/model.tfl exists, or the model may be in root.)
 
         // Build the expected filename and path
-        char filename[16];
+        char filename[64];
         snprintf(filename, sizeof(filename), "%uV%u.tfl", (unsigned int)(g_project_id % 10000), (unsigned int)g_deploy_version);
 
-        char manifest_path[48];
+        char manifest_path[128];
         snprintf(manifest_path, sizeof(manifest_path), "/Manifest/%s", filename);
 
-        // Check if the model from manifest matches what's in flash
-        bool flash_has_same_model = is_model_in_flash(filename);
-
-        if (flash_has_same_model)
+        // Check if any .tfl model exists in /Manifest
+        DIR dir;
+        FILINFO fno;
+        bool any_model_found = false;
+        if (f_opendir(&dir, "/Manifest") == FR_OK)
         {
-            xprintf("Flash already contains '%s'; loading from flash.\n", filename);
-            loaded = load_model_from_flash();
+            while (f_readdir(&dir, &fno) == FR_OK && fno.fname[0] != '\0')
+            {
+                const char *ext = strrchr(fno.fname, '.');
+                if (ext && (strcasecmp(ext, ".tfl") == 0 || strcasecmp(ext, ".TFL") == 0))
+                {
+                    // Use this specific model filename
+                    snprintf(filename, sizeof(filename), "%s", fno.fname);
+                    // Update manifest_path to point to the discovered model
+                    snprintf(manifest_path, sizeof(manifest_path), "/Manifest/%s", filename);
+                    any_model_found = true;
+                    break;
+                }
+            }
+            f_closedir(&dir);
+        }
+        xprintf("-----------------Looking for model file: %s\n", filename);
+
+        if (!any_model_found)
+        {
+            xprintf("No .tfl model found in Manifest folder. Skipping neural network initialization.\n");
+            model = nullptr;
+            return 1;
         }
         else
         {
-            xprintf("Flash model differs or missing; copying '%s' to flash...\n", filename);
-            // Try manifest path first, then fallback to root
-            const char *src_path = file_exists(manifest_path) ? manifest_path : filename;
-            xprintf("Source chosen: %s\n", src_path);
+            // Check if the model from manifest matches what's in flash
+            bool flash_has_same_model = is_model_in_flash(filename);
 
-            if (load_model_from_sd_to_flash((char *)src_path) == 0)
+            if (flash_has_same_model)
             {
-                xprintf("Copied %s to flash OK; loading from flash...\n", src_path);
+                xprintf("Flash already contains '%s'; loading from flash.\n", filename);
                 loaded = load_model_from_flash();
             }
             else
             {
-                xprintf("SD->flash copy failed for %s\n", src_path);
+                xprintf("Flash model differs or missing; copying '%s' to flash...\n", filename);
+                // Try manifest path first, then fallback to root
+                const char *src_path = file_exists(manifest_path) ? manifest_path : filename;
+                xprintf("Source chosen: %s\n", src_path);
+
+                if (load_model_from_sd_to_flash((char *)src_path) == 0)
+                {
+                    xprintf("Copied %s to flash OK; loading from flash...\n", src_path);
+                    loaded = load_model_from_flash();
+                }
+                else
+                {
+                    xprintf("SD->flash copy failed for %s\n", src_path);
+                }
             }
+            model = loaded;
         }
-        model = loaded;
     }
 #endif
 
@@ -1042,7 +1071,6 @@ static const tflite::Model *load_model_from_flash(void)
  */
 TfLiteStatus cv_run(int8_t *outCategories, uint16_t categoriesCount)
 {
-
     // give image to input tensor
     /*
     void img_rescale(
@@ -1154,12 +1182,12 @@ TfLiteStatus cv_run(int8_t *outCategories, uint16_t categoriesCount)
     if (model_score > 0)
     {
         XP_LT_GREEN;
-        xprintf("TARGET ANIMAL DETECTED!\n\n");
+        xprintf("TARGET OBJECT DETECTED!\n\n");
     }
     else
     {
         XP_LT_RED;
-        xprintf("No target animal detected.\n\n");
+        xprintf("No target object detected.\n\n");
     }
     XP_WHITE;
 

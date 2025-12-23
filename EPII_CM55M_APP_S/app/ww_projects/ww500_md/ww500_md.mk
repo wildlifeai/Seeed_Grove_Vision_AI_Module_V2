@@ -4,6 +4,17 @@ override SCENARIO_APP_SUPPORT_LIST := $(APP_TYPE)
 # APP_TYPE = ww500_md
 APPL_DEFINES += -DWW500_MD
 
+# Select one of these:
+#APPL_DEFINES += -DWW500_A00
+APPL_DEFINES += -DWW500_B00
+# APPL_DEFINES += -DWW500_C00
+
+# String available to code using app_get_board_name_string()
+# Select one of these:
+#BOARD_NAME_STRING := '"WW500_A00"'
+#BOARD_NAME_STRING := '"WW500_B00"'
+BOARD_NAME_STRING := '"WW500_C02"'
+
 #APPL_DEFINES += -DIP_xdma
 #APPL_DEFINES += -DEVT_DATAPATH
 

@@ -248,6 +248,12 @@ uint32_t g_img_data;
 
 static uint16_t g_imageSeqNum; // 0 indicates no SD card
 
+// Flag to track if neural network model is loaded and available
+static bool g_model_loaded = false;
+
+// Semaphore to ensure JPEG buffer is not reused until disk write completes
+static SemaphoreHandle_t xJpegBufferSemaphore = NULL;
+
 // Strings for each of these states. Values must match APP_IMAGE_TASK_STATE_E in image_task.h
 const char *imageTaskStateString[APP_IMAGE_TASK_STATE_NUMSTATES] = {
     "Uninitialised",
@@ -735,10 +741,21 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg)
         // Now use startTime to measure NN duration
         startTime = presentTime;
 
-        // run NN processing
+        // run NN processing only if model is loaded
         // This gets the input image address and dimensions from:
         // app_get_raw_addr(), app_get_raw_width(), app_get_raw_height()
-        ret = cv_run(outCategories, CATEGORIESCOUNT);
+        if (g_model_loaded)
+        {
+            ret = cv_run(outCategories, CATEGORIESCOUNT);
+        }
+        else
+        {
+            // TBP - this should be reviewed, I've set the results to zero for now when no model is loaded
+            xprintf("Skipping NN processing (no model loaded).\n");
+            ret = kTfLiteOk; // Treat as successful but no predictions
+            outCategories[0] = 0;
+            outCategories[1] = 0;
+        }
 
         elapsedTime = xTaskGetTickCount() - startTime;
         elapsedMs = (elapsedTime * 1000) / configTICK_RATE_HZ;
@@ -751,7 +768,7 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg)
             if (outCategories[1] > 0)
             {
                 XP_LT_GREEN;
-                xprintf("TARGET ANIMAL DETECTED!\n");
+                xprintf("TARGET OBJECT DETECTED!\n");
                 // NOTE this only works if CATEGORIESCOUNT == 2
                 fatfs_incrementOperationalParameter(OP_PARAMETER_NUM_POSITIVE_NN_ANALYSES);
                 // nnPositive = true;
@@ -764,7 +781,7 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg)
             else
             {
                 XP_LT_RED;
-                xprintf("Target animal not detected.\n");
+                xprintf("Target object not detected.\n");
                 XP_WHITE;
 
                 // Send a message to the BLE processor so it can inform the user on the app immediately.
@@ -813,6 +830,10 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg)
 
         // Proceed to write the jpeg file, even if there is no SD card
         // since the fatfs_task will handle that.
+
+        // Take semaphore FIRST before modifying jpeg_exif_buf
+        // This prevents jpeg_exif_buf from being overwritten before previous write completes
+        xSemaphoreTake(xJpegBufferSemaphore, portMAX_DELAY);
 
         cisdp_get_jpginfo(&jpeg_sz, &jpeg_addr); // Revised size after inserting EIF
 
@@ -957,6 +978,8 @@ static APP_MSG_DEST_T handleEventForNNProcessing(APP_MSG_T img_recv_msg)
     {
 
     case APP_MSG_IMAGETASK_DISK_WRITE_COMPLETE:
+        // Increment sequence number BEFORE releasing semaphore
+        // This prevents race condition where next capture reads old sequence number
         if (diskStatus == 0)
         {
             fatfs_incrementOperationalParameter(OP_PARAMETER_SEQUENCE_NUMBER);
@@ -965,6 +988,9 @@ static APP_MSG_DEST_T handleEventForNNProcessing(APP_MSG_T img_recv_msg)
         {
             dbg_printf(DBG_LESS_INFO, "Image not written. Error: %d\n", diskStatus);
         }
+
+        // Release semaphore - JPEG buffer can now be safely reused
+        xSemaphoreGive(xJpegBufferSemaphore);
 
         // This represents the point at which an image has been captured and processed.
 
@@ -1352,15 +1378,22 @@ static void vImageTask(void *pvParameters)
 
     // Initialize with default project_id from common_config.h and version 1
     // The actual values will be loaded from flash if available, or use these defaults
-    if (cv_init(true, true, PROJECT_ID, 1) < 0)
+    int cv_init_result = cv_init(true, true, PROJECT_ID, 1);
+    if (cv_init_result < 0)
     {
         xprintf("cv init fail\n");
         selfTest_setErrorBits(1 << SELF_TEST_AI_NN_ERROR);
         configASSERT(0);
     }
+    else if (cv_init_result == 1)
+    {
+        xprintf("No model found on SD card. Neural network will be skipped.\n");
+        g_model_loaded = false;
+    }
     else
     {
         xprintf("Initialised neural network.\n");
+        g_model_loaded = true;
     }
 
     // A value of 0 means no SD card so we can skip all SD card activities
@@ -2395,6 +2428,17 @@ TaskHandle_t image_createTask(int8_t priority, APP_WAKE_REASON_E wakeReason)
         xprintf("Failed to create xImageTaskQueue\n");
         configASSERT(0); // TODO add debug messages?
     }
+
+    // Create binary semaphore to protect JPEG buffer from being reused before write completes
+    xJpegBufferSemaphore = xSemaphoreCreateBinary();
+    if (xJpegBufferSemaphore == NULL)
+    {
+        xprintf("Failed to create xJpegBufferSemaphore\n");
+        configASSERT(0);
+    }
+    // Initialize semaphore as available (give it once)
+    xSemaphoreGive(xJpegBufferSemaphore);
+
 #ifdef USE_HM0360
     // Using HM0360 so no need for captureTimer
 #else

@@ -983,19 +983,40 @@ static int fatfs_load_labels_from_sd(const char *path, char labels[][48], int *l
  */
 static int fatfs_unzip_manifest_zip(void)
 {
-	const char *zip_path = "/Manifest.zip";
+	// Canonical manifest locations (8.3 + uppercase), but be tolerant to zip filename case variants.
+	const char *zip_candidates[] = {
+		"/MANIFEST.ZIP",
+		"/MANIFEST.zip",
+		"/Manifest.zip",
+		"/manifest.zip",
+		"/Manifest.ZIP",
+		"/manifest.ZIP",
+	};
+	const char *zip_path = NULL;
+	const char *out_dir = "/MANIFEST";
 	FIL zf;
-	FRESULT res = f_open(&zf, zip_path, FA_READ);
+	FRESULT res = FR_NO_FILE;
+	for (unsigned i = 0; i < (sizeof(zip_candidates) / sizeof(zip_candidates[0])); i++)
+	{
+		res = f_open(&zf, zip_candidates[i], FA_READ);
+		if (res == FR_OK)
+		{
+			zip_path = zip_candidates[i];
+			break;
+		}
+	}
 	if (res != FR_OK)
 	{
-		xprintf("No manifest.zip present (err %d)\n", res);
+		xprintf("No manifest zip present (err %d)\n", res);
 		return -1;
 	}
 
 	DWORD fsize = f_size(&zf);
-	xprintf("manifest.zip size=%lu bytes\n", (unsigned long)fsize);
+	xprintf("manifest zip '%s' size=%lu bytes\n", zip_path ? zip_path : "<unknown>", (unsigned long)fsize);
 
-	f_mkdir("/Manifest");
+	// Don't create /MANIFEST up-front. If unzip fails early (bad/unsupported zip),
+	// creating the directory here masks the failure and causes confusing behavior.
+	bool outdir_created = false;
 
 	if (f_lseek(&zf, 0) != FR_OK)
 	{
@@ -1005,11 +1026,12 @@ static int fatfs_unzip_manifest_zip(void)
 
 	int models_extracted = 0;
 	bool labels_extracted = false;
+	bool config_extracted = false;
 
 	// First pass: Extract all files
 	while (f_tell(&zf) < fsize)
 	{
-		uint32_t lofs = f_tell(&zf);
+		// Note: keep parsing simple; we don't currently need the local file offset.
 		uint8_t lfh[30];
 		UINT br = 0;
 
@@ -1020,6 +1042,7 @@ static int fatfs_unzip_manifest_zip(void)
 
 		if (!(lfh[0] == 0x50 && lfh[1] == 0x4b && lfh[2] == 0x03 && lfh[3] == 0x04))
 		{
+			xprintf("ZIP parse stopped: local header signature mismatch at offset %lu\n", (unsigned long)(f_tell(&zf) - sizeof(lfh)));
 			break;
 		}
 
@@ -1048,12 +1071,59 @@ static int fatfs_unzip_manifest_zip(void)
 			continue;
 		}
 
-		const char *slash = strrchr(name, '/');
+		// ZIP entries may use either '/' or '\\' as separators.
+		const char *slash_fwd = strrchr(name, '/');
+		const char *slash_bak = strrchr(name, '\\');
+		const char *slash = slash_fwd;
+		if (slash_bak && (!slash_fwd || slash_bak > slash_fwd))
+		{
+			slash = slash_bak;
+		}
 		const char *base = slash ? slash + 1 : name;
+		// Skip directory entries (e.g. "MANIFEST/" or names ending with a separator).
+		if (base[0] == '\0')
+		{
+			// No file to extract; continue to next entry.
+			continue;
+		}
+		// Defensive: ignore empty/odd names
+		if (base[0] == '\0' || base[0] == '.')
+		{
+			if (f_lseek(&zf, f_tell(&zf) + csize) != FR_OK)
+				break;
+			continue;
+		}
+
+		// Minimal debug to understand real entry names on device.
+		xprintf("ZIP entry: '%s' (base '%s', size %lu)\n", name, base, (unsigned long)csize);
+
+		// If this is the config entry, always extract to canonical name.
+		bool is_config_entry = ((strcasecmp(base, "config.txt") == 0) ||
+								(strcasecmp(base, "config") == 0) ||
+								(strcasecmp(base, STATE_FILE) == 0));
+
 		char outpath[64];
-		snprintf(outpath, sizeof(outpath), "/Manifest/%s", base);
+		if (is_config_entry)
+		{
+			snprintf(outpath, sizeof(outpath), "%s/%s", out_dir, STATE_FILE);
+		}
+		else
+		{
+			snprintf(outpath, sizeof(outpath), "%s/%s", out_dir, base);
+		}
 
 		xprintf("Extracting '%s' to '%s'\n", name, outpath);
+
+		if (!outdir_created)
+		{
+			FRESULT mk = f_mkdir(out_dir);
+			if (mk != FR_OK && mk != FR_EXIST)
+			{
+				xprintf("Failed to create output dir '%s' (%d)\n", out_dir, mk);
+				break;
+			}
+			outdir_created = true;
+		}
 
 		FIL out;
 		if (f_open(&out, outpath, FA_WRITE | FA_CREATE_ALWAYS) != FR_OK)
@@ -1087,7 +1157,13 @@ static int fatfs_unzip_manifest_zip(void)
 		}
 		else
 		{
-			// After successful extraction, check what file it was
+			// After successful extraction, check what file it was.
+			if (is_config_entry)
+			{
+				xprintf("  Found and extracted CONFIG.TXT\n");
+				config_extracted = true;
+			}
+
 			if (strcasecmp(base, "labels.txt") == 0)
 			{
 				xprintf("  Found and extracted labels.txt\n");
@@ -1113,14 +1189,25 @@ static int fatfs_unzip_manifest_zip(void)
 		}
 	}
 
-	// Second pass: Check if labels.txt was extracted
+	// Summary + success criteria aligned to required scenarios:
+	// Scenario 1 (no model): CONFIG.TXT present => success
+	// Scenario 2 (with model): model + labels typically present => success
+	if (!config_extracted)
+	{
+		xprintf("Warning: CONFIG.TXT was not found in the zip archive.\n");
+	}
 	if (!labels_extracted)
 	{
 		xprintf("Warning: labels.txt was not found in the zip archive.\n");
 	}
 
+	xprintf("Manifest unzip summary: config=%s, labels=%s, models=%d\n",
+			config_extracted ? "yes" : "no",
+			labels_extracted ? "yes" : "no",
+			models_extracted);
+
 	f_close(&zf);
-	return (models_extracted > 0) ? 0 : -1;
+	return (config_extracted || (models_extracted > 0)) ? 0 : -1;
 }
 
 /********************************** FreeRTOS Task  *************************************/
@@ -1131,7 +1218,7 @@ static int fatfs_unzip_manifest_zip(void)
  * This is called when the scheduler starts.
  * Various entities have already be set up by fatfs_createTask()
  *
- * After some one-off activities it waits for events to arrive in its xFatTaskQueue
+ * After some one-off act	ivities it waits for events to arrive in its xFatTaskQueue
  */
 static void vFatFsTask(void *pvParameters)
 {

@@ -23,6 +23,7 @@
 /* FreeRTOS includes. */
 #include "FreeRTOS.h"
 #include "queue.h"
+#include "directory_manager.h"
 
 #ifdef __cplusplus
 extern "C"
@@ -129,6 +130,8 @@ extern "C"
 
 	// Unzip Manifest.zip (method 0 STORE only - no compression)
 	int fatfs_unzip_manifest(void);
+
+	FRESULT save_configuration(const char *path, directoryManager_t *dirManager);
 
 #ifdef __cplusplus
 }

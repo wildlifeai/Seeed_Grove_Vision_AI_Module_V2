@@ -19,6 +19,7 @@
 #include "directory_manager.h"
 #include "image_task.h"
 #include "ffconf.h"
+#include "fatfs_task.h"
 
 /*************************************** Definitions *******************************************/
 
@@ -110,8 +111,9 @@ static FRESULT ensure_default_config_file_exists(directoryManager_t *dirManager)
 
 	// 	const char *header = "# Auto-created default config. See the wildlife-watcher-model-conversion streamlit app\n";
 	// (void)f_write(&f, header, strlen(header), &bw);
-
-	const char *header = "# Auto-created default configuration\n";
+	const char *header = "# Auto-created default configuration\n"
+						 "# To download the latest manifest folder, visit: https://wildlifewatcher.streamlit.app/\n"
+						 "#\n";
 	(void)f_write(&f, header, strlen(header), &bw);
 
 	res = f_close(&f);
@@ -120,6 +122,7 @@ static FRESULT ensure_default_config_file_exists(directoryManager_t *dirManager)
 		xprintf("Failed to close config file '%s' (%d)\r\n", STATE_FILE, res);
 		return res;
 	}
+	save_configuration(STATE_FILE, dirManager);
 
 	// Keep directory manager state consistent
 	dirManager->configOpen = false;

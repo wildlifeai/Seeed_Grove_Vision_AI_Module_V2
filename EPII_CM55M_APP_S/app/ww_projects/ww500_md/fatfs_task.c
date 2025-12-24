@@ -118,7 +118,7 @@ static FRESULT fileWrite(fileOperation_t *fileOp);
 FRESULT list_dir(const char *path);
 
 static FRESULT load_configuration(const char *filename, directoryManager_t *dirManager);
-static FRESULT save_configuration(const char *filename, directoryManager_t *dirManager);
+FRESULT save_configuration(const char *filename, directoryManager_t *dirManager);
 
 // ZIP and label handling functions (moved from cvapp.cpp)
 static int fatfs_load_labels_from_sd(const char *path, char labels[][48], int *label_count, int max_labels, int max_label_len);
@@ -808,7 +808,7 @@ static FRESULT load_configuration(const char *filename, directoryManager_t *dirM
  * @param dirManager pointer to the directoryManager_t structure
  * @return error code
  */
-static FRESULT save_configuration(const char *filename, directoryManager_t *dirManager)
+FRESULT save_configuration(const char *filename, directoryManager_t *dirManager)
 {
 	FRESULT res;
 	UINT bytesWritten;

@@ -705,6 +705,7 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg)
     TfLiteStatus ret;
     bool setEnabled;
     uint16_t exif_len;
+    bool skip_nn = false;
 
     // Signed integers
     int8_t outCategories[CATEGORIESCOUNT];
@@ -750,9 +751,10 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg)
         }
         else
         {
-            // TBP - this should be reviewed, I've set the results to zero for now when no model is loaded
             xprintf("Skipping NN processing (no model loaded).\n");
+            // TBP - this is hacky but it works for now, could get revised
             ret = kTfLiteOk; // Treat as successful but no predictions
+            skip_nn = true;
             outCategories[0] = 0;
             outCategories[1] = 0;
         }
@@ -780,9 +782,12 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg)
             }
             else
             {
-                XP_LT_RED;
-                xprintf("Target object not detected.\n");
-                XP_WHITE;
+                if (!skip_nn)
+                {
+                    XP_LT_RED;
+                    xprintf("Target object not detected.\n");
+                    XP_WHITE;
+                }
 
                 // Send a message to the BLE processor so it can inform the user on the app immediately.
                 // Also can be used to flash an LED.

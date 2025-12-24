@@ -840,6 +840,12 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg)
         // JPEF buffer exists but this will insert EXIF data and increase jpeg_sz
         exif_len = insertExif(jpeg_sz, jpeg_addr, outCategories, CATEGORIESCOUNT);
 
+        // CRITICAL: Flush the D-cache to RAM immediately after populating the buffer
+        // This ensures the modified jpeg_exif_buf data is written to RAM before
+        // the FatFS task tries to read it. Without this, the cache may contain the
+        // modified data while RAM still has stale/garbage data.
+        SCB_CleanDCache_by_Addr((void *)jpeg_exif_buf, (jpeg_sz + exif_len));
+
 #if 0
     	// Check by printing some of the buffer that includes the EXIF
         //uint16_t bytesToPrint = exif_len + 8;

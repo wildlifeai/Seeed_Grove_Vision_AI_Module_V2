@@ -39,7 +39,6 @@ static const char *find_manifest_zip_path(void)
 		"/MANIFEST.zip",
 		"/Manifest.zip",
 		"/manifest.zip",
-		"/MANIFEST.ZIP",
 		"/Manifest.ZIP",
 		"/manifest.ZIP",
 	};
@@ -114,7 +113,13 @@ static FRESULT ensure_default_config_file_exists(directoryManager_t *dirManager)
 	const char *header = "# Auto-created default configuration\n"
 						 "# To download the latest manifest folder, visit: https://wildlifewatcher.streamlit.app/\n"
 						 "#\n";
-	(void)f_write(&f, header, strlen(header), &bw);
+	res = f_write(&f, header, strlen(header), &bw);
+	if (res != FR_OK)
+	{
+		xprintf("Failed to write header to config file '%s' (%d)\r\n", STATE_FILE, res);
+		f_close(&f);
+		return res;
+	}
 
 	res = f_close(&f);
 	if (res != FR_OK)

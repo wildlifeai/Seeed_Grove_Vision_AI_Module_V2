@@ -33,8 +33,7 @@ jobs:
           release_branches: main
           dry_run: true # Don't create tag yet, just calculate version
           tag_prefix: config-v
-          initial_version: 0.0.0
-          
+
       - name: Generate Release Notes
         id: release_notes
         shell: bash

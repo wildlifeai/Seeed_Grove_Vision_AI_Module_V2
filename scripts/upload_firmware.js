@@ -104,10 +104,22 @@ async function uploadFirmware() {
       console.log(`Using provided SYSTEM_USER_ID: ${systemUserId}`);
     }
 
+    // Generate appropriate firmware name based on type
+    let firmwareName;
+    if (FIRMWARE_TYPE === 'config') {
+      firmwareName = `Config Firmware ${FIRMWARE_VERSION}`;
+    } else if (FIRMWARE_TYPE === 'ble') {
+      firmwareName = `BLE Firmware ${FIRMWARE_VERSION}`;
+    } else if (FIRMWARE_TYPE === 'himax') {
+      firmwareName = `Himax Firmware ${FIRMWARE_VERSION}`;
+    } else {
+      firmwareName = `${FIRMWARE_TYPE.toUpperCase()} Firmware ${FIRMWARE_VERSION}`;
+    }
+
     const { data: insertData, error: insertError } = await supabase
       .from('firmware')
       .insert({
-        name: `Himax Firmware ${FIRMWARE_VERSION}`,
+        name: firmwareName,
         version: FIRMWARE_VERSION,
         type: FIRMWARE_TYPE,
         location_path: storagePath,

@@ -3,10 +3,10 @@ name: Build and Test Functions on ww500_md
 on:
   push:
     branches:
-      - main
+      - dev
   pull_request:
     branches:
-      - main
+      - dev
   workflow_dispatch:
 
 # Make and build the WW500_MD application

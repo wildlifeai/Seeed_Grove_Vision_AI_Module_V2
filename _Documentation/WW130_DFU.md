@@ -56,6 +56,18 @@ Watch the progress on the app. If successful all four status lines will have gre
 
 On completion the new app starts executing.
 
+## Engineering Console Process (Manual Update)
+
+If debugging or manually updating via a BLE Console (e.g., nRF Connect), the process is:
+
+1.  **Connect** to the device using a BLE tool (e.g., nRF Connect on Android/iOS).
+2.  **Subscribe** to notifications on the UART TX characteristic to see responses.
+3.  **Send Command**: Write `dfu` (as text/UTF-8) to the UART RX characteristic.
+    *   *Note*: The device prepares to switch to DFU mode but waits for disconnection.
+4.  **Disconnect** from the BLE device.
+    *   *Observation*: The device LEDs will change (e.g., Red+Blue on WW130, or specific pattern on WW500) indicating DFU mode is active.
+5.  **Perform DFU**: Use the "Device Firmware Update" (DFU) feature in nRF Connect (or nRF Toolbox) to scan for the target (which now advertises as `DfuTarg` or `WW500_DFU`) and upload the `.zip` package.
+
 ## Differences for WW500
 The process is the same except note the following differences:
 

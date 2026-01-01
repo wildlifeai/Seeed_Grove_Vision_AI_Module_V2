@@ -840,16 +840,35 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg)
         // This prevents jpeg_exif_buf from being overwritten before previous write completes
         xSemaphoreTake(xJpegBufferSemaphore, portMAX_DELAY);
 
-        cisdp_get_jpginfo(&jpeg_sz, &jpeg_addr); // Revised size after inserting EIF
+        cisdp_get_jpginfo(&jpeg_sz, &jpeg_addr); // Gets JPEG buffer from hardware encoder
+        // Clearing cache between each capture
+        SCB_InvalidateDCache_by_Addr((void *)jpeg_addr, jpeg_sz);
 
         // JPEF buffer exists but this will insert EXIF data and increase jpeg_sz
         exif_len = insertExif(jpeg_sz, jpeg_addr, outCategories, CATEGORIESCOUNT);
 
-        // CRITICAL: Flush the D-cache to RAM immediately after populating the buffer
-        // This ensures the modified jpeg_exif_buf data is written to RAM before
-        // the FatFS task tries to read it. Without this, the cache may contain the
-        // modified data while RAM still has stale/garbage data.
-        SCB_CleanDCache_by_Addr((void *)jpeg_exif_buf, (jpeg_sz + exif_len));
+        // Determine which buffer to use based on whether EXIF insertion succeeded
+        uint32_t buffer_to_write;
+        uint32_t size_to_write;
+
+        if (exif_len > 0)
+        {
+            // EXIF insertion succeeded - use combined buffer
+            buffer_to_write = (uint32_t)jpeg_exif_buf;
+            size_to_write = jpeg_sz + exif_len;
+
+            SCB_CleanDCache_by_Addr((void *)jpeg_exif_buf, size_to_write);
+        }
+        else
+        {
+            // EXIF insertion failed - use original JPEG buffer
+            xprintf("EXIF insertion failed, using original JPEG buffer\n");
+            buffer_to_write = jpeg_addr;
+            size_to_write = jpeg_sz;
+
+            // Flush the original JPEG buffer cache
+            SCB_CleanDCache_by_Addr((void *)jpeg_addr, size_to_write);
+        }
 
 #if 0
     	// Check by printing some of the buffer that includes the EXIF
@@ -857,9 +876,9 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg)
         uint16_t bytesToPrint = 16;
 
         XP_LT_GREY;
-    	xprintf("JPEG&EXIF buffer (%d bytes) begins:\n", (jpeg_sz + exif_len));
+    	xprintf("JPEG&EXIF buffer (%d bytes) begins:\n", size_to_write);
     	for (int i = 0; i < bytesToPrint; i++) {
-    	    xprintf("%02X ", jpeg_exif_buf[i]);
+    	    xprintf("%02X ", ((uint8_t*)buffer_to_write)[i]);
     	    if (i%16 == 15) {
     	    	xprintf("\n");
     	    }
@@ -871,10 +890,10 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg)
         g_imageSeqNum = fatfs_getImageSequenceNumber();
         generateImageFileName(g_imageSeqNum);
 
-        setFileOpFromJpeg((jpeg_sz + exif_len), (uint32_t)jpeg_exif_buf);
+        setFileOpFromJpeg(size_to_write, buffer_to_write);
 
         dbg_printf(DBG_LESS_INFO, "Writing %d bytes (%d + %d) to '%s' from 0x%08x\n",
-                   fileOp.length, jpeg_sz, exif_len, fileOp.fileName, fileOp.buffer);
+                   size_to_write, jpeg_sz, exif_len, fileOp.fileName, buffer_to_write);
 
         // Save the file name as the most recent image
         snprintf(lastImageFileName, IMAGEFILENAMELEN, "%s", fileOp.fileName);

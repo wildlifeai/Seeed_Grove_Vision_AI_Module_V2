@@ -467,24 +467,33 @@ int cv_init(bool security_enable, bool privilege_enable, int project_id, int dep
         DIR dir;
         FILINFO fno;
         bool any_model_found = false;
-        if (f_opendir(&dir, "/Manifest") == FR_OK)
+
+        if (fatfs_mounted())
         {
-            while (f_readdir(&dir, &fno) == FR_OK && fno.fname[0] != '\0')
+            if (f_opendir(&dir, "/Manifest") == FR_OK)
             {
-                const char *ext = strrchr(fno.fname, '.');
-                if (ext && (strcasecmp(ext, ".tfl") == 0 || strcasecmp(ext, ".TFL") == 0))
+                while (f_readdir(&dir, &fno) == FR_OK && fno.fname[0] != '\0')
                 {
-                    // Use this specific model filename
-                    snprintf(filename, sizeof(filename), "%s", fno.fname);
-                    // Update manifest_path to point to the discovered model
-                    snprintf(manifest_path, sizeof(manifest_path), "/Manifest/%s", filename);
-                    any_model_found = true;
-                    break;
+                    const char *ext = strrchr(fno.fname, '.');
+                    if (ext && (strcasecmp(ext, ".tfl") == 0 || strcasecmp(ext, ".TFL") == 0))
+                    {
+                        // Use this specific model filename
+                        snprintf(filename, sizeof(filename), "%s", fno.fname);
+                        // Update manifest_path to point to the discovered model
+                        snprintf(manifest_path, sizeof(manifest_path), "/Manifest/%s", filename);
+                        any_model_found = true;
+                        break;
+                    }
                 }
+                f_closedir(&dir);
             }
-            f_closedir(&dir);
+            xprintf("-----------------Looking for model file: %s\n", filename);
         }
-        xprintf("-----------------Looking for model file: %s\n", filename);
+        else
+        {
+            // Don't attempt disk access if filesystem not mounted
+            xprintf("FatFS not mounted, skipping model search\n");
+        }
 
         if (!any_model_found)
         {

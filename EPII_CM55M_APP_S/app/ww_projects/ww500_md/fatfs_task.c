@@ -1129,8 +1129,10 @@ static int fatfs_unzip_manifest_zip(void)
 		}
 
 		FIL out;
-		if (f_open(&out, outpath, FA_WRITE | FA_CREATE_ALWAYS) != FR_OK)
+		FRESULT open_res = f_open(&out, outpath, FA_WRITE | FA_CREATE_ALWAYS);
+		if (open_res != FR_OK)
 		{
+			xprintf("Failed to open '%s' for writing (err %d)\n", outpath, open_res);
 			if (f_lseek(&zf, f_tell(&zf) + csize) != FR_OK)
 				break;
 			continue;

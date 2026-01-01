@@ -127,7 +127,15 @@ static FRESULT ensure_default_config_file_exists(directoryManager_t *dirManager)
 		xprintf("Failed to close config file '%s' (%d)\r\n", STATE_FILE, res);
 		return res;
 	}
-	save_configuration(STATE_FILE, dirManager);
+
+	// TBP: I've removed save_configuration() func call from here.
+	// It was generating a UsageFault_Handler error on an empty SD card emulation.
+	// Described below as:
+	// On an empty SD boot, directory manager initialization can still be in progress
+	// and save_configuration() changes directories using dirManager fields (base_dir,
+	// current_config_dir). If any of these are not valid yet, it can trigger faults.
+	// The FATFS task will call load_configuration() shortly after init; if it wants
+	// to normalize/write defaults, it should do so after init is complete.
 
 	// Keep directory manager state consistent
 	dirManager->configOpen = false;
@@ -156,8 +164,18 @@ FRESULT dir_mgr_init_directories(directoryManager_t *dirManager)
 	FRESULT res;
 	char path_buf[IMAGEFILENAMELEN];
 	FILINFO fno;
+
+	// Make sure all fields start from a known state.
+	// (This is especially important for path buffers used by f_chdir()).
+	memset(dirManager, 0, sizeof(*dirManager));
+
 	int len = sizeof(dirManager->base_dir);
 	res = f_getcwd(dirManager->base_dir, len); /* Get current directory */
+	if (res != FR_OK)
+	{
+		// Use root as base directory.
+		strcpy(dirManager->base_dir, "/");
+	}
 	dirManager->imagesDirIdx = 0;
 
 	// === MANIFEST / CONFIG DIRECTORY + UNZIP LOGIC ===
@@ -198,6 +216,9 @@ FRESULT dir_mgr_init_directories(directoryManager_t *dirManager)
 			dirManager->configRes = res;
 			return res;
 		}
+		// Initialize current_config_dir BEFORE calling ensure_default_config_file_exists
+		strcpy(dirManager->current_config_dir, MANIFEST_DIR);
+
 		res = f_chdir(MANIFEST_DIR);
 		if (res != FR_OK)
 		{

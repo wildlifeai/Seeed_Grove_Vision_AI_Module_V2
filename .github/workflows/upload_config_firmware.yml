@@ -1,0 +1,116 @@
+name: Upload Config Firmware to Supabase
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'EPII_CM55M_APP_S/app/ww_projects/ww500_md/MANIFEST/**'
+  workflow_dispatch: # Allow manual triggering
+
+jobs:
+  upload-config-firmware:
+    runs-on: ubuntu-latest
+    
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      SYSTEM_EMAIL: ${{ secrets.SYSTEM_EMAIL }}
+      FALLBACK_USER_ID: ${{ secrets.FALLBACK_USER_ID }}
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Fetch all history for semantic versioning
+
+      - name: Calculate Semantic Version
+        id: semver
+        uses: mathieudutour/github-tag-action@v6.2
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          default_bump: patch
+          release_branches: main
+          dry_run: true # Don't create tag yet, just calculate version
+          tag_prefix: config-v
+
+      - name: Generate Release Notes
+        id: release_notes
+        shell: bash
+        run: |
+          # Get commits since last config tag
+          LAST_TAG=$(git describe --tags --match "config-v*" --abbrev=0 2>/dev/null || echo "")
+          
+          if [ -z "$LAST_TAG" ]; then
+            # No previous tags, get all commits affecting MANIFEST folder
+            COMMITS=$(git log --pretty=format:"- %s (%h)" --no-merges -- EPII_CM55M_APP_S/app/ww_projects/ww500_md/MANIFEST/)
+          else
+            # Get commits since last tag affecting MANIFEST folder
+            COMMITS=$(git log "$LAST_TAG..HEAD" --pretty=format:"- %s (%h)" --no-merges -- EPII_CM55M_APP_S/app/ww_projects/ww500_md/MANIFEST/)
+          fi
+          
+          # Save to environment variable
+          echo "RELEASE_NOTES<<EOF" >> $GITHUB_ENV
+          echo "$COMMITS" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+          
+          echo "Generated release notes:"
+          echo "$COMMITS"
+
+      - name: Create MANIFEST Zip
+        id: create_zip
+        run: |
+          # Navigate to MANIFEST folder
+          cd EPII_CM55M_APP_S/app/ww_projects/ww500_md/MANIFEST
+          
+          # Create zip file with timestamp for uniqueness
+          VERSION="${{ steps.semver.outputs.new_tag }}"
+          ZIP_NAME="config-firmware-${VERSION}.zip"
+          
+          # Zip all files in the MANIFEST directory with STORE method (no compression)
+          zip -0 -r "${ZIP_NAME}" CONFIG.TXT HMSTB1.BIN README.TXT config_file.md
+          
+          # Move to a location accessible to next steps
+          mv "${ZIP_NAME}" "$GITHUB_WORKSPACE/"
+          
+          # Set output for next steps
+          echo "zip_path=$GITHUB_WORKSPACE/${ZIP_NAME}" >> $GITHUB_OUTPUT
+          echo "zip_name=${ZIP_NAME}" >> $GITHUB_OUTPUT
+          
+          echo "Created ${ZIP_NAME}"
+          ls -lh "$GITHUB_WORKSPACE/${ZIP_NAME}"
+
+      - name: Upload Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: config-firmware
+          path: ${{ steps.create_zip.outputs.zip_path }}
+          retention-days: 30
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Node Dependencies
+        run: npm install @supabase/supabase-js
+        working-directory: ./scripts
+
+      - name: Set Environment Variables for Upload
+        run: |
+          echo "FIRMWARE_PATH=${{ steps.create_zip.outputs.zip_path }}" >> "$GITHUB_ENV"
+          echo "FIRMWARE_VERSION=${{ steps.semver.outputs.new_tag }}" >> "$GITHUB_ENV"
+          echo "FIRMWARE_TYPE=config" >> "$GITHUB_ENV"
+          echo "BUCKET_NAME=firmware" >> "$GITHUB_ENV"
+
+      - name: Upload to Supabase
+        working-directory: ./scripts
+        run: node upload_firmware.js
+        
+      - name: Create Git Tag
+        if: success()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a ${{ steps.semver.outputs.new_tag }} -m "Config Firmware Release ${{ steps.semver.outputs.new_tag }}"
+          git push origin ${{ steps.semver.outputs.new_tag }}

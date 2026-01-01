@@ -3,7 +3,7 @@ name: Build and Release Himax Firmware
 on:
   push:
     branches:
-      - main
+      - dev
       - 'fix/firmware-upload-ci'
   workflow_dispatch: # Allow manual triggering
 
@@ -93,19 +93,32 @@ jobs:
           # Use the discovered toolchain path
           make -j4 GNU_TOOLPATH="${{ env.GNU_TOOLPATH }}"
 
+      - name: Fetch Correct DPD Image Gen Tool
+        run: |
+          echo "Cloning external repository to get correct image gen tool..."
+          git clone --depth 1 https://github.com/stevehuang82/for_wildlife_ai.git temp_tools
+          
+          echo "Replacing ENTIRE we2_image_gen_local_dpd directory..."
+          rm -rf we2_image_gen_local_dpd
+          cp -r temp_tools/we2_image_gen_local_dpd .
+          
+          echo "Cleaning up..."
+          rm -rf temp_tools
+
       - name: Copy ELF to Image Gen Input Directory
         run: |
           echo "Copying compiled ELF file to image generation input directory..."
+          mkdir -p we2_image_gen_local_dpd/input_case1_secboot/
           cp EPII_CM55M_APP_S/obj_epii_evb_icv30_bdv10/gnu_epii_evb_WLCSP65/EPII_CM55M_gnu_epii_evb_WLCSP65_s.elf \
-             we2_image_gen_local/input_case1_secboot/ # Destination must exist in repo
+             we2_image_gen_local_dpd/input_case1_secboot/ # Destination must exist in repo
 
       - name: Generate Firmware Image
-        working-directory: ./we2_image_gen_local
+        working-directory: ./we2_image_gen_local_dpd
         run: |
-          # Ensure execution permissions
-          chmod +x we2_local_image_gen
+          # Ensure execution permissions for all tools
+          chmod -R +x .
           # Run the image generation tool
-          ./we2_local_image_gen project_case1_blp_wlcsp.json
+          ./we2_local_image_gen project_case1_blp_wlcsp_rc24m.json
 
       - name: Find Generated Image
         id: find_image
@@ -113,7 +126,7 @@ jobs:
         run: |
           # Find the .img file in the output directory
           # Note: working-directory is root here, so we must specify full relative path
-          IMG_FILE=$(find ./we2_image_gen_local/output_case1_sec_wlcsp -name "*.img" | head -n 1)
+          IMG_FILE=$(find ./we2_image_gen_local_dpd/output_case1_sec_wlcsp -name "output.img" | head -n 1)
           
           if [ -n "$IMG_FILE" ]; then
             # Resolve absolute path or make relative to scripts folder if easier
@@ -123,8 +136,8 @@ jobs:
             echo "firmware_path=$FULL_PATH" >> $GITHUB_OUTPUT
           else
             echo "No .img file found in output directory!"
-            echo "Checking we2_image_gen_local content:"
-            ls -R we2_image_gen_local
+            echo "Checking we2_image_gen_local_dpd content:"
+            ls -R we2_image_gen_local_dpd
             exit 1
           fi
 

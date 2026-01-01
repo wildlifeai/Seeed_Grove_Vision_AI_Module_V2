@@ -4,6 +4,8 @@
 
 The Manifest folder system provides a flexible way to configure the WW500 camera trap, supporting both AI-enabled and AI-disabled operation modes. The system automatically handles model deployment and configuration based on what files are present on the SD card.
 
+NOTE: The MANIFEST folder must be compressed using STORE compression method only
+
 ---
 
 ## Directory Structure

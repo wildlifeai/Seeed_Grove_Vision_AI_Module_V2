@@ -78,10 +78,10 @@
 /*************************************** Includes *******************************************/
 
 /* Modified by Maxim Integrated 26-Jun-2015 to quiet compiler warnings */
-#include "string.h"
-#include "stdio.h"
-#include "stdbool.h"
-#include "stdlib.h"
+#include <string.h>
+#include <stdio.h>
+#include <stdbool.h>
+#include <stdlib.h>
 
 /* FreeRTOS includes. */
 #include "FreeRTOS.h"
@@ -90,6 +90,7 @@
 #include "queue.h"
 #include "timers.h"
 #include "semphr.h"
+
 
 /* FreeRTOS+CLI includes. */
 #include "FreeRTOS_CLI.h"
@@ -162,7 +163,7 @@ extern GPS_Coordinate exif_gps_deviceLat;
 extern GPS_Coordinate exif_gps_deviceLon;
 extern GPS_Altitude exif_gps_deviceAlt;
 
-extern Barrier_t startupBarrier; // Object that calls a function when all tasks are ready
+extern Barrier_t startupBarrier;  // Object that calls a function when all tasks are ready
 
 /*************************************** Local variables *******************************************/
 
@@ -178,7 +179,8 @@ const char *cliTaskEventString[APP_MSG_CLITASK_LAST - APP_MSG_CLITASK_FIRST] = {
 	"Console Char",
 	"I2C String",
 	"Disk Write Complete",
-	"Disk Read Complete"};
+	"Disk Read Complete"
+};
 
 static char cliInBuffer[CLI_CMD_LINE_BUF_SIZE];	  /* Buffer for input */
 static char cliOutBuffer[WW130_MAX_PAYLOAD_SIZE]; /* Buffer for output */
@@ -248,6 +250,7 @@ static BaseType_t prvGetgps(char *writeBuffer, size_t writeBufferLen, const char
 static BaseType_t prvExifGpsTests(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 static BaseType_t prvLoadModel(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 
+
 static BaseType_t prvSetOpParam(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 static BaseType_t prvGetOpParam(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 
@@ -261,6 +264,7 @@ static BaseType_t prvLedFlash(char *pcWriteBuffer, size_t xWriteBufferLen, const
 static void processSingleCharacter(char rxChar);
 static void processCommand(char *rxString);
 static bool startsWith(char *a, const char *b);
+
 
 /********************************** Structures that define CLI commands  *************************************/
 
@@ -301,7 +305,7 @@ static const CLI_Command_Definition_t xDpd = {
 	"dpd", /* The command string to type. */
 	"dpd:\r\n Enter Deep Power Down\r\n",
 	prvDpd, /* The function to run. */
-	0		/* No parameters are expected. */
+	0		  /* No parameters are expected. */
 };
 
 /* Structure that defines the "status" command line command. */
@@ -317,7 +321,7 @@ static const CLI_Command_Definition_t xVer = {
 	"ver", /* The command string to type. */
 	"ver:\r\n Report software version\r\n",
 	prvVer, /* The function to run. */
-	0		/* No parameters expected */
+	0		   /* No parameters expected */
 };
 
 /* Structure that defines the "enable" command line command. */
@@ -336,12 +340,13 @@ static const CLI_Command_Definition_t xDisable = {
 	0			/* No parameters expected */
 };
 
+
 /* Structure that defines the "getutc" command line command. */
 static const CLI_Command_Definition_t xGetUtc = {
 	"getutc", /* The command string to type. */
 	"getutc:\r\n Print time as a UTC string\r\n",
 	prvGetUtc, /* The function to run. */
-	0		   /* No parameters expected */
+	0			/* No parameters expected */
 };
 
 /* Structure that defines the "setutc" command line command. */
@@ -349,7 +354,7 @@ static const CLI_Command_Definition_t xSetUtc = {
 	"setutc", /* The command string to type. */
 	"setutc <utcString>:\r\n Set time from UTC string like '2025-03-21T09:05:00Z'\n",
 	prvSetUtc, /* The function to run. */
-	1		   /* No parameters expected */
+	1			/* No parameters expected */
 };
 
 /* Structure that defines the "utctests" command line command. */
@@ -357,15 +362,16 @@ static const CLI_Command_Definition_t xUtcTests = {
 	"utctests", /* The command string to type. */
 	"utctests:\r\n Runs exif_utc tests\n",
 	prvExifUtcTests, /* The function to run. */
-	0				 /* No parameters expected */
+	0			/* No parameters expected */
 };
+
 
 /* Structure that defines the "time" command line command. */
 static const CLI_Command_Definition_t xTimeN = {
 	"testtime", /* The command string to type. */
 	"testtime <n> <m>:\r\n Print time as a UTC string - <n> times with <m>s interval\r\n",
 	prvPrintRTCN, /* The function to run. */
-	2			  /* No parameters expected */
+	2			/* No parameters expected */
 };
 
 #ifdef WW500_C00
@@ -374,25 +380,25 @@ static const CLI_Command_Definition_t xLedFlash = {
 	"flash", /* The command string to type. */
 	"flash <n> <m>:\r\n Flash LED at brightness <n> for <m>ms \r\n",
 	prvLedFlash, /* The function to run. */
-	2			 /* No parameters expected */
+	2			/* No parameters expected */
 };
 
 #endif // WW500_C00
 
 /* structure that defines the "setgps: command line command */
 static const CLI_Command_Definition_t xSetGps = {
-	"setgps",
-	"setgps \"<gps_string>\": Set GPS data from a formatted string. Replace spaces with '_'\r\n",
-	prvSetgps,
-	1 // Number of expected parameters
+    "setgps",
+    "setgps \"<gps_string>\": Set GPS data from a formatted string. Replace spaces with '_'\r\n",
+    prvSetgps,
+    1 // Number of expected parameters
 };
 
 /* structure that defines the "getgps: command line command */
 static const CLI_Command_Definition_t xGetGps = {
-	"getgps",
-	"getgps: Get device GPS location\r\n",
-	prvGetgps,
-	0 // Number of expected parameters
+    "getgps",
+    "getgps: Get device GPS location\r\n",
+    prvGetgps,
+    0 // Number of expected parameters
 };
 
 /* Structure that defines the "gpstests" command line command. */
@@ -400,7 +406,7 @@ static const CLI_Command_Definition_t xGpsTests = {
 	"gpstests", /* The command string to type. */
 	"gpstests:\r\n Runs exif_gps tests\n",
 	prvExifGpsTests, /* The function to run. */
-	0				 /* No parameters expected */
+	0			/* No parameters expected */
 };
 
 /* Structure that defines the "loadmodel" command line command. */
@@ -410,6 +416,7 @@ static const CLI_Command_Definition_t xLoadModel = {
 	prvLoadModel, /* The function to run. */
 	1			  /* One parameter expected */
 };
+
 
 /* Structure that defines the "i2c" command line command. */
 static const CLI_Command_Definition_t xI2C = {
@@ -464,7 +471,7 @@ static const CLI_Command_Definition_t xSetOpParam = {
 	"setop", /* The command string to type. */
 	"setop <index> <value>:\r\n Set Operational Parameter <index> to <value>\r\n",
 	prvSetOpParam, /* The function to run. */
-	2			   /* Two parameters expected */
+	2			/* Two parameters expected */
 };
 
 /* Structure that defines the "getop" command line command. */
@@ -472,12 +479,13 @@ static const CLI_Command_Definition_t xGetOpParam = {
 	"getop", /* The command string to type. */
 	"getop <index>:\r\n Get Operational Parameter <index>\r\n",
 	prvGetOpParam, /* The function to run. */
-	1			   /* One parameter expected */
+	1			/* One parameter expected */
 };
 
 /********************************** Private Functions - for CLI commands *************************************/
 
 // One of these commands for each activity invoked by the CLI
+
 
 // Print the task list and some stats
 static BaseType_t prvTaskStatsCommand(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString)
@@ -544,29 +552,23 @@ static BaseType_t prvTaskStateCmd(char *pcWriteBuffer, size_t xWriteBufferLen, c
 }
 
 //// Set or clear a boolean called verbose (not used at the moment, but could be!
-// static BaseType_t prvVerbose( char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString )
-{
+// static BaseType_t prvVerbose( char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString ) {
 //	const char *pcParameter;
 //	BaseType_t lParameterStringLength;
 //
 //	/* Get parameter */
 //	pcParameter = FreeRTOS_CLIGetParameter(pcCommandString, 1, &lParameterStringLength);
-//	if (pcParameter != NULL)
-{
-//		if (pcParameter[0] == '0')
-{
+//	if (pcParameter != NULL) {
+//		if (pcParameter[0] == '0') {
 //			verbose = false;
 //			pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen, "Verbose is off\r\n");
-//		} else if (pcParameter[0] == '1')
-{
+//		} else if (pcParameter[0] == '1') {
 //			pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen, "Verbose is on\r\n");
 //			verbose = true;
-//		} else
-{
+//		} else {
 //			pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen, "Must supply 0 (Disable) or 1 (Enable)\r\n");
 //		}
-//	} else
-{
+//	} else {
 //		pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen, "Must supply 0 (Disable) or 1 (Enable)\r\n");
 //	}
 //
@@ -591,8 +593,7 @@ static BaseType_t prvAssert(char *pcWriteBuffer, size_t xWriteBufferLen, const c
 }
 
 // Resets the device
-static BaseType_t prvReset(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString)
-{
+static BaseType_t prvReset(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) {
 
 	(void)pcCommandString;
 	(void)xWriteBufferLen;
@@ -610,24 +611,22 @@ static BaseType_t prvReset(char *pcWriteBuffer, size_t xWriteBufferLen, const ch
 }
 
 // Enter Deep Power Down
-static BaseType_t prvDpd(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString)
-{
+static BaseType_t prvDpd(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) {
 	(void)pcCommandString;
 	(void)xWriteBufferLen;
 	configASSERT(pcWriteBuffer);
 
 	// TODO clean this up when there is a proper way to enter DPD with the state machine.
-	// app_pmu_enter_dpd(false);
+	//app_pmu_enter_dpd(false);
 	// TODO send a message to the state machine
-	image_hackInactive(); // this sets up the HM0360 to do motion detection, then enters DPD
+	image_hackInactive();	// this sets up the HM0360 to do motion detection, then enters DPD
 
 	/* There is no more data to return after this single string, so return pdFALSE. */
 	return pdFALSE;
 }
 
 // Reports on some status
-static BaseType_t prvStatus(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString)
-{
+static BaseType_t prvStatus(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) {
 	(void)pcCommandString;
 	(void)xWriteBufferLen;
 	configASSERT(pcWriteBuffer);
@@ -642,8 +641,7 @@ static BaseType_t prvStatus(char *pcWriteBuffer, size_t xWriteBufferLen, const c
 }
 
 // Reports on software version - something like: 'WW500-A00 V 00.08.00 18:29:31 Mar 26 2025'
-static BaseType_t prvVer(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString)
-{
+static BaseType_t prvVer(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) {
 	(void)pcCommandString;
 	(void)xWriteBufferLen;
 	configASSERT(pcWriteBuffer);
@@ -654,8 +652,7 @@ static BaseType_t prvVer(char *pcWriteBuffer, size_t xWriteBufferLen, const char
 }
 
 // Sets some state
-static BaseType_t prvEnable(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString)
-{
+static BaseType_t prvEnable(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) {
 	/* Remove compile time warnings about unused parameters, and check the
 	write buffer is not NULL.  NOTE - for simplicity, this example assumes the
 	write buffer length is adequate, so does not check for buffer overflows. */
@@ -668,11 +665,10 @@ static BaseType_t prvEnable(char *pcWriteBuffer, size_t xWriteBufferLen, const c
 	sprintf(pcWriteBuffer, "Enabled Camera System");
 
 	// Inform the ImageTask message queue
-	send_msg.msg_data = 1; // 0 means disabled; 1 means enabled
+	send_msg.msg_data = 1;	// 0 means disabled; 1 means enabled
 	send_msg.msg_event = APP_MSG_IMAGETASK_CHANGE_ENABLE;
 
-	if (xQueueSend(xImageTaskQueue, (void *)&send_msg, __QueueSendTicksToWait) != pdTRUE)
-	{
+	if (xQueueSend(xImageTaskQueue, (void *)&send_msg, __QueueSendTicksToWait) != pdTRUE) {
 		xprintf("Failed to send 0x%x to imageTask\r\n", send_msg.msg_event);
 	}
 
@@ -681,8 +677,7 @@ static BaseType_t prvEnable(char *pcWriteBuffer, size_t xWriteBufferLen, const c
 }
 
 // Sets some state
-static BaseType_t prvDisable(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString)
-{
+static BaseType_t prvDisable(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) {
 
 	/* Remove compile time warnings about unused parameters, and check the
 	write buffer is not NULL.  NOTE - for simplicity, this example assumes the
@@ -696,17 +691,17 @@ static BaseType_t prvDisable(char *pcWriteBuffer, size_t xWriteBufferLen, const 
 	sprintf(pcWriteBuffer, "Disabled Camera System");
 
 	// Inform the ImageTask message queue
-	send_msg.msg_data = 0; // 0 means disabled; 1 means enabled
+	send_msg.msg_data = 0;	// 0 means disabled; 1 means enabled
 	send_msg.msg_event = APP_MSG_IMAGETASK_CHANGE_ENABLE;
 
-	if (xQueueSend(xImageTaskQueue, (void *)&send_msg, __QueueSendTicksToWait) != pdTRUE)
-	{
+	if (xQueueSend(xImageTaskQueue, (void *)&send_msg, __QueueSendTicksToWait) != pdTRUE) {
 		xprintf("Failed to send 0x%x to imageTask\r\n", send_msg.msg_event);
 	}
 
 	/* There is no more data to return after this single string, so return pdFALSE. */
 	return pdFALSE;
 }
+
 
 /**
  * prints time as a ISO string
@@ -718,8 +713,7 @@ static BaseType_t prvDisable(char *pcWriteBuffer, size_t xWriteBufferLen, const 
  * https://en.wikipedia.org/wiki/ISO_8601
  *
  */
-static BaseType_t prvGetUtc(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString)
-{
+static BaseType_t prvGetUtc(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) {
 	rtc_time time = {0};
 	RTC_ERROR_E ret;
 	char timeString[UTCSTRINGLENGTH];
@@ -731,28 +725,26 @@ static BaseType_t prvGetUtc(char *pcWriteBuffer, size_t xWriteBufferLen, const c
 	(void)xWriteBufferLen;
 	configASSERT(pcWriteBuffer);
 
-	ret = exif_utc_get_rtc_as_time(&time);
+    ret = exif_utc_get_rtc_as_time(&time);
 
-	if (ret != RTC_NO_ERROR)
-	{
-		snprintf(pcWriteBuffer, xWriteBufferLen, "Error %d", ret);
-		return pdFALSE;
-	}
+    if (ret != RTC_NO_ERROR) {
+    	snprintf(pcWriteBuffer, xWriteBufferLen, "Error %d", ret);
+    	return pdFALSE;
+    }
 
-	// convert to a string
-	ret = exif_utc_time_to_utc_string(&time, timeString, sizeof(timeString));
-	if (ret == RTC_NO_ERROR)
-	{
-		snprintf(pcWriteBuffer, xWriteBufferLen, "%s", timeString);
-	}
-	else
-	{
-		snprintf(pcWriteBuffer, xWriteBufferLen, "Error %d", ret);
-	}
+    // convert to a string
+    ret = exif_utc_time_to_utc_string(&time, timeString, sizeof(timeString));
+    if (ret == RTC_NO_ERROR) {
+    	snprintf(pcWriteBuffer, xWriteBufferLen, "%s", timeString);
+    }
+    else {
+    	snprintf(pcWriteBuffer, xWriteBufferLen, "Error %d", ret);
+    }
 
 	/* There is no more data to return after this single string, so return pdFALSE. */
 	return pdFALSE;
 }
+
 
 /**
  * prints time as a UTC string
@@ -768,12 +760,11 @@ static BaseType_t prvGetUtc(char *pcWriteBuffer, size_t xWriteBufferLen, const c
  * It does hang up the CLI task....
  *
  */
-static BaseType_t prvPrintRTCN(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString)
-{
+static BaseType_t prvPrintRTCN(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) {
 	rtc_time time;
 	uint16_t rtcTimes;
 	uint16_t rtcInterval;
-	const char *pcParameter;
+	const char * pcParameter;
 	BaseType_t lParameterStringLength;
 	RTC_ERROR_E ret;
 
@@ -787,38 +778,36 @@ static BaseType_t prvPrintRTCN(char *pcWriteBuffer, size_t xWriteBufferLen, cons
 	configASSERT(pcWriteBuffer);
 
 	pcParameter = FreeRTOS_CLIGetParameter(pcCommandString, 1, &lParameterStringLength);
-	rtcTimes = atoi(pcParameter); // Consider using strtol for safer parsing and error checking.
+	rtcTimes = atoi(pcParameter);	// Consider using strtol for safer parsing and error checking.
 
 	pcParameter = FreeRTOS_CLIGetParameter(pcCommandString, 2, &lParameterStringLength);
-	rtcInterval = atoi(pcParameter); // Consider using strtol for safer parsing and error checking.
+	rtcInterval = atoi(pcParameter);	// Consider using strtol for safer parsing and error checking.
 
 	xLastWakeTime = xTaskGetTickCount();
 
-	while (rtcTimes > 0)
-	{
+	while (rtcTimes > 0) {
 		ret = exif_utc_get_rtc_as_time(&time);
 
-		if (ret == RTC_NO_ERROR)
-		{
+		if (ret == RTC_NO_ERROR) {
 			// "YYYY-MM-DDTHH:MM:SSZ"
 			xprintf("[%d] %04d-%02d-%02dT%02d:%02d:%02dZ\n",
 					rtcTimes,
 					time.tm_year, time.tm_mon, time.tm_mday,
 					time.tm_hour, time.tm_min, time.tm_sec);
 		}
-		else
-		{
+		else {
 			xprintf("Error %d\n", ret);
 		}
 
 		rtcTimes--;
 
-		vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(rtcInterval * 1000)); // Convert timer_period to milliseconds
+		vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(rtcInterval  * 1000)); // Convert timer_period to milliseconds
 	}
 
 	/* There is no more data to return after this single string, so return pdFALSE. */
 	return pdFALSE;
 }
+
 
 #ifdef WW500_C00
 /**
@@ -827,11 +816,10 @@ static BaseType_t prvPrintRTCN(char *pcWriteBuffer, size_t xWriteBufferLen, cons
  * parameters are flash brightness (0-15) and duration (ms)
  *
  */
-static BaseType_t prvLedFlash(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString)
-{
+static BaseType_t prvLedFlash(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) {
 	uint16_t brightness;
 	uint16_t duration;
-	const char *pcParameter;
+	const char * pcParameter;
 	BaseType_t lParameterStringLength;
 
 	int32_t paramLong;
@@ -841,10 +829,9 @@ static BaseType_t prvLedFlash(char *pcWriteBuffer, size_t xWriteBufferLen, const
 
 	paramLong = strtol(pcParameter, &endptr, 10);
 
-	if (endptr == pcParameter || paramLong < 0 || paramLong > 100)
-	{
+	if (endptr == pcParameter || paramLong < 0 || paramLong > 100) {
 		pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen,
-								  "Must supply brightness in range 0-100");
+				"Must supply brightness in range 0-100");
 		return pdFALSE;
 	}
 	brightness = (uint16_t)paramLong;
@@ -853,17 +840,16 @@ static BaseType_t prvLedFlash(char *pcWriteBuffer, size_t xWriteBufferLen, const
 	pcParameter = FreeRTOS_CLIGetParameter(pcCommandString, 2, &lParameterStringLength);
 	paramLong = strtol(pcParameter, &endptr, 10);
 
-	if (endptr == pcParameter || paramLong < 1 || paramLong > 1000)
-	{
+	if (endptr == pcParameter || paramLong < 1 || paramLong > 1000) {
 		pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen,
-								  "Must supply duration in range 1-1000ms");
+				"Must supply duration in range 1-1000ms");
 		return pdFALSE;
 	}
 	duration = (uint16_t)paramLong;
 
 	// Else OK
 	ledFlashInit();
-	ledFlashBrightness(brightness); // Call before ledFlashSelectLED()
+	ledFlashBrightness(brightness);	// Call before ledFlashSelectLED()
 	ledFlashSelectLED(VIS_LED);
 	ledFlashEnable(duration);
 
@@ -880,8 +866,7 @@ static BaseType_t prvLedFlash(char *pcWriteBuffer, size_t xWriteBufferLen, const
  *
  * utc 2025-03-21T09:05:00Z
  */
-static BaseType_t prvSetUtc(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString)
-{
+static BaseType_t prvSetUtc(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) {
 	const char *pcParameter;
 	BaseType_t lParameterStringLength;
 	RTC_ERROR_E ret;
@@ -897,26 +882,22 @@ static BaseType_t prvSetUtc(char *pcWriteBuffer, size_t xWriteBufferLen, const c
 
 	/* Get parameter */
 	pcParameter = FreeRTOS_CLIGetParameter(pcCommandString, 1, &lParameterStringLength);
-	if (pcParameter != NULL)
-	{
+	if (pcParameter != NULL) {
 
 		ret = exif_utc_utc_string_to_time(pcParameter, &tm);
-		if (ret != RTC_NO_ERROR)
-		{
+		if (ret != RTC_NO_ERROR) {
 			snprintf(pcWriteBuffer, xWriteBufferLen, "Error %d\n", ret);
 			return pdFALSE;
 		}
 		startTime = xTaskGetTickCount();
-		ret = exif_utc_set_rtc_from_time(&tm); // This takes 1-2s
+		ret = exif_utc_set_rtc_from_time(&tm);	// This takes 1-2s
 		elapsedTime = xTaskGetTickCount() - startTime;
 		elapsedMs = (elapsedTime * 1000) / configTICK_RATE_HZ;
 
-		if (ret == RTC_NO_ERROR)
-		{
-			snprintf(pcWriteBuffer, xWriteBufferLen, "RTC set to %s (this took %dms)", pcParameter, (int)elapsedMs);
+		if (ret == RTC_NO_ERROR) {
+			snprintf(pcWriteBuffer, xWriteBufferLen, "RTC set to %s (this took %dms)", pcParameter, (int) elapsedMs);
 		}
-		else
-		{
+		else {
 			snprintf(pcWriteBuffer, xWriteBufferLen, "Error %d setting RTC", ret);
 		}
 	}
@@ -929,8 +910,7 @@ static BaseType_t prvSetUtc(char *pcWriteBuffer, size_t xWriteBufferLen, const c
  * Runs exif_utc tests from within the CLI
  *
  */
-static BaseType_t prvExifUtcTests(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString)
-{
+static BaseType_t prvExifUtcTests(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) {
 	(void)pcCommandString;
 	(void)xWriteBufferLen;
 	configASSERT(pcWriteBuffer);
@@ -938,7 +918,7 @@ static BaseType_t prvExifUtcTests(char *pcWriteBuffer, size_t xWriteBufferLen, c
 	XP_GREEN;
 	xprintf("\nTest of exif_utc_test_set_rtc() - with valid string\n");
 	XP_WHITE;
-	exif_utc_test_set_rtc("2025-03-21T09:05:00Z"); // correctly formed
+	exif_utc_test_set_rtc("2025-03-21T09:05:00Z");	// correctly formed
 
 	XP_GREEN;
 	xprintf("Test of exif_utc_test_get_rtc()\n");
@@ -949,7 +929,7 @@ static BaseType_t prvExifUtcTests(char *pcWriteBuffer, size_t xWriteBufferLen, c
 	xprintf("Test of exif_utc_test_set_rtc() - with invalid string\n");
 	XP_WHITE;
 
-	exif_utc_test_set_rtc("2025-03-21T09:05:00"); // incorrectly formed
+	exif_utc_test_set_rtc("2025-03-21T09:05:00");	// incorrectly formed
 
 	XP_GREEN;
 	xprintf("exif_utc  tests finished\n\n");
@@ -1002,27 +982,22 @@ static BaseType_t prvInt(char *pcWriteBuffer, size_t xWriteBufferLen, const char
 }
 
 // Check for I2C device at an address (7-bit, decimal number)
-static BaseType_t prvI2C(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString)
-{
+static BaseType_t prvI2C(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) {
 	const char *pcParameter;
 	BaseType_t lParameterStringLength;
 	uint16_t address;
 
 	/* Get parameter */
 	pcParameter = FreeRTOS_CLIGetParameter(pcCommandString, 1, &lParameterStringLength);
-	if (pcParameter != NULL)
-	{
+	if (pcParameter != NULL) {
 
 		address = atoi(pcParameter); // Consider using strtol for safer parsing and error checking.
 
-		if ((address >= 0) && (address <= 127))
-		{
-			if (hm0360_md_isSensorPresent(address))
-			{
+		if ((address >= 0) && (address <= 127)) {
+			if (hm0360_md_isSensorPresent(address)) {
 				pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen, "Present");
 			}
-			else
-			{
+			else {
 				pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen, "Not present");
 			}
 			return pdFALSE;
@@ -1060,8 +1035,8 @@ static BaseType_t prvWriteFile(char *pcWriteBuffer, size_t xWriteBufferLen, cons
 	{
 		// TODO should really check for a valid file name...
 		// prepare the file operation structure
-		strncpy(fName, pcParameter, FNAMELEN - 1); // Ensure there is space for string terminator
-		fName[FNAMELEN - 1] = '\0';
+		strncpy(fName, pcParameter, FNAMELEN-1);	// Ensure there is space for string terminator
+		fName[FNAMELEN-1] = '\0';
 		fileOp.fileName = fName;
 		fileOp.buffer = (uint8_t *)fContents;
 		fileOp.closeWhenDone = true;
@@ -1126,8 +1101,8 @@ static BaseType_t prvReadFile(char *pcWriteBuffer, size_t xWriteBufferLen, const
 		// TODO should really check for a valid file name...
 
 		// prepare the file operation structure
-		strncpy(fName, pcParameter, FNAMELEN - 1); // Ensure there is space for string terminator
-		fName[FNAMELEN - 1] = '\0';
+		strncpy(fName, pcParameter, FNAMELEN-1);	// Ensure there is space for string terminator
+		fName[FNAMELEN-1] = '\0';
 		fileOp.fileName = fName;
 		fileOp.buffer = (uint8_t *)fContents;
 		fileOp.closeWhenDone = true;
@@ -1182,13 +1157,11 @@ static BaseType_t prvSend(char *pcWriteBuffer, size_t xWriteBufferLen, const cha
 				}
 
 				// This version breaks the message into several strings, once ch reaches 0x80
-				//				if (ch == 0x80)
-				{
+				//				if (ch == 0x80) {
 				//					// No longer a printable character. Next time, add a string delimiter
 				//					ch = '\0';
 				//				}
-				//				else if (ch == 1)
-				{
+				//				else if (ch == 1) {
 				//					// We have just written the '\0', so start the sequence again
 				//					ch = ' ';
 				//				}
@@ -1218,8 +1191,7 @@ static BaseType_t prvSend(char *pcWriteBuffer, size_t xWriteBufferLen, const cha
  *
  * Once completed, the sensor state goes back to IDLE, until state changed again.
  */
-static BaseType_t prvCapture(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString)
-{
+static BaseType_t prvCapture(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) {
 	const char *pcParameter1;
 	const char *pcParameter2;
 	BaseType_t xParameter1StringLength;
@@ -1241,10 +1213,9 @@ static BaseType_t prvCapture(char *pcWriteBuffer, size_t xWriteBufferLen, const 
 		return pdFALSE;
 	}
 
-	if ((captures < MIN_IMAGE_CAPTURES) || (captures > MAX_IMAGE_CAPTURES))
-	{
+	if ((captures < MIN_IMAGE_CAPTURES) || (captures > MAX_IMAGE_CAPTURES)) {
 		snprintf(pcWriteBuffer, xWriteBufferLen, "Error: number of images must be between %d and %d.\r\n",
-				 MIN_IMAGE_CAPTURES, MAX_IMAGE_CAPTURES);
+				MIN_IMAGE_CAPTURES, MAX_IMAGE_CAPTURES);
 		return pdFALSE;
 	}
 
@@ -1261,21 +1232,18 @@ static BaseType_t prvCapture(char *pcWriteBuffer, size_t xWriteBufferLen, const 
 		return pdFALSE;
 	}
 
-	if ((timerInterval < MIN_IMAGE_INTERVAL) || (timerInterval > MAX_IMAGE_INTERVAL))
-	{
+	if ((timerInterval < MIN_IMAGE_INTERVAL) || (timerInterval > MAX_IMAGE_INTERVAL)) {
 		snprintf(pcWriteBuffer, xWriteBufferLen, "Error: interval must be between %d and %d.\r\n",
-				 MIN_IMAGE_INTERVAL, MAX_IMAGE_INTERVAL);
+				MIN_IMAGE_INTERVAL, MAX_IMAGE_INTERVAL);
 		return pdFALSE;
 	}
 
 	// Parameters are valid
 
-	if (captures == 1)
-	{
+	if (captures == 1) {
 		pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen, "About to capture 1 image with an interval of '%u' milliseconds", timerInterval);
 	}
-	else
-	{
+	else {
 		pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen, "About to capture %u images with an interval of '%u' milliseconds", captures, timerInterval);
 	}
 
@@ -1284,8 +1252,7 @@ static BaseType_t prvCapture(char *pcWriteBuffer, size_t xWriteBufferLen, const 
 	send_msg.msg_parameter = timerInterval;
 	send_msg.msg_event = APP_MSG_IMAGETASK_STARTCAPTURE;
 
-	if (xQueueSend(xImageTaskQueue, (void *)&send_msg, __QueueSendTicksToWait) != pdTRUE)
-	{
+	if (xQueueSend(xImageTaskQueue, (void *)&send_msg, __QueueSendTicksToWait) != pdTRUE) {
 		xprintf("Failed to send 0x%x to imageTask\r\n", send_msg.msg_event);
 	}
 
@@ -1302,8 +1269,7 @@ static BaseType_t prvCapture(char *pcWriteBuffer, size_t xWriteBufferLen, const 
  *
  * The values may be changed by events and by this command
  */
-static BaseType_t prvSetOpParam(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString)
-{
+static BaseType_t prvSetOpParam(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) {
 	const char *pcParameter1;
 	const char *pcParameter2;
 	BaseType_t xParameter1StringLength;
@@ -1313,32 +1279,27 @@ static BaseType_t prvSetOpParam(char *pcWriteBuffer, size_t xWriteBufferLen, con
 
 	/* Get the first parameter */
 	pcParameter1 = FreeRTOS_CLIGetParameter(pcCommandString, 1, &xParameter1StringLength);
-	if (pcParameter1 != NULL)
-	{
+	if (pcParameter1 != NULL) {
 		// TODO check the parameter is a number e.g. isnumber()
 		index = atoi(pcParameter1); // Consider using strtol for safer parsing and error checking.
 	}
-	else
-	{
+	else {
 		snprintf(pcWriteBuffer, xWriteBufferLen, "Error: Index required.\r\n");
 		return pdFALSE;
 	}
 
-	if ((index < 0) || (index >= OP_PARAMETER_NUM_ENTRIES))
-	{
-		snprintf(pcWriteBuffer, xWriteBufferLen, "Error: index must be between 0 and %d.\r\n", OP_PARAMETER_NUM_ENTRIES - 1);
+	if ((index < 0) || (index >= OP_PARAMETER_NUM_ENTRIES)) {
+		snprintf(pcWriteBuffer, xWriteBufferLen, "Error: index must be between 0 and %d.\r\n",OP_PARAMETER_NUM_ENTRIES - 1);
 		return pdFALSE;
 	}
 
 	/* Get the second parameter */
 	pcParameter2 = FreeRTOS_CLIGetParameter(pcCommandString, 2, &xParameter2StringLength);
-	if (pcParameter2 != NULL)
-	{
+	if (pcParameter2 != NULL) {
 		// TODO check the parameter is a number e.g. isnumber()
 		value = atoi(pcParameter2); // Consider using strtol for safer parsing and error checking.
 	}
-	else
-	{
+	else {
 		snprintf(pcWriteBuffer, xWriteBufferLen, "Error: value required.\r\n");
 		return pdFALSE;
 	}
@@ -1358,8 +1319,7 @@ static BaseType_t prvSetOpParam(char *pcWriteBuffer, size_t xWriteBufferLen, con
  *
  * The values may be changed by events and by this command
  */
-static BaseType_t prvGetOpParam(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString)
-{
+static BaseType_t prvGetOpParam(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) {
 	const char *pcParameter1;
 	BaseType_t xParameter1StringLength;
 	uint16_t index = 0;
@@ -1367,28 +1327,25 @@ static BaseType_t prvGetOpParam(char *pcWriteBuffer, size_t xWriteBufferLen, con
 
 	/* Get the first parameter */
 	pcParameter1 = FreeRTOS_CLIGetParameter(pcCommandString, 1, &xParameter1StringLength);
-	if (pcParameter1 != NULL)
-	{
+	if (pcParameter1 != NULL) {
 		// TODO check the parameter is a number e.g. isnumber()
 		index = atoi(pcParameter1); // Consider using strtol for safer parsing and error checking.
 	}
-	else
-	{
+	else {
 		snprintf(pcWriteBuffer, xWriteBufferLen, "Error: Index required.\r\n");
 		return pdFALSE;
 	}
 
-	if ((index < 0) || (index >= OP_PARAMETER_NUM_ENTRIES))
-	{
+	if ((index < 0) || (index >= OP_PARAMETER_NUM_ENTRIES)) {
 		snprintf(pcWriteBuffer, xWriteBufferLen, "Error: index must be between 0 and %d.\r\n",
-				 OP_PARAMETER_NUM_ENTRIES - 1);
+				OP_PARAMETER_NUM_ENTRIES - 1);
 		return pdFALSE;
 	}
 
 	// Parameters are valid
 	value = fatfs_getOperationalParameter(index);
-	// snprintf(pcWriteBuffer, xWriteBufferLen, "Op Param %d = %d\r\n", index, value);
-	snprintf(pcWriteBuffer, xWriteBufferLen, "OpParam %d = %d", index, value); // just the value integer
+	//snprintf(pcWriteBuffer, xWriteBufferLen, "Op Param %d = %d\r\n", index, value);
+	snprintf(pcWriteBuffer, xWriteBufferLen, "OpParam %d = %d", index, value);	// just the value integer
 
 	return pdFALSE;
 }
@@ -1404,76 +1361,67 @@ static BaseType_t prvGetOpParam(char *pcWriteBuffer, size_t xWriteBufferLen, con
  * Issue the command with enclosing quotes, so like this:
  * 		setgps "37°48'30.50\"_N_122°25'10.22\"_W_500.75_Above"
  */
-static BaseType_t prvSetgps(char *pcWriteBuffer, size_t writeBufferLen, const char *pcCommandString)
-{
-	char gpsString[128];
-	char parsedGpsString[128] = {0};
+static BaseType_t prvSetgps(char *pcWriteBuffer, size_t writeBufferLen, const char *pcCommandString) {
+    char gpsString[128];
+    char parsedGpsString[128] = {0};
 
-	(void)pcWriteBuffer;
-	(void)writeBufferLen;
+    (void)pcWriteBuffer;
+    (void)writeBufferLen;
 
-	const char *param;
-	BaseType_t paramLen;
+    const char *param;
+    BaseType_t paramLen;
 
-	// Extract the first parameter (expected to be a quoted string)
-	param = FreeRTOS_CLIGetParameter(pcCommandString, 1, &paramLen);
-	if (!param || paramLen == 0)
-	{
-		snprintf(pcWriteBuffer, writeBufferLen, "Error: No GPS string provided.\r\n");
-		return pdFALSE;
-	}
+    // Extract the first parameter (expected to be a quoted string)
+    param = FreeRTOS_CLIGetParameter(pcCommandString, 1, &paramLen);
+    if (!param || paramLen == 0) {
+        snprintf(pcWriteBuffer, writeBufferLen, "Error: No GPS string provided.\r\n");
+        return pdFALSE;
+    }
 
-	// Copy extracted parameter into a null-terminated buffer
-	if (paramLen >= sizeof(gpsString))
-	{
-		snprintf(pcWriteBuffer, writeBufferLen, "Error: GPS string too long.\r\n");
-		return pdFALSE;
-	}
+    // Copy extracted parameter into a null-terminated buffer
+    if (paramLen >= sizeof(gpsString)) {
+        snprintf(pcWriteBuffer, writeBufferLen, "Error: GPS string too long.\r\n");
+        return pdFALSE;
+    }
 
-	strncpy(gpsString, param, paramLen);
-	gpsString[paramLen] = '\0'; // Null-terminate the extracted string
+    strncpy(gpsString, param, paramLen);
+    gpsString[paramLen] = '\0'; // Null-terminate the extracted string
 
-	// Process the GPS string (remove escape characters if necessary)
-	// Remove first and last enclosing quotes
-	int j = 0;
-	for (int i = 0; i < paramLen; i++)
-	{
-		if (param[i] == '"')
-		{
-			// skip it
-		}
-		else if (param[i] == '\\' && param[i + 1] == '"')
-		{
-			parsedGpsString[j++] = '"';
-			i++; // Skip the escaped quote
-		}
-		else if (param[i] == '_')
-		{
-			// replace underscore with space
-			parsedGpsString[j++] = ' ';
-		}
-		else
-		{
-			parsedGpsString[j++] = param[i];
-		}
-	}
-	parsedGpsString[j] = '\0';
+    // Process the GPS string (remove escape characters if necessary)
+    // Remove first and last enclosing quotes
+    int j = 0;
+    for (int i = 0; i < paramLen; i++) {
+    	if (param[i] == '"') {
+    		// skip it
+    	}
+    	else if (param[i] == '\\' && param[i + 1] == '"') {
+            parsedGpsString[j++] = '"';
+            i++; // Skip the escaped quote
+        }
+        else if (param[i] == '_') {
+        	// replace underscore with space
+        	parsedGpsString[j++] = ' ';
+        }
+        else {
+            parsedGpsString[j++] = param[i];
+        }
+    }
+    parsedGpsString[j] = '\0';
 
-	xprintf("Parsed GPS string is '%s'\n", parsedGpsString);
-	// Call the EXIF GPS parsing function to set coordinates
+    xprintf("Parsed GPS string is '%s'\n", parsedGpsString);
+    // Call the EXIF GPS parsing function to set coordinates
 	exif_gps_parse_full_string(&exif_gps_deviceLat, &exif_gps_deviceLon, &exif_gps_deviceAlt, parsedGpsString);
 
 	// String to return to the app
 	sprintf(pcWriteBuffer, "Device GPS set");
 
-	return pdFALSE; // Command execution complete
+    return pdFALSE; // Command execution complete
 }
 
 /**
  * Return current device GPS location
  */
-static BaseType_t prvGetgps(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString)
-{
+static BaseType_t prvGetgps(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) {
 	(void)pcCommandString;
 	(void)xWriteBufferLen;
 	configASSERT(pcWriteBuffer);
@@ -1497,8 +1445,7 @@ static BaseType_t prvGetgps(char *pcWriteBuffer, size_t xWriteBufferLen, const c
  * Runs exif_gps tests from within the CLI
  *
  */
-static BaseType_t prvExifGpsTests(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString)
-{
+static BaseType_t prvExifGpsTests(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) {
 	(void)pcCommandString;
 	(void)xWriteBufferLen;
 	configASSERT(pcWriteBuffer);
@@ -1643,11 +1590,9 @@ static void processSingleCharacter(char rxChar)
 			/* If xMore == pdTRUE, then output buffer contains no null termination, so
 			 *  we know it is OUTPUT_BUF_SIZE. If pdFALSE, we can use strlen.
 			 */
-			//						for (x = 0; x < (xMore == pdTRUE ? OUTPUT_BUF_SIZE : strlen(output)) ; x++)
-			{
+			//						for (x = 0; x < (xMore == pdTRUE ? OUTPUT_BUF_SIZE : strlen(output)) ; x++) {
 			//							char outChar = *(output + x);
-			//							if (outChar != 0)
-			{
+			//							if (outChar != 0) {
 			//								putchar(outChar);
 			//							}
 			//						}
@@ -1726,8 +1671,7 @@ static void processCommand(char *rxString)
 
 	processingWW130Command = true;
 
-	do
-	{
+	do {
 		// Wait till previous I2C comms transmission is done.
 		xSemaphoreTake(xI2CTxSemaphore, portMAX_DELAY);
 
@@ -1737,32 +1681,27 @@ static void processCommand(char *rxString)
 
 		// Truncate the long 'Command not recognised.  Enter 'help' to view a list of available commands.' message
 		// TODO manage other error messages that come from the same source
-		if (startsWith(cliOutBuffer, "Command not recognised"))
-		{
+		if (startsWith(cliOutBuffer, "Command not recognised")) {
 			strcpy(cliOutBuffer, "Unrecognised");
 		}
 
 		// Send back to MKL62BA - msg_data is the string
 		send_msg.msg_data = (uint32_t)cliOutBuffer;
 
-		if (processingWW130Command)
-		{
+		if (processingWW130Command) {
 			// the first message in response to a CLI command is this one:
-			if (binaryLength >= 0)
-			{
+			if (binaryLength >= 0) {
 				// This shows that the command is returning binary data, as opposed to a string
 				send_msg.msg_event = APP_MSG_IFTASK_I2CCOMM_CLI_BINARY_RESPONSE;
 				send_msg.msg_parameter = (uint32_t)binaryLength; // msg_parameter is the length passed to us from the cli-parsing functions.
 			}
-			else
-			{
+			else {
 				xprintf("%s\n", cliOutBuffer);
 				send_msg.msg_parameter = strnlen((char *)cliOutBuffer, CLI_OUTPUT_BUF_SIZE);
 				send_msg.msg_event = APP_MSG_IFTASK_I2CCOMM_CLI_STRING_RESPONSE;
 			}
 		}
-		else
-		{
+		else {
 			// If there is more than one line from the CLI response then send this message:
 			if (binaryLength >= 0)
 			{
@@ -1777,8 +1716,7 @@ static void processCommand(char *rxString)
 			}
 		}
 
-		if (xQueueSend(xIfTaskQueue, (void *)&send_msg, __QueueSendTicksToWait) != pdTRUE)
-		{
+		if (xQueueSend(xIfTaskQueue, (void *)&send_msg, __QueueSendTicksToWait) != pdTRUE) {
 			xprintf("send_msg=0x%x fail\r\n", send_msg.msg_event);
 			xMore = pdFALSE;
 		}
@@ -1810,8 +1748,7 @@ static void processCommand(char *rxString)
  *
  * =======================================================
  */
-static void vCmdLineTask(void *pvParameters)
-{
+static void vCmdLineTask(void *pvParameters) {
 	char rxChar;
 	DEV_UART_PTR dev_uart_ptr;
 	DEV_BUFFER rx_buffer;
@@ -1821,10 +1758,10 @@ static void vCmdLineTask(void *pvParameters)
 	uint32_t rxData;
 	APP_MSG_T send_msg;
 
-	XP_CYAN;
-	// Observing these messages confirms the initialisation sequence
-	xprintf("Starting CLI Task\n");
-	XP_WHITE;
+    XP_CYAN;
+    // Observing these messages confirms the initialisation sequence
+    xprintf("Starting CLI Task\n");
+    XP_WHITE;
 
 	/* Register available CLI commands */
 	vRegisterCLICommands();
@@ -1847,12 +1784,10 @@ static void vCmdLineTask(void *pvParameters)
 	dev_uart_ptr->uart_control(UART_CMD_SET_RXINT_BUF, (UART_CTRL_PARAM)&rx_buffer);
 	dev_uart_ptr->uart_control(UART_CMD_SET_RXINT, (UART_CTRL_PARAM)1);
 
-	barrier_ready(&startupBarrier); // Call a function when every task reaches this point
+	barrier_ready(&startupBarrier);		// Call a function when every task reaches this point
 
-	for (;;)
-	{
-		if (xQueueReceive(xCliTaskQueue, &(rxMessage), __QueueRecvTicksToWait) == pdTRUE)
-		{
+	for(;;) {
+		if (xQueueReceive(xCliTaskQueue, &(rxMessage), __QueueRecvTicksToWait) == pdTRUE) {
 
 			event = rxMessage.msg_event;
 			rxData = rxMessage.msg_data;
@@ -1862,12 +1797,10 @@ static void vCmdLineTask(void *pvParameters)
 
 			// convert event to a string
 			const char * eventString;
-			if ((event >= APP_MSG_CLITASK_FIRST) && (event < APP_MSG_CLITASK_LAST))
-			{
+			if ((event >= APP_MSG_CLITASK_FIRST) && (event < APP_MSG_CLITASK_LAST)) {
 				eventString = cliTaskEventString[event - APP_MSG_CLITASK_FIRST];
 			}
-			else
-			{
+			else {
 				eventString = "Unexpected";
 			}
 
@@ -1877,8 +1810,7 @@ static void vCmdLineTask(void *pvParameters)
 			xprintf("received event '%s' (0x%04x). RX data = 0x%08x\r\n", eventString, event, rxData);
 #endif
 			// For now, switch on event
-			switch (event)
-			{
+			switch (event) {
 
 			case APP_MSG_CLITASK_RXCHAR:
 				// Character has arrived from the UART (user types at console)
@@ -2001,20 +1933,20 @@ static void vRegisterCLICommands(void)
 
 	FreeRTOS_CLIRegisterCommand(&xSetGps);
 	FreeRTOS_CLIRegisterCommand(&xGetGps);
-	FreeRTOS_CLIRegisterCommand(&xGpsTests);  // Runs several UTC tests
+	FreeRTOS_CLIRegisterCommand(&xGpsTests); // Runs several UTC tests
 	FreeRTOS_CLIRegisterCommand(&xLoadModel); // Load model by version number
+	FreeRTOS_CLIRegisterCommand(&xSetUtc);		// Sets time from a UTC string
+	FreeRTOS_CLIRegisterCommand(&xGetUtc);	// Prints UTC time (once)
 
-	FreeRTOS_CLIRegisterCommand(&xSetUtc);	 // Sets time from a UTC string
-	FreeRTOS_CLIRegisterCommand(&xGetUtc);	 // Prints UTC time (once)
 	FreeRTOS_CLIRegisterCommand(&xUtcTests); // Runs several UTC tests
-	FreeRTOS_CLIRegisterCommand(&xTimeN);	 // Prints UTC time (many times)
+	FreeRTOS_CLIRegisterCommand(&xTimeN);	// Prints UTC time (many times)
 
-	FreeRTOS_CLIRegisterCommand(&xSetOpParam); // Sets an Operational Parameter
-	FreeRTOS_CLIRegisterCommand(&xGetOpParam); // Gets an Operational Parameter
+	FreeRTOS_CLIRegisterCommand(&xSetOpParam);	// Sets an Operational Parameter
+	FreeRTOS_CLIRegisterCommand(&xGetOpParam);	// Gets an Operational Parameter
 
 #ifdef WW500_C00
-	FreeRTOS_CLIRegisterCommand(&xLedFlash); // Test the ledFlash code
-#endif										 // WW500_C00
+	FreeRTOS_CLIRegisterCommand(&xLedFlash);	// Test the ledFlash code
+#endif // WW500_C00
 }
 
 /********************************** Public Functions  *************************************/
@@ -2026,8 +1958,7 @@ static void vRegisterCLICommands(void)
  *
  * Not sure how bug the stack needs to be...
  */
-TaskHandle_t cli_createTask(int8_t priority, APP_WAKE_REASON_E wakeReason)
-{
+TaskHandle_t cli_createTask(int8_t priority, APP_WAKE_REASON_E wakeReason) {
 
 	if (priority < 0)
 	{
@@ -2045,7 +1976,7 @@ TaskHandle_t cli_createTask(int8_t priority, APP_WAKE_REASON_E wakeReason)
 					3 * configMINIMAL_STACK_SIZE + CLI_CMD_LINE_BUF_SIZE + CLI_OUTPUT_BUF_SIZE,
 					NULL, priority,
 					&cli_task_id) != pdPASS)
-					{
+	{
 		xprintf("Failed to create vCmdLineTask\n");
 		configASSERT(0); // TODO add debug messages?
 	}

@@ -78,10 +78,10 @@
 /*************************************** Includes *******************************************/
 
 /* Modified by Maxim Integrated 26-Jun-2015 to quiet compiler warnings */
-#include <string.h>
-#include <stdio.h>
-#include <stdbool.h>
-#include <stdlib.h>
+#include "string.h"
+#include "stdio.h"
+#include "stdbool.h"
+#include "stdlib.h"
 
 /* FreeRTOS includes. */
 #include "FreeRTOS.h"
@@ -544,23 +544,29 @@ static BaseType_t prvTaskStateCmd(char *pcWriteBuffer, size_t xWriteBufferLen, c
 }
 
 //// Set or clear a boolean called verbose (not used at the moment, but could be!
-// static BaseType_t prvVerbose( char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString ) {
+// static BaseType_t prvVerbose( char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString )
+{
 //	const char *pcParameter;
 //	BaseType_t lParameterStringLength;
 //
 //	/* Get parameter */
 //	pcParameter = FreeRTOS_CLIGetParameter(pcCommandString, 1, &lParameterStringLength);
-//	if (pcParameter != NULL) {
-//		if (pcParameter[0] == '0') {
+//	if (pcParameter != NULL)
+{
+//		if (pcParameter[0] == '0')
+{
 //			verbose = false;
 //			pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen, "Verbose is off\r\n");
-//		} else if (pcParameter[0] == '1') {
+//		} else if (pcParameter[0] == '1')
+{
 //			pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen, "Verbose is on\r\n");
 //			verbose = true;
-//		} else {
+//		} else
+{
 //			pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen, "Must supply 0 (Disable) or 1 (Enable)\r\n");
 //		}
-//	} else {
+//	} else
+{
 //		pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen, "Must supply 0 (Disable) or 1 (Enable)\r\n");
 //	}
 //
@@ -1176,11 +1182,13 @@ static BaseType_t prvSend(char *pcWriteBuffer, size_t xWriteBufferLen, const cha
 				}
 
 				// This version breaks the message into several strings, once ch reaches 0x80
-				//				if (ch == 0x80) {
+				//				if (ch == 0x80)
+				{
 				//					// No longer a printable character. Next time, add a string delimiter
 				//					ch = '\0';
 				//				}
-				//				else if (ch == 1) {
+				//				else if (ch == 1)
+				{
 				//					// We have just written the '\0', so start the sequence again
 				//					ch = ' ';
 				//				}
@@ -1635,9 +1643,11 @@ static void processSingleCharacter(char rxChar)
 			/* If xMore == pdTRUE, then output buffer contains no null termination, so
 			 *  we know it is OUTPUT_BUF_SIZE. If pdFALSE, we can use strlen.
 			 */
-			//						for (x = 0; x < (xMore == pdTRUE ? OUTPUT_BUF_SIZE : strlen(output)) ; x++) {
+			//						for (x = 0; x < (xMore == pdTRUE ? OUTPUT_BUF_SIZE : strlen(output)) ; x++)
+			{
 			//							char outChar = *(output + x);
-			//							if (outChar != 0) {
+			//							if (outChar != 0)
+			{
 			//								putchar(outChar);
 			//							}
 			//						}
@@ -1852,10 +1862,12 @@ static void vCmdLineTask(void *pvParameters)
 
 			// convert event to a string
 			const char * eventString;
-			if ((event >= APP_MSG_CLITASK_FIRST) && (event < APP_MSG_CLITASK_LAST)) {
+			if ((event >= APP_MSG_CLITASK_FIRST) && (event < APP_MSG_CLITASK_LAST))
+			{
 				eventString = cliTaskEventString[event - APP_MSG_CLITASK_FIRST];
 			}
-			else {
+			else
+			{
 				eventString = "Unexpected";
 			}
 
@@ -2033,7 +2045,7 @@ TaskHandle_t cli_createTask(int8_t priority, APP_WAKE_REASON_E wakeReason)
 					3 * configMINIMAL_STACK_SIZE + CLI_CMD_LINE_BUF_SIZE + CLI_OUTPUT_BUF_SIZE,
 					NULL, priority,
 					&cli_task_id) != pdPASS)
-	{
+					{
 		xprintf("Failed to create vCmdLineTask\n");
 		configASSERT(0); // TODO add debug messages?
 	}

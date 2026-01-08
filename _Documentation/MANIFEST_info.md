@@ -36,8 +36,8 @@ SD Card Root
 
 **Behavior:**
 1. On power-up, the firmware detects `manifest.zip` on the SD card root
-2. The zip file is automatically extracted to `/Manifest/` directory
-3. The firmware scans `/Manifest/` for any `.tfl` file
+2. The zip file is automatically extracted to `/MANIFEST/` directory
+3. The firmware scans `/MANIFEST/` for any `.tfl` file
 4. If found, the model is loaded and neural network inference is enabled
 5. Labels from `labels.txt` are loaded and written to EXIF metadata
 6. Captured images include:
@@ -62,7 +62,7 @@ no rat
 
 **Behavior:**
 1. On power-up, the firmware detects `manifest.zip` and extracts it
-2. The firmware scans `/Manifest/` but finds no `.tfl` file
+2. The firmware scans `/MANIFEST/` but finds no `.tfl` file
 3. Neural network processing is **skipped** - no AI inference runs
 4. Camera operates normally with both motion detection AND/OR time-lapse wake sources
    - Motion detection: Enabled if `OP_PARAMETER_MD_INTERVAL` > 0 (from CONFIG.TXT)
@@ -82,8 +82,8 @@ no rat
 - Fresh SD card with no `manifest.zip` file
 
 **Behavior:**
-1. On power-up, firmware detects missing `/Manifest/` directory
-2. `/Manifest/` directory is automatically created
+1. On power-up, firmware detects missing `/MANIFEST/` directory
+2. `/MANIFEST/` directory is automatically created
 3. A default `CONFIG.TXT` is generated with factory settings
 4. No model is loaded - operates without AI inference
 5. Camera operates with default wake source configuration:
@@ -98,11 +98,11 @@ no rat
 ### Scenario 4: Manifest Directory Already Exists
 
 **Setup:**
-- `/Manifest/` directory present from previous boot
+- `/MANIFEST/` directory present from previous boot
 - May contain model, labels, and config from earlier extraction
 
 **Behavior:**
-1. On power-up, firmware detects existing `/Manifest/` directory
+1. On power-up, firmware detects existing `/MANIFEST/` directory
 2. **No extraction occurs** - existing files are preserved
 3. If `.tfl` model exists, it is loaded and used
 4. If `labels.txt` exists, labels are loaded
@@ -111,8 +111,8 @@ no rat
 **Use Case:** Normal operation after initial setup
 
 **Note:** To update the model, either:
-- Delete the `/Manifest/` directory and replace `manifest.zip`
-- Directly update files in `/Manifest/` (advanced users)
+- Delete the `/MANIFEST/` directory and replace `manifest.zip`
+- Directly update files in `/MANIFEST/` (advanced users)
 - Update the parameters via the mobile app
 
 ---
@@ -121,9 +121,9 @@ no rat
 
 The firmware uses a flexible model discovery system:
 
-1. **Scans `/Manifest/` directory** for any file with `.tfl` extension
+1. **Scans `/MANIFEST/` directory** for any file with `.tfl` extension
 2. **No specific filename required** - first `.tfl` file found is used
-3. **Fallback search**: If `/Manifest/` is empty, checks SD card root
+3. **Fallback search**: If `/MANIFEST/` is empty, checks SD card root
 4. **Model validation**: Verifies model format before loading
 5. **Memory check**: Ensures sufficient RAM for model execution
 
@@ -137,7 +137,7 @@ The firmware uses a flexible model discovery system:
 
 ## Label Loading
 
-Labels are loaded from `/Manifest/labels.txt` if present:
+Labels are loaded from `/MANIFEST/labels.txt` if present:
 
 - **Format**: One label per line, UTF-8 text
 - **Order**: Must match model output class order (class 0 = first line)
@@ -165,7 +165,7 @@ UserComment: "NN: skipped (no model)"
 
 ## Configuration File (CONFIG.TXT)
 
-**Location**: Always stored in `/Manifest/CONFIG.TXT`
+**Location**: Always stored in `/MANIFEST/CONFIG.TXT`
 
 **Format**: Key-value pairs, one per line
 
@@ -190,7 +190,7 @@ There is a failsafe method to support all manifest.zip case scenarios:
 - `/manifest.ZIP`
 
 **Directory:**
-- Created as `/Manifest/` (title case)
+- Created as `/MANIFEST/` (upper case)
 - Case-insensitive file lookups
 
 **Config file:**
@@ -202,13 +202,13 @@ There is a failsafe method to support all manifest.zip case scenarios:
 ## Troubleshooting
 
 ### Model Not Loading
-1. Check that `.tfl` file exists in `/Manifest/`
+1. Check that `.tfl` file exists in `/MANIFEST/`
 2. Verify model is TensorFlow Lite format (not TensorFlow)
 3. Ensure model is quantized (int8) - float models not supported
 4. Check serial console for error messages during boot
 
 ### Labels Not Appearing in EXIF
-1. Verify `labels.txt` exists in `/Manifest/`
+1. Verify `labels.txt` exists in `/MANIFEST/`
 2. Check label count matches model output classes
 3. Ensure UTF-8 encoding (no BOM)
 4. Verify line endings (LF or CRLF both work)

@@ -381,7 +381,7 @@ static APP_MSG_DEST_T handleEventForUninit(APP_MSG_T rxMessage) {
 		//    	// Complete this as necessary
 		//    	else if (sendMsg.destination == anotherTaskQueue) {
 		//        	sendMsg.message.msg_event = APP_MSG_ANOTHERTASK_DISK_WRITE_COMPLETE;
-		//    	} else {
+		else {
 			// assumed to be CLI task.
 			sendMsg.message.msg_event = APP_MSG_CLITASK_DISK_WRITE_COMPLETE;
 		}
@@ -401,7 +401,7 @@ static APP_MSG_DEST_T handleEventForUninit(APP_MSG_T rxMessage) {
 		//    	// Complete this as necessary
 		//    	else if (sendMsg.destination == anotherTaskQueue) {
 		//        	sendMsg.message.msg_event = APP_MSG_ANOTHERTASK_DISK_READ_COMPLETE;
-		//    	} else {
+		else {
 			// assumed to be CLI task.
 			sendMsg.message.msg_event = APP_MSG_CLITASK_DISK_READ_COMPLETE;
 		}
@@ -479,11 +479,7 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 			sendMsg.message.msg_event = APP_MSG_IFTASK_DISK_WRITE_COMPLETE;
 		} else if (sendMsg.destination == xImageTaskQueue) {
 			sendMsg.message.msg_event = APP_MSG_IMAGETASK_DISK_WRITE_COMPLETE;
-		}
-		//    	// Complete this as necessary
-		//    	else if (sendMsg.destination == anotherTaskQueue) {
-		//        	sendMsg.message.msg_event = APP_MSG_ANOTHERTASK_DISK_WRITE_COMPLETE;
-		//    	} else {
+		} else {
 			// assumed to be CLI task.
 			sendMsg.message.msg_event = APP_MSG_CLITASK_DISK_WRITE_COMPLETE;
 		}
@@ -510,7 +506,7 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 		//    	// Complete this as necessary
 		//    	else if (sendMsg.destination == anotherTaskQueue) {
 		//        	sendMsg.message.msg_event = APP_MSG_ANOTHERTASK_DISK_READ_COMPLETE;
-		//    	} else {
+		else {
 			// assumed to be CLI task.
 			sendMsg.message.msg_event = APP_MSG_CLITASK_DISK_READ_COMPLETE;
 		}
@@ -1324,15 +1320,7 @@ TaskHandle_t fatfs_createTask(int8_t priority, APP_WAKE_REASON_E wakeReason) {
 		xprintf("Failed to create xSDInitDoneSemaphore\n");
 		configASSERT(0); // TODO add debug messages?
 	}
-
-	// Semaphore to flag that the final message has been sent and we can enter DPD
-	xSDInitDoneSemaphore = xSemaphoreCreateBinary();
-
-	if (xSDInitDoneSemaphore == NULL) {
-		xprintf("Failed to create xSDInitDoneSemaphore\n");
-		configASSERT(0); // TODO add debug messages?
-	}
-
+	
 	return fatFs_task_id;
 }
 

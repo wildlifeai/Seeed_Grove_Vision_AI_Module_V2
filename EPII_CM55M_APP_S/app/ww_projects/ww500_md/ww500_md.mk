@@ -4,17 +4,6 @@ override SCENARIO_APP_SUPPORT_LIST := $(APP_TYPE)
 # APP_TYPE = ww500_md
 APPL_DEFINES += -DWW500_MD
 
-# Select one of these:
-#APPL_DEFINES += -DWW500_A00
-APPL_DEFINES += -DWW500_B00
-# APPL_DEFINES += -DWW500_C00
-
-# String available to code using app_get_board_name_string()
-# Select one of these:
-#BOARD_NAME_STRING := '"WW500_A00"'
-#BOARD_NAME_STRING := '"WW500_B00"'
-BOARD_NAME_STRING := '"WW500_C02"'
-
 #APPL_DEFINES += -DIP_xdma
 #APPL_DEFINES += -DEVT_DATAPATH
 
@@ -53,14 +42,14 @@ override CIS_SEL := HM_COMMON
 override EPII_USECASE_SEL := drv_onecore_cm55m_s
 
 CIS_SUPPORT_INAPP = cis_sensor
-CIS_SUPPORT_INAPP_MODEL = cis_hm0360
+#CIS_SUPPORT_INAPP_MODEL = cis_hm0360
 # OV5647 for RP v1 camera
 #CIS_SUPPORT_INAPP_MODEL = cis_ov5647
 # IMX219 for RP v2 camera
 #CIS_SUPPORT_INAPP_MODEL = cis_imx219
 #CIS_SUPPORT_INAPP_MODEL = cis_imx477
 # IMX708 for RP v3 camera
-# CIS_SUPPORT_INAPP_MODEL = cis_imx708
+CIS_SUPPORT_INAPP_MODEL = cis_imx708
 
 # CGP added to indicate HM0360 is used:
 

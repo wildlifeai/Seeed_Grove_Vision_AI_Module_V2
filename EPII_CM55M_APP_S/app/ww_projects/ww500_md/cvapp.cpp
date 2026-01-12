@@ -67,8 +67,11 @@
 #endif
 #endif
 
-extern uint8_t __tensor_arena_start__;
-extern uint8_t __tensor_arena_end__;
+extern "C" {
+	// These are defined in the linker .ld file, and aligned on 32-byte boundaries
+    extern uint8_t __tensor_arena_start__;
+    extern uint8_t __tensor_arena_end__;
+}
 
 static uint8_t *tensor_arena_buf = &__tensor_arena_start__;
 static size_t tensor_arena_size = 0; // Will be calculated at runtime in cv_init()
@@ -83,8 +86,8 @@ namespace
     // static uint32_t tensor_arena= (uint32_t)tensor_arena_buf;
 
     struct ethosu_driver ethosu_drv; /* Default Ethos-U device driver */
-    tflite::MicroInterpreter *int_ptr = nullptr;
-    tflite::MicroMutableOpResolver<1> *op_resolver_ptr = nullptr;
+    static tflite::MicroInterpreter *int_ptr = nullptr;
+    static tflite::MicroMutableOpResolver<1> *op_resolver_ptr = nullptr;
     TfLiteTensor *input, *output;
 
     // Labels loaded from SD (one per line) – used for printing class names
@@ -411,7 +414,10 @@ int cv_init(bool security_enable, bool privilege_enable, int project_id, int dep
     if (tensor_arena_size == 0)
     {
         tensor_arena_size = (size_t)(&__tensor_arena_end__ - &__tensor_arena_start__);
-        xprintf("Calculated tensor arena size: %lu bytes\n", (unsigned long)tensor_arena_size);
+        //xprintf("Calculated tensor arena size: %lu bytes at 0x%08x - 0x%08x\n",
+        //		(unsigned long)tensor_arena_size, &__tensor_arena_start__, (&__tensor_arena_end__) - 1);
+        xprintf("Calculated tensor arena size: %lu bytes at 0x%08x - 0x%08x\n",
+        		(unsigned long)tensor_arena_size, &__tensor_arena_start__, (&__tensor_arena_end__) - 1);
     }
 
     // On first boot (g_project_id == 0), read the persisted model info from flash
@@ -574,25 +580,29 @@ int cv_init(bool security_enable, bool privilege_enable, int project_id, int dep
         return -1;
     }
 
-    xprintf("Tensor arena at %p, size = %lu bytes\n",
+    xprintf("Tensor arena at 0x%08x, size = %lu bytes\n",
             tensor_arena_buf,
             (unsigned long)tensor_arena_size);
 
-    tflite::MicroInterpreter *interpreter = new tflite::MicroInterpreter(
+    static tflite::MicroInterpreter *static_interpreter = new tflite::MicroInterpreter(
         model,
         *op_resolver_ptr,
         tensor_arena_buf,
         tensor_arena_size,
         &micro_error_reporter);
 
-    if (interpreter->AllocateTensors() != kTfLiteOk)
+    if (static_interpreter->AllocateTensors() != kTfLiteOk)
     {
         xprintf("Failed to allocate tensors\n");
         return -1;
     }
-    int_ptr = interpreter;
-    input = interpreter->input(0);
-    output = interpreter->output(0);
+    else {
+    	xprintf("Used %lu/%lu bytes for tensors\n",
+    			static_interpreter->arena_used_bytes(), tensor_arena_size);
+    }
+    int_ptr = static_interpreter;
+    input = static_interpreter->input(0);
+    output = static_interpreter->output(0);
     return 0;
 
     // static tflite::MicroInterpreter static_interpreter(

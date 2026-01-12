@@ -243,3 +243,48 @@ There is a failsafe method to support all manifest.zip case scenarios:
 - **EXIF Structure**: `EXIF_Support_for_WW.md`
 - **Operational Parameters**: `Operational_Parameters.md`
 - **Model Handling**: `Model_handling.md`
+
+---
+
+## Attempt at unzipping
+ 
+Charles attempted to unzip a `MANIFEST.zip` file from an SD card with no MANIFEST folder.
+The .zip file came from [wildlifewatcher.streamlit.app](https://wildlifewatcher.streamlit.app/).
+
+The unzipping failed. The console output is as follows:
+
+```
+MANIFEST_DIR: /MANIFEST
+MANIFEST_ZIP (selected): /MANIFEST.ZIP
+'/MANIFEST.ZIP' exists but '/MANIFEST' missing; unzipping...
+manifest zip '/MANIFEST.ZIP' size=256635 bytes
+ZIP entry: 'MANIFEST/labels.txt' (base 'labels.txt', size 16)
+Extracting 'MANIFEST/labels.txt' to '/MANIFEST/labels.txt'
+  Found and extracted labels.txt
+ZIP entry: 'MANIFEST/person_detection.tflite' (base 'person_detection.tflite', size 251568)
+Extracting 'MANIFEST/person_detection.tflite' to '/MANIFEST/person_detection.tflite'
+Failed to open '/MANIFEST/person_detection.tflite' for writing (err 6)
+ZIP entry: 'MANIFEST/CONFIG.TXT' (base 'CONFIG.TXT', size 210)
+Extracting 'MANIFEST/CONFIG.TXT' to '/MANIFEST/CONFIG.TXT'
+  Found and extracted CONFIG.TXT
+ZIP entry: 'MANIFEST/HMSTB1.BIN' (base 'HMSTB1.BIN', size 40)
+Extracting 'MANIFEST/HMSTB1.BIN' to '/MANIFEST/HMSTB1.BIN'
+ZIP entry: 'MANIFEST/config_file.md' (base 'config_file.md', size 3463)
+Extracting 'MANIFEST/config_file.md' to '/MANIFEST/config_file.md'
+Failed to open '/MANIFEST/config_file.md' for writing (err 6)
+ZIP entry: 'MANIFEST/README.TXT' (base 'README.TXT', size 598)
+Extracting 'MANIFEST/README.TXT' to '/MANIFEST/README.TXT'
+ZIP parse stopped: local header signature mismatch at offset 256206
+Manifest unzip summary: config=yes, labels=yes, models=0
+Unzip result: 0
+Post-unzip stat('/MANIFEST') = OK
+Post-unzip stat('/MANIFEST/CONFIG.TXT') = 0
+```
+
+The 'err 6' is 'The path name format is invalid' and seems to occur when attempting to write files
+that are not in the 8.3 format.
+
+There is also a 'local header signature mismatch' which may or may not be related.
+
+In the short term have added a 'UNZIPMANIFEST' switch (defined in fatfs_task.h) to exclude code associated with the unzipping process.
+

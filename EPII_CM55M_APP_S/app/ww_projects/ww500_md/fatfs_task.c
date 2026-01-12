@@ -122,8 +122,11 @@ FRESULT save_configuration(const char *filename, directoryManager_t *dirManager)
 
 // ZIP and label handling functions (moved from cvapp.cpp)
 static int fatfs_load_labels_from_sd(const char *path, char labels[][48], int *label_count, int max_labels, int max_label_len);
+
+#ifdef UNZIPMANIFEST
 static int fatfs_unzip_manifest_zip(void);
 int fatfs_unzip_manifest(void);
+#endif //  UNZIPMANIFEST
 
 /*************************************** External Function Declaraions *******************************************/
 
@@ -879,6 +882,7 @@ static int fatfs_load_labels_from_sd(const char *path, char labels[][48], int *l
 	return labels_loaded ? 0 : -1;
 }
 
+#ifdef UNZIPMANIFEST
 /**
  * Minimal unzipper: extract manifest/labels.txt and manifest/MOD0000X.tfl
  * Only supports method 0 (STORE, no compression).
@@ -1083,6 +1087,7 @@ static int fatfs_unzip_manifest_zip(void) {
 	f_close(&zf);
 	return (config_extracted || (models_extracted > 0)) ? 0 : -1;
 }
+#endif // UNZIPMANIFEST
 
 /********************************** FreeRTOS Task  *************************************/
 
@@ -1428,6 +1433,7 @@ int fatfs_load_labels(const char *path, char labels[][48], int *label_count, int
 	return fatfs_load_labels_from_sd(path, labels, label_count, max_labels, max_label_len);
 }
 
+#ifdef UNZIPMANIFEST
 /**
  * Unzip Manifest.zip (public API)
  * Extracts manifest/labels.txt and manifest/MOD0000X.tfl files
@@ -1438,6 +1444,7 @@ int fatfs_load_labels(const char *path, char labels[][48], int *label_count, int
 int fatfs_unzip_manifest(void) {
 	return fatfs_unzip_manifest_zip();
 }
+#endif //UNZIPMANIFEST
 
 /**
  * Reconstruct deployment ID UUID from operational parameters OP20-OP27

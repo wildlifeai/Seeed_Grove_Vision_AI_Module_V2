@@ -25,10 +25,32 @@
 
 #define MAXIMAGEDIRECTORIES 999
 
+#ifdef UNZIPMANIFEST
 // Locations on SD card
 // Note: CONFIG_DIR comes from directory_manager.h and is currently "/MANIFEST"
 #define MANIFEST_DIR CONFIG_DIR
 #define MANIFEST_ZIP_CANON "/MANIFEST.ZIP"
+#endif // UNZIPMANIFEST
+
+/*************************************** Local variables *******************************************/
+
+// const char *folder_defaults[DIR_COUNT] = {
+//     "config/",
+//     "images/2025/08/06/",
+//     "tflite_model/",
+//     "logs/",
+//     "models/"
+// };
+
+/*************************************** Global variables *******************************************/
+
+directoryManager_t dirManager; // Added definition for dirManager
+
+/********************************** Private Function Declarations *****************************/
+
+/********************************** Private Function Definitions  *************************************/
+
+#ifdef UNZIPMANIFEST
 
 static const char *find_manifest_zip_path(void)
 {
@@ -52,20 +74,6 @@ static const char *find_manifest_zip_path(void)
 	}
 	return NULL;
 }
-
-/*************************************** Local variables *******************************************/
-
-// const char *folder_defaults[DIR_COUNT] = {
-//     "config/",
-//     "images/2025/08/06/",
-//     "tflite_model/",
-//     "logs/",
-//     "models/"
-// };
-
-/*************************************** Global variables *******************************************/
-
-directoryManager_t dirManager; // Added definition for dirManager
 
 static FRESULT ensure_directory_exists(const char *path)
 {
@@ -143,6 +151,7 @@ static FRESULT ensure_default_config_file_exists(directoryManager_t *dirManager)
 	xprintf("Created default config file '%s'\r\n", STATE_FILE);
 	return FR_OK;
 }
+#endif // UNZIPMANIFEST
 
 ///*************************************** Global Function Definitions *****************************/
 
@@ -154,7 +163,7 @@ static FRESULT ensure_default_config_file_exists(directoryManager_t *dirManager)
  * is locked when it is opened, and unlocked when it is closed.
  * This is to prevent other tasks from writing to the directory
  * while it is being used. 2 also means that it enables two directories
- * to be used simulantaneously.
+ * to be used simultaneously.
  *
  * TODO - this should probably be the responsibility of the image task?
  * Or else: move generateImageFileName() to the fatfs task as well.
@@ -177,6 +186,8 @@ FRESULT dir_mgr_init_directories(directoryManager_t *dirManager)
 		strcpy(dirManager->base_dir, "/");
 	}
 	dirManager->imagesDirIdx = 0;
+
+#ifdef UNZIPMANIFEST
 
 	// === MANIFEST / CONFIG DIRECTORY + UNZIP LOGIC ===
 	// Required behavior:
@@ -258,6 +269,9 @@ FRESULT dir_mgr_init_directories(directoryManager_t *dirManager)
 	}
 
 	strcpy(dirManager->current_config_dir, MANIFEST_DIR);
+#else
+
+#endif //UNZIPMANIFEST
 
 	// === IMAGES DIRECTORY ===
 #if FF_USE_LFN
@@ -329,6 +343,7 @@ FRESULT dir_mgr_add_capture_folder(directoryManager_t *dirManager)
 #if FF_USE_LFN
 		snprintf(path_buf, sizeof(path_buf), "%s_%04d", CAPTURE_DIR, idx);
 #else
+		// TODO Compiler says 'warning: 'snprintf' output may be truncated before the last format character'
 		snprintf(path_buf, sizeof(path_buf), "%s.%03d", CAPTURE_DIR, idx);
 #endif
 

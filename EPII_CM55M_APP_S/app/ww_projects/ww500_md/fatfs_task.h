@@ -35,6 +35,10 @@ extern "C" {
 // TODO Experimental: set a limit on the name of files
 #define	FNAMELEN 16
 
+// Uncomment this to include the unzipping code
+// See error report 12/01/26 in MANIFEST_info.md
+//#define UNZIPMANIFEST
+
 /**************************************** Type declarations  *************************************/
 
 // Operational parameters to get/set.
@@ -138,8 +142,10 @@ void fatfs_getDeploymentId(char *deployment_id_buffer, size_t buffer_size);
 // Load labels from SD card text file
 int fatfs_load_labels(const char *path, char labels[][48], int *label_count, int max_labels, int max_label_len);
 
+#ifdef UNZIPMANIFEST
 // Unzip Manifest.zip (method 0 STORE only - no compression)
 int fatfs_unzip_manifest(void);
+#endif // UNZIPMANIFEST
 
 FRESULT save_configuration(const char *path, directoryManager_t *dirManager);
 

@@ -481,7 +481,8 @@ int cv_init(bool security_enable, bool privilege_enable, int project_id, int dep
                 while (f_readdir(&dir, &fno) == FR_OK && fno.fname[0] != '\0')
                 {
                     const char *ext = strrchr(fno.fname, '.');
-                    if (ext && (strcasecmp(ext, ".tfl") == 0 || strcasecmp(ext, ".TFL") == 0))
+                    // The strcasecmp function is case-insensitive: matches .tfl and .TFL
+                    if (ext && strcasecmp(ext, ".tfl") == 0)
                     {
                         // Use this specific model filename
                         snprintf(filename, sizeof(filename), "%s", fno.fname);

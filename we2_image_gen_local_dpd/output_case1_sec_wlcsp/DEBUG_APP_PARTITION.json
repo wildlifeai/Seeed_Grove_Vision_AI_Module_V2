@@ -34,26 +34,26 @@
             "section_3": {
                 "type": 3,
                 "section_number": 3,
-                "sec_size": "0x1CE54",
+                "sec_size": "0x1CE34",
                 "version": 2,
                 "output": "output_case1_sec_wlcsp\\inter_files\\cm55m_s_application_p1_s3.img",
                 "div_cnt": 1,
                 "align": 0,
                 "sec_offset": "0x0",
-                "div_sec_size": "0x1ce54",
+                "div_sec_size": "0x1ce34",
                 "sec_type": 0,
                 "sec_dst": "0x100007c0"
             },
             "section_4": {
                 "type": 3,
                 "section_number": 4,
-                "sec_size": "0x8508",
+                "sec_size": "0x84C8",
                 "version": 2,
                 "output": "output_case1_sec_wlcsp\\inter_files\\cm55m_s_application_p1_s4.img",
                 "div_cnt": 1,
                 "align": 0,
                 "sec_offset": "0x0",
-                "div_sec_size": "0x8508",
+                "div_sec_size": "0x84c8",
                 "sec_type": 1,
                 "sec_dst": "0x30000000"
             },
@@ -68,7 +68,7 @@
                 "sec_offset": "0x0",
                 "div_sec_size": "0x8",
                 "sec_type": 1,
-                "sec_dst": "0x1001d614"
+                "sec_dst": "0x1001d5f4"
             },
             "output_sec": "D:\\Development\\wildlife.ai\\Seeed_Checking\\Seeed_Grove_Vision_AI_Module_V2\\we2_image_gen_local_dpd\\output_case1_sec_wlcsp\\inter_files\\sign_formal_cm55m_s_application_p1.img"
         },
@@ -84,7 +84,7 @@
                 "sec_offset": "0x0",
                 "div_sec_size": "0xc",
                 "sec_type": 2,
-                "sec_dst": "0x1001d61c"
+                "sec_dst": "0x1001d5fc"
             },
             "section_count": 3,
             "section_2": {
@@ -98,7 +98,7 @@
                 "sec_offset": "0x0",
                 "div_sec_size": "0x10d8",
                 "sec_type": 2,
-                "sec_dst": "0x30008508"
+                "sec_dst": "0x300084c8"
             },
             "section_3": {
                 "type": 3,
@@ -111,7 +111,7 @@
                 "sec_offset": "0x0",
                 "div_sec_size": "0x8",
                 "sec_type": 2,
-                "sec_dst": "0x1001d628"
+                "sec_dst": "0x1001d608"
             },
             "output_sec": "D:\\Development\\wildlife.ai\\Seeed_Checking\\Seeed_Grove_Vision_AI_Module_V2\\we2_image_gen_local_dpd\\output_case1_sec_wlcsp\\inter_files\\sign_formal_cm55m_s_application_p2.img"
         },

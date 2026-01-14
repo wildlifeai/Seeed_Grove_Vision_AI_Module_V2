@@ -121,7 +121,7 @@ static FRESULT load_configuration(const char *filename, directoryManager_t *dirM
 FRESULT save_configuration(const char *filename, directoryManager_t *dirManager);
 
 // ZIP and label handling functions (moved from cvapp.cpp)
-static int fatfs_load_labels_from_sd(const char *path, char labels[][48], int *label_count, int max_labels, int max_label_len);
+static int8_t load_labels_from_sd(const char *path, char labels[][MAX_LABEL_LEN], uint8_t *label_count, uint8_t max_labels, uint8_t max_label_len);
 
 #ifdef UNZIPMANIFEST
 static int fatfs_unzip_manifest_zip(void);
@@ -834,17 +834,23 @@ FRESULT save_configuration(const char *filename, directoryManager_t *dirManager)
  * @param max_label_len Maximum length of each label
  * @return 0 on success, -1 on failure
  */
-static int fatfs_load_labels_from_sd(const char *path, char labels[][48], int *label_count, int max_labels, int max_label_len) {
+static int8_t load_labels_from_sd(const char *path, char labels[][MAX_LABEL_LEN], uint8_t *label_count, uint8_t max_labels, uint8_t max_label_len) {
 	FIL f;
-	FRESULT res = f_open(&f, path, FA_READ);
+	FRESULT res;
+	char line[96];
+	UINT br = 0;
+	int pos = 0;
+	bool labels_loaded;
+
+	*label_count = 0;
+
+	res = f_open(&f, path, FA_READ);
+
 	if (res != FR_OK) {
 		xprintf("Labels open failed: %s (err %d)\n", path, res);
 		return -1;
 	}
-	*label_count = 0;
-	char line[96];
-	UINT br = 0;
-	int pos = 0;
+
 	for (;;) {
 		char c;
 		res = f_read(&f, &c, 1, &br);
@@ -858,8 +864,11 @@ static int fatfs_load_labels_from_sd(const char *path, char labels[][48], int *l
 			}
 			break;
 		}
-		if (c == '\r')
+
+		if (c == '\r') {
 			continue;
+		}
+
 		if (c == '\n') {
 			if (pos > 0 && *label_count < max_labels) {
 				line[pos] = '\0';
@@ -868,18 +877,17 @@ static int fatfs_load_labels_from_sd(const char *path, char labels[][48], int *l
 				(*label_count)++;
 			}
 			pos = 0;
-		} else if (pos < (int)sizeof(line) - 1) {
+		}
+		else if (pos < (int)sizeof(line) - 1) {
 			line[pos++] = c;
 		}
 	}
+
 	f_close(&f);
-	bool labels_loaded = (*label_count > 0);
-	if (labels_loaded) {
-		xprintf("Loaded %d labels from %s\n", *label_count, path);
-	} else {
-		xprintf("No labels loaded from %s\n", path);
-	}
-	return labels_loaded ? 0 : -1;
+
+	labels_loaded = (*label_count > 0);
+
+	return labels_loaded ? 0: -1;
 }
 
 #ifdef UNZIPMANIFEST
@@ -1429,8 +1437,8 @@ void fatfs_incrementOperationalParameter(OP_PARAMETERS_E parameter) {
  * @param max_label_len Maximum length per label
  * @return 0 on success, -1 on failure
  */
-int fatfs_load_labels(const char *path, char labels[][48], int *label_count, int max_labels, int max_label_len) {
-	return fatfs_load_labels_from_sd(path, labels, label_count, max_labels, max_label_len);
+int8_t fatfs_load_labels(const char *path, char labels[][MAX_LABEL_LEN], uint8_t *label_count, uint8_t max_labels, uint8_t max_label_len) {
+	return load_labels_from_sd(path, labels, label_count, max_labels, max_label_len);
 }
 
 #ifdef UNZIPMANIFEST

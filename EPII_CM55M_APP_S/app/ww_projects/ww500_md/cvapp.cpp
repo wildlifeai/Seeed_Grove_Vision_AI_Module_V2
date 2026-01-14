@@ -54,6 +54,7 @@
 #define LOCAL_FRAQ_BITS (8)
 #define SC(A, B) ((A << 8) / B)
 
+// TODO can we make these in the model file?
 #define INPUT_SIZE_X 96
 #define INPUT_SIZE_Y 96
 
@@ -74,16 +75,14 @@ extern "C" {
 }
 
 static uint8_t *tensor_arena_buf = &__tensor_arena_start__;
-static size_t tensor_arena_size = 0; // Will be calculated at runtime in cv_init()
+static size_t tensor_arena_size = (size_t)(&__tensor_arena_end__ - &__tensor_arena_start__);
+
 
 // #define TENSOR_ARENA_BUFSIZE (125 * 1024)
 // __attribute__(( section(".bss.NoInit"))) uint8_t tensor_arena_buf[TENSOR_ARENA_BUFSIZE] __ALIGNED(32);
 
 using namespace std;
-namespace
-{
-    // constexpr int tensor_arena_size = TENSOR_ARENA_BUFSIZE;
-    // static uint32_t tensor_arena= (uint32_t)tensor_arena_buf;
+namespace {
 
     struct ethosu_driver ethosu_drv; /* Default Ethos-U device driver */
     static tflite::MicroInterpreter *int_ptr = nullptr;
@@ -91,12 +90,11 @@ namespace
     TfLiteTensor *input, *output;
 
     // Labels loaded from SD (one per line) – used for printing class names
-    static const int MAX_LABELS = 64;    // Adjust if needed
-    static const int MAX_LABEL_LEN = 48; // Adjust if needed
-    static char g_labels[MAX_LABELS][MAX_LABEL_LEN];
-    static int g_label_count = 0;
+    static char g_labels[MAX_CLASSES][MAX_LABEL_LEN];
+    static uint8_t g_label_count = 0;
     static bool g_labels_loaded = false;
 };
+
 // SPI EEPROM configuration
 static USE_DW_SPI_MST_E spi_id = USE_DW_SPI_MST_Q;
 static bool flash_initialized = false;
@@ -106,6 +104,7 @@ static SemaphoreHandle_t xSPIMutex = NULL;
 static bool model_loaded_from_sd = false;
 
 // Globals to hold the current model identifiers
+// TODO should these really be 32-bits?
 static int g_project_id = 0;
 static int g_deploy_version = 0;
 
@@ -121,16 +120,16 @@ static const tflite::Model *load_model_from_flash(void);
 int erase_model_flash_area(uint32_t model_size);
 void compare_sd_spi_xip_chunked(const char *filename);
 void debug_sd_model_integrity(const char *filename);
-void debug_flash_status();
+void debug_flash_status(void);
 void test_basic_spi_operations();
 int cv_deinit();
 int init_flash();
 static inline uint32_t align_down(uint32_t addr, uint32_t align);
 static inline uint32_t align_up(uint32_t size, uint32_t align);
-int read_persisted_model_info();
-int write_persisted_model_info();
+int read_persisted_model_info(void);
+int write_persisted_model_info(void);
 static bool file_exists(const char *path);
-static void load_labels_from_manifest_or_root(void);
+static void load_labels_from_manifest(void);
 void cv_get_model_info(int *project_id, int *deploy_version);
 
 // --------------------- Utilities / Helpers ---------------------
@@ -154,45 +153,45 @@ static bool file_exists(const char *path)
     return (res == FR_OK);
 }
 
-// Helper: load labels from /Manifest/labels.txt first
-static void load_labels_from_manifest_or_root(void)
-{
+/**
+ * Load labels from "/MANIFEST/LABELS.TXT"
+ */
+static void load_labels_from_manifest(void) {
+
     g_labels_loaded = false;
     g_label_count = 0;
-    const char *labels_path = "/MANIFEST/LABELS.TXT";
-    if (file_exists(labels_path))
-    {
-        int count = 0;
-        if (fatfs_load_labels(labels_path, g_labels, &count, MAX_LABELS, MAX_LABEL_LEN) == 0)
-        {
+    //const char *labels_path = "/MANIFEST/LABELS.TXT";
+
+    // Look for "/MANIFEST/LABELS.TXT" - concatenation done by the compiler.
+    const char *labels_path = CONFIG_DIR "/LABELS.TXT";
+
+    if (file_exists(labels_path))  {
+        uint8_t count = 0;
+        if (fatfs_load_labels(labels_path, g_labels, &count, MAX_CLASSES, MAX_LABEL_LEN) == 0) {
             g_label_count = count;
             g_labels_loaded = (g_label_count > 0);
             xprintf("Loaded %d labels from %s\n", g_label_count, labels_path);
             return;
         }
-        else
-        {
+        else  {
             xprintf("Labels load failed from %s\n", labels_path);
         }
     }
     xprintf("No labels found on SD\n");
 }
 
-int get_model_id()
-{
+int get_model_id() {
     return g_project_id;
 }
 
 // Public getter for other modules to know the current model
-void cv_get_model_info(int *project_id, int *deploy_version)
-{
+void cv_get_model_info(int *project_id, int *deploy_version) {
     *project_id = g_project_id;
     *deploy_version = g_deploy_version;
 }
 
 // Public setter for current model info
-void cv_set_model_info(int project_id, int deploy_version)
-{
+void cv_set_model_info(int project_id, int deploy_version) {
     // Only log when values actually change
     if (g_project_id != project_id || g_deploy_version != deploy_version)
     {
@@ -204,29 +203,35 @@ void cv_set_model_info(int project_id, int deploy_version)
 }
 
 // Public getter for confidence data (for EXIF)
-bool cv_get_confidence_data(ClassConfidenceData *data)
-{
-    if (data != nullptr)
-    {
+bool cv_get_confidence_data(ClassConfidenceData *data) {
+    if (data != nullptr) {
         memcpy(data, &g_last_confidence_data, sizeof(ClassConfidenceData));
         return true;
     }
     return false;
 }
 
-// Read the persisted model info from flash
-// Flash layout: [project_id(4 bytes)][deploy_version(4 bytes)][filename(16 bytes)][model data...]
-int read_persisted_model_info()
-{
-    if (init_flash() != 0)
-    {
+/**
+ *  Read the persisted model info from flash
+ *
+ *  Flash layout:
+ *  	project_id (4 bytes)
+ *  	deploy_version (4 bytes)
+ *  	filename (16 bytes)
+ *  	model data...
+ */
+int read_persisted_model_info(void) {
+	uint32_t model_info_xip_addr;
+	uint32_t model_info_phys_addr;
+    uint32_t stored_info[2] = {0}; // [0] = project_id, [1] = deploy_version
+
+    if (init_flash() != 0)   {
         xprintf("Flash init failed, using default model info\n");
         return -1;
     }
 
     // Take semaphore
-    if (xSemaphoreTake(xSPIMutex, portMAX_DELAY) != pdTRUE)
-    {
+    if (xSemaphoreTake(xSPIMutex, portMAX_DELAY) != pdTRUE) {
         xprintf("Failed to take SPI mutex for read_persisted_model_info\n");
         return -1;
     }
@@ -236,13 +241,17 @@ int read_persisted_model_info()
 
     // Model info is stored 24 bytes before the model data
     // (4 bytes project_id + 4 bytes version + 16 bytes filename header)
-    uint32_t model_xip_addr = 0x3A200000;
-    uint32_t model_info_xip_addr = model_xip_addr - 24;
-    uint32_t model_info_phys_addr = virt_to_phys(model_info_xip_addr);
 
-    uint32_t stored_info[2] = {0}; // [0] = project_id, [1] = deploy_version
-    if (hx_lib_spi_eeprom_word_read(spi_id, model_info_phys_addr, stored_info, 8) != 0)
-    {
+//    uint32_t model_xip_addr = 0x3A200000;
+//    uint32_t model_info_xip_addr = model_xip_addr - 24;
+//    uint32_t model_info_phys_addr = virt_to_phys(model_info_xip_addr);
+
+    // CGP - TODO -surely we should be placing model_info_xip_addr at the start of a EEPROM sector?
+    // TODO - remove magic numbers
+    model_info_xip_addr = MODEL_XIP_ADDR - 24;
+    model_info_phys_addr = virt_to_phys(model_info_xip_addr);
+
+    if (hx_lib_spi_eeprom_word_read(spi_id, model_info_phys_addr, stored_info, 8) != 0)  {
         xprintf("Failed to read persisted model info, using defaults\n");
         xSemaphoreGive(xSPIMutex);
         return -1;
@@ -251,15 +260,14 @@ int read_persisted_model_info()
     xSemaphoreGive(xSPIMutex);
 
     // Basic validation: check if values are not 0xFFFFFFFF (uninitialized)
-    if (stored_info[0] != 0xFFFFFFFF && stored_info[1] != 0xFFFFFFFF)
-    {
+    if ((stored_info[0] != 0xFFFFFFFF) && (stored_info[1] != 0xFFFFFFFF)) {
         g_project_id = stored_info[0];
         g_deploy_version = stored_info[1];
-        xprintf("Read persisted model info from flash: Project=%d, Version=%d\n", g_project_id, g_deploy_version);
+        xprintf("Read persisted model info from flash at 0x%08x: Project=%d, Version=%d\n",
+        		model_info_phys_addr, g_project_id, g_deploy_version);
         return 0;
     }
-    else
-    {
+    else  {
         xprintf("Invalid persisted model info (0x%08lX, 0x%08lX), using defaults\n", stored_info[0], stored_info[1]);
         return -1;
     }
@@ -283,7 +291,7 @@ int write_persisted_model_info()
     // Disable XIP before write
     hx_lib_spi_eeprom_enable_XIP(spi_id, false, FLASH_SINGLE, false);
 
-    uint32_t model_xip_addr = 0x3A200000;
+    uint32_t model_xip_addr = MODEL_XIP_ADDR;
     uint32_t model_info_xip_addr = model_xip_addr - 24;
     uint32_t model_info_phys_addr = virt_to_phys(model_info_xip_addr);
 
@@ -306,6 +314,15 @@ int write_persisted_model_info()
     return 0;
 }
 
+/**
+ * Bilinear interpolation.
+ *
+ * Image is squashed but not cropped.
+ *
+ * Array is converted
+ * Many ML models (TFLite / Edge Impulse) expect zero-centered input\
+ * So out_image_fix - 128  converts unsigned grayscale → signed
+ */
 void img_rescale(
     const uint8_t *in_image,
     const int32_t width,
@@ -378,8 +395,7 @@ static void _arm_npu_irq_init(void)
     NVIC_EnableIRQ(ethosu_irqnum);
 }
 
-static int _arm_npu_init(bool security_enable, bool privilege_enable)
-{
+static int _arm_npu_init(bool security_enable, bool privilege_enable) {
     int err = 0;
 
     /* Initialise the IRQ */
@@ -406,273 +422,239 @@ static int _arm_npu_init(bool security_enable, bool privilege_enable)
 }
 
 // Optional model number parameter, default to 1
-int cv_init(bool security_enable, bool privilege_enable, int project_id, int deploy_version)
-{
-    xprintf("cv_init called with ProjectID: %d, Version: %d\n", project_id, deploy_version);
+/**
+ *
+ * 	@param security_enable
+ *	@param privilege_enable
+ *	@param project_id
+ *	@param deploy_version
+ *	@return 0 for OK
+ */
+int cv_init(bool security_enable, bool privilege_enable, int project_id, int deploy_version) {
+	DIR dir;
+	FILINFO fno;
+	bool any_model_found = false;
+	char filename[IMAGEFILENAMELEN];	// for 8.3 this is 13, including the training \0
+	char manifest_path[10 + IMAGEFILENAMELEN];			// let's restrict this to "/12345678/" then the filename, so 10 + IMAGEFILENAMELEN
+	static const tflite::Model *model = nullptr;
 
-    // Calculate tensor arena size at runtime (must be done here, not at static init)
-    if (tensor_arena_size == 0)
-    {
-        tensor_arena_size = (size_t)(&__tensor_arena_end__ - &__tensor_arena_start__);
-        //xprintf("Calculated tensor arena size: %lu bytes at 0x%08x - 0x%08x\n",
-        //		(unsigned long)tensor_arena_size, &__tensor_arena_start__, (&__tensor_arena_end__) - 1);
-        xprintf("Calculated tensor arena size: %lu bytes at 0x%08x - 0x%08x\n",
-        		(unsigned long)tensor_arena_size, &__tensor_arena_start__, (&__tensor_arena_end__) - 1);
-    }
 
-    // On first boot (g_project_id == 0), read the persisted model info from flash
-    if (g_project_id == 0)
-    {
-        if (read_persisted_model_info() != 0)
-        {
-            // If flash is empty or invalid, use the values passed to init
-            g_project_id = project_id;
-            g_deploy_version = deploy_version;
-            xprintf("First boot: No valid info in flash, using provided: Project=%d, Version=%d\n", g_project_id, g_deploy_version);
-        }
-    }
-    else if (project_id != g_project_id || deploy_version != g_deploy_version)
-    {
-        g_project_id = project_id;
-        g_deploy_version = deploy_version;
-        model_loaded_from_sd = false; // reset flag to allow reloading
-        xprintf("------------------------Model changed to Project=%d, Version=%d. Resetting load flag.\n", g_project_id, g_deploy_version);
-    }
+	xprintf("cv_init called with ProjectID: %d, Version: %d\n", project_id, deploy_version);
 
-    xprintf("cv_init now loading with Project: %d, Version: %d\n", g_project_id, g_deploy_version);
+	// On first boot (g_project_id == 0), read the persisted model info from flash
+	if (g_project_id == 0)  {
+		if (read_persisted_model_info() != 0)  {
+			// If flash is empty or invalid, use the values passed to init
+			g_project_id = project_id;
+			g_deploy_version = deploy_version;
+			xprintf("First boot: No valid info in flash, using provided: Project=%d, Version=%d\n",
+					g_project_id, g_deploy_version);
+		}
+	}
+	else if ((project_id != g_project_id) || (deploy_version != g_deploy_version))  {
+		g_project_id = project_id;
+		g_deploy_version = deploy_version;
+		model_loaded_from_sd = false; // reset flag to allow reloading
+		xprintf("------------------------Model changed to Project=%d, Version=%d. Resetting load flag.\n",
+				g_project_id, g_deploy_version);
+	}
 
-    if (_arm_npu_init(security_enable, privilege_enable) != 0)
-    {
-        return -1;
-    }
+	xprintf("cv_init now loading with Project: %d, Version: %d\n", g_project_id, g_deploy_version);
 
-    static const tflite::Model *model = nullptr;
+	// Initialise Ethos-U55 device
+	if (_arm_npu_init(security_enable, privilege_enable) != 0) {
+		return -1;
+	}
 
-    // TBP - I've removed the static model data inclusion here and all refernces to the embedded model within the app
-    // #if (MODEL_LOAD_MODE == MODEL_FROM_C_FILE)
-    //     model = tflite::GetModel((const void *)g_person_detect_model_data_vela);
+	// TBP - I've removed the static model data inclusion here and all refernces to the embedded model within the app
+	// #if (MODEL_LOAD_MODE == MODEL_FROM_C_FILE)
+	//     model = tflite::GetModel((const void *)g_person_detect_model_data_vela);
 
 #if (MODEL_LOAD_MODE == MODEL_FROM_FLASH)
-    model = load_model_from_flash();
+	model = load_model_from_flash();
 
 #elif (MODEL_LOAD_MODE == MODEL_FROM_SD_CARD)
-    {
-        const tflite::Model *loaded = nullptr;
 
-        // Manifest unzip is handled by directory_manager during SD init.
-        // (We expect either /Manifest/model.tfl exists, or the model may be in root.)
+	const tflite::Model *loaded = nullptr;
 
-        // Build the expected filename and path
-        char filename[64];
-        snprintf(filename, sizeof(filename), "%uV%u.tfl", (unsigned int)(g_project_id % 10000), (unsigned int)g_deploy_version);
+	// Manifest unzip is handled by directory_manager during SD init.
+	// (We expect either /Manifest/model.tfl exists, or the model may be in root.)
 
-        char manifest_path[128];
-        snprintf(manifest_path, sizeof(manifest_path), "/Manifest/%s", filename);
+	// Build the expected filename and path
+	// TODO put file and path names using #define
+	snprintf(filename, sizeof(filename), "%dV%d.TFL",
+			(unsigned int)(g_project_id % 10000), (unsigned int)g_deploy_version);
 
-        // Check if any .tfl model exists in /Manifest
-        DIR dir;
-        FILINFO fno;
-        bool any_model_found = false;
+	snprintf(manifest_path, sizeof(manifest_path), "%s/%s", CONFIG_DIR, filename);
 
-        if (fatfs_mounted())
-        {
-            if (f_opendir(&dir, "/Manifest") == FR_OK)
-            {
-                while (f_readdir(&dir, &fno) == FR_OK && fno.fname[0] != '\0')
-                {
-                    const char *ext = strrchr(fno.fname, '.');
-                    // The strcasecmp function is case-insensitive: matches .tfl and .TFL
-                    if (ext && strcasecmp(ext, ".tfl") == 0)
-                    {
-                        // Use this specific model filename
-                        snprintf(filename, sizeof(filename), "%s", fno.fname);
-                        // Update manifest_path to point to the discovered model
-                        snprintf(manifest_path, sizeof(manifest_path), "/Manifest/%s", filename);
-                        any_model_found = true;
-                        break;
-                    }
-                }
-                f_closedir(&dir);
-            }
-            xprintf("-----------------Looking for model file: %s\n", filename);
-        }
-        else
-        {
-            // Don't attempt disk access if filesystem not mounted
-            xprintf("FatFS not mounted, skipping model search\n");
-        }
+	xprintf("DEBUG: Looking for %s\n", manifest_path);
+	// Check if any .tfl model exists in /Manifest
 
-        if (!any_model_found)
-        {
-            xprintf("No .tfl model found in Manifest folder. Skipping neural network initialization.\n");
-            model = nullptr;
-            return 1;
-        }
-        else
-        {
-            // Check if the model from manifest matches what's in flash
-            bool flash_has_same_model = is_model_in_flash(filename);
+	if (fatfs_mounted()) {
+		if (f_opendir(&dir, CONFIG_DIR) == FR_OK) {
+			while ((f_readdir(&dir, &fno) == FR_OK) && (fno.fname[0] != '\0')) {
+				const char *ext = strrchr(fno.fname, '.');
+				// The strcasecmp function is case-insensitive: matches .tfl and .TFL
+				if (ext && strcasecmp(ext, ".TFL") == 0) {
+					// Use this specific model filename
+					snprintf(filename, sizeof(filename), "%s", fno.fname);
+					// Update manifest_path to point to the discovered model
+					snprintf(manifest_path, sizeof(manifest_path), "%s/%s", CONFIG_DIR, filename);
+					any_model_found = true;
+					xprintf("----------------- Found model file '%s' on SD card\n", filename);
+					break;
+				}
+			}
+			f_closedir(&dir);
+		}
+	}
+	else  {
+		// Don't attempt disk access if filesystem not mounted
+		xprintf("FatFS not mounted, skipping model search\n");
+	}
 
-            if (flash_has_same_model)
-            {
-                xprintf("Flash already contains '%s'; loading from flash.\n", filename);
-                loaded = load_model_from_flash();
-            }
-            else
-            {
-                xprintf("Flash model differs or missing; copying '%s' to flash...\n", filename);
-                // Try manifest path first, then fallback to root
-                const char *src_path = file_exists(manifest_path) ? manifest_path : filename;
-                xprintf("Source chosen: %s\n", src_path);
+	if (!any_model_found) {
+		// TODO - This implies that the SD card must contain a .tfl file for the NN to work - even if there is a model in flash...
+		xprintf("No .TFL model found in MANIFEST folder. Skipping neural network initialiSation.\n");
+		model = nullptr;
+		return 1;
+	}
+	else  {
+		// Check if the model from manifest matches what's in flash
+		if (is_model_in_flash(filename))  {
+			xprintf("Flash already contains '%s'; loading from flash.\n", filename);
+			loaded = load_model_from_flash();
+		}
+		else  {
+			xprintf("Flash model differs or missing; copying '%s' to flash...\n", filename);
+			// Try manifest path first, then fallback to root
+			const char *src_path = file_exists(manifest_path) ? manifest_path : filename;
+			xprintf("Source chosen: %s\n", src_path);
 
-                if (load_model_from_sd_to_flash((char *)src_path) == 0)
-                {
-                    xprintf("Copied %s to flash OK; loading from flash...\n", src_path);
-                    loaded = load_model_from_flash();
-                }
-                else
-                {
-                    xprintf("SD->flash copy failed for %s\n", src_path);
-                }
-            }
-            model = loaded;
-        }
-    }
-#endif
+			if (load_model_from_sd_to_flash((char *)src_path) == 0) {
+				xprintf("Copied %s to flash OK; loading from flash...\n", src_path);
+				loaded = load_model_from_flash();
+			}
+			else {
+				xprintf("SD->flash copy failed for %s\n", src_path);
+			}
+		}
+		model = loaded;
+	}
 
-    if (!model)
-    {
-        xprintf("Failed to load model\n");
-        return -1;
-    }
+#endif // MODEL_LOAD_MODE
 
-    xprintf("Model loaded successfully\n");
+	if (!model)  {
+		xprintf("Failed to load model\n");
+		return -1;
+	}
 
-    // Attempt to load labels so results print friendly names
-    // Load labels (prefer /Manifest/labels.txt)
-    load_labels_from_manifest_or_root();
+	xprintf("Model loaded successfully\n");
 
-    if (model->version() != TFLITE_SCHEMA_VERSION)
-    {
-        xprintf("[ERROR] Model's schema version %d is not equal to supported version %d\n",
-                model->version(), TFLITE_SCHEMA_VERSION);
-        return -1;
-    }
-    else
-    {
-        xprintf("Model schema version: %d\n", model->version());
-        xprintf("Input: %d x %d NN: %d x %d\n",
-                app_get_raw_width(), app_get_raw_height(), INPUT_SIZE_X, INPUT_SIZE_X);
-    }
+	// Attempt to load labels so results print friendly names
+	load_labels_from_manifest();
 
-    static tflite::MicroErrorReporter micro_error_reporter;
+	if (model->version() != TFLITE_SCHEMA_VERSION)  {
+		xprintf("[ERROR] Model's schema version %d is not equal to supported version %d\n",
+				model->version(), TFLITE_SCHEMA_VERSION);
+		return -1;
+	}
+	else {
+		xprintf("Model schema version: %d\n", model->version());
+//		xprintf("Input: %d x %d NN: %d x %d\n",
+//				app_get_raw_width(), app_get_raw_height(), INPUT_SIZE_X, INPUT_SIZE_X);
+	}
 
-    // Allocate op_resolver on heap so it persists beyond cv_init() scope
-    // The interpreter keeps a reference to it, so it must live as long as the interpreter
-    if (op_resolver_ptr != nullptr)
-    {
-        delete op_resolver_ptr;
-    }
-    op_resolver_ptr = new tflite::MicroMutableOpResolver<1>();
+	static tflite::MicroErrorReporter micro_error_reporter;
 
-    if (kTfLiteOk != op_resolver_ptr->AddEthosU())
-    {
-        xprintf("Failed to add Arm NPU support to op resolver.\n");
-        return -1;
-    }
+	// Allocate op_resolver on heap so it persists beyond cv_init() scope
+	// The interpreter keeps a reference to it, so it must live as long as the interpreter
+	if (op_resolver_ptr != nullptr) {
+		delete op_resolver_ptr;
+	}
+	op_resolver_ptr = new tflite::MicroMutableOpResolver<1>();
 
-    xprintf("Tensor arena at 0x%08x, size = %lu bytes\n",
-            tensor_arena_buf,
-            (unsigned long)tensor_arena_size);
+	if (kTfLiteOk != op_resolver_ptr->AddEthosU())  {
+		xprintf("Failed to add Arm NPU support to op resolver.\n");
+		return -1;
+	}
 
-    static tflite::MicroInterpreter *static_interpreter = new tflite::MicroInterpreter(
-        model,
-        *op_resolver_ptr,
-        tensor_arena_buf,
-        tensor_arena_size,
-        &micro_error_reporter);
+	static tflite::MicroInterpreter *static_interpreter = new tflite::MicroInterpreter(
+			model,
+			*op_resolver_ptr,
+			tensor_arena_buf,
+			tensor_arena_size,
+			&micro_error_reporter);
 
-    if (static_interpreter->AllocateTensors() != kTfLiteOk)
-    {
-        xprintf("Failed to allocate tensors\n");
-        return -1;
-    }
-    else {
-    	xprintf("Used %lu/%lu bytes for tensors\n",
-    			static_interpreter->arena_used_bytes(), tensor_arena_size);
-    }
-    int_ptr = static_interpreter;
-    input = static_interpreter->input(0);
-    output = static_interpreter->output(0);
-    return 0;
+	if (static_interpreter->AllocateTensors() != kTfLiteOk) {
+		xprintf("Failed to allocate tensors\n");
+		return -1;
+	}
+	else {
+		xprintf("Used %lu/%lu bytes for tensors. Tensor arena is at 0x%08x\n",
+				static_interpreter->arena_used_bytes(), tensor_arena_size, tensor_arena_buf);
+	}
 
-    // static tflite::MicroInterpreter static_interpreter(
-    // 	model,
-    // 	op_resolver,
-    // 	(uint8_t *)tensor_arena,
-    // 	tensor_arena_size,
-    // 	&micro_error_reporter);
+	int_ptr = static_interpreter;
+	input = static_interpreter->input(0);
+	output = static_interpreter->output(0);
 
-    // if (static_interpreter.AllocateTensors() != kTfLiteOk) {
-    // 	xprintf("Failed to allocate tensors\n");
-    // 	return -1;
-    // }
-    // int_ptr = &static_interpreter;
-    // input = static_interpreter.input(0);
-    // output = static_interpreter.output(0);
-    // return 0;
+	return 0;
 }
 
-// Initialize the flash memory (SPI EEPROM)
-int init_flash(void)
-{
-    // Create mutex on first call
-    if (xSPIMutex == NULL)
-    {
-        xSPIMutex = xSemaphoreCreateMutex();
-        if (xSPIMutex == NULL)
-        {
-            xprintf("Failed to create SPI mutex\n");
-            return -1;
-        }
-    }
+/**
+ * Initialize the flash memory (SPI EEPROM)
+ *
+ * TODO - this is called many times - should only be called once.
+ */
+int init_flash(void) {
 
-    // Take mutex
-    if (xSemaphoreTake(xSPIMutex, portMAX_DELAY) != pdTRUE)
-    {
-        xprintf("Failed to take SPI mutex\n");
-        return -1;
-    }
+	if (flash_initialized) {
+		return 0;
+	}
 
-    if (!flash_initialized)
-    {
-        xprintf("Init EEPROM...\r\n");
+	// Create mutex on first call
+	if (xSPIMutex == NULL)  {
+		xSPIMutex = xSemaphoreCreateMutex();
+		if (xSPIMutex == NULL)
+		{
+			xprintf("Failed to create SPI mutex\n");
+			return -1;
+		}
+	}
 
-        // CRITICAL: Disable XIP mode before SPI operations
-        hx_lib_spi_eeprom_enable_XIP(spi_id, false, FLASH_SINGLE, false);
-        vTaskDelay(pdMS_TO_TICKS(10)); // Small delay for mode switch
+	// Take mutex
+	if (xSemaphoreTake(xSPIMutex, portMAX_DELAY) != pdTRUE) {
+		xprintf("Failed to take SPI mutex\n");
+		return -1;
+	}
 
-        if (hx_lib_spi_eeprom_open(spi_id) != 0)
-        {
-            xprintf("Failed to open SPI EEPROM\n");
-            flash_initialized = false;
-            xSemaphoreGive(xSPIMutex);
-            return -1;
-        }
+	xprintf("Init EEPROM...\r\n");
 
-        uint8_t id_info = 0;
-        if (hx_lib_spi_eeprom_read_ID(spi_id, &id_info) != 0)
-        {
-            xprintf("Failed to read flash ID\n");
-            xSemaphoreGive(xSPIMutex);
-            return -1;
-        }
-        xprintf("Flash ID: 0x%02X\n", id_info);
-        flash_initialized = true;
-    }
+	// CRITICAL: Disable XIP mode before SPI operations
+	hx_lib_spi_eeprom_enable_XIP(spi_id, false, FLASH_SINGLE, false);
+	vTaskDelay(pdMS_TO_TICKS(10)); // Small delay for mode switch
 
-    xSemaphoreGive(xSPIMutex);
-    return 0;
+	if (hx_lib_spi_eeprom_open(spi_id) != 0) {
+		xprintf("Failed to open SPI EEPROM\n");
+		flash_initialized = false;
+		xSemaphoreGive(xSPIMutex);
+		return -1;
+	}
+
+	uint8_t id_info = 0;
+	if (hx_lib_spi_eeprom_read_ID(spi_id, &id_info) != 0) {
+		xprintf("Failed to read flash ID\n");
+		xSemaphoreGive(xSPIMutex);
+		return -1;
+	}
+
+	xprintf("Flash ID: 0x%02X\n", id_info);
+	flash_initialized = true;
+
+	xSemaphoreGive(xSPIMutex);
+
+	return 0;
 }
 
 // Erase the flash region covering the model info, header, AND the model data.
@@ -728,16 +710,17 @@ int erase_model_flash_area(uint32_t model_size)
     return ret;
 }
 
-int load_model_from_sd_to_flash(char *filename)
-{
+int load_model_from_sd_to_flash(char *filename) {
     FRESULT res;
     FIL file;
     UINT bytesRead;
+
     union
     {
-        uint8_t bytes[16];
-        uint32_t words[4];
+        uint8_t bytes[MODEL_XIP_INFO_SIZE];
+        uint32_t words[MODEL_XIP_INFO_SIZE / 4];
     } fname_header, fname_verify;
+
     // aligned buffers
     uint8_t write_buf[256] __attribute__((aligned(4)));
     uint8_t verify_buf[256] __attribute__((aligned(4)));
@@ -780,8 +763,8 @@ int load_model_from_sd_to_flash(char *filename)
         return -1;
     }
 
-    uint32_t model_xip_addr = 0x3A200000;
-    uint32_t header_xip_addr = model_xip_addr - 16;
+    uint32_t model_xip_addr = MODEL_XIP_ADDR;
+    uint32_t header_xip_addr = model_xip_addr - MODEL_XIP_INFO_SIZE;
     uint32_t model_phys_addr = virt_to_phys(model_xip_addr);
     uint32_t header_phys_addr = virt_to_phys(header_xip_addr);
 
@@ -801,7 +784,7 @@ int load_model_from_sd_to_flash(char *filename)
     xprintf("Writing filename header: %s\n", fname_header.bytes);
 
     // write header via SPI (4 words)
-    int wr = hx_lib_spi_eeprom_word_write(spi_id, header_phys_addr, fname_header.words, 16);
+    int wr = hx_lib_spi_eeprom_word_write(spi_id, header_phys_addr, fname_header.words, MODEL_XIP_INFO_SIZE);
     if (wr != 0)
     {
         xprintf("Failed to write filename header to flash (err %d)\n", wr);
@@ -818,7 +801,7 @@ int load_model_from_sd_to_flash(char *filename)
 
     // verify header by reading back via SPI
     memset(fname_verify.bytes, 0, sizeof(fname_verify.bytes));
-    if (hx_lib_spi_eeprom_word_read(spi_id, header_phys_addr, fname_verify.words, 16) != 0)
+    if (hx_lib_spi_eeprom_word_read(spi_id, header_phys_addr, fname_verify.words, MODEL_XIP_INFO_SIZE) != 0)
     {
         xprintf("Failed to verify filename header in flash (read error)\n");
         xSemaphoreGive(xSPIMutex);
@@ -826,7 +809,7 @@ int load_model_from_sd_to_flash(char *filename)
         return -1;
     }
 
-    if (memcmp(fname_header.bytes, fname_verify.bytes, 16) != 0)
+    if (memcmp(fname_header.bytes, fname_verify.bytes, MODEL_XIP_INFO_SIZE) != 0)
     {
         xprintf("Filename header verify FAIL (SPI)\n");
         xSemaphoreGive(xSPIMutex);
@@ -933,18 +916,17 @@ int load_model_from_sd_to_flash(char *filename)
 }
 
 // Improved model validation with detailed debugging
-bool is_model_in_flash(char *filename)
-{
-    if (init_flash() != 0)
-    {
+bool is_model_in_flash(char *filename) {
+    char fname_param[MODEL_XIP_INFO_SIZE] = {0};
+
+    if (init_flash() != 0)  {
         return false;
     }
 
-    debug_flash_status();
+    debug_flash_status();	// print debug info
 
     // Take semaphore
-    if (xSemaphoreTake(xSPIMutex, portMAX_DELAY) != pdTRUE)
-    {
+    if (xSemaphoreTake(xSPIMutex, portMAX_DELAY) != pdTRUE) {
         xprintf("Failed to take SPI mutex for is_model_in_flash\n");
         return false;
     }
@@ -953,27 +935,24 @@ bool is_model_in_flash(char *filename)
     hx_lib_spi_eeprom_enable_XIP(spi_id, false, FLASH_SINGLE, false);
 
     // Read filename header (first 16 bytes) BEFORE model address
-    uint32_t model_xip_addr = 0x3A200000;
-    uint32_t header_xip_addr = model_xip_addr - 16;
+    uint32_t model_xip_addr = MODEL_XIP_ADDR;
+    uint32_t header_xip_addr = model_xip_addr - MODEL_XIP_INFO_SIZE;
     uint32_t fname_addr = virt_to_phys(header_xip_addr);
 
-    union
-    {
-        uint8_t bytes[16];
-        uint32_t words[4];
+    union {
+        uint8_t bytes[MODEL_XIP_INFO_SIZE];
+        uint32_t words[MODEL_XIP_INFO_SIZE/4];
     } fname_header;
 
     memset(fname_header.bytes, 0, sizeof(fname_header.bytes));
-    if (hx_lib_spi_eeprom_word_read(spi_id, fname_addr, fname_header.words, 16) != 0)
-    {
+    if (hx_lib_spi_eeprom_word_read(spi_id, fname_addr, fname_header.words, MODEL_XIP_INFO_SIZE) != 0)  {
         xprintf("Failed to read filename header from flash\n");
         xSemaphoreGive(xSPIMutex);
         return false;
     }
 
     xprintf("Flash filename header: ");
-    for (int i = 0; i < 16; i++)
-    {
+    for (int i = 0; i < MODEL_XIP_INFO_SIZE; i++) {
         xprintf("%02X ", fname_header.bytes[i]);
     }
     xprintf("\n");
@@ -981,37 +960,35 @@ bool is_model_in_flash(char *filename)
     xSemaphoreGive(xSPIMutex);
 
     // Compare filename
-    char fname_param[16] = {0};
     strncpy(fname_param, filename, sizeof(fname_param) - 1);
-    xprintf("filename parameter: %s\n", fname_param);
+    xprintf("Filename parameter: %s\n", fname_param);
 
-    if (memcmp(fname_header.bytes, fname_param, 16) == 0)
-    {
-        xprintf("Model filename in flash matches parameter\n");
-        return true;
+    // Use the filename length of 13 bytes - IMAGEFILENAMELEN
+    if (strncmp(filename, (const char *)fname_header.bytes, IMAGEFILENAMELEN) == 0) {
+    	xprintf("Model filename in flash matches parameter\n");
+    	        return true;
     }
-    else
-    {
-        xprintf("Model filename in flash does NOT match parameter\n");
-        return false;
+    else {
+    	xprintf("Model filename in flash does NOT match parameter\n");
+    	        return false;
     }
 }
 
 // Modified load function - test BOTH SPI and XIP access
-static const tflite::Model *load_model_from_flash(void)
-{
-    if (init_flash() != 0)
-    {
+/**
+ *
+ */
+static const tflite::Model *load_model_from_flash(void) {
+    if (init_flash() != 0) {
         xprintf("Flash init failed\n");
         return nullptr;
     }
 
     const uint32_t phys = MODEL_FLASH_ADDR;   // 0x00200000
-    const uint32_t virt = phys_to_virt(phys); // 0x3A200000
+    const uint32_t virt = phys_to_virt(phys); // 0x3A200000= MODEL_XIP_ADDR
 
     // Take semaphore
-    if (xSemaphoreTake(xSPIMutex, portMAX_DELAY) != pdTRUE)
-    {
+    if (xSemaphoreTake(xSPIMutex, portMAX_DELAY) != pdTRUE)  {
         xprintf("Failed to take SPI mutex for load_model_from_flash\n");
         return nullptr;
     }
@@ -1020,31 +997,31 @@ static const tflite::Model *load_model_from_flash(void)
     hx_lib_spi_eeprom_enable_XIP(spi_id, false, FLASH_SINGLE, false);
 
     // Step 1: Read via SPI to confirm data exists
+
     uint8_t spi_hdr[32] __attribute__((aligned(4))) = {0};
-    if (hx_lib_spi_eeprom_word_read(spi_id, phys, (uint32_t *)spi_hdr, sizeof(spi_hdr)) != 0)
-    {
+    if (hx_lib_spi_eeprom_word_read(spi_id, phys, (uint32_t *)spi_hdr, sizeof(spi_hdr)) != 0) {
         xprintf("Failed to read SPI header\n");
         xSemaphoreGive(xSPIMutex);
         return nullptr;
     }
 
     xprintf("SPI@: ");
-    for (size_t i = 0; i < sizeof(spi_hdr); i++)
+    for (size_t i = 0; i < sizeof(spi_hdr); i++) {
         xprintf("%02X ", spi_hdr[i]);
+    }
     xprintf("\n");
 
     // Check if we have valid TFLite header via SPI
-    if (spi_hdr[4] != 0x54 || spi_hdr[5] != 0x46 ||
-        spi_hdr[6] != 0x4C || spi_hdr[7] != 0x33)
-    {
+    if (spi_hdr[4] != 'T' || spi_hdr[5] != 'F' ||
+        spi_hdr[6] != 'L' || spi_hdr[7] != '3')  {
         xprintf("No valid TFLite model in flash (SPI check)\n");
         xSemaphoreGive(xSPIMutex);
         return nullptr;
     }
 
     // Step 2: Enable XIP mode for memory-mapped access
-    if (hx_lib_spi_eeprom_enable_XIP(spi_id, true, FLASH_SINGLE, true) != 0)
-    {
+
+    if (hx_lib_spi_eeprom_enable_XIP(spi_id, true, FLASH_SINGLE, true) != 0)   {
         xprintf("Failed to enable XIP mode\n");
         xSemaphoreGive(xSPIMutex);
         return nullptr;
@@ -1055,20 +1032,19 @@ static const tflite::Model *load_model_from_flash(void)
     // Step 3: Verify XIP mapping works
     volatile uint8_t *xip_hdr = (volatile uint8_t *)virt;
     xprintf("XIP@0x%08lX: ", virt);
-    for (int i = 0; i < 32; i++)
+    for (int i = 0; i < 32; i++) {
         xprintf("%02X ", xip_hdr[i]);
+    }
     xprintf("\n");
 
     // Step 4: Check if XIP matches SPI data
     bool xip_matches = (memcmp((const void *)spi_hdr, (const void *)xip_hdr, 32) == 0);
 
-    if (xip_matches)
-    {
+    if (xip_matches)  {
         xprintf("XIP mapping works! Using virtual address\n");
-        return tflite::GetModel((const void *)virt);
+        return tflite::GetModel((const void *) virt);
     }
-    else
-    {
+    else  {
         xprintf("XIP mapping mismatch!\n");
         return nullptr;
     }
@@ -1089,8 +1065,36 @@ static const tflite::Model *load_model_from_flash(void)
  * @param categoriesCount = size of the array
  * @return error code
  */
-TfLiteStatus cv_run(int8_t *outCategories, uint16_t categoriesCount)
-{
+TfLiteStatus cv_run(int8_t *outCategories, uint16_t categoriesCount) {
+
+	uint16_t input_height = 0;
+	uint16_t input_width = 0;
+	uint8_t input_channels = 0;
+
+	// Some debug info here:
+	// Expect dimensions = 4, with batch, height, width, channels
+	uint16_t dims = input->dims->size;   // number of dimensions
+	if ((dims == 4) && (input->dims->data[0] == 1)) {
+		input_height = input->dims->data[1];
+		input_width = input->dims->data[2];
+		input_channels = input->dims->data[3];
+	}
+	else if (dims == 3) {
+		input_height = input->dims->data[0];
+		input_width = input->dims->data[1];
+		input_channels = input->dims->data[2];
+	}
+
+	if (input_channels == 0) {
+		// invalid data
+		return kTfLiteError;
+	}
+	// debug figure out raw data type by its size
+	xprintf("Input image is %d x %d (%d bytes)\n",
+			app_get_raw_width(), app_get_raw_height(), app_get_raw_sz());
+
+	xprintf("Input tensor is %d x %d (%d channels)\n", input_height, input_width, input_channels);
+
     // give image to input tensor
     /*
     void img_rescale(
@@ -1104,40 +1108,59 @@ TfLiteStatus cv_run(int8_t *outCategories, uint16_t categoriesCount)
             const int32_t nyfactor)
 
      */
+
+//    img_rescale((uint8_t *)app_get_raw_addr(),
+//                app_get_raw_width(),
+//                app_get_raw_height(),
+//                INPUT_SIZE_X,
+//                INPUT_SIZE_Y,
+//                input->data.int8,
+//                SC(app_get_raw_width(), INPUT_SIZE_X),
+//                SC(app_get_raw_height(), INPUT_SIZE_Y));
+
+	// TODO - consider hx_lib_image_resize_helium() etc - could be faster.
     img_rescale((uint8_t *)app_get_raw_addr(),
                 app_get_raw_width(),
                 app_get_raw_height(),
-                INPUT_SIZE_X,
-                INPUT_SIZE_Y,
+				input_width,
+				input_height,
                 input->data.int8,
-                SC(app_get_raw_width(), INPUT_SIZE_X),
-                SC(app_get_raw_height(), INPUT_SIZE_Y));
-    xprintf("Image rescaled and loaded into input tensor.\n");
+                SC(app_get_raw_width(), input_width),
+                SC(app_get_raw_height(), input_height));
+
+    //xprintf("Image rescaled and loaded into input tensor.\n");
+
     TfLiteStatus invoke_status = int_ptr->Invoke();
     xprintf("Model invoked.\n");
-    if (invoke_status != kTfLiteOk)
-    {
+
+    if (invoke_status != kTfLiteOk)   {
         xprintf("	TensorLite invoke fail\n");
         return invoke_status;
     }
 
-    // print generic results
+    // See here for how TFLM can process outputs:
+    // https://chatgpt.com/share/69670b6b-2034-8005-a63b-7c09e3f76cf1
+
     //  For int8 output tensor
     int8_t *results = output->data.int8;
-    int classes = (output->dims->size >= 2) ? output->dims->data[1] : output->dims->data[0];
+    // 2D data use data[1] 1D data use data[0]
+    int num_classes = (output->dims->size >= 2) ? output->dims->data[1] : output->dims->data[0];
 
     // Use TFLite's reference softmax implementation
     // Convert int8 logits to float for processing
-    float logits_float[classes];
-    float probabilities[classes];
+    float logits_float[num_classes];
+    float probabilities[num_classes];
 
     // Dequantize int8 logits to float
     // Typical quantization for logits: scale = 0.00390625 (1/256), zero_point = 0
     const float scale = output->params.scale;
     const int32_t zero_point = output->params.zero_point;
 
-    for (int i = 0; i < classes; ++i)
-    {
+    // Raw int8 values are in [-128, 127]
+    // To get actual logits in float, you reverse the quantization:
+    // logits_float[i]=(int8_value[i]−zero_point)×scale
+
+    for (int i = 0; i < num_classes; ++i) {
         logits_float[i] = (static_cast<float>(results[i]) - static_cast<float>(zero_point)) * scale;
     }
 
@@ -1145,49 +1168,44 @@ TfLiteStatus cv_run(int8_t *outCategories, uint16_t categoriesCount)
     tflite::SoftmaxParams softmax_params;
     softmax_params.beta = 1.0f; // Standard softmax temperature
 
-    tflite::RuntimeShape shape({1, classes});
+    tflite::RuntimeShape shape({1, num_classes});
+    // Softmax() converts the dequantized logits into probabilities (0-1, total = 1)
     tflite::reference_ops::Softmax(softmax_params, shape, logits_float, shape, probabilities);
 
     // Store results and display
-    g_last_confidence_data.class_count = (classes > MAX_CLASSES) ? MAX_CLASSES : classes;
+    g_last_confidence_data.class_count = (num_classes > MAX_CLASSES) ? MAX_CLASSES : num_classes;
 
-    for (int i = 0; i < classes; ++i)
-    {
+    for (int i = 0; i < num_classes; ++i) {
         float confidence = probabilities[i] * 100.0f;                                     // Convert to percentage
         int confidence_int = (int)(confidence + 0.5f);                                    // Round to nearest integer
         int confidence_frac = (int)((confidence - (float)confidence_int) * 10.0f + 0.5f); // Get decimal part
-        if (confidence_frac < 0)
+        if (confidence_frac < 0) {
             confidence_frac = 0; // Handle rounding edge cases
+        }
 
         const char *label = (g_labels_loaded && i < g_label_count) ? g_labels[i] : nullptr;
 
         // Store confidence data for EXIF (if within bounds)
-        if (i < MAX_CLASSES)
-        {
+        if (i < MAX_CLASSES)  {
             g_last_confidence_data.confidence_percent[i] = confidence_int;
             g_last_confidence_data.labels[i] = label;
         }
 
         // Color code based on confidence level
-        if (confidence >= 50.0f)
-        {
+        if (confidence >= 50.0f)  {
             XP_LT_GREEN; // High confidence
         }
-        else if (confidence >= 20.0f)
-        {
+        else if (confidence >= 20.0f) {
             XP_YELLOW; // Medium confidence
         }
-        else
-        {
+        else {
             XP_LT_RED; // Low confidence
         }
 
-        if (label)
-        {
+        if (label)  {
             xprintf("Class '%s': %d.%d%% (raw: %d)\n", label, confidence_int, confidence_frac, results[i]);
         }
-        else
-        {
+        else  {
             xprintf("Class %d: %d.%d%% (raw: %d)\n", i, confidence_int, confidence_frac, results[i]);
         }
     }
@@ -1217,13 +1235,12 @@ TfLiteStatus cv_run(int8_t *outCategories, uint16_t categoriesCount)
     //	error_reporter->Report(
     //		   "   model score: %d, no model score: %d\n", model_score, no_model_score);
 #else
-    if (categoriesCount != 2)
-    {
+    // TODO - must process > 2 categories!
+    if (categoriesCount != CATEGORIESCOUNT)   {
         return kTfLiteError; // error
     }
 
-    for (uint8_t i = 0; i < categoriesCount; i++)
-    {
+    for (uint8_t i = 0; i < categoriesCount; i++)  {
         outCategories[i] = output->data.int8[i];
     }
 #endif
@@ -1290,9 +1307,11 @@ void debug_sd_model_integrity(const char *filename)
     if (res == FR_OK && bytesRead == sizeof(header))
     {
         xprintf("SD TFLite header (first 16 bytes): ");
-        for (int i = 0; i < 16; ++i)
+        for (int i = 0; i < MODEL_XIP_INFO_SIZE; ++i) {
             xprintf("%02X ", header[i]);
+        }
         xprintf("\n");
+
         // Check for 'T','F','L','3' at header[4..7]
         if (header[4] == 'T' && header[5] == 'F' && header[6] == 'L' && header[7] == '3')
         {
@@ -1310,8 +1329,12 @@ void debug_sd_model_integrity(const char *filename)
     f_close(&file);
 }
 
-void debug_flash_status()
-{
+/**
+ * Debug code for SPI EEPROM:
+ *
+ * Prints Flash init status, SPI ID, EEPROM ID byte
+ */
+void debug_flash_status(void) {
     xprintf("=== FLASH DEBUG STATUS ===\n");
     xprintf("Flash initialized: %s\n", flash_initialized ? "YES" : "NO");
     xprintf("SPI ID: %d\n", (int)spi_id);

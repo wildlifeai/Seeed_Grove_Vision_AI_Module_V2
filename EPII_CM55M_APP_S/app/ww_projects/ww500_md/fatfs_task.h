@@ -24,6 +24,7 @@
 #include "FreeRTOS.h"
 #include "queue.h"
 #include "directory_manager.h"
+#include "cvapp.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -140,7 +141,7 @@ void fatfs_getDeploymentId(char *deployment_id_buffer, size_t buffer_size);
 #define DEPLOYMENT_ID_ZERO_UUID "00000000-0000-0000-0000-000000000000"
 
 // Load labels from SD card text file
-int fatfs_load_labels(const char *path, char labels[][48], int *label_count, int max_labels, int max_label_len);
+int8_t fatfs_load_labels(const char *path, char labels[][MAX_LABEL_LEN], uint8_t *label_count, uint8_t max_labels, uint8_t max_label_len);
 
 #ifdef UNZIPMANIFEST
 // Unzip Manifest.zip (method 0 STORE only - no compression)

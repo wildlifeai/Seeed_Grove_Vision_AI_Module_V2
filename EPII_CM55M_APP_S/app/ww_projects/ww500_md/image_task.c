@@ -63,10 +63,8 @@
 #include "selfTest.h"
 
 // Enable/disable writing per-class confidence/label EXIF tags (0xF300+)
-// Set to 0 to quickly rule out EXIF confidence as a cause of runtime issues
-#ifndef ENABLE_EXIF_CONFIDENCE
-#define ENABLE_EXIF_CONFIDENCE 1
-#endif
+// Uncomment this to enable confidence data
+#define ENABLE_EXIF_CONFIDENCE
 
 /*************************************** Definitions *******************************************/
 
@@ -103,6 +101,7 @@
 
 #define EXIF_MAX_LEN 512 // I have seen 350 used...
 // Limit how many dynamic class entries we will write to EXIF to avoid buffer growth
+// TODO - should this not be the same as the maximaum number of classes defined elsewhere? e.g. the max number of labels?
 #define EXIF_MAX_DYNAMIC_CLASSES 4
 // Limit label length copied into EXIF to keep data small
 #define EXIF_MAX_LABEL_LEN 20
@@ -768,8 +767,7 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg)
             // OK
             fatfs_incrementOperationalParameter(OP_PARAMETER_NUM_NN_ANALYSES);
 
-            if (outCategories[1] > 0)
-            {
+            if (outCategories[1] > 0)  {
                 XP_LT_GREEN;
                 xprintf("TARGET OBJECT DETECTED!\n");
                 // NOTE this only works if CATEGORIESCOUNT == 2
@@ -781,8 +779,7 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg)
                 snprintf(msgToMaster, MSGTOMASTERLEN, "NN+");
                 sendMsgToMaster(msgToMaster);
             }
-            else
-            {
+            else  {
                 if (!skip_nn)
                 {
                     XP_LT_RED;
@@ -1335,11 +1332,11 @@ static void vImageTask(void *pvParameters)
     XP_WHITE;
 
     // Report whether dynamic EXIF confidence tags are enabled at build time
-#if ENABLE_EXIF_CONFIDENCE
+#ifdef ENABLE_EXIF_CONFIDENCE
     xprintf("EXIF confidence tags: ENABLED\n");
 #else
     xprintf("EXIF confidence tags: DISABLED\n");
-#endif
+#endif // ENABLE_EXIF_CONFIDENCE
 
     // Should initialise the camera but not start taking images
 #ifdef USE_HM0360
@@ -2250,76 +2247,78 @@ static void create_gps_ifd(uint8_t *gps_ifd_start)
  * This particular example has hard-coded tags to add, including the X&Y resilutions.
  *
  */
-static uint16_t build_exif_segment(int8_t *outCategories, uint8_t categoriesCount)
-{
+static uint16_t build_exif_segment(int8_t *outCategories, uint8_t categoriesCount) {
     char timestamp[EXIFSTRINGLENGTH] = {0}; // 22:20:36 2025:07:06 = 19 characters plus trailing \0
     uint16_t exif_len;
-
     uint8_t nnData[CATEGORIESCOUNT + 2];
 
+    // IFD count: base entries (9) + UserComment (1 if has confidence data) + DeploymentID (1 if has deployment ID)
+    uint16_t dynamic_ifd_count = IFD0_ENTRY_COUNT;	// 9
+
     // Insert the NN data (raw scores for backwards compatibility)
-    if (categoriesCount > CATEGORIESCOUNT)
-    {
+    if (categoriesCount > CATEGORIESCOUNT)  {
         // error
         nnData[0] = 1;
         nnData[1] = 0;
     }
-    else
-    {
+    else  {
         // First byte is the number of bytes following
         nnData[0] = categoriesCount + 1;
         // Second byte is the number of categories
         nnData[1] = categoriesCount;
         // Subsequent bytes are the NN outputs
-        for (uint8_t i = 0; i < categoriesCount; i++)
-        {
+        for (uint8_t i = 0; i < categoriesCount; i++)  {
             nnData[i + 2] = outCategories[i];
         }
     }
 
+#ifdef ENABLE_EXIF_CONFIDENCE
+
     // Get confidence data from CV module (optional)
     // Use static variables to avoid consuming ~164 bytes of stack space.
     // This prevents stack overflow during memory-intensive operations like manifest unzip.
+    // TODO resolve the above cleanly
     static ClassConfidenceData confidence_data;
     static char user_comment[256]; // Buffer for UserComment string
+    bool has_confidence_data;
 
     memset(&confidence_data, 0, sizeof(confidence_data));
     memset(user_comment, 0, sizeof(user_comment));
 
-#if ENABLE_EXIF_CONFIDENCE
     cv_get_confidence_data(&confidence_data);
-    bool has_confidence_data = (confidence_data.class_count > 0 && confidence_data.class_count <= MAX_CLASSES);
+    has_confidence_data = ((confidence_data.class_count > 0) && (confidence_data.class_count <= MAX_CLASSES));
+
+    // DEBUG message to check the difference between int and uint8_t
+    //xprintf("EXIF: sizeof(confidence_data) = %d\n", sizeof(confidence_data));
 
     // Build UserComment string with model results
-    if (has_confidence_data)
-    {
+    if (has_confidence_data)  {
         char *ptr = user_comment;
         int remaining = sizeof(user_comment) - 1;
 
-        xprintf("EXIF: Building UserComment with %d classes\n", confidence_data.class_count);
+        //xprintf("EXIF: Building UserComment with %d classes\n", confidence_data.class_count);
 
-        for (uint8_t i = 0; i < confidence_data.class_count && i < EXIF_MAX_DYNAMIC_CLASSES; i++)
-        {
+        for (uint8_t i = 0; i < confidence_data.class_count && i < EXIF_MAX_DYNAMIC_CLASSES; i++)  {
             const char *label = confidence_data.labels[i] ? confidence_data.labels[i] : "Unknown";
             int conf = confidence_data.confidence_percent[i];
 
             // Format: "Class: label (conf%); "
             int written = snprintf(ptr, remaining, "%s: %d%%; ", label, conf);
 
-            if (written > 0 && written < remaining)
-            {
+            if (written > 0 && written < remaining) {
                 ptr += written;
                 remaining -= written;
             }
-            else
-            {
+            else  {
                 break; // Buffer full
             }
         }
+
+        if (user_comment[0] != '\0')  {
+            dynamic_ifd_count++; // Add one entry for UserComment
+        }
     }
-#else
-    bool has_confidence_data = false;
-#endif
+#endif //ENABLE_EXIF_CONFIDENCE
 
 	// Get deployment ID from operational parameters
 	char deployment_id[37];
@@ -2328,14 +2327,8 @@ static uint16_t build_exif_segment(int8_t *outCategories, uint8_t categoriesCoun
 	// Only include in EXIF if not all zeros (i.e., a deployment is active)
 	bool has_deployment_id = (strcmp(deployment_id, DEPLOYMENT_ID_ZERO_UUID) != 0);
 
-    // IFD count: base entries (9) + UserComment (1 if has confidence data) + DeploymentID (1 if has deployment ID)
-    uint16_t dynamic_ifd_count = IFD0_ENTRY_COUNT;
-    if (has_confidence_data && user_comment[0] != '\0')
-    {
-        dynamic_ifd_count += 1; // Add one entry for UserComment
-    }
-	if (has_deployment_id)
-	{
+
+	if (has_deployment_id) {
 		dynamic_ifd_count += 1; // Add one entry for DeploymentID
 	}
 
@@ -2395,8 +2388,7 @@ static uint16_t build_exif_segment(int8_t *outCategories, uint8_t categoriesCoun
     uint32_t gps_ifd_offset = (uint32_t)(gps_ifd_start - tiff_start);
     // Ensure we don't exceed buffer when reserving GPS IFD
     size_t gps_size = get_gps_ifd_size();
-    if ((size_t)(next_data_ptr - exif_buffer) + gps_size > EXIF_MAX_LEN)
-    {
+    if ((size_t)(next_data_ptr - exif_buffer) + gps_size > EXIF_MAX_LEN) {
         // If GPS won't fit, reduce gps_size to 0 (skip GPS)
         gps_size = 0;
     }
@@ -2413,18 +2405,17 @@ static uint16_t build_exif_segment(int8_t *outCategories, uint8_t categoriesCoun
     addIFD(TAG_CREATE_DATE, ifd_start + (entry++ * 12), timestamp);
     addIFD(TAG_NN_DATA, ifd_start + (entry++ * 12), nnData); // Neural network output (raw, for backwards compatibility)
 
-#if ENABLE_EXIF_CONFIDENCE
+#ifdef ENABLE_EXIF_CONFIDENCE
     // Add UserComment with model results if available
-    if (has_confidence_data && user_comment[0] != '\0')
-    {
-        xprintf("EXIF: Adding UserComment: %s\n", user_comment);
+    // TODO is it best to use TAG_USER_COMMENT or make a new tag?
+    if (has_confidence_data && user_comment[0] != '\0')  {
+        xprintf("EXIF: Adding UserComment (%d classes): '%s'\n", confidence_data.class_count, user_comment);
         addIFD(TAG_USER_COMMENT, ifd_start + (entry++ * 12), user_comment);
     }
-#endif
+#endif // ENABLE_EXIF_CONFIDENCE
 
 	// Add deployment ID if present (not all zeros)
-	if (has_deployment_id)
-	{
+	if (has_deployment_id) {
 		xprintf("EXIF: Adding DeploymentID: %s\n", deployment_id);
 		addIFD(TAG_DEPLOYMENT_ID, ifd_start + (entry++ * 12), deployment_id);
 	}
@@ -2433,15 +2424,13 @@ static uint16_t build_exif_segment(int8_t *outCategories, uint8_t categoriesCoun
     addIFD(TAG_GPS_IFD_POINTER, ifd_start + (entry++ * 12), &gps_ifd_offset);
 
     // Now write the GPS IFD structure if we reserved space
-    if (gps_size > 0)
-    {
+    if (gps_size > 0) {
         create_gps_ifd(gps_ifd_start);
     }
 
     // Fill in length field (BE!)
     // Protect against exceeding EXIF_MAX_LEN
-    if ((size_t)(next_data_ptr - exif_buffer) > EXIF_MAX_LEN)
-    {
+    if ((size_t)(next_data_ptr - exif_buffer) > EXIF_MAX_LEN) {
         next_data_ptr = exif_buffer + EXIF_MAX_LEN;
     }
     uint16_t len = (next_data_ptr - exif_buffer) - 2; // exclude 0xFFE1 marker

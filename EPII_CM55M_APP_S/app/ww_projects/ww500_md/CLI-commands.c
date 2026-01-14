@@ -812,6 +812,7 @@ static BaseType_t prvLedFlash(char *pcWriteBuffer, size_t xWriteBufferLen, const
 	int32_t paramLong;
 	char *endptr;
 
+	// Get the first parameter (brightness)
 	pcParameter = FreeRTOS_CLIGetParameter(pcCommandString, 1, &lParameterStringLength);
 
 	paramLong = strtol(pcParameter, &endptr, 10);
@@ -822,6 +823,9 @@ static BaseType_t prvLedFlash(char *pcWriteBuffer, size_t xWriteBufferLen, const
 		return pdFALSE;
 	}
 	brightness = (uint16_t)paramLong;
+
+	// Get the second parameter (duration)
+	pcParameter = FreeRTOS_CLIGetParameter(pcCommandString, 2, &lParameterStringLength);
 
 	paramLong = strtol(pcParameter, &endptr, 10);
 

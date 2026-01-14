@@ -243,13 +243,14 @@ void ledFlashDisable(void) {
 	}
 
 	XP_LT_RED;
-	xprintf("DEBUG: ledFlashDisable()\n");
 
 	if ((controlBits & LF_FLENABLE) == LF_FLENABLE) {
 		// Change is needed
 		controlBits &= ~LF_FLENABLE;
 		// Now send these bits to the PCA9574
 		pca9574_write(PCA9574_I2C_ADDRESS_0, PCA9574_REG_OUT, controlBits);
+
+		xprintf("DEBUG: ledFlashDisable(). Control bits now 0x%02x\n", controlBits);
 	}
 	else {
 		xprintf("DEBUG: flash was already off\n");

@@ -293,7 +293,7 @@ int cisdp_sensor_init(bool sensor_init) {
 #if defined  (WW500)
 #pragma message "WW500 in IMX219 driver"
 
-	hx_drv_gpio_set_out_value(GPIO1, GPIO_OUT_HIGH);     // Need a delay here for the power to come on!
+	// Surely done elsewhere? hx_drv_gpio_set_out_value(GPIO1, GPIO_OUT_HIGH);     // Need a delay here for the power to come on!
     vTaskDelay(pdMS_TO_TICKS(CIS_POWERUP_DELAY));
 
 #elif defined(GROVE_VISION_AI)
@@ -577,7 +577,7 @@ void cisdp_stream_on()
     }
     else
     {
-    	dbg_printf(DBG_LESS_INFO, "IMX219 on by app done\r\n");
+    	dbg_printf(DBG_LESS_INFO, "IMX219 on by app done (on)\r\n");
     }
 }
 
@@ -610,7 +610,7 @@ void cisdp_sensor_start()
     }
     else
     {
-    	dbg_printf(DBG_LESS_INFO, "IMX219 on by app done\r\n");
+    	dbg_printf(DBG_LESS_INFO, "IMX219 on by app done (start)\r\n");
     }
 
     sensordplib_set_mclkctrl_xsleepctrl_bySCMode();

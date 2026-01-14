@@ -1370,7 +1370,7 @@ static bool configure_image_sensor(CAMERA_CONFIG_E operation) {
 	// Check i2c address
 	uint8_t cameraID;
 	hx_drv_cis_get_slaveID(&cameraID);
-    xprintf("Camera ID 0x%02x\n", cameraID);
+    xprintf("Camera I2C address 0x%02x\n", cameraID);
 
 	switch (operation) {
 

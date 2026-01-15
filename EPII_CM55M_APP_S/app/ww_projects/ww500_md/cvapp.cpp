@@ -68,6 +68,9 @@
 #endif
 #endif
 
+// Uncomment this to get information about the model:
+#define PRINTMODELFINGERPRINT
+
 extern "C" {
 	// These are defined in the linker .ld file, and aligned on 32-byte boundaries
     extern uint8_t __tensor_arena_start__;
@@ -313,6 +316,131 @@ int write_persisted_model_info()
     xprintf("Persisted model info to flash: Project=%d, Version=%d\n", g_project_id, g_deploy_version);
     return 0;
 }
+
+
+#ifdef PRINTMODELFINGERPRINT
+#include "tensorflow/lite/schema/schema_generated.h"
+//#include "tensorflow/lite/version.h"
+
+// Forward declaration of your printf
+extern "C" void xprintf(const char *fmt, ...);
+
+static const char* TfLiteTypeName(TfLiteType t) {
+    switch (t) {
+    case kTfLiteFloat32: return "f32";
+    case kTfLiteInt32:   return "i32";
+    case kTfLiteUInt8:   return "u8";
+    case kTfLiteInt8:    return "i8";
+    case kTfLiteInt16:   return "i16";
+    default:             return "?";
+    }
+}
+
+static const char* BuiltinOpName(tflite::BuiltinOperator op) {
+    switch (op) {
+    case tflite::BuiltinOperator_CONV_2D:            return "CONV2D";
+    case tflite::BuiltinOperator_DEPTHWISE_CONV_2D: return "DWCONV";
+    case tflite::BuiltinOperator_FULLY_CONNECTED:   return "FC";
+    case tflite::BuiltinOperator_ADD:               return "ADD";
+    case tflite::BuiltinOperator_AVERAGE_POOL_2D:  return "AVGPOOL";
+    case tflite::BuiltinOperator_MAX_POOL_2D:      return "MAXPOOL";
+    case tflite::BuiltinOperator_SOFTMAX:           return "SOFTMAX";
+    case tflite::BuiltinOperator_RESHAPE:           return "RESHAPE";
+    default:                                        return "OTHER";
+    }
+}
+
+// Enhanced Ethos-U55-aware fingerprint
+void tflm_print_ethosu_fingerprint(const tflite::Model* model) {
+    if (!model) {
+        xprintf("TFLM: model = NULL\r\n");
+        return;
+    }
+
+    xprintf("TFLM Ethos-U55 Model Fingerprint\r\n");
+    xprintf("---------------------------------\r\n");
+    xprintf("Schema version : %d (expected %d)\r\n",
+            model->version(), TFLITE_SCHEMA_VERSION);
+
+    const auto* subgraphs = model->subgraphs();
+    xprintf("Subgraphs      : %d\r\n", subgraphs->size());
+
+    if (subgraphs->size() == 0) return;
+
+    const auto* g = subgraphs->Get(0);
+    const auto* tensors = g->tensors();
+    const auto* ops = g->operators();
+
+    xprintf("Operators      : %d\r\n", ops->size());
+
+    for (uint32_t i = 0; i < ops->size(); i++) {
+        const auto* op = ops->Get(i);
+        const auto* opcode = model->operator_codes()->Get(op->opcode_index());
+        tflite::BuiltinOperator builtin = opcode->builtin_code();
+        const char* op_name = BuiltinOpName(builtin);
+        const char* custom_name = nullptr;
+
+        // If CUSTOM operator, print the custom code string
+        if (builtin == tflite::BuiltinOperator_CUSTOM && opcode->custom_code()) {
+        	custom_name = opcode->custom_code()->c_str();
+        	op_name = "CUSTOM";
+        }
+
+        // Count weight bytes for this operator
+        size_t op_weight_bytes = 0;
+        for (uint32_t j = 0; j < op->inputs()->size(); j++) {
+            int t_idx = op->inputs()->Get(j);
+            if (t_idx < 0 || t_idx >= static_cast<int>(tensors->size())) continue;
+            const auto* t = tensors->Get(t_idx);
+            int buf_idx = t->buffer();
+            if (buf_idx < 0 || buf_idx >= static_cast<int>(model->buffers()->size())) continue;
+            const auto* buf = model->buffers()->Get(buf_idx);
+            if (buf->data()) op_weight_bytes += buf->data()->size();
+        }
+
+        // Print operator info
+        xprintf("  Op %d: %s", i, op_name);
+        if (custom_name) xprintf(" (%s)", custom_name);
+        xprintf(", weight bytes: %u\r\n", (unsigned)op_weight_bytes);
+    }
+
+    // Input tensor
+    if (g->inputs()->size() > 0) {
+        const auto* t = tensors->Get(g->inputs()->Get(0));
+        xprintf("Input tensor   : %s [",
+                TfLiteTypeName(static_cast<TfLiteType>(t->type())));
+        for (uint32_t i = 0; i < t->shape()->size(); i++) {
+            xprintf("%d", t->shape()->Get(i));
+            if (i != t->shape()->size() - 1) xprintf(",");
+        }
+        xprintf("]\r\n");
+    }
+
+    // Output tensor
+    if (g->outputs()->size() > 0) {
+        const auto* t = tensors->Get(g->outputs()->Get(0));
+        xprintf("Output tensor  : %s [",
+                TfLiteTypeName(static_cast<TfLiteType>(t->type())));
+        for (uint32_t i = 0; i < t->shape()->size(); i++) {
+            xprintf("%d", t->shape()->Get(i));
+            if (i != t->shape()->size() - 1) xprintf(",");
+        }
+        xprintf("]\r\n");
+    }
+
+    // Total weight bytes (all buffers)
+    size_t total_weight_bytes = 0;
+    const auto* buffers = model->buffers();
+    for (uint32_t i = 0; i < buffers->size(); i++) {
+        const auto* b = buffers->Get(i);
+        if (b->data()) total_weight_bytes += b->data()->size();
+    }
+
+    xprintf("Total weight bytes : %u\r\n", (unsigned)total_weight_bytes);
+    xprintf("---------------------------------\r\n");
+}
+
+#endif	// PRINTMODELFINGERPRINT
 
 /**
  * Bilinear interpolation.
@@ -564,6 +692,11 @@ int cv_init(bool security_enable, bool privilege_enable, int project_id, int dep
 //		xprintf("Input: %d x %d NN: %d x %d\n",
 //				app_get_raw_width(), app_get_raw_height(), INPUT_SIZE_X, INPUT_SIZE_X);
 	}
+
+#ifdef PRINTMODELFINGERPRINT
+	// Print information about the model
+	tflm_print_ethosu_fingerprint(model);
+#endif // PRINTMODELFINGERPRINT
 
 	static tflite::MicroErrorReporter micro_error_reporter;
 
@@ -1089,7 +1222,8 @@ TfLiteStatus cv_run(int8_t *outCategories, uint16_t categoriesCount) {
 		// invalid data
 		return kTfLiteError;
 	}
-	// debug figure out raw data type by its size
+
+	// debug figure out raw data type by its size: RP3 camera seems to produce 1.5 bytes per pixel -> YUV420
 	xprintf("Input image is %d x %d (%d bytes)\n",
 			app_get_raw_width(), app_get_raw_height(), app_get_raw_sz());
 

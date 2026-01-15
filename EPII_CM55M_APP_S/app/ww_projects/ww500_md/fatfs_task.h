@@ -143,12 +143,12 @@ void fatfs_getDeploymentId(char *deployment_id_buffer, size_t buffer_size);
 // Load labels from SD card text file
 int8_t fatfs_load_labels(const char *path, char labels[][MAX_LABEL_LEN], uint8_t *label_count, uint8_t max_labels, uint8_t max_label_len);
 
+void fatfs_printCwd(void);
+
 #ifdef UNZIPMANIFEST
 // Unzip Manifest.zip (method 0 STORE only - no compression)
 int fatfs_unzip_manifest(void);
 #endif // UNZIPMANIFEST
-
-FRESULT save_configuration(const char *path, directoryManager_t *dirManager);
 
 #ifdef __cplusplus
 }

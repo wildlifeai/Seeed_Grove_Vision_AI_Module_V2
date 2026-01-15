@@ -661,15 +661,19 @@ static FRESULT load_configuration(const char *filename, directoryManager_t *dirM
 	uint8_t index;
 	uint16_t value;
 
-	if (!fatfs_mounted()) {
-		xprintf("SD card not mounted.\n");
-		return FR_NO_FILESYSTEM;
-	}
+    if (!fatfs_mounted()) {
+        xprintf("SD card not mounted.\n");
+    	return FR_NO_FILESYSTEM;
+    }
 
 	if (!dirManager->configOpen) {
 		res = f_chdir(dirManager->current_config_dir);
-		if (res != FR_OK)
+		if (res != FR_OK) {
+			xprintf("Failed to change to: %s\n", dirManager->current_config_dir);
 			return res;
+		}
+    	xprintf("Loading configuration: ");
+    	fatfs_printCwd();	// will print CWD
 
 		// Open the file
 		res = f_open(&dirManager->configFile, filename, FA_READ);
@@ -715,6 +719,7 @@ static FRESULT load_configuration(const char *filename, directoryManager_t *dirM
 			// Set array value if index is in range
 			if (index >= 0 && index < OP_PARAMETER_NUM_ENTRIES) {
 				op_parameter[index] = value;
+				// debug only:
 				// xprintf("   op_parameter[%d] = %d\n", index, value);
 			}
 		}
@@ -754,15 +759,19 @@ FRESULT save_configuration(const char *filename, directoryManager_t *dirManager)
 	char comment_lines[MAXNUMCOMMENTS][MAXCOMMENTLENGTH];
 	uint16_t comment_count = 0;
 
-	if (!fatfs_mounted()) {
-		xprintf("SD card not mounted.\n");
-		return FR_NO_FILESYSTEM;
-	}
+    if (!fatfs_mounted()) {
+        xprintf("SD card not mounted.\n");
+    	return FR_NO_FILESYSTEM;
+    }
 
 	if (!dirManager->configOpen) {
 		res = f_chdir(dirManager->current_config_dir);
-		if (res != FR_OK)
+		if (res != FR_OK) {
 			return res;
+		}
+
+    	//xprintf("Saving configuration: ");
+    	//fatfs_printCwd();	// will print CWD
 
 		// --- First Pass: Try to read existing comment lines ---
 		res = f_open(&dirManager->configFile, filename, FA_READ);
@@ -1163,8 +1172,8 @@ static void vFatFsTask(void *pvParameters) {
 
 		res = dir_mgr_init_directories(&dirManager);
 		if (res == FR_OK) {
-
 			xprintf("SD card initialised. ");
+			fatfs_printCwd();	// for debug purposes
 
 			// Load all the saved configuration values, including the image sequence number
 			res = load_configuration(STATE_FILE, &dirManager);
@@ -1199,7 +1208,8 @@ static void vFatFsTask(void *pvParameters) {
 		// Short timeout after cold boot.
 		inactivityPeriod = INACTIVITYTIMEOUTCB;
 		fatfs_incrementOperationalParameter(OP_PARAMETER_NUM_COLD_BOOTS);
-	} else {
+	}
+	else {
 		inactivityPeriod = op_parameter[OP_PARAMETER_INTERVAL_BEFORE_DPD];
 		fatfs_incrementOperationalParameter(OP_PARAMETER_NUM_WARM_BOOTS);
 	}
@@ -1500,4 +1510,22 @@ void fatfs_getDeploymentId(char *deployment_id_buffer, size_t buffer_size) {
 			 chunks[4],              // 4 chars
 			 chunks[5], chunks[6], chunks[7]  // 12 chars
 	);
+}
+
+/**
+ * Prints the CWD
+ *
+ */
+void fatfs_printCwd(void) {
+	FRESULT res;
+	char cur_dir[128]; //8.3? or full path?
+	UINT len = 128;
+
+	res = f_getcwd(cur_dir, len);      /* Get current directory */
+	if (res) {
+		xprintf("Error %d with f_getcwd\n", res);
+	}
+	else {
+		xprintf("CWD is '%s'\n", cur_dir);
+	}
 }

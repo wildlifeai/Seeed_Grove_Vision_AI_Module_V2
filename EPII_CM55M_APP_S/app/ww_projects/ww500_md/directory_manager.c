@@ -25,10 +25,12 @@
 
 #define MAXIMAGEDIRECTORIES 999
 
+// Note: CONFIG_DIR comes from directory_manager.h and is currently "/MANIFEST"
+// TODO no need for both...
+#define MANIFEST_DIR CONFIG_DIR
+
 #ifdef UNZIPMANIFEST
 // Locations on SD card
-// Note: CONFIG_DIR comes from directory_manager.h and is currently "/MANIFEST"
-#define MANIFEST_DIR CONFIG_DIR
 #define MANIFEST_ZIP_CANON "/MANIFEST.ZIP"
 #endif // UNZIPMANIFEST
 
@@ -168,8 +170,7 @@ static FRESULT ensure_default_config_file_exists(directoryManager_t *dirManager)
  * TODO - this should probably be the responsibility of the image task?
  * Or else: move generateImageFileName() to the fatfs task as well.
  */
-FRESULT dir_mgr_init_directories(directoryManager_t *dirManager)
-{
+FRESULT dir_mgr_init_directories(directoryManager_t *dirManager) {
 	FRESULT res;
 	char path_buf[IMAGEFILENAMELEN];
 	FILINFO fno;
@@ -180,8 +181,7 @@ FRESULT dir_mgr_init_directories(directoryManager_t *dirManager)
 
 	int len = sizeof(dirManager->base_dir);
 	res = f_getcwd(dirManager->base_dir, len); /* Get current directory */
-	if (res != FR_OK)
-	{
+	if (res != FR_OK) {
 		// Use root as base directory.
 		strcpy(dirManager->base_dir, "/");
 	}
@@ -201,12 +201,10 @@ FRESULT dir_mgr_init_directories(directoryManager_t *dirManager)
 	xprintf("MANIFEST_DIR: %s\r\n", MANIFEST_DIR);
 	xprintf("MANIFEST_ZIP (selected): %s\r\n", manifest_zip_path ? manifest_zip_path : "<none>");
 
-	if (manifest_dir_exists)
-	{
+	if (manifest_dir_exists) {
 		xprintf("Directory '%s' exists\r\n", MANIFEST_DIR);
 	}
-	else if (manifest_zip_exists)
-	{
+	else if (manifest_zip_exists) {
 		xprintf("'%s' exists but '%s' missing; unzipping...\r\n", manifest_zip_path, MANIFEST_DIR);
 		int uz = fatfs_unzip_manifest();
 		xprintf("Unzip result: %d\r\n", uz);
@@ -217,13 +215,11 @@ FRESULT dir_mgr_init_directories(directoryManager_t *dirManager)
 		FRESULT cfg_stat = f_stat(MANIFEST_DIR "/" STATE_FILE, &fno);
 		xprintf("Post-unzip stat('%s/%s') = %d\r\n", MANIFEST_DIR, STATE_FILE, cfg_stat);
 	}
-	else
-	{
+	else {
 		xprintf("Neither '%s' nor '%s' exists; creating default config\r\n", MANIFEST_ZIP_CANON, MANIFEST_DIR);
 		// Neither manifest.zip nor manifest dir exists: create config dir and default config file.
 		res = ensure_directory_exists(MANIFEST_DIR);
-		if (res != FR_OK)
-		{
+		if (res != FR_OK) {
 			dirManager->configRes = res;
 			return res;
 		}
@@ -231,16 +227,14 @@ FRESULT dir_mgr_init_directories(directoryManager_t *dirManager)
 		strcpy(dirManager->current_config_dir, MANIFEST_DIR);
 
 		res = f_chdir(MANIFEST_DIR);
-		if (res != FR_OK)
-		{
+		if (res != FR_OK) {
 			dirManager->configRes = res;
 			return res;
 		}
 		res = ensure_default_config_file_exists(dirManager);
 		// Always restore original dir
 		(void)f_chdir(dirManager->base_dir);
-		if (res != FR_OK)
-		{
+		if (res != FR_OK) {
 			dirManager->configRes = res;
 			return res;
 		}
@@ -270,6 +264,22 @@ FRESULT dir_mgr_init_directories(directoryManager_t *dirManager)
 
 	strcpy(dirManager->current_config_dir, MANIFEST_DIR);
 #else
+	// Original code
+	xsprintf(path_buf, CONFIG_DIR);
+	res = f_stat(path_buf, &fno);
+	if (res == FR_OK) {
+		xprintf("Directory '%s' exists\r\n", path_buf);
+	}
+	else {
+		xprintf("Creating directory '%s'\r\n", path_buf);
+		res = f_mkdir(path_buf);
+		if (res != FR_OK) {
+			xprintf("f_mkdir(config) failed (%d)\r\n", res);
+			dirManager->configRes = res;
+			return dirManager->configRes;
+		}
+	}
+	strcpy(dirManager->current_config_dir, path_buf); // Set initial result for config operations
 
 #endif //UNZIPMANIFEST
 
@@ -282,16 +292,13 @@ FRESULT dir_mgr_init_directories(directoryManager_t *dirManager)
 #endif // FF_USE_LFN
 
 	res = f_stat(path_buf, &fno);
-	if (res == FR_OK)
-	{
+	if (res == FR_OK) {
 		xprintf("Directory '%s' exists\r\n", path_buf);
 	}
-	else
-	{
+	else {
 		xprintf("Creating directory '%s'\r\n", path_buf);
 		res = f_mkdir(path_buf);
-		if (res != FR_OK)
-		{
+		if (res != FR_OK) {
 			xprintf("f_mkdir(images) failed (%d)\r\n", res);
 			dirManager->imagesRes = res;
 			return dirManager->imagesRes;

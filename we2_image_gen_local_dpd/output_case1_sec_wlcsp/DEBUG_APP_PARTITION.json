@@ -47,13 +47,13 @@
             "section_4": {
                 "type": 3,
                 "section_number": 4,
-                "sec_size": "0x8738",
+                "sec_size": "0x871C",
                 "version": 2,
                 "output": "output_case1_sec_wlcsp\\inter_files\\cm55m_s_application_p1_s4.img",
                 "div_cnt": 1,
                 "align": 0,
                 "sec_offset": "0x0",
-                "div_sec_size": "0x8738",
+                "div_sec_size": "0x871c",
                 "sec_type": 1,
                 "sec_dst": "0x30000000"
             },
@@ -90,15 +90,15 @@
             "section_2": {
                 "type": 3,
                 "section_number": 2,
-                "sec_size": "0x10C8",
+                "sec_size": "0x10C0",
                 "version": 2,
                 "output": "output_case1_sec_wlcsp\\inter_files\\cm55m_s_application_p2_s2.img",
                 "div_cnt": 1,
                 "align": 0,
                 "sec_offset": "0x0",
-                "div_sec_size": "0x10c8",
+                "div_sec_size": "0x10c0",
                 "sec_type": 2,
-                "sec_dst": "0x30008738"
+                "sec_dst": "0x30008720"
             },
             "section_3": {
                 "type": 3,

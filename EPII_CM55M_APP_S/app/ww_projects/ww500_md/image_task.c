@@ -1078,6 +1078,7 @@ static APP_MSG_DEST_T handleEventForNNUpdate(APP_MSG_T img_recv_msg)
 {
     APP_MSG_DEST_T send_msg;
     send_msg.destination = NULL;
+    // TODO - prvLoadModel() is accepting only one parameter
     int project_id = (int)img_recv_msg.msg_data;
     int deploy_version = (int)img_recv_msg.msg_parameter;
     xprintf("Requested to update NN model to %dV%d.tfl (Project ID: %d)\n", project_id, deploy_version, project_id);

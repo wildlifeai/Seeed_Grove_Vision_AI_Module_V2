@@ -1456,6 +1456,7 @@ static BaseType_t prvExifGpsTests(char *pcWriteBuffer, size_t xWriteBufferLen, c
 	return pdFALSE;
 }
 
+// TODO - process 2 parameters! project ID and version
 static BaseType_t prvLoadModel(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString)
 {
 	const char *pcParameter;

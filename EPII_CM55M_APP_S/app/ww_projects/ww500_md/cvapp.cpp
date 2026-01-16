@@ -99,7 +99,6 @@ namespace {
 };
 
 // SPI EEPROM configuration
-static USE_DW_SPI_MST_E spi_id = USE_DW_SPI_MST_Q;
 static bool flash_initialized = false;
 static SemaphoreHandle_t xSPIMutex = NULL;
 
@@ -240,7 +239,7 @@ int read_persisted_model_info(void) {
     }
 
     // Disable XIP before SPI read
-    hx_lib_spi_eeprom_enable_XIP(spi_id, false, FLASH_SINGLE, false);
+    hx_lib_spi_eeprom_enable_XIP(USE_DW_SPI_MST_Q, false, FLASH_QUAD, false);
 
     // Model info is stored 24 bytes before the model data
     // (4 bytes project_id + 4 bytes version + 16 bytes filename header)
@@ -254,7 +253,7 @@ int read_persisted_model_info(void) {
     model_info_xip_addr = MODEL_XIP_ADDR - 24;
     model_info_phys_addr = virt_to_phys(model_info_xip_addr);
 
-    if (hx_lib_spi_eeprom_word_read(spi_id, model_info_phys_addr, stored_info, 8) != 0)  {
+    if (hx_lib_spi_eeprom_word_read(USE_DW_SPI_MST_Q, model_info_phys_addr, stored_info, 8) != 0)  {
         xprintf("Failed to read persisted model info, using defaults\n");
         xSemaphoreGive(xSPIMutex);
         return -1;
@@ -292,14 +291,14 @@ int write_persisted_model_info()
     }
 
     // Disable XIP before write
-    hx_lib_spi_eeprom_enable_XIP(spi_id, false, FLASH_SINGLE, false);
+    hx_lib_spi_eeprom_enable_XIP(USE_DW_SPI_MST_Q, false, FLASH_QUAD, false);
 
     uint32_t model_xip_addr = MODEL_XIP_ADDR;
     uint32_t model_info_xip_addr = model_xip_addr - 24;
     uint32_t model_info_phys_addr = virt_to_phys(model_info_xip_addr);
 
     uint32_t info_to_write[2] = {(uint32_t)g_project_id, (uint32_t)g_deploy_version};
-    if (hx_lib_spi_eeprom_word_write(spi_id, model_info_phys_addr, info_to_write, 8) != 0)
+    if (hx_lib_spi_eeprom_word_write(USE_DW_SPI_MST_Q, model_info_phys_addr, info_to_write, 8) != 0)
     {
         xprintf("Failed to write persisted model info\n");
         xSemaphoreGive(xSPIMutex);
@@ -566,7 +565,7 @@ int cv_init(bool security_enable, bool privilege_enable, int project_id, int dep
 	char manifest_path[10 + IMAGEFILENAMELEN];			// let's restrict this to "/12345678/" then the filename, so 10 + IMAGEFILENAMELEN
 	static const tflite::Model *model = nullptr;
 
-
+	// TODO - consider an arrangement for multiple models in flash
 	xprintf("cv_init called with ProjectID: %d, Version: %d\n", project_id, deploy_version);
 
 	// On first boot (g_project_id == 0), read the persisted model info from flash
@@ -687,15 +686,12 @@ int cv_init(bool security_enable, bool privilege_enable, int project_id, int dep
 				model->version(), TFLITE_SCHEMA_VERSION);
 		return -1;
 	}
-	else {
-		xprintf("Model schema version: %d\n", model->version());
-//		xprintf("Input: %d x %d NN: %d x %d\n",
-//				app_get_raw_width(), app_get_raw_height(), INPUT_SIZE_X, INPUT_SIZE_X);
-	}
 
 #ifdef PRINTMODELFINGERPRINT
 	// Print information about the model
 	tflm_print_ethosu_fingerprint(model);
+#else
+	xprintf("Model schema version: %d\n", model->version());
 #endif // PRINTMODELFINGERPRINT
 
 	static tflite::MicroErrorReporter micro_error_reporter;
@@ -741,6 +737,7 @@ int cv_init(bool security_enable, bool privilege_enable, int project_id, int dep
  * TODO - this is called many times - should only be called once.
  */
 int init_flash(void) {
+	uint8_t id_info;
 
 	if (flash_initialized) {
 		return 0;
@@ -764,19 +761,26 @@ int init_flash(void) {
 
 	xprintf("Init EEPROM...\r\n");
 
-	// CRITICAL: Disable XIP mode before SPI operations
-	hx_lib_spi_eeprom_enable_XIP(spi_id, false, FLASH_SINGLE, false);
-	vTaskDelay(pdMS_TO_TICKS(10)); // Small delay for mode switch
+//	hx_lib_spi_eeprom_open(USE_DW_SPI_MST_Q);
+//    //hx_lib_spi_eeprom_open_speed(USE_DW_SPI_MST_Q, 6000000);
+//
+//	hx_lib_spi_eeprom_enable_XIP(USE_DW_SPI_MST_Q, true, FLASH_QUAD, true);
 
-	if (hx_lib_spi_eeprom_open(spi_id) != 0) {
+	if (hx_lib_spi_eeprom_open(USE_DW_SPI_MST_Q) != 0) {
 		xprintf("Failed to open SPI EEPROM\n");
 		flash_initialized = false;
 		xSemaphoreGive(xSPIMutex);
 		return -1;
 	}
 
-	uint8_t id_info = 0;
-	if (hx_lib_spi_eeprom_read_ID(spi_id, &id_info) != 0) {
+	// CRITICAL: Disable XIP mode before SPI operations
+	hx_lib_spi_eeprom_enable_XIP(USE_DW_SPI_MST_Q, false, FLASH_QUAD, false);
+
+	// Small delay for mode switch
+	// TODO - why?
+	vTaskDelay(pdMS_TO_TICKS(10));
+
+	if (hx_lib_spi_eeprom_read_ID(USE_DW_SPI_MST_Q, &id_info) != 0) {
 		xprintf("Failed to read flash ID\n");
 		xSemaphoreGive(xSPIMutex);
 		return -1;
@@ -806,10 +810,10 @@ int erase_model_flash_area(uint32_t model_size)
     }
 
     // Disable XIP before erase
-    hx_lib_spi_eeprom_enable_XIP(spi_id, false, FLASH_SINGLE, false);
+    hx_lib_spi_eeprom_enable_XIP(USE_DW_SPI_MST_Q, false, FLASH_QUAD, false);
 
     // Addresses (XIP virtual used as reference)
-    const uint32_t model_xip_addr = 0x3A200000;
+    const uint32_t model_xip_addr = MODEL_XIP_ADDR;
     const uint32_t model_info_xip_addr = model_xip_addr - 24; // 8 bytes for model info before filename header
 
     // Convert to physical addresses
@@ -828,7 +832,7 @@ int erase_model_flash_area(uint32_t model_size)
     for (uint32_t i = 0; i < sectors_needed; i++)
     {
         uint32_t sector_addr = erase_start + (i * FLASH_SECTOR_SIZE);
-        int er = hx_lib_spi_eeprom_erase_sector(spi_id, sector_addr, FLASH_SECTOR);
+        int er = hx_lib_spi_eeprom_erase_sector(USE_DW_SPI_MST_Q, sector_addr, FLASH_SECTOR);
         xprintf("  Erase sector %lu addr 0x%08lX -> result %d\n",
                 (unsigned long)i, sector_addr, er);
         if (er != 0)
@@ -910,14 +914,14 @@ int load_model_from_sd_to_flash(char *filename) {
     }
 
     // Ensure XIP is disabled
-    hx_lib_spi_eeprom_enable_XIP(spi_id, false, FLASH_SINGLE, false);
+    hx_lib_spi_eeprom_enable_XIP(USE_DW_SPI_MST_Q, false, FLASH_QUAD, false);
 
     memset(fname_header.bytes, 0, sizeof(fname_header.bytes));
     strncpy((char *)fname_header.bytes, base, sizeof(fname_header.bytes) - 1);
     xprintf("Writing filename header: %s\n", fname_header.bytes);
 
     // write header via SPI (4 words)
-    int wr = hx_lib_spi_eeprom_word_write(spi_id, header_phys_addr, fname_header.words, MODEL_XIP_INFO_SIZE);
+    int wr = hx_lib_spi_eeprom_word_write(USE_DW_SPI_MST_Q, header_phys_addr, fname_header.words, MODEL_XIP_INFO_SIZE);
     if (wr != 0)
     {
         xprintf("Failed to write filename header to flash (err %d)\n", wr);
@@ -934,7 +938,7 @@ int load_model_from_sd_to_flash(char *filename) {
 
     // verify header by reading back via SPI
     memset(fname_verify.bytes, 0, sizeof(fname_verify.bytes));
-    if (hx_lib_spi_eeprom_word_read(spi_id, header_phys_addr, fname_verify.words, MODEL_XIP_INFO_SIZE) != 0)
+    if (hx_lib_spi_eeprom_word_read(USE_DW_SPI_MST_Q, header_phys_addr, fname_verify.words, MODEL_XIP_INFO_SIZE) != 0)
     {
         xprintf("Failed to verify filename header in flash (read error)\n");
         xSemaphoreGive(xSPIMutex);
@@ -979,11 +983,11 @@ int load_model_from_sd_to_flash(char *filename) {
         }
 
         // Ensure XIP is disabled
-        hx_lib_spi_eeprom_enable_XIP(spi_id, false, FLASH_SINGLE, false);
+        hx_lib_spi_eeprom_enable_XIP(USE_DW_SPI_MST_Q, false, FLASH_QUAD, false);
 
         xprintf("Writing %u bytes (aligned %u) to 0x%08lX\n",
                 (unsigned)bytesRead, (unsigned)write_size, (unsigned long)flash_address);
-        if (hx_lib_spi_eeprom_word_write(spi_id,
+        if (hx_lib_spi_eeprom_word_write(USE_DW_SPI_MST_Q,
                                          flash_address,
                                          (uint32_t *)write_buf,
                                          write_size) != 0)
@@ -999,7 +1003,7 @@ int load_model_from_sd_to_flash(char *filename) {
         }
 
         memset(verify_buf, 0, write_size);
-        if (hx_lib_spi_eeprom_word_read(spi_id,
+        if (hx_lib_spi_eeprom_word_read(USE_DW_SPI_MST_Q,
                                         flash_address,
                                         (uint32_t *)verify_buf,
                                         write_size) != 0)
@@ -1033,10 +1037,8 @@ int load_model_from_sd_to_flash(char *filename) {
         write_persisted_model_info();
 
         // Re-enable XIP mode after all writes complete
-        if (xSemaphoreTake(xSPIMutex, portMAX_DELAY) == pdTRUE)
-        {
-            if (hx_lib_spi_eeprom_enable_XIP(spi_id, true, FLASH_SINGLE, true) == 0)
-            {
+        if (xSemaphoreTake(xSPIMutex, portMAX_DELAY) == pdTRUE)  {
+            if (hx_lib_spi_eeprom_enable_XIP(USE_DW_SPI_MST_Q, true, FLASH_QUAD, true) == 0) {
                 xprintf("XIP mode re-enabled successfully\n");
             }
             xSemaphoreGive(xSPIMutex);
@@ -1065,7 +1067,7 @@ bool is_model_in_flash(char *filename) {
     }
 
     // Ensure XIP is disabled
-    hx_lib_spi_eeprom_enable_XIP(spi_id, false, FLASH_SINGLE, false);
+    hx_lib_spi_eeprom_enable_XIP(USE_DW_SPI_MST_Q, false, FLASH_QUAD, false);
 
     // Read filename header (first 16 bytes) BEFORE model address
     uint32_t model_xip_addr = MODEL_XIP_ADDR;
@@ -1078,7 +1080,7 @@ bool is_model_in_flash(char *filename) {
     } fname_header;
 
     memset(fname_header.bytes, 0, sizeof(fname_header.bytes));
-    if (hx_lib_spi_eeprom_word_read(spi_id, fname_addr, fname_header.words, MODEL_XIP_INFO_SIZE) != 0)  {
+    if (hx_lib_spi_eeprom_word_read(USE_DW_SPI_MST_Q, fname_addr, fname_header.words, MODEL_XIP_INFO_SIZE) != 0)  {
         xprintf("Failed to read filename header from flash\n");
         xSemaphoreGive(xSPIMutex);
         return false;
@@ -1127,12 +1129,12 @@ static const tflite::Model *load_model_from_flash(void) {
     }
 
     // Disable XIP for SPI read
-    hx_lib_spi_eeprom_enable_XIP(spi_id, false, FLASH_SINGLE, false);
+    hx_lib_spi_eeprom_enable_XIP(USE_DW_SPI_MST_Q, false, FLASH_QUAD, false);
 
     // Step 1: Read via SPI to confirm data exists
 
     uint8_t spi_hdr[32] __attribute__((aligned(4))) = {0};
-    if (hx_lib_spi_eeprom_word_read(spi_id, phys, (uint32_t *)spi_hdr, sizeof(spi_hdr)) != 0) {
+    if (hx_lib_spi_eeprom_word_read(USE_DW_SPI_MST_Q, phys, (uint32_t *)spi_hdr, sizeof(spi_hdr)) != 0) {
         xprintf("Failed to read SPI header\n");
         xSemaphoreGive(xSPIMutex);
         return nullptr;
@@ -1154,7 +1156,7 @@ static const tflite::Model *load_model_from_flash(void) {
 
     // Step 2: Enable XIP mode for memory-mapped access
 
-    if (hx_lib_spi_eeprom_enable_XIP(spi_id, true, FLASH_SINGLE, true) != 0)   {
+    if (hx_lib_spi_eeprom_enable_XIP(USE_DW_SPI_MST_Q, true, FLASH_QUAD, true) != 0) {
         xprintf("Failed to enable XIP mode\n");
         xSemaphoreGive(xSPIMutex);
         return nullptr;
@@ -1471,7 +1473,7 @@ void debug_sd_model_integrity(const char *filename)
 void debug_flash_status(void) {
     xprintf("=== FLASH DEBUG STATUS ===\n");
     xprintf("Flash initialized: %s\n", flash_initialized ? "YES" : "NO");
-    xprintf("SPI ID: %d\n", (int)spi_id);
+    xprintf("SPI ID: %d\n", (int)USE_DW_SPI_MST_Q);
 
     // Take semaphore
     if (xSemaphoreTake(xSPIMutex, portMAX_DELAY) != pdTRUE)
@@ -1481,10 +1483,10 @@ void debug_flash_status(void) {
     }
 
     // CRITICAL: Disable XIP before reading ID
-    hx_lib_spi_eeprom_enable_XIP(spi_id, false, FLASH_SINGLE, false);
+    hx_lib_spi_eeprom_enable_XIP(USE_DW_SPI_MST_Q, false, FLASH_QUAD, false);
 
     uint8_t id_info = 0;
-    int result = hx_lib_spi_eeprom_read_ID(spi_id, &id_info);
+    int result = hx_lib_spi_eeprom_read_ID(USE_DW_SPI_MST_Q, &id_info);
     xprintf("Flash ID read result: %d, ID: 0x%02X\n", result, id_info);
 
     xSemaphoreGive(xSPIMutex);
@@ -1496,7 +1498,7 @@ void test_basic_spi_operations()
 
     uint32_t test_addr = (MODEL_FLASH_ADDR + 4 * FLASH_SECTOR_SIZE) & ~(FLASH_SECTOR_SIZE - 1);
 
-    int er = hx_lib_spi_eeprom_erase_sector(spi_id, test_addr, FLASH_SECTOR);
+    int er = hx_lib_spi_eeprom_erase_sector(USE_DW_SPI_MST_Q, test_addr, FLASH_SECTOR);
     xprintf("Erase result: %d at 0x%08lX\n", er, test_addr);
 
     uint32_t test_data[4] = {0xDEADBEEF, 0x12345678, 0xABCDEF00, 0x11223344};
@@ -1505,7 +1507,7 @@ void test_basic_spi_operations()
     xprintf("Writing one word at a time:\n");
     for (int i = 0; i < 4; i++)
     {
-        int wr = hx_lib_spi_eeprom_word_write(spi_id, test_addr + (i * 4), &test_data[i], 1);
+        int wr = hx_lib_spi_eeprom_word_write(USE_DW_SPI_MST_Q, test_addr + (i * 4), &test_data[i], 1);
         xprintf("  Write word %d (0x%08lX) to 0x%08lX: result %d\n",
                 i, test_data[i], test_addr + (i * 4), wr);
     }
@@ -1515,7 +1517,7 @@ void test_basic_spi_operations()
     for (int i = 0; i < 4; i++)
     {
         uint32_t read_data = 0;
-        int rr = hx_lib_spi_eeprom_word_read(spi_id, test_addr + (i * 4), &read_data, 1);
+        int rr = hx_lib_spi_eeprom_word_read(USE_DW_SPI_MST_Q, test_addr + (i * 4), &read_data, 1);
         xprintf("  Read word %d from 0x%08lX: result %d, data 0x%08lX %s\n",
                 i, test_addr + (i * 4), rr, read_data,
                 (read_data == test_data[i]) ? "OK" : "FAIL");
@@ -1554,9 +1556,9 @@ void compare_sd_spi_xip_chunked(const char *filename)
             break;
         }
         // // Read SPI
-        if (hx_lib_spi_eeprom_word_read(spi_id, MODEL_FLASH_ADDR + offset, (uint32_t *)spi_buf, to_read) != 0)
+        if (hx_lib_spi_eeprom_word_read(USE_DW_SPI_MST_Q, MODEL_FLASH_ADDR + offset, (uint32_t *)spi_buf, to_read) != 0)
         {
-            // if (hx_lib_spi_eeprom_word_read(spi_id, MODEL_FLASH_ADDR + offset, (uint32_t*)spi_buf, (to_read + 3) / 4) != 0) {
+            // if (hx_lib_spi_eeprom_word_read(USE_DW_SPI_MST_Q, MODEL_FLASH_ADDR + offset, (uint32_t*)spi_buf, (to_read + 3) / 4) != 0) {
             xprintf("Failed to read SPI at offset %lu\n", offset);
             break;
         }

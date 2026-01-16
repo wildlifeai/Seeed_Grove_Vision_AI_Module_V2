@@ -36,7 +36,7 @@
 
 // Address set at virtual address: 0x3A200000 and called as physical memory region parameter: 0x200000
 // Default from Himax's GetModel function was 0x3A180000
-#define MODEL_ADDR 0x3A3BB000
+// not used #define MODEL_ADDR 0x3A3BB000
 
 // Project ID (last 4 digits only) for model naming convention: <last4digits>V<version>.tfl
 // Example: for project ID 2782, the model file would be named 2782V24.tfl (where 24 is the version)

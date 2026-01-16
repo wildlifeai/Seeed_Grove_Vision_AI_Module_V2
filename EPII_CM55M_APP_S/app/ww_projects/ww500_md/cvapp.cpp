@@ -124,7 +124,7 @@ void compare_sd_spi_xip_chunked(const char *filename);
 void debug_sd_model_integrity(const char *filename);
 void debug_flash_status(void);
 void test_basic_spi_operations();
-int cv_deinit();
+int cv_deinit(void);
 int init_flash();
 static inline uint32_t align_down(uint32_t addr, uint32_t align);
 static inline uint32_t align_up(uint32_t size, uint32_t align);
@@ -617,6 +617,7 @@ int cv_init(bool security_enable, bool privilege_enable, int project_id, int dep
 	xprintf("DEBUG: Looking for %s\n", manifest_path);
 	// Check if any .tfl model exists in /Manifest
 
+	// Searches for the first .TFL file on the SD card and exits if found
 	if (fatfs_mounted()) {
 		if (f_opendir(&dir, CONFIG_DIR) == FR_OK) {
 			while ((f_readdir(&dir, &fno) == FR_OK) && (fno.fname[0] != '\0')) {
@@ -654,18 +655,29 @@ int cv_init(bool security_enable, bool privilege_enable, int project_id, int dep
 		}
 		else  {
 			xprintf("Flash model differs or missing; copying '%s' to flash...\n", filename);
-			// Try manifest path first, then fallback to root
-			const char *src_path = file_exists(manifest_path) ? manifest_path : filename;
-			xprintf("Source chosen: %s\n", src_path);
 
-			if (load_model_from_sd_to_flash((char *)src_path) == 0) {
-				xprintf("Copied %s to flash OK; loading from flash...\n", src_path);
+//			// Try manifest path first, then fallback to root
+//			// TODO surely we should restrict to a single location?
+//			const char *src_path = file_exists(manifest_path) ? manifest_path : filename;
+//			xprintf("Source chosen: %s\n", src_path);
+//
+//			if (load_model_from_sd_to_flash((char *)src_path) == 0) {
+//				xprintf("Copied %s to flash OK; loading from flash...\n", src_path);
+//				loaded = load_model_from_flash();
+//			}
+//			else {
+//				xprintf("SD->flash copy failed for %s\n", src_path);
+//			}
+
+			if (load_model_from_sd_to_flash(filename) == 0) {
+				xprintf("Copied %s to flash OK\n", filename);
 				loaded = load_model_from_flash();
 			}
 			else {
-				xprintf("SD->flash copy failed for %s\n", src_path);
+				xprintf("SD->flash copy failed for %s\n", filename);
 			}
 		}
+
 		model = loaded;
 	}
 
@@ -702,31 +714,42 @@ int cv_init(bool security_enable, bool privilege_enable, int project_id, int dep
 		delete op_resolver_ptr;
 	}
 	op_resolver_ptr = new tflite::MicroMutableOpResolver<1>();
+	xprintf("DEBUG: 0\n");
 
 	if (kTfLiteOk != op_resolver_ptr->AddEthosU())  {
 		xprintf("Failed to add Arm NPU support to op resolver.\n");
 		return -1;
 	}
 
+	xprintf("DEBUG: 1\n");
 	static tflite::MicroInterpreter *static_interpreter = new tflite::MicroInterpreter(
 			model,
 			*op_resolver_ptr,
 			tensor_arena_buf,
 			tensor_arena_size,
 			&micro_error_reporter);
+	xprintf("DEBUG: 2\n");
 
+	// TODO fix crach that happens here when running loadmodel 2 3
+	// See https://chatgpt.com/s/t_696ab268fa708191abc79f8768b3dffe
+	// later: https://chatgpt.com/s/t_696ab3bc127881918e7ca6e01cc911a7
 	if (static_interpreter->AllocateTensors() != kTfLiteOk) {
 		xprintf("Failed to allocate tensors\n");
 		return -1;
 	}
 	else {
+#if 0
 		xprintf("Used %lu/%lu bytes for tensors. Tensor arena is at 0x%08x\n",
 				static_interpreter->arena_used_bytes(), tensor_arena_size, tensor_arena_buf);
+#else
+		xprintf("DEBUG 3\n");
+#endif // 0
 	}
 
 	int_ptr = static_interpreter;
 	input = static_interpreter->input(0);
 	output = static_interpreter->output(0);
+	xprintf("DEBUG: 4\n");
 
 	return 0;
 }
@@ -795,16 +818,27 @@ int init_flash(void) {
 }
 
 // Erase the flash region covering the model info, header, AND the model data.
-int erase_model_flash_area(uint32_t model_size)
-{
-    if (init_flash() != 0)
-    {
-        return -1;
-    }
+int erase_model_flash_area(uint32_t model_size) {
+	uint32_t model_xip_addr;
+	uint32_t model_info_xip_addr; // 8 bytes for model info before filename header
+
+	// Convert to physical addresses
+	uint32_t model_phys_addr;      // e.g. 0x00200000
+	uint32_t model_info_phys_addr; // e.g. 0x001FFFE8
+
+	uint32_t erase_start;
+	uint32_t total_length;
+	uint32_t sectors_needed;
+	uint32_t sector_addr;
+
+    int ret = 0;
+
+	if (init_flash() != 0) {
+		return -1;
+	}
 
     // Take semaphore
-    if (xSemaphoreTake(xSPIMutex, portMAX_DELAY) != pdTRUE)
-    {
+    if (xSemaphoreTake(xSPIMutex, portMAX_DELAY) != pdTRUE)  {
         xprintf("Failed to take SPI mutex for erase\n");
         return -1;
     }
@@ -813,30 +847,27 @@ int erase_model_flash_area(uint32_t model_size)
     hx_lib_spi_eeprom_enable_XIP(USE_DW_SPI_MST_Q, false, FLASH_QUAD, false);
 
     // Addresses (XIP virtual used as reference)
-    const uint32_t model_xip_addr = MODEL_XIP_ADDR;
-    const uint32_t model_info_xip_addr = model_xip_addr - 24; // 8 bytes for model info before filename header
+    model_xip_addr = MODEL_XIP_ADDR;
+    model_info_xip_addr = model_xip_addr - 24; // 8 bytes for model info before filename header
 
     // Convert to physical addresses
-    const uint32_t model_phys_addr = virt_to_phys(model_xip_addr);           // e.g. 0x00200000
-    const uint32_t model_info_phys_addr = virt_to_phys(model_info_xip_addr); // e.g. 0x001FFFE8
+    model_phys_addr = virt_to_phys(model_xip_addr);           // e.g. 0x00200000
+    model_info_phys_addr = virt_to_phys(model_info_xip_addr); // e.g. 0x001FFFE8
 
     // Compute erase region such that it covers model_info + header + model_size
-    uint32_t erase_start = align_down(model_info_phys_addr, FLASH_SECTOR_SIZE);
-    uint32_t total_length = (model_phys_addr + model_size) - erase_start;
-    uint32_t sectors_needed = align_up(total_length, FLASH_SECTOR_SIZE) / FLASH_SECTOR_SIZE;
+    erase_start = align_down(model_info_phys_addr, FLASH_SECTOR_SIZE);
+    total_length = (model_phys_addr + model_size) - erase_start;
+    sectors_needed = align_up(total_length, FLASH_SECTOR_SIZE) / FLASH_SECTOR_SIZE;
 
     xprintf("Erasing %lu sectors from 0x%08lX to cover info+header+model (%lu bytes)...\n",
             (unsigned long)sectors_needed, erase_start, (unsigned long)total_length);
 
-    int ret = 0;
-    for (uint32_t i = 0; i < sectors_needed; i++)
-    {
-        uint32_t sector_addr = erase_start + (i * FLASH_SECTOR_SIZE);
-        int er = hx_lib_spi_eeprom_erase_sector(USE_DW_SPI_MST_Q, sector_addr, FLASH_SECTOR);
+    for (uint32_t i = 0; i < sectors_needed; i++) {
+        sector_addr = erase_start + (i * FLASH_SECTOR_SIZE);
+        ret = hx_lib_spi_eeprom_erase_sector(USE_DW_SPI_MST_Q, sector_addr, FLASH_SECTOR);
         xprintf("  Erase sector %lu addr 0x%08lX -> result %d\n",
-                (unsigned long)i, sector_addr, er);
-        if (er != 0)
-        {
+                (unsigned long)i, sector_addr, ret);
+        if (ret != 0) {
             xprintf("Failed to erase sector at address 0x%08lX\n", sector_addr);
             ret = -1;
             break;
@@ -851,9 +882,17 @@ int load_model_from_sd_to_flash(char *filename) {
     FRESULT res;
     FIL file;
     UINT bytesRead;
+    DWORD fileSize;
+    uint32_t model_xip_addr;
+    uint32_t header_xip_addr;
+    uint32_t model_phys_addr;
+    uint32_t header_phys_addr;
+    uint32_t flash_address;
+    uint32_t totalBytesRead;
+    uint32_t write_size;
 
-    union
-    {
+
+    union {
         uint8_t bytes[MODEL_XIP_INFO_SIZE];
         uint32_t words[MODEL_XIP_INFO_SIZE / 4];
     } fname_header, fname_verify;
@@ -865,49 +904,44 @@ int load_model_from_sd_to_flash(char *filename) {
     // If 'filename' includes a path, use it to open the file but only store the basename in flash header
     const char *src_path = filename; // may include /Manifest/
     const char *base = filename;     // basename part only
-    for (const char *p = filename; *p; ++p)
-    {
+    for (const char *p = filename; *p; ++p)  {
         if (*p == '/' || *p == '\\')
             base = p + 1; // advance past last separator
     }
     xprintf("load_model_from_sd_to_flash: src_path='%s' base='%s'\n", src_path, base);
 
-    if (init_flash() != 0)
-    {
+    if (init_flash() != 0)  {
         return -1;
     }
 
     res = f_open(&file, src_path, FA_READ);
-    if (res != FR_OK)
-    {
+    if (res != FR_OK)  {
         xprintf("Failed to open model file %s (error: %d)\n", src_path, res);
         return -1;
     }
 
-    DWORD fileSize = f_size(&file);
-    if (fileSize == 0)
-    {
+    fileSize = f_size(&file);
+    if (fileSize == 0)  {
         xprintf("Model file is empty\n");
         f_close(&file);
         return -1;
     }
     xprintf("Model file size: %lu bytes\n", fileSize);
 
-    if (erase_model_flash_area(fileSize) != 0)
-    {
+    if (erase_model_flash_area(fileSize) != 0)  {
         xprintf("Failed to erase flash for model\n");
         f_close(&file);
         return -1;
     }
 
-    uint32_t model_xip_addr = MODEL_XIP_ADDR;
-    uint32_t header_xip_addr = model_xip_addr - MODEL_XIP_INFO_SIZE;
-    uint32_t model_phys_addr = virt_to_phys(model_xip_addr);
-    uint32_t header_phys_addr = virt_to_phys(header_xip_addr);
+    //
+    model_xip_addr = MODEL_XIP_ADDR;
+    header_xip_addr = model_xip_addr - MODEL_XIP_INFO_SIZE;
+    model_phys_addr = virt_to_phys(model_xip_addr);
+    header_phys_addr = virt_to_phys(header_xip_addr);
 
     // Take semaphore for header write
-    if (xSemaphoreTake(xSPIMutex, portMAX_DELAY) != pdTRUE)
-    {
+    if (xSemaphoreTake(xSPIMutex, portMAX_DELAY) != pdTRUE)  {
         xprintf("Failed to take SPI mutex for header write\n");
         f_close(&file);
         return -1;
@@ -920,10 +954,9 @@ int load_model_from_sd_to_flash(char *filename) {
     strncpy((char *)fname_header.bytes, base, sizeof(fname_header.bytes) - 1);
     xprintf("Writing filename header: %s\n", fname_header.bytes);
 
-    // write header via SPI (4 words)
+    // write header (filename) via SPI (4 words)
     int wr = hx_lib_spi_eeprom_word_write(USE_DW_SPI_MST_Q, header_phys_addr, fname_header.words, MODEL_XIP_INFO_SIZE);
-    if (wr != 0)
-    {
+    if (wr != 0)  {
         xprintf("Failed to write filename header to flash (err %d)\n", wr);
         xSemaphoreGive(xSPIMutex);
         f_close(&file);
@@ -931,23 +964,21 @@ int load_model_from_sd_to_flash(char *filename) {
     }
 
     // small delay to let write finish
-    for (volatile int d = 0; d < 20000; ++d)
-    {
+    // TODO -why?
+    for (volatile int d = 0; d < 20000; ++d)  {
         asm volatile("nop");
     }
 
     // verify header by reading back via SPI
     memset(fname_verify.bytes, 0, sizeof(fname_verify.bytes));
-    if (hx_lib_spi_eeprom_word_read(USE_DW_SPI_MST_Q, header_phys_addr, fname_verify.words, MODEL_XIP_INFO_SIZE) != 0)
-    {
+    if (hx_lib_spi_eeprom_word_read(USE_DW_SPI_MST_Q, header_phys_addr, fname_verify.words, MODEL_XIP_INFO_SIZE) != 0) {
         xprintf("Failed to verify filename header in flash (read error)\n");
         xSemaphoreGive(xSPIMutex);
         f_close(&file);
         return -1;
     }
 
-    if (memcmp(fname_header.bytes, fname_verify.bytes, MODEL_XIP_INFO_SIZE) != 0)
-    {
+    if (memcmp(fname_header.bytes, fname_verify.bytes, MODEL_XIP_INFO_SIZE) != 0)  {
         xprintf("Filename header verify FAIL (SPI)\n");
         xSemaphoreGive(xSPIMutex);
         f_close(&file);
@@ -957,26 +988,22 @@ int load_model_from_sd_to_flash(char *filename) {
     xSemaphoreGive(xSPIMutex);
 
     // Write model data at model_phys_addr
-    uint32_t flash_address = model_phys_addr;
-    uint32_t totalBytesRead = 0;
+    flash_address = model_phys_addr;
+    totalBytesRead = 0;
 
-    while (totalBytesRead < fileSize)
-    {
+    while (totalBytesRead < fileSize) {
         memset(write_buf, 0, sizeof(write_buf));
         res = f_read(&file, write_buf, sizeof(write_buf), &bytesRead);
-        if (res != FR_OK || bytesRead == 0)
-        {
+        if (res != FR_OK || bytesRead == 0)  {
             break;
         }
-        uint32_t write_size = (bytesRead + 3) & ~3U;
-        if (write_size > bytesRead)
-        {
+        write_size = (bytesRead + 3) & ~3U;
+        if (write_size > bytesRead)  {
             memset(write_buf + bytesRead, 0, write_size - bytesRead);
         }
 
         // Take semaphore for each chunk write
-        if (xSemaphoreTake(xSPIMutex, portMAX_DELAY) != pdTRUE)
-        {
+        if (xSemaphoreTake(xSPIMutex, portMAX_DELAY) != pdTRUE)  {
             xprintf("Failed to take SPI mutex for chunk write\n");
             f_close(&file);
             return -1;
@@ -990,15 +1017,15 @@ int load_model_from_sd_to_flash(char *filename) {
         if (hx_lib_spi_eeprom_word_write(USE_DW_SPI_MST_Q,
                                          flash_address,
                                          (uint32_t *)write_buf,
-                                         write_size) != 0)
-        {
+                                         write_size) != 0) {
             xprintf("Flash write failed at 0x%08lX\n", flash_address);
             xSemaphoreGive(xSPIMutex);
             f_close(&file);
             return -1;
         }
-        for (volatile int d = 0; d < 10000; ++d)
-        {
+
+        // TODO - Why a delay? In any event, use FreeRTOS delay
+        for (volatile int d = 0; d < 10000; ++d)  {
             asm volatile("nop");
         }
 
@@ -1006,15 +1033,13 @@ int load_model_from_sd_to_flash(char *filename) {
         if (hx_lib_spi_eeprom_word_read(USE_DW_SPI_MST_Q,
                                         flash_address,
                                         (uint32_t *)verify_buf,
-                                        write_size) != 0)
-        {
+                                        write_size) != 0)  {
             xprintf("Flash verify read failed at 0x%08lX\n", flash_address);
             xSemaphoreGive(xSPIMutex);
             f_close(&file);
             return -1;
         }
-        if (memcmp(write_buf, verify_buf, write_size) != 0)
-        {
+        if (memcmp(write_buf, verify_buf, write_size) != 0) {
             xprintf("Verify FAIL at 0x%08lX\n", flash_address);
             xSemaphoreGive(xSPIMutex);
             f_close(&file);
@@ -1028,8 +1053,7 @@ int load_model_from_sd_to_flash(char *filename) {
     }
     f_close(&file);
 
-    if (totalBytesRead == fileSize)
-    {
+    if (totalBytesRead == fileSize) {
         xprintf("Model successfully written to physical 0x%08lX (%lu bytes)\n",
                 (unsigned long)MODEL_FLASH_ADDR, (unsigned long)fileSize);
 
@@ -1100,12 +1124,12 @@ bool is_model_in_flash(char *filename) {
 
     // Use the filename length of 13 bytes - IMAGEFILENAMELEN
     if (strncmp(filename, (const char *)fname_header.bytes, IMAGEFILENAMELEN) == 0) {
-    	xprintf("Model filename in flash matches parameter\n");
-    	        return true;
+    	xprintf("Model filename in flash is '%s'\n", filename);
+    	return true;
     }
     else {
-    	xprintf("Model filename in flash does NOT match parameter\n");
-    	        return false;
+    	xprintf("Model filename in flash is '%s', not '%s'\n", fname_header.bytes, filename);
+    	return false;
     }
 }
 
@@ -1140,6 +1164,8 @@ static const tflite::Model *load_model_from_flash(void) {
         return nullptr;
     }
 
+#if 0
+    // This can be considered code to test the XIP mapping
     xprintf("SPI@: ");
     for (size_t i = 0; i < sizeof(spi_hdr); i++) {
         xprintf("%02X ", spi_hdr[i]);
@@ -1183,6 +1209,39 @@ static const tflite::Model *load_model_from_flash(void) {
         xprintf("XIP mapping mismatch!\n");
         return nullptr;
     }
+#else
+    // Use this once confident:
+
+    // Check if we have valid TFLite header via SPI
+
+    if (memcmp(&spi_hdr[4], "TFL3", 4) != 0) {
+        // no match
+        xprintf("No valid TFLite model in flash (SPI check)\n");
+        xSemaphoreGive(xSPIMutex);
+        return nullptr;
+    }
+
+    // Step 2: Enable XIP mode for memory-mapped access
+
+    if (hx_lib_spi_eeprom_enable_XIP(USE_DW_SPI_MST_Q, true, FLASH_QUAD, true) != 0) {
+        xprintf("Failed to enable XIP mode\n");
+        xSemaphoreGive(xSPIMutex);
+        return nullptr;
+    }
+
+    xSemaphoreGive(xSPIMutex);
+
+    // Step 4: Check if XIP matches SPI data
+    bool xip_matches = (memcmp((const void *)spi_hdr, (const void *)virt, 32) == 0);
+
+    if (xip_matches)  {
+        return tflite::GetModel((const void *) virt);
+    }
+    else  {
+        xprintf("XIP mapping mismatch!\n");
+        return nullptr;
+    }
+#endif // 0
 }
 
 /**
@@ -1385,8 +1444,7 @@ TfLiteStatus cv_run(int8_t *outCategories, uint16_t categoriesCount) {
 }
 
 // Robust deinit: safely release interpreter and tensor resources before model reloads
-int cv_deinit()
-{
+int cv_deinit(void) {
     // Disable interrupts or enter critical section if needed (to prevent concurrent access)
     taskENTER_CRITICAL();
 

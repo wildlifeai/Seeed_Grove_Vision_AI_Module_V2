@@ -1078,21 +1078,18 @@ static APP_MSG_DEST_T handleEventForNNUpdate(APP_MSG_T img_recv_msg)
 {
     APP_MSG_DEST_T send_msg;
     send_msg.destination = NULL;
-    // TODO - prvLoadModel() is accepting only one parameter
     int project_id = (int)img_recv_msg.msg_data;
     int deploy_version = (int)img_recv_msg.msg_parameter;
-    xprintf("Requested to update NN model to %dV%d.tfl (Project ID: %d)\n", project_id, deploy_version, project_id);
+    xprintf("Requested to update NN model to %dV%d.TFL (Project ID: %d)\n", project_id, deploy_version, project_id);
 
     int result_not = cv_deinit();
-    if (result_not != 0)
-    {
+    if (result_not != 0)  {
         xprintf("Failed to deinit cv\n");
     }
 
     // Try to load the new model with project_id and deploy_version
     int result = cv_init(true, true, project_id, deploy_version);
-    if (result == 0)
-    {
+    if (result == 0)   {
         // Model loaded successfully - no need to send event, just continue
         XP_GREEN;
         xprintf("---------MODEL UPDATE SUCCESS: %dV%d.tfl---------\n", project_id, deploy_version);
@@ -1100,11 +1097,10 @@ static APP_MSG_DEST_T handleEventForNNUpdate(APP_MSG_T img_recv_msg)
         // Don't send any message - state is already set to INIT
         send_msg.destination = NULL;
     }
-    else
-    {
+    else {
         // Model load failed, send error event
         XP_RED;
-        xprintf("------------MODEL UPDATE FAILED for %dV%d.tfl, sending ERROR event\n", project_id, deploy_version);
+        xprintf("------------MODEL UPDATE FAILED for %dV%d.TFT, sending ERROR event\n", project_id, deploy_version);
         XP_WHITE;
         send_msg.message.msg_event = APP_MSG_IMAGETASK_ERROR;
         send_msg.message.msg_data = project_id;

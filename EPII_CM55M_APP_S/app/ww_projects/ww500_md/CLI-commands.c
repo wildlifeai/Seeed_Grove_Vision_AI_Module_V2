@@ -412,9 +412,9 @@ static const CLI_Command_Definition_t xGpsTests = {
 /* Structure that defines the "loadmodel" command line command. */
 static const CLI_Command_Definition_t xLoadModel = {
 	"loadmodel", /* The command string to type. */
-	"loadmodel <version>:\r\n Specify model version to load from SD card (e.g., loadmodel 24 loads 2782V24.tfl).\n",
+	"loadmodel <ID> <version>:\r\n Specify NN model to load from SD card (e.g., loadmodel 12 34 loads 21V34.TFL).\n",
 	prvLoadModel, /* The function to run. */
-	1			  /* One parameter expected */
+	2			  /* Two parameters expected */
 };
 
 
@@ -1456,44 +1456,51 @@ static BaseType_t prvExifGpsTests(char *pcWriteBuffer, size_t xWriteBufferLen, c
 	return pdFALSE;
 }
 
-// TODO - process 2 parameters! project ID and version
-static BaseType_t prvLoadModel(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString)
-{
+/**
+ * Specify the NN projectID and version to use
+ */
+static BaseType_t prvLoadModel(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) {
 	const char *pcParameter;
 	BaseType_t lParameterStringLength;
-	int deploy_version;
+	uint16_t projectId;
+	uint16_t deploy_version;
 	APP_MSG_T send_msg;
+	int32_t paramLong;
+	char *endptr;
 
-	/* Get parameter - this is now the version number */
+	// Process first parameter for project ID
 	pcParameter = FreeRTOS_CLIGetParameter(pcCommandString, 1, &lParameterStringLength);
-	if ((pcParameter != NULL) && (lParameterStringLength > 0))
-	{
-		// replaced atoi with strtol for better error checking
-		char *endptr;
-		deploy_version = strtol(pcParameter, &endptr, 10);
-		if (endptr == pcParameter || *endptr != '\0')
-		{
-			snprintf(pcWriteBuffer, xWriteBufferLen, "Error: Invalid version number provided.");
-			return pdFALSE;
-		}
 
-		send_msg.msg_event = APP_MSG_IMAGETASK_NN_UPDATE_MODEL;
-		// send_msg.msg_data = PROJECT_ID;			 // Pass project_id in msg_data
-		send_msg.msg_parameter = deploy_version; // Pass version in msg_parameter
+	paramLong = strtol(pcParameter, &endptr, 10);
 
-		if (xQueueSend(xImageTaskQueue, (void *)&send_msg, __QueueSendTicksToWait) == pdTRUE)
-		{
-			// PROJECT_ID already represents the last 4 digits
-			snprintf(pcWriteBuffer, xWriteBufferLen, "Requested model update to %dV%d.tfl", PROJECT_ID, deploy_version);
-		}
-		else
-		{
-			snprintf(pcWriteBuffer, xWriteBufferLen, "Failed to send model update request");
-		}
+	if (endptr == pcParameter || paramLong < 0 || paramLong > 65535) {
+		pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen,
+				"Must supply project ID in range 0-65535");
+		return pdFALSE;
 	}
-	else
-	{
-		snprintf(pcWriteBuffer, xWriteBufferLen, "Error: Must supply a version number");
+	projectId = (uint16_t)paramLong;
+
+	// Process first parameter for deploy_version
+	pcParameter = FreeRTOS_CLIGetParameter(pcCommandString, 2, &lParameterStringLength);
+	paramLong = strtol(pcParameter, &endptr, 10);
+
+	if (endptr == pcParameter || paramLong < 1 || paramLong > 65535) {
+		pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen,
+				"Must supply deploy_version in range 0-65535");
+		return pdFALSE;
+	}
+	deploy_version = (uint16_t)paramLong;
+
+	// Now send a message to Image Task Queue
+	send_msg.msg_event = APP_MSG_IMAGETASK_NN_UPDATE_MODEL;
+	send_msg.msg_data = projectId;			 // Pass project_id in msg_data
+	send_msg.msg_parameter = deploy_version; // Pass deploy_version in msg_parameter
+
+	if (xQueueSend(xImageTaskQueue, (void *)&send_msg, __QueueSendTicksToWait) == pdTRUE) {
+		snprintf(pcWriteBuffer, xWriteBufferLen, "Requested model update to %dV%d.TFL", projectId, deploy_version);
+	}
+	else {
+		snprintf(pcWriteBuffer, xWriteBufferLen, "Failed to send model update request");
 	}
 
 	return pdFALSE;

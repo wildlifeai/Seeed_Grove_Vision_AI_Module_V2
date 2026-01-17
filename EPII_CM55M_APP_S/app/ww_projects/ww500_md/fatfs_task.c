@@ -82,6 +82,9 @@
 #include "selfTest.h"
 #include "cvapp.h"
 
+// TODO this is for the default project id and version - move elsewhere?
+#include "common_config.h"
+
 /*************************************** Definitions *******************************************/
 
 // TODO sort out how to allocate priorities
@@ -199,8 +202,9 @@ uint16_t op_parameter[OP_PARAMETER_NUM_ENTRIES] = {
 	DPDINTERVAL,	   // 11 Interval (ms) between frames in MD mode (0 inhibits)
 	FLASHDURATION,	   // 12 Duration (ms) that LED Flash is on
 	0,				   // 13 LED bit mask: vis=1, IR=2, none=0
-	0,				   // 14 OP_PARAMETER_MODEL_NUMBER
-	0, 0, 0, 0, 0,	   // 15-19 Reserved for future use
+	PROJECT_ID,		   // 14 OP_PARAMETER_MODEL_PROJECT
+	PROJECT_VER,	   // 15 OP_PARAMETER_MODEL_VERSION
+	0, 0, 0, 0,	   // 15-19 Reserved for future use
 	0, 0, 0, 0, 0, 0, 0, 0  // 20-27 Deployment ID chunks
 };
 
@@ -1138,25 +1142,6 @@ static void vFatFsTask(void *pvParameters) {
 	// Observing these messages confirms the initialisation sequence
 	xprintf("Starting FatFS Task\n");
 	XP_WHITE;
-
-	//	// Initialise the configuration[] array
-	//    // TODO use default C array initialisation syntax
-	//	op_parameter[OP_PARAMETER_SEQUENCE_NUMBER] = 0; // 0 indicates no SD card
-	//	op_parameter[OP_PARAMETER_NUM_PICTURES] = NUMPICTURESTOGRAB;
-	//	op_parameter[OP_PARAMETER_PICTURE_INTERVAL] = PICTUREINTERVAL;
-	//	op_parameter[OP_PARAMETER_TIMELAPSE_INTERVAL] = TIMELAPSEINTERVAL;
-	//	op_parameter[OP_PARAMETER_INTERVAL_BEFORE_DPD] = INACTIVITYTIMEOUT;
-	//	op_parameter[OP_PARAMETER_LED_BRIGHTNESS_PERCENT] = FLASHLEDDUTY;
-	//	op_parameter[OP_PARAMETER_NUM_NN_ANALYSES] = 0;
-	//	op_parameter[OP_PARAMETER_NUM_COLD_BOOTS] = 0;
-	//	op_parameter[OP_PARAMETER_NUM_WARM_BOOTS] = 0;
-	//	// why would we want the  default (no SD card) to be disabled?
-	//	// op_parameter[OP_PARAMETER_CAMERA_ENABLED] = 0;	// disabled
-	//	op_parameter[OP_PARAMETER_CAMERA_ENABLED] = 1;			  // enabled
-	//	op_parameter[OP_PARAMETER_MD_INTERVAL] = DPDINTERVAL;	  // Interval (ms) between frames in MD mode (0 inhibits)
-	//    op_parameter[OP_PARAMETER_FLASH_DURATION] = FLASHDURATION; // Duration (ms) that LED Flash is on
-	//    op_parameter[OP_PARAMETER_FLASH_LED] = 0; // Neither LED is selected
-	//	op_parameter[OP_PARAMETER_MODEL_NUMBER] = get_model_id(); // CV model ID
 
 	// One-off initialisation here...
 	startTime = xTaskGetTickCount();

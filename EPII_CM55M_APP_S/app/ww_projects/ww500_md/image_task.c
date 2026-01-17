@@ -1403,12 +1403,17 @@ static void vImageTask(void *pvParameters)
 
     // Initialize with default project_id from common_config.h and version 1
     // The actual values will be loaded from flash if available, or use these defaults
-    int cv_init_result = cv_init(true, true, PROJECT_ID, 1);
+    //int cv_init_result = cv_init(true, true, PROJECT_ID, 1);
+
+    int cv_init_result = cv_init(true, true,
+    		fatfs_getOperationalParameter(OP_PARAMETER_MODEL_PROJECT),
+			fatfs_getOperationalParameter(OP_PARAMETER_MODEL_VERSION));
+
     if (cv_init_result < 0)
     {
         xprintf("cv init fail\n");
         selfTest_setErrorBits(1 << SELF_TEST_AI_NN_ERROR);
-        configASSERT(0);
+        //configASSERT(0);
     }
     else if (cv_init_result == 1)
     {

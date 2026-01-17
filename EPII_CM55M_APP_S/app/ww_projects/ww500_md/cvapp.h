@@ -30,7 +30,6 @@ extern "C" {
 #define MODEL_XIP_ADDR 			0x3A200000
 #define MODEL_XIP_INFO_SIZE 	16		// Must be divisible by 4
 
-
 // Maximum number of classes supported
 #define MAX_CLASSES 			16
 #define MAX_LABEL_LEN 			20	// e.g. 'no person\0'
@@ -53,18 +52,12 @@ typedef struct {
 
 #endif
 
-static inline uint32_t virt_to_phys(uint32_t virt)  {
-	return virt - FLASH_VIRTUAL_BASE + FLASH_PHYSICAL_BASE;
-}
-static inline uint32_t phys_to_virt(uint32_t phys) {
-	return phys - FLASH_PHYSICAL_BASE + FLASH_VIRTUAL_BASE;
-}
-
 int cv_init(bool security_enable, bool privilege_enable, int project_id, int deploy_version);
+int cv_deinit(void);
+
 void cv_get_model_info(int *project_id, int *deploy_version);
 // Update current model identifiers (used by unzip when discovering a TFL filename)
 void cv_set_model_info(int project_id, int deploy_version);
-int get_model_id();
 
 // CGP I am asking the NN processing to return an array
 TfLiteStatus cv_run(int8_t *outCategories, uint16_t categoriesCount);
@@ -72,9 +65,6 @@ TfLiteStatus cv_run(int8_t *outCategories, uint16_t categoriesCount);
 // Get the most recent confidence scores with labels
 bool cv_get_confidence_data(ClassConfidenceData *data);
 
-// int load_model_cli_command(int model_selection);
-
-int cv_deinit();
 #ifdef __cplusplus
 }
 #endif

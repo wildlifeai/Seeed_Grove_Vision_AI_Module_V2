@@ -42,9 +42,14 @@
 // Example: for project ID 2782, the model file would be named 2782V24.tfl (where 24 is the version)
 // Set this value to match your Edge Impulse project's last 4 digits
 
+// TODO - place these elsewhere? and consider removing #ifndef
 #ifndef PROJECT_ID
-#define PROJECT_ID 0
-#endif
+#define PROJECT_ID 1
+#endif // PROJECT_ID
+
+#ifndef PROJECT_VER
+#define PROJECT_VER 1
+#endif	// PROJECT_VER
 
 #if (PROJECT_ID > 9999)
 #error "PROJECT_ID must be the last 4 digits (0-9999)."

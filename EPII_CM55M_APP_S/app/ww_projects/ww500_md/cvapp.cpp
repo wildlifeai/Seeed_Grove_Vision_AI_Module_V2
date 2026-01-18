@@ -5,6 +5,8 @@
  *      Author: 902452
  */
 
+/*************************************** Includes *******************************************/
+
 #include <cstdio>
 #include <cmath>
 #include <assert.h>
@@ -12,18 +14,25 @@
 #include <stdint.h>
 #include <string.h>
 #include <stdlib.h>
+
+// POSIX string functions (strcasecmp)
+// TODO try to omit this
+#include <strings.h>
+
+// FreeRTOS kernel includes.
+#include "FreeRTOS.h"
+#include "task.h"
+#include "semphr.h"
+
 #include "WE2_device.h"
 #include "board.h"
 #include "cvapp.h"
 #include "ff.h"
-#include "FreeRTOS.h"
-#include "task.h"
-#include "semphr.h"
+
 #include "hx_drv_spi.h"
 #include "spi_eeprom_comm.h"
 
 #include "WE2_core.h"
-#include "WE2_device.h"
 
 #include "ethosu_driver.h"
 #include "tensorflow/lite/micro/micro_mutable_op_resolver.h"
@@ -35,21 +44,18 @@
 #include "tensorflow/lite/kernels/internal/types.h"
 
 #include "xprintf.h"
-#include "ff.h"
 #include "fatfs_task.h"
-// POSIX string functions (strcasecmp)
-#include <strings.h>
-
-// Compare model in flash with file in chunks to avoid large allocations
-#define VERIFY_CHUNK_SIZE 512
 
 // Required for the app_get_xxx() functions
 // #include "cisdp_cfg.h"
 #include "cisdp_sensor.h"
-
 #include "common_config.h"
-
 #include "printf_x.h" // Print colours
+
+/*************************************** Definitions *******************************************/
+
+// Compare model in flash with file in chunks to avoid large allocations
+#define VERIFY_CHUNK_SIZE 512
 
 // #include "dev_common.h"
 
@@ -73,12 +79,7 @@
 // Uncomment this to get information about the model:
 #define PRINTMODELFINGERPRINT
 
-static inline uint32_t virt_to_phys(uint32_t virt)  {
-	return virt - FLASH_VIRTUAL_BASE + FLASH_PHYSICAL_BASE;
-}
-static inline uint32_t phys_to_virt(uint32_t phys) {
-	return phys - FLASH_PHYSICAL_BASE + FLASH_VIRTUAL_BASE;
-}
+/*************************************** External variables *******************************************/
 
 extern "C" {
 	// These are defined in the linker .ld file, and aligned on 32-byte boundaries
@@ -86,12 +87,11 @@ extern "C" {
     extern uint8_t __tensor_arena_end__;
 }
 
+
 static uint8_t *tensor_arena_buf = &__tensor_arena_start__;
 static size_t tensor_arena_size = (size_t)(&__tensor_arena_end__ - &__tensor_arena_start__);
 
-// #define TENSOR_ARENA_BUFSIZE (125 * 1024)
-// __attribute__(( section(".bss.NoInit"))) uint8_t tensor_arena_buf[TENSOR_ARENA_BUFSIZE] __ALIGNED(32);
-
+/*************************************** C++ Namespace *******************************************/
 
 // #define OLD
 // see https://chatgpt.com/share/696ae627-6f60-8005-92cb-6030e56990cc
@@ -121,6 +121,8 @@ namespace {
     static bool g_labels_loaded = false;
 };
 
+/*************************************** Local variables *******************************************/
+
 // Use this constants since a bizarre compiler issue is redefining USE_DW_SPI_MST_Q as 1860 in some places
 // See the "Bizarre" comment in is_model_in_flash()
 USE_DW_SPI_MST_E spi_inst = (USE_DW_SPI_MST_E)0;
@@ -137,9 +139,8 @@ static int g_deploy_version = 0;
 // Global to store the last confidence data for EXIF
 static ClassConfidenceData g_last_confidence_data = {0};
 
-// ------------------- Declarations -------------------
+/*************************************** Local Function Declarations *****************************/
 
-// int load_model_cli_command(int model_selection);
 static bool is_model_in_flash(char *filename);
 static bool is_model_in_sd(char *filename);
 static const tflite::Model *load_model_from_sd(char * filename);
@@ -162,13 +163,22 @@ static void load_labels_from_manifest(void);
 
 
 
-// --------------------- Utilities / Helpers ---------------------
+static inline uint32_t virt_to_phys(uint32_t virt)  {
+	return virt - FLASH_VIRTUAL_BASE + FLASH_PHYSICAL_BASE;
+}
+static inline uint32_t phys_to_virt(uint32_t phys) {
+	return phys - FLASH_PHYSICAL_BASE + FLASH_VIRTUAL_BASE;
+}
+
+
+/*************************************** Local Function Definitions  *************************************/
 
 // Round down address to sector boundary
 static inline uint32_t align_down(uint32_t addr, uint32_t align)
 {
     return addr & ~(align - 1);
 }
+
 // Round up size to align
 static inline uint32_t align_up(uint32_t size, uint32_t align)
 {
@@ -210,33 +220,6 @@ static void load_labels_from_manifest(void) {
         }
     }
     xprintf("No labels found on SD\n");
-}
-
-// Public getter for other modules to know the current model
-void cv_get_model_info(int *project_id, int *deploy_version) {
-    *project_id = g_project_id;
-    *deploy_version = g_deploy_version;
-}
-
-// Public setter for current model info
-void cv_set_model_info(int project_id, int deploy_version) {
-    // Only log when values actually change
-    if (g_project_id != project_id || g_deploy_version != deploy_version)
-    {
-        xprintf("cv_set_model_info: Project %d -> %d, Version %d -> %d\n",
-                g_project_id, project_id, g_deploy_version, deploy_version);
-        g_project_id = project_id;
-        g_deploy_version = deploy_version;
-    }
-}
-
-// Public getter for confidence data (for EXIF)
-bool cv_get_confidence_data(ClassConfidenceData *data) {
-    if (data != nullptr) {
-        memcpy(data, &g_last_confidence_data, sizeof(ClassConfidenceData));
-        return true;
-    }
-    return false;
 }
 
 /**
@@ -345,7 +328,6 @@ int write_persisted_model_info()
 
 #ifdef PRINTMODELFINGERPRINT
 #include "tensorflow/lite/schema/schema_generated.h"
-//#include "tensorflow/lite/version.h"
 
 // Forward declaration of your printf
 extern "C" void xprintf(const char *fmt, ...);
@@ -574,6 +556,176 @@ static int _arm_npu_init(bool security_enable, bool privilege_enable) {
     return 0;
 }
 
+
+/* ------------debuggers------------- */
+
+void debug_sd_model_integrity(const char *filename)
+{
+    xprintf("=== SD MODEL INTEGRITY CHECK ===\n");
+
+    FIL file;
+    FRESULT res = f_open(&file, filename, FA_READ);
+    if (res != FR_OK)
+    {
+        xprintf("FAIL: Cannot open SD file %s (error: %d)\n", filename, res);
+        return;
+    }
+
+    DWORD fileSize = f_size(&file);
+    xprintf("SD Model size: %lu bytes\n", fileSize);
+
+    // Read and print first 16 bytes
+    uint8_t header[16];
+    UINT bytesRead;
+    res = f_read(&file, header, sizeof(header), &bytesRead);
+    if (res == FR_OK && bytesRead == sizeof(header))
+    {
+        xprintf("SD TFLite header (first 16 bytes): ");
+        for (int i = 0; i < MODEL_XIP_INFO_SIZE; ++i) {
+            xprintf("%02X ", header[i]);
+        }
+        xprintf("\n");
+
+        // Check for 'T','F','L','3' at header[4..7]
+        if (header[4] == 'T' && header[5] == 'F' && header[6] == 'L' && header[7] == '3')
+        {
+            xprintf("Header magic OK: TFL3\n");
+        }
+        else
+        {
+            xprintf("Header magic NOT OK: expected TFL3 at bytes 4-7\n");
+        }
+    }
+    else
+    {
+        xprintf("Failed to read SD header for integrity check\n");
+    }
+    f_close(&file);
+}
+
+/**
+ * Debug code for SPI EEPROM:
+ *
+ * Prints Flash init status, SPI ID, EEPROM ID byte
+ */
+void debug_flash_status(void) {
+    xprintf("=== FLASH DEBUG STATUS ===\n");
+    xprintf("Flash initialized: %s\n", flash_initialized ? "YES" : "NO");
+
+    // Take semaphore
+    if (xSemaphoreTake(xSPIMutex, portMAX_DELAY) != pdTRUE)  {
+        xprintf("Failed to take SPI mutex for debug_flash_status\n");
+        return;
+    }
+
+    // CRITICAL: Disable XIP before reading ID
+    hx_lib_spi_eeprom_enable_XIP(spi_inst, false, FLASH_QUAD, false);
+
+    uint8_t id_info = 0;
+    int result = hx_lib_spi_eeprom_read_ID(spi_inst, &id_info);
+    if (result == 0) {
+        xprintf("SPI ID: 0x%02x, Flash ID: 0x%02X\n", spi_inst,  id_info);
+    }
+    else {
+        xprintf("SPI ID: 0x%02x, error %d:\n", spi_inst, result);
+    }
+
+    xSemaphoreGive(xSPIMutex);
+}
+
+void test_basic_spi_operations()
+{
+    xprintf("=== TESTING BASIC SPI OPS ===\n");
+
+    uint32_t test_addr = (MODEL_FLASH_ADDR + 4 * FLASH_SECTOR_SIZE) & ~(FLASH_SECTOR_SIZE - 1);
+
+    int er = hx_lib_spi_eeprom_erase_sector(spi_inst, test_addr, FLASH_SECTOR);
+    xprintf("Erase result: %d at 0x%08lX\n", er, test_addr);
+
+    uint32_t test_data[4] = {0xDEADBEEF, 0x12345678, 0xABCDEF00, 0x11223344};
+
+    // Test writing one word at a time
+    xprintf("Writing one word at a time:\n");
+    for (int i = 0; i < 4; i++)
+    {
+        int wr = hx_lib_spi_eeprom_word_write(spi_inst, test_addr + (i * 4), &test_data[i], 1);
+        xprintf("  Write word %d (0x%08lX) to 0x%08lX: result %d\n",
+                i, test_data[i], test_addr + (i * 4), wr);
+    }
+
+    // Test reading one word at a time
+    xprintf("Reading one word at a time:\n");
+    for (int i = 0; i < 4; i++)
+    {
+        uint32_t read_data = 0;
+        int rr = hx_lib_spi_eeprom_word_read(spi_inst, test_addr + (i * 4), &read_data, 1);
+        xprintf("  Read word %d from 0x%08lX: result %d, data 0x%08lX %s\n",
+                i, test_addr + (i * 4), rr, read_data,
+                (read_data == test_data[i]) ? "OK" : "FAIL");
+    }
+}
+
+void compare_sd_spi_xip_chunked(const char *filename)
+{
+    FIL file;
+    FRESULT res = f_open(&file, filename, FA_READ);
+    if (res != FR_OK)
+    {
+        xprintf("Failed to open model file %s (error: %d)\n", filename, res);
+        return;
+    }
+
+    DWORD fileSize = f_size(&file);
+    xprintf("Model file size: %lu bytes\n", fileSize);
+
+    UINT bytesRead = 0;
+    uint8_t sd_buf[VERIFY_CHUNK_SIZE] = {0};
+    uint8_t spi_buf[VERIFY_CHUNK_SIZE] __attribute__((aligned(4))) = {0};
+    uint8_t xip_buf[VERIFY_CHUNK_SIZE] = {0};
+
+    DWORD offset = 0;
+    int any_mismatch = 0;
+    while (offset < fileSize)
+    {
+        UINT to_read = (fileSize - offset > VERIFY_CHUNK_SIZE) ? VERIFY_CHUNK_SIZE : (fileSize - offset);
+        // Read SD
+        f_lseek(&file, offset);
+        res = f_read(&file, sd_buf, to_read, &bytesRead);
+        if (res != FR_OK || bytesRead != to_read)
+        {
+            xprintf("Failed to read model file at offset %lu\n", offset);
+            break;
+        }
+        // // Read SPI
+        if (hx_lib_spi_eeprom_word_read(spi_inst, MODEL_FLASH_ADDR + offset, (uint32_t *)spi_buf, to_read) != 0)
+        {
+            // if (hx_lib_spi_eeprom_word_read(spi_inst, MODEL_FLASH_ADDR + offset, (uint32_t*)spi_buf, (to_read + 3) / 4) != 0) {
+            xprintf("Failed to read SPI at offset %lu\n", offset);
+            break;
+        }
+        // Read XIP
+        uint32_t virt_address = phys_to_virt(MODEL_FLASH_ADDR + offset);
+        memcpy(xip_buf, (void *)virt_address, to_read);
+
+        // Print mismatches for this chunk
+        for (UINT i = 0; i < to_read; i++)
+        {
+            if (sd_buf[i] != spi_buf[i] || sd_buf[i] != xip_buf[i] || spi_buf[i] != xip_buf[i])
+            {
+                xprintf("Mismatch at offset %lu (+%u): SD=0x%02X SPI=0x%02X XIP=0x%02X\n",
+                        offset, i, sd_buf[i], spi_buf[i], xip_buf[i]);
+                any_mismatch = 1;
+            }
+        }
+        offset += to_read;
+    }
+    if (!any_mismatch)
+    {
+        xprintf("Model in flash (SPI/XIP) matches SD file!\n");
+    }
+    f_close(&file);
+}
+
 /**
  * Loads model from the SD card to flash.
  *
@@ -597,302 +749,7 @@ static const tflite::Model *load_model_from_sd(char * filename) {
 	}
 }
 
-#ifdef OLD
-// Add a flag to track if we've already loaded from SD card
-// TODO - omit as never used
-static bool model_loaded_from_sd = false;
 
-// Optional model number parameter, default to 1
-/**
- *	Initialise TFLM model
- *
- * 	@param security_enable
- *	@param privilege_enable
- *	@param project_id
- *	@param deploy_version
- *	@return 0 for OK
- */
-int cv_init(bool security_enable, bool privilege_enable, int project_id, int deploy_version) {
-	DIR dir;
-	FILINFO fno;
-	bool any_model_found = false;
-	char filename[IMAGEFILENAMELEN];	// for 8.3 this is 13, including the training \0
-	char manifest_path[10 + IMAGEFILENAMELEN];			// let's restrict this to "/12345678/" then the filename, so 10 + IMAGEFILENAMELEN
-	static const tflite::Model *model = nullptr;
-
-	// TODO - consider an arrangement for multiple models in flash
-	xprintf("cv_init called with ProjectID: %d, Version: %d\n", project_id, deploy_version);
-
-	// On first boot (g_project_id == 0), read the persisted model info from flash
-	if (g_project_id == 0)  {
-		if (read_persisted_model_info() != 0)  {
-			// If flash is empty or invalid, use the values passed to init
-			g_project_id = project_id;
-			g_deploy_version = deploy_version;
-			xprintf("First boot: No valid info in flash, using provided: Project=%d, Version=%d\n",
-					g_project_id, g_deploy_version);
-		}
-	}
-	else if ((project_id != g_project_id) || (deploy_version != g_deploy_version))  {
-		g_project_id = project_id;
-		g_deploy_version = deploy_version;
-		model_loaded_from_sd = false; // reset flag to allow reloading
-		xprintf("------------------------Model changed to Project=%d, Version=%d. Resetting load flag.\n",
-				g_project_id, g_deploy_version);
-	}
-
-	xprintf("cv_init now loading with Project: %d, Version: %d\n", g_project_id, g_deploy_version);
-
-	// Initialise Ethos-U55 device
-	if (_arm_npu_init(security_enable, privilege_enable) != 0) {
-		return -1;
-	}
-
-	// TBP - I've removed the static model data inclusion here and all refernces to the embedded model within the app
-	// #if (MODEL_LOAD_MODE == MODEL_FROM_C_FILE)
-	//     model = tflite::GetModel((const void *)g_person_detect_model_data_vela);
-
-#if (MODEL_LOAD_MODE == MODEL_FROM_FLASH)
-	model = load_model_from_flash();
-
-#elif (MODEL_LOAD_MODE == MODEL_FROM_SD_CARD)
-
-	const tflite::Model *loaded = nullptr;
-
-	// Manifest unzip is handled by directory_manager during SD init.
-	// (We expect either /Manifest/model.tfl exists, or the model may be in root.)
-
-	// Build the expected filename and path
-	// TODO put file and path names using #define
-	snprintf(filename, sizeof(filename), "%dV%d.TFL",
-			(unsigned int)(g_project_id % 10000), (unsigned int)g_deploy_version);
-
-	snprintf(manifest_path, sizeof(manifest_path), "%s/%s", CONFIG_DIR, filename);
-
-	xprintf("DEBUG: Looking for %s\n", manifest_path);
-	// Check if any .tfl model exists in /Manifest
-
-	// Searches for the first .TFL file on the SD card and exits if found
-	if (fatfs_mounted()) {
-		if (f_opendir(&dir, CONFIG_DIR) == FR_OK) {
-			while ((f_readdir(&dir, &fno) == FR_OK) && (fno.fname[0] != '\0')) {
-				const char *ext = strrchr(fno.fname, '.');
-				// The strcasecmp function is case-insensitive: matches .tfl and .TFL
-				if (ext && strcasecmp(ext, ".TFL") == 0) {
-					// Use this specific model filename
-					snprintf(filename, sizeof(filename), "%s", fno.fname);
-					// Update manifest_path to point to the discovered model
-					snprintf(manifest_path, sizeof(manifest_path), "%s/%s", CONFIG_DIR, filename);
-					any_model_found = true;
-					xprintf("----------------- Found model file '%s' on SD card\n", filename);
-					break;
-				}
-			}
-			f_closedir(&dir);
-		}
-	}
-	else  {
-		// Don't attempt disk access if filesystem not mounted
-		xprintf("FatFS not mounted, skipping model search\n");
-	}
-
-	if (!any_model_found) {
-		// TODO - This implies that the SD card must contain a .tfl file for the NN to work - even if there is a model in flash...
-		xprintf("No .TFL model found in MANIFEST folder. Skipping neural network initialiSation.\n");
-		model = nullptr;
-		return 1;
-	}
-	else  {
-		// Check if the model from manifest matches what's in flash
-		if (is_model_in_flash(filename))  {
-			xprintf("Flash already contains '%s'; loading from flash.\n", filename);
-			loaded = load_model_from_flash();
-		}
-		else  {
-			xprintf("Flash model differs or missing; copying '%s' to flash...\n", filename);
-
-//			// Try manifest path first, then fallback to root
-//			// TODO surely we should restrict to a single location?
-//			const char *src_path = file_exists(manifest_path) ? manifest_path : filename;
-//			xprintf("Source chosen: %s\n", src_path);
-//
-//			if (load_model_from_sd_to_flash((char *)src_path) == 0) {
-//				xprintf("Copied %s to flash OK; loading from flash...\n", src_path);
-//				loaded = load_model_from_flash();
-//			}
-//			else {
-//				xprintf("SD->flash copy failed for %s\n", src_path);
-//			}
-
-			if (load_model_from_sd_to_flash(filename) == 0) {
-				xprintf("Copied %s to flash OK\n", filename);
-				loaded = load_model_from_flash();
-			}
-			else {
-				xprintf("SD->flash copy failed for %s\n", filename);
-			}
-		}
-
-		model = loaded;
-	}
-
-#endif // MODEL_LOAD_MODE
-
-	if (!model)  {
-		xprintf("Failed to load model\n");
-		return -1;
-	}
-
-	xprintf("Model loaded successfully\n");
-
-	// Attempt to load labels so results print friendly names
-	load_labels_from_manifest();
-
-	if (model->version() != TFLITE_SCHEMA_VERSION)  {
-		xprintf("[ERROR] Model's schema version %d is not equal to supported version %d\n",
-				model->version(), TFLITE_SCHEMA_VERSION);
-		return -1;
-	}
-
-#ifdef PRINTMODELFINGERPRINT
-	// Print information about the model
-	tflm_print_ethosu_fingerprint(model);
-#else
-	xprintf("Model schema version: %d\n", model->version());
-#endif // PRINTMODELFINGERPRINT
-
-	static tflite::MicroErrorReporter micro_error_reporter;
-
-	// Allocate op_resolver on heap so it persists beyond cv_init() scope
-	// The interpreter keeps a reference to it, so it must live as long as the interpreter
-	if (op_resolver_ptr != nullptr) {
-		delete op_resolver_ptr;
-	}
-	op_resolver_ptr = new tflite::MicroMutableOpResolver<1>();
-	xprintf("DEBUG: 0\n");
-
-	if (kTfLiteOk != op_resolver_ptr->AddEthosU())  {
-		xprintf("Failed to add Arm NPU support to op resolver.\n");
-		return -1;
-	}
-
-	xprintf("DEBUG: 1\n");
-	static tflite::MicroInterpreter *static_interpreter = new tflite::MicroInterpreter(
-			model,
-			*op_resolver_ptr,
-			tensor_arena_buf,
-			tensor_arena_size,
-			&micro_error_reporter);
-	xprintf("DEBUG: 2\n");
-
-	// TODO fix crach that happens here when running loadmodel 2 3
-	// See https://chatgpt.com/s/t_696ab268fa708191abc79f8768b3dffe
-	// later: https://chatgpt.com/s/t_696ab3bc127881918e7ca6e01cc911a7
-	if (static_interpreter->AllocateTensors() != kTfLiteOk) {
-		xprintf("Failed to allocate tensors\n");
-		return -1;
-	}
-	else {
-#if 0
-		xprintf("Used %lu/%lu bytes for tensors. Tensor arena is at 0x%08x\n",
-				static_interpreter->arena_used_bytes(), tensor_arena_size, tensor_arena_buf);
-#else
-		xprintf("DEBUG 3\n");
-#endif // 0
-	}
-
-	interpreter = static_interpreter;
-	input = static_interpreter->input(0);
-	output = static_interpreter->output(0);
-	xprintf("DEBUG: 4\n");
-
-	return 0;
-}
-
-#else
-
-/**
- *	Initialise TFLM model
- *
- * 	@param security_enable
- *	@param privilege_enable
- *	@param project_id
- *	@param deploy_version
- *	@return 0 for OK
- */
-int cv_init(bool security_enable, bool privilege_enable, int project_id, int deploy_version) {
-	char filename[IMAGEFILENAMELEN];	// for 8.3 this is 13, including the training \0
-
-	// Enforce clean state
-	cv_deinit();
-
-	if (_arm_npu_init(security_enable, privilege_enable) != 0) {
-		return -1;
-	}
-
-	// Create a file name based on the project_id and deploy_version parameters
-	snprintf(filename, sizeof(filename), "%dV%d.TFL", (int) project_id, (int) deploy_version);
-
-	xprintf("Looking for model '%s' in flash or SD card\n", filename);
-
-	if (is_model_in_flash(filename)) {
-		xprintf("Flash already contains model '%s'; loading from flash.\n", filename);
-		model = load_model_from_flash();
-	}
-	else if (is_model_in_sd(filename)) {
-#if 0
-		xprintf("SD contains model; loading from SD - TODO CONSIDER WRITING NEW CODE\n");
-		// TODO write new code for this:
-		char manifest_path[10 + IMAGEFILENAMELEN];			// let's restrict this to "/12345678/" then the filename, so 10 + IMAGEFILENAMELEN
-		snprintf(manifest_path, sizeof(manifest_path), "%s/%s", CONFIG_DIR, filename);
-
-		if (load_model_from_sd_to_flash(manifest_path) == 0) {
-			xprintf("Copied %s to flash OK\n", filename);
-			model = load_model_from_flash();
-		}
-		else {
-			xprintf("SD->flash copy failed for %s\n", filename);
-		}
-#else
-	model = load_model_from_sd(filename);
-#endif
-}
-	else {
-		xprintf("Failed to load model\n");
-		return -1;
-	}
-
-	op_resolver_ptr = new tflite::MicroMutableOpResolver<1>();
-	if (!op_resolver_ptr) {
-		return -1;
-	}
-
-	if (op_resolver_ptr->AddEthosU() != kTfLiteOk) {
-		xprintf("Failed to add Arm NPU support to op resolver.\n");
-		return -1;
-	}
-
-	interpreter = new tflite::MicroInterpreter(
-			model,
-			*op_resolver_ptr,
-			tensor_arena_buf,
-			tensor_arena_size,
-			&micro_error_reporter);
-
-	if (!interpreter) {
-		return -1;
-	}
-
-	if (interpreter->AllocateTensors() != kTfLiteOk) {
-		return -1;
-	}
-
-	input  = interpreter->input(0);
-	output = interpreter->output(0);
-
-	return 0;
-}
-#endif // OLD
 
 
 /**
@@ -1473,6 +1330,369 @@ static const tflite::Model *load_model_from_flash(void) {
 #endif // 0
 }
 
+
+/********************************** Public Functions  *************************************/
+
+#ifdef OLD
+// Add a flag to track if we've already loaded from SD card
+// TODO - omit as never used
+static bool model_loaded_from_sd = false;
+
+// Optional model number parameter, default to 1
+/**
+ *	Initialise TFLM model
+ *
+ * 	@param security_enable
+ *	@param privilege_enable
+ *	@param project_id
+ *	@param deploy_version
+ *	@return 0 for OK
+ */
+int cv_init(bool security_enable, bool privilege_enable, int project_id, int deploy_version) {
+	DIR dir;
+	FILINFO fno;
+	bool any_model_found = false;
+	char filename[IMAGEFILENAMELEN];	// for 8.3 this is 13, including the training \0
+	char manifest_path[10 + IMAGEFILENAMELEN];			// let's restrict this to "/12345678/" then the filename, so 10 + IMAGEFILENAMELEN
+	static const tflite::Model *model = nullptr;
+
+	// TODO - consider an arrangement for multiple models in flash
+	xprintf("cv_init called with ProjectID: %d, Version: %d\n", project_id, deploy_version);
+
+	// On first boot (g_project_id == 0), read the persisted model info from flash
+	if (g_project_id == 0)  {
+		if (read_persisted_model_info() != 0)  {
+			// If flash is empty or invalid, use the values passed to init
+			g_project_id = project_id;
+			g_deploy_version = deploy_version;
+			xprintf("First boot: No valid info in flash, using provided: Project=%d, Version=%d\n",
+					g_project_id, g_deploy_version);
+		}
+	}
+	else if ((project_id != g_project_id) || (deploy_version != g_deploy_version))  {
+		g_project_id = project_id;
+		g_deploy_version = deploy_version;
+		model_loaded_from_sd = false; // reset flag to allow reloading
+		xprintf("------------------------Model changed to Project=%d, Version=%d. Resetting load flag.\n",
+				g_project_id, g_deploy_version);
+	}
+
+	xprintf("cv_init now loading with Project: %d, Version: %d\n", g_project_id, g_deploy_version);
+
+	// Initialise Ethos-U55 device
+	if (_arm_npu_init(security_enable, privilege_enable) != 0) {
+		return -1;
+	}
+
+	// TBP - I've removed the static model data inclusion here and all refernces to the embedded model within the app
+	// #if (MODEL_LOAD_MODE == MODEL_FROM_C_FILE)
+	//     model = tflite::GetModel((const void *)g_person_detect_model_data_vela);
+
+#if (MODEL_LOAD_MODE == MODEL_FROM_FLASH)
+	model = load_model_from_flash();
+
+#elif (MODEL_LOAD_MODE == MODEL_FROM_SD_CARD)
+
+	const tflite::Model *loaded = nullptr;
+
+	// Manifest unzip is handled by directory_manager during SD init.
+	// (We expect either /Manifest/model.tfl exists, or the model may be in root.)
+
+	// Build the expected filename and path
+	// TODO put file and path names using #define
+	snprintf(filename, sizeof(filename), "%dV%d.TFL",
+			(unsigned int)(g_project_id % 10000), (unsigned int)g_deploy_version);
+
+	snprintf(manifest_path, sizeof(manifest_path), "%s/%s", CONFIG_DIR, filename);
+
+	xprintf("DEBUG: Looking for %s\n", manifest_path);
+	// Check if any .tfl model exists in /Manifest
+
+	// Searches for the first .TFL file on the SD card and exits if found
+	if (fatfs_mounted()) {
+		if (f_opendir(&dir, CONFIG_DIR) == FR_OK) {
+			while ((f_readdir(&dir, &fno) == FR_OK) && (fno.fname[0] != '\0')) {
+				const char *ext = strrchr(fno.fname, '.');
+				// The strcasecmp function is case-insensitive: matches .tfl and .TFL
+				if (ext && strcasecmp(ext, ".TFL") == 0) {
+					// Use this specific model filename
+					snprintf(filename, sizeof(filename), "%s", fno.fname);
+					// Update manifest_path to point to the discovered model
+					snprintf(manifest_path, sizeof(manifest_path), "%s/%s", CONFIG_DIR, filename);
+					any_model_found = true;
+					xprintf("----------------- Found model file '%s' on SD card\n", filename);
+					break;
+				}
+			}
+			f_closedir(&dir);
+		}
+	}
+	else  {
+		// Don't attempt disk access if filesystem not mounted
+		xprintf("FatFS not mounted, skipping model search\n");
+	}
+
+	if (!any_model_found) {
+		// TODO - This implies that the SD card must contain a .tfl file for the NN to work - even if there is a model in flash...
+		xprintf("No .TFL model found in MANIFEST folder. Skipping neural network initialiSation.\n");
+		model = nullptr;
+		return 1;
+	}
+	else  {
+		// Check if the model from manifest matches what's in flash
+		if (is_model_in_flash(filename))  {
+			xprintf("Flash already contains '%s'; loading from flash.\n", filename);
+			loaded = load_model_from_flash();
+		}
+		else  {
+			xprintf("Flash model differs or missing; copying '%s' to flash...\n", filename);
+
+//			// Try manifest path first, then fallback to root
+//			// TODO surely we should restrict to a single location?
+//			const char *src_path = file_exists(manifest_path) ? manifest_path : filename;
+//			xprintf("Source chosen: %s\n", src_path);
+//
+//			if (load_model_from_sd_to_flash((char *)src_path) == 0) {
+//				xprintf("Copied %s to flash OK; loading from flash...\n", src_path);
+//				loaded = load_model_from_flash();
+//			}
+//			else {
+//				xprintf("SD->flash copy failed for %s\n", src_path);
+//			}
+
+			if (load_model_from_sd_to_flash(filename) == 0) {
+				xprintf("Copied %s to flash OK\n", filename);
+				loaded = load_model_from_flash();
+			}
+			else {
+				xprintf("SD->flash copy failed for %s\n", filename);
+			}
+		}
+
+		model = loaded;
+	}
+
+#endif // MODEL_LOAD_MODE
+
+	if (!model)  {
+		xprintf("Failed to load model\n");
+		return -1;
+	}
+
+	xprintf("Model loaded successfully\n");
+
+	// Attempt to load labels so results print friendly names
+	load_labels_from_manifest();
+
+	if (model->version() != TFLITE_SCHEMA_VERSION)  {
+		xprintf("[ERROR] Model's schema version %d is not equal to supported version %d\n",
+				model->version(), TFLITE_SCHEMA_VERSION);
+		return -1;
+	}
+
+#ifdef PRINTMODELFINGERPRINT
+	// Print information about the model
+	tflm_print_ethosu_fingerprint(model);
+#else
+	xprintf("Model schema version: %d\n", model->version());
+#endif // PRINTMODELFINGERPRINT
+
+	static tflite::MicroErrorReporter micro_error_reporter;
+
+	// Allocate op_resolver on heap so it persists beyond cv_init() scope
+	// The interpreter keeps a reference to it, so it must live as long as the interpreter
+	if (op_resolver_ptr != nullptr) {
+		delete op_resolver_ptr;
+	}
+	op_resolver_ptr = new tflite::MicroMutableOpResolver<1>();
+	xprintf("DEBUG: 0\n");
+
+	if (kTfLiteOk != op_resolver_ptr->AddEthosU())  {
+		xprintf("Failed to add Arm NPU support to op resolver.\n");
+		return -1;
+	}
+
+	xprintf("DEBUG: 1\n");
+	static tflite::MicroInterpreter *static_interpreter = new tflite::MicroInterpreter(
+			model,
+			*op_resolver_ptr,
+			tensor_arena_buf,
+			tensor_arena_size,
+			&micro_error_reporter);
+	xprintf("DEBUG: 2\n");
+
+	// TODO fix crach that happens here when running loadmodel 2 3
+	// See https://chatgpt.com/s/t_696ab268fa708191abc79f8768b3dffe
+	// later: https://chatgpt.com/s/t_696ab3bc127881918e7ca6e01cc911a7
+	if (static_interpreter->AllocateTensors() != kTfLiteOk) {
+		xprintf("Failed to allocate tensors\n");
+		return -1;
+	}
+	else {
+#if 0
+		xprintf("Used %lu/%lu bytes for tensors. Tensor arena is at 0x%08x\n",
+				static_interpreter->arena_used_bytes(), tensor_arena_size, tensor_arena_buf);
+#else
+		xprintf("DEBUG 3\n");
+#endif // 0
+	}
+
+	interpreter = static_interpreter;
+	input = static_interpreter->input(0);
+	output = static_interpreter->output(0);
+	xprintf("DEBUG: 4\n");
+
+	return 0;
+}
+
+#else
+
+/**
+ *	Initialise TFLM model
+ *
+ * 	@param security_enable
+ *	@param privilege_enable
+ *	@param project_id
+ *	@param deploy_version
+ *	@return 0 for OK
+ */
+int cv_init(bool security_enable, bool privilege_enable, int project_id, int deploy_version) {
+	char filename[IMAGEFILENAMELEN];	// for 8.3 this is 13, including the training \0
+
+	// Enforce clean state
+	cv_deinit();
+
+	if (_arm_npu_init(security_enable, privilege_enable) != 0) {
+		return -1;
+	}
+
+	// Create a file name based on the project_id and deploy_version parameters
+	snprintf(filename, sizeof(filename), "%dV%d.TFL", (int) project_id, (int) deploy_version);
+
+	xprintf("Looking for model '%s' in flash or SD card\n", filename);
+
+	if (is_model_in_flash(filename)) {
+		xprintf("Flash already contains model '%s'; loading from flash.\n", filename);
+		model = load_model_from_flash();
+	}
+	else if (is_model_in_sd(filename)) {
+#if 0
+		xprintf("SD contains model; loading from SD - TODO CONSIDER WRITING NEW CODE\n");
+		// TODO write new code for this:
+		char manifest_path[10 + IMAGEFILENAMELEN];			// let's restrict this to "/12345678/" then the filename, so 10 + IMAGEFILENAMELEN
+		snprintf(manifest_path, sizeof(manifest_path), "%s/%s", CONFIG_DIR, filename);
+
+		if (load_model_from_sd_to_flash(manifest_path) == 0) {
+			xprintf("Copied %s to flash OK\n", filename);
+			model = load_model_from_flash();
+		}
+		else {
+			xprintf("SD->flash copy failed for %s\n", filename);
+		}
+#else
+	model = load_model_from_sd(filename);
+#endif
+}
+	else {
+		xprintf("Failed to load model\n");
+		return -1;
+	}
+
+	op_resolver_ptr = new tflite::MicroMutableOpResolver<1>();
+	if (!op_resolver_ptr) {
+		return -1;
+	}
+
+	if (op_resolver_ptr->AddEthosU() != kTfLiteOk) {
+		xprintf("Failed to add Arm NPU support to op resolver.\n");
+		return -1;
+	}
+
+	interpreter = new tflite::MicroInterpreter(
+			model,
+			*op_resolver_ptr,
+			tensor_arena_buf,
+			tensor_arena_size,
+			&micro_error_reporter);
+
+	if (!interpreter) {
+		return -1;
+	}
+
+	if (interpreter->AllocateTensors() != kTfLiteOk) {
+		return -1;
+	}
+
+	input  = interpreter->input(0);
+	output = interpreter->output(0);
+
+	return 0;
+}
+#endif // OLD
+
+
+// Robust deinit: safely release interpreter and tensor resources before model reloads
+int cv_deinit(void) {
+
+#ifdef OLD
+    // Disable interrupts or enter critical section if needed (to prevent concurrent access)
+    taskENTER_CRITICAL();
+
+    // Free the TFLite interpreter if it exists
+    if (interpreter != nullptr)
+    {
+        delete interpreter;
+        interpreter = nullptr;
+    }
+
+    // Free the op_resolver if it exists
+    if (op_resolver_ptr != nullptr)
+    {
+        delete op_resolver_ptr;
+        op_resolver_ptr = nullptr;
+    }
+
+    // Reset tensor pointers
+    input = nullptr;
+    output = nullptr;
+
+    // Reset model loaded flag
+    model_loaded_from_sd = false;
+
+    // NOTE: We do NOT reset flash_initialized here!
+    // The flash hardware remains initialized, we just need to manage XIP mode properly
+
+    // Leave critical section
+    taskEXIT_CRITICAL();
+    return 0;
+
+#else
+    if (interpreter) {
+    	delete interpreter;
+    	interpreter = nullptr;
+    }
+
+    if (op_resolver_ptr) {
+    	delete op_resolver_ptr;
+    	op_resolver_ptr = nullptr;
+    }
+
+    model = nullptr;
+
+    // IMPORTANT: clear tensor arena
+    memset(tensor_arena_buf, 0, tensor_arena_size);
+
+    // Reset tensor pointers
+    input = nullptr;
+    output = nullptr;
+
+    // Optional: shut down Ethos-U if required
+    //_arm_npu_deinit();
+    return 0;
+#endif // OLD
+}
+
+
 /**
  * This runs the neural network processing.
  *
@@ -1671,234 +1891,30 @@ TfLiteStatus cv_run(int8_t *outCategories, uint16_t categoriesCount) {
 
     return invoke_status;
 }
-
-// Robust deinit: safely release interpreter and tensor resources before model reloads
-int cv_deinit(void) {
-
-#ifdef OLD
-    // Disable interrupts or enter critical section if needed (to prevent concurrent access)
-    taskENTER_CRITICAL();
-
-    // Free the TFLite interpreter if it exists
-    if (interpreter != nullptr)
-    {
-        delete interpreter;
-        interpreter = nullptr;
-    }
-
-    // Free the op_resolver if it exists
-    if (op_resolver_ptr != nullptr)
-    {
-        delete op_resolver_ptr;
-        op_resolver_ptr = nullptr;
-    }
-
-    // Reset tensor pointers
-    input = nullptr;
-    output = nullptr;
-
-    // Reset model loaded flag
-    model_loaded_from_sd = false;
-
-    // NOTE: We do NOT reset flash_initialized here!
-    // The flash hardware remains initialized, we just need to manage XIP mode properly
-
-    // Leave critical section
-    taskEXIT_CRITICAL();
-    return 0;
-
-#else
-    if (interpreter) {
-    	delete interpreter;
-    	interpreter = nullptr;
-    }
-
-    if (op_resolver_ptr) {
-    	delete op_resolver_ptr;
-    	op_resolver_ptr = nullptr;
-    }
-
-    model = nullptr;
-
-    // IMPORTANT: clear tensor arena
-    memset(tensor_arena_buf, 0, tensor_arena_size);
-
-    // Reset tensor pointers
-    input = nullptr;
-    output = nullptr;
-
-    // Optional: shut down Ethos-U if required
-    //_arm_npu_deinit();
-    return 0;
+// Public getter for other modules to know the current model
+void cv_get_model_info(int *project_id, int *deploy_version) {
+    *project_id = g_project_id;
+    *deploy_version = g_deploy_version;
 }
 
-#endif // OLD
-
-/* ------------debuggers------------- */
-
-void debug_sd_model_integrity(const char *filename)
-{
-    xprintf("=== SD MODEL INTEGRITY CHECK ===\n");
-
-    FIL file;
-    FRESULT res = f_open(&file, filename, FA_READ);
-    if (res != FR_OK)
+// Public setter for current model info
+void cv_set_model_info(int project_id, int deploy_version) {
+    // Only log when values actually change
+    if (g_project_id != project_id || g_deploy_version != deploy_version)
     {
-        xprintf("FAIL: Cannot open SD file %s (error: %d)\n", filename, res);
-        return;
-    }
-
-    DWORD fileSize = f_size(&file);
-    xprintf("SD Model size: %lu bytes\n", fileSize);
-
-    // Read and print first 16 bytes
-    uint8_t header[16];
-    UINT bytesRead;
-    res = f_read(&file, header, sizeof(header), &bytesRead);
-    if (res == FR_OK && bytesRead == sizeof(header))
-    {
-        xprintf("SD TFLite header (first 16 bytes): ");
-        for (int i = 0; i < MODEL_XIP_INFO_SIZE; ++i) {
-            xprintf("%02X ", header[i]);
-        }
-        xprintf("\n");
-
-        // Check for 'T','F','L','3' at header[4..7]
-        if (header[4] == 'T' && header[5] == 'F' && header[6] == 'L' && header[7] == '3')
-        {
-            xprintf("Header magic OK: TFL3\n");
-        }
-        else
-        {
-            xprintf("Header magic NOT OK: expected TFL3 at bytes 4-7\n");
-        }
-    }
-    else
-    {
-        xprintf("Failed to read SD header for integrity check\n");
-    }
-    f_close(&file);
-}
-
-/**
- * Debug code for SPI EEPROM:
- *
- * Prints Flash init status, SPI ID, EEPROM ID byte
- */
-void debug_flash_status(void) {
-    xprintf("=== FLASH DEBUG STATUS ===\n");
-    xprintf("Flash initialized: %s\n", flash_initialized ? "YES" : "NO");
-
-    // Take semaphore
-    if (xSemaphoreTake(xSPIMutex, portMAX_DELAY) != pdTRUE)  {
-        xprintf("Failed to take SPI mutex for debug_flash_status\n");
-        return;
-    }
-
-    // CRITICAL: Disable XIP before reading ID
-    hx_lib_spi_eeprom_enable_XIP(spi_inst, false, FLASH_QUAD, false);
-
-    uint8_t id_info = 0;
-    int result = hx_lib_spi_eeprom_read_ID(spi_inst, &id_info);
-    if (result == 0) {
-        xprintf("SPI ID: 0x%02x, Flash ID: 0x%02X\n", spi_inst,  id_info);
-    }
-    else {
-        xprintf("SPI ID: 0x%02x, error %d:\n", spi_inst, result);
-    }
-
-    xSemaphoreGive(xSPIMutex);
-}
-
-void test_basic_spi_operations()
-{
-    xprintf("=== TESTING BASIC SPI OPS ===\n");
-
-    uint32_t test_addr = (MODEL_FLASH_ADDR + 4 * FLASH_SECTOR_SIZE) & ~(FLASH_SECTOR_SIZE - 1);
-
-    int er = hx_lib_spi_eeprom_erase_sector(spi_inst, test_addr, FLASH_SECTOR);
-    xprintf("Erase result: %d at 0x%08lX\n", er, test_addr);
-
-    uint32_t test_data[4] = {0xDEADBEEF, 0x12345678, 0xABCDEF00, 0x11223344};
-
-    // Test writing one word at a time
-    xprintf("Writing one word at a time:\n");
-    for (int i = 0; i < 4; i++)
-    {
-        int wr = hx_lib_spi_eeprom_word_write(spi_inst, test_addr + (i * 4), &test_data[i], 1);
-        xprintf("  Write word %d (0x%08lX) to 0x%08lX: result %d\n",
-                i, test_data[i], test_addr + (i * 4), wr);
-    }
-
-    // Test reading one word at a time
-    xprintf("Reading one word at a time:\n");
-    for (int i = 0; i < 4; i++)
-    {
-        uint32_t read_data = 0;
-        int rr = hx_lib_spi_eeprom_word_read(spi_inst, test_addr + (i * 4), &read_data, 1);
-        xprintf("  Read word %d from 0x%08lX: result %d, data 0x%08lX %s\n",
-                i, test_addr + (i * 4), rr, read_data,
-                (read_data == test_data[i]) ? "OK" : "FAIL");
+        xprintf("cv_set_model_info: Project %d -> %d, Version %d -> %d\n",
+                g_project_id, project_id, g_deploy_version, deploy_version);
+        g_project_id = project_id;
+        g_deploy_version = deploy_version;
     }
 }
 
-void compare_sd_spi_xip_chunked(const char *filename)
-{
-    FIL file;
-    FRESULT res = f_open(&file, filename, FA_READ);
-    if (res != FR_OK)
-    {
-        xprintf("Failed to open model file %s (error: %d)\n", filename, res);
-        return;
+// Public getter for confidence data (for EXIF)
+bool cv_get_confidence_data(ClassConfidenceData *data) {
+    if (data != nullptr) {
+        memcpy(data, &g_last_confidence_data, sizeof(ClassConfidenceData));
+        return true;
     }
-
-    DWORD fileSize = f_size(&file);
-    xprintf("Model file size: %lu bytes\n", fileSize);
-
-    UINT bytesRead = 0;
-    uint8_t sd_buf[VERIFY_CHUNK_SIZE] = {0};
-    uint8_t spi_buf[VERIFY_CHUNK_SIZE] __attribute__((aligned(4))) = {0};
-    uint8_t xip_buf[VERIFY_CHUNK_SIZE] = {0};
-
-    DWORD offset = 0;
-    int any_mismatch = 0;
-    while (offset < fileSize)
-    {
-        UINT to_read = (fileSize - offset > VERIFY_CHUNK_SIZE) ? VERIFY_CHUNK_SIZE : (fileSize - offset);
-        // Read SD
-        f_lseek(&file, offset);
-        res = f_read(&file, sd_buf, to_read, &bytesRead);
-        if (res != FR_OK || bytesRead != to_read)
-        {
-            xprintf("Failed to read model file at offset %lu\n", offset);
-            break;
-        }
-        // // Read SPI
-        if (hx_lib_spi_eeprom_word_read(spi_inst, MODEL_FLASH_ADDR + offset, (uint32_t *)spi_buf, to_read) != 0)
-        {
-            // if (hx_lib_spi_eeprom_word_read(spi_inst, MODEL_FLASH_ADDR + offset, (uint32_t*)spi_buf, (to_read + 3) / 4) != 0) {
-            xprintf("Failed to read SPI at offset %lu\n", offset);
-            break;
-        }
-        // Read XIP
-        uint32_t virt_address = phys_to_virt(MODEL_FLASH_ADDR + offset);
-        memcpy(xip_buf, (void *)virt_address, to_read);
-
-        // Print mismatches for this chunk
-        for (UINT i = 0; i < to_read; i++)
-        {
-            if (sd_buf[i] != spi_buf[i] || sd_buf[i] != xip_buf[i] || spi_buf[i] != xip_buf[i])
-            {
-                xprintf("Mismatch at offset %lu (+%u): SD=0x%02X SPI=0x%02X XIP=0x%02X\n",
-                        offset, i, sd_buf[i], spi_buf[i], xip_buf[i]);
-                any_mismatch = 1;
-            }
-        }
-        offset += to_read;
-    }
-    if (!any_mismatch)
-    {
-        xprintf("Model in flash (SPI/XIP) matches SD file!\n");
-    }
-    f_close(&file);
+    return false;
 }
+

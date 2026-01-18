@@ -52,6 +52,8 @@ typedef struct {
 
 #endif
 
+/********************************** Public Functions Declarations *************************************/
+
 int cv_init(bool security_enable, bool privilege_enable, int project_id, int deploy_version);
 int cv_deinit(void);
 

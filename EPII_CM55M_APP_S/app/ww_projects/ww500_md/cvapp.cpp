@@ -73,10 +73,6 @@
 // Uncomment this to get information about the model:
 #define PRINTMODELFINGERPRINT
 
-// Use this constants since a bizarre compiler issue is redefining USE_DW_SPI_MST_Q as 1860 in some places
-// See the "Bizarre" comment in is_model_in_flash()
-USE_DW_SPI_MST_E spi_inst = (USE_DW_SPI_MST_E)0;
-
 static inline uint32_t virt_to_phys(uint32_t virt)  {
 	return virt - FLASH_VIRTUAL_BASE + FLASH_PHYSICAL_BASE;
 }
@@ -125,11 +121,13 @@ namespace {
     static bool g_labels_loaded = false;
 };
 
+// Use this constants since a bizarre compiler issue is redefining USE_DW_SPI_MST_Q as 1860 in some places
+// See the "Bizarre" comment in is_model_in_flash()
+USE_DW_SPI_MST_E spi_inst = (USE_DW_SPI_MST_E)0;
+
 // SPI EEPROM configuration
 static bool flash_initialized = false;
 static SemaphoreHandle_t xSPIMutex = NULL;
-
-
 
 // Globals to hold the current model identifiers
 // TODO should these really be 32-bits?
@@ -144,9 +142,11 @@ static ClassConfidenceData g_last_confidence_data = {0};
 // int load_model_cli_command(int model_selection);
 static bool is_model_in_flash(char *filename);
 static bool is_model_in_sd(char *filename);
+static const tflite::Model *load_model_from_sd(char * filename);
 
 int load_model_from_sd_to_flash(char *filename);
 static const tflite::Model *load_model_from_flash(void);
+
 int erase_model_flash_area(uint32_t model_size);
 void compare_sd_spi_xip_chunked(const char *filename);
 void debug_sd_model_integrity(const char *filename);
@@ -197,6 +197,8 @@ static void load_labels_from_manifest(void) {
 
     if (file_exists(labels_path))  {
         uint8_t count = 0;
+        // TODO - labels to flash
+        // https://chatgpt.com/share/696d4dca-4900-8005-a0ad-9a211e8a1d9a
         if (fatfs_load_labels(labels_path, g_labels, &count, MAX_CLASSES, MAX_LABEL_LEN) == 0) {
             g_label_count = count;
             g_labels_loaded = (g_label_count > 0);
@@ -572,8 +574,27 @@ static int _arm_npu_init(bool security_enable, bool privilege_enable) {
     return 0;
 }
 
-static tflite::Model *load_model_from_sd(uint16_t project_id, uint16_t deploy_version) {
-	return nullptr;
+/**
+ * Loads model from the SD card to flash.
+ *
+ * Model is expected to be in /MANIFEST folder.
+ *
+ * Model is copied to flash and a pointer to the model is returned.
+ */
+static const tflite::Model *load_model_from_sd(char * filename) {
+	char manifest_path[10 + IMAGEFILENAMELEN];			// let's restrict this to "/12345678/" then the filename, so 10 + IMAGEFILENAMELEN
+
+	// Get absolute path to the SD card file
+	snprintf(manifest_path, sizeof(manifest_path), "%s/%s", CONFIG_DIR, filename);
+
+	if (load_model_from_sd_to_flash(manifest_path) == 0) {
+		xprintf("Copied %s to flash OK\n", manifest_path);
+		return load_model_from_flash();
+	}
+	else {
+		xprintf("SD->flash copy failed for %s\n", manifest_path);
+		return nullptr;
+	}
 }
 
 #ifdef OLD
@@ -809,11 +830,8 @@ int cv_init(bool security_enable, bool privilege_enable, int project_id, int dep
 		return -1;
 	}
 
-
 	// Create a file name based on the project_id and deploy_version parameters
-	// TODO remove leading 0s! that us, omit the %02d which is just a hack fro development
-	//snprintf(filename, sizeof(filename), "%dV%d.TFL", (int) project_id, (int) deploy_version);
-	snprintf(filename, sizeof(filename), "%02dV%02d.TFL", (int) project_id, (int) deploy_version);
+	snprintf(filename, sizeof(filename), "%dV%d.TFL", (int) project_id, (int) deploy_version);
 
 	xprintf("Looking for model '%s' in flash or SD card\n", filename);
 
@@ -822,9 +840,23 @@ int cv_init(bool security_enable, bool privilege_enable, int project_id, int dep
 		model = load_model_from_flash();
 	}
 	else if (is_model_in_sd(filename)) {
-		xprintf("SD contains model; loading from SD\n");
-		model = load_model_from_sd(project_id, deploy_version);
-	}
+#if 0
+		xprintf("SD contains model; loading from SD - TODO CONSIDER WRITING NEW CODE\n");
+		// TODO write new code for this:
+		char manifest_path[10 + IMAGEFILENAMELEN];			// let's restrict this to "/12345678/" then the filename, so 10 + IMAGEFILENAMELEN
+		snprintf(manifest_path, sizeof(manifest_path), "%s/%s", CONFIG_DIR, filename);
+
+		if (load_model_from_sd_to_flash(manifest_path) == 0) {
+			xprintf("Copied %s to flash OK\n", filename);
+			model = load_model_from_flash();
+		}
+		else {
+			xprintf("SD->flash copy failed for %s\n", filename);
+		}
+#else
+	model = load_model_from_sd(filename);
+#endif
+}
 	else {
 		xprintf("Failed to load model\n");
 		return -1;

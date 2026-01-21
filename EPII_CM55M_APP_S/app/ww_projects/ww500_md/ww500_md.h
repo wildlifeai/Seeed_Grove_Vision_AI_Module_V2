@@ -20,6 +20,10 @@
 #include "board.h"
 #include "if_task.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /*************************************** Definitions *******************************************/
 
 // Uncomment this if PB9 is to be used as the green LED.
@@ -89,5 +93,9 @@ char * app_get_version_string(void);
 char * app_get_board_name_string(void);
 
 void app_onInactivityDetection(void);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // WW500_MD_H_

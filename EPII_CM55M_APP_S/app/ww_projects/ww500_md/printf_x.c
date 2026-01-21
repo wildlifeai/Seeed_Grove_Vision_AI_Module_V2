@@ -5,6 +5,8 @@
  *      Author: charl
  */
 
+
+
 #include "printf_x.h"
 #include "xprintf.h"
 #include "ctype.h"
@@ -116,25 +118,35 @@ void printf_x_test(void) {
 /**
  * Utility to print the contents of a buffer
  */
-void printf_x_printBuffer(uint8_t * buff, uint16_t length) {
-    uint8_t lineBuff[IN_LINE_PRINT_CNT + 1];	  // +1 for '\0'
+void printf_x_printBuffer(const void *buff, size_t length) {
+	uint8_t lineBuff[IN_LINE_PRINT_CNT + 1];	  // +1 for '\0'
 
-    for (uint16_t addr = 0; addr < length; addr += IN_LINE_PRINT_CNT)  {
-    	memcpy(lineBuff, buff + addr, IN_LINE_PRINT_CNT);
-        lineBuff[IN_LINE_PRINT_CNT] = '\0';
+	for (uint16_t addr = 0; addr < length; addr += IN_LINE_PRINT_CNT)  {
+		memcpy(lineBuff, buff + addr, IN_LINE_PRINT_CNT);
+		lineBuff[IN_LINE_PRINT_CNT] = '\0';
 
-        xprintf("%03x: ", addr);
-        for (uint8_t i = 0; i < IN_LINE_PRINT_CNT; i++)  {
-        	xprintf("%02x ", lineBuff[i]);
-            if (i == 7) {
-            	// Extra space to separate 1st and 2nd 8 bytes
-            	xprintf(" ");
-            }
-            if (!isprint((int)lineBuff[i]))  {
-                lineBuff[i] = '.';
-            }
-        }
-        // Now the string version
-        xprintf("%s\n", lineBuff);
-    }
+		xprintf("%03x: ", addr);
+		for (uint8_t i = 0; i < IN_LINE_PRINT_CNT; i++)  {
+			if (i == 7) {
+				// Extra space to separate 1st and 2nd 8 bytes
+				xprintf(" ");
+			}
+			if ((addr + i) < length) {
+				xprintf("%02x ", lineBuff[i]);
+
+				if (!isprint((int)lineBuff[i]))  {
+					lineBuff[i] = '.';
+				}
+			}
+			else {
+				// Exceeded the extent of the incoming buffer, so don't print characters for the rest of the line
+				xprintf("   ");
+				lineBuff[i] = ' ';
+			}
+		}
+		// Now the string version
+		xprintf("%s\n", lineBuff);
+	}
 }
+
+

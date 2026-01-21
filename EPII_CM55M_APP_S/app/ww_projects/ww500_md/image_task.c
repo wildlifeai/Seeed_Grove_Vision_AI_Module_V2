@@ -1088,7 +1088,7 @@ static APP_MSG_DEST_T handleEventForNNUpdate(APP_MSG_T img_recv_msg)
     }
 
     // Try to load the new model with project_id and deploy_version
-    int result = cv_init(true, true, project_id, deploy_version);
+    int result = cv_init(true, true, project_id, deploy_version, woken);
     if (result == 0)   {
         // Model loaded successfully - no need to send event, just continue
         XP_GREEN;
@@ -1401,27 +1401,19 @@ static void vImageTask(void *pvParameters)
 #endif // USE_HM0360_MD
 #endif // 0
 
-    // Initialize with default project_id from common_config.h and version 1
-    // The actual values will be loaded from flash if available, or use these defaults
-    //int cv_init_result = cv_init(true, true, PROJECT_ID, 1);
 
     int cv_init_result = cv_init(true, true,
     		fatfs_getOperationalParameter(OP_PARAMETER_MODEL_PROJECT),
-			fatfs_getOperationalParameter(OP_PARAMETER_MODEL_VERSION));
+			fatfs_getOperationalParameter(OP_PARAMETER_MODEL_VERSION),
+			woken);
 
-    if (cv_init_result < 0)
-    {
-        xprintf("cv init fail\n");
-        selfTest_setErrorBits(1 << SELF_TEST_AI_NN_ERROR);
-        //configASSERT(0);
-    }
-    else if (cv_init_result == 1)
-    {
+    if (cv_init_result < 0) {
         xprintf("No model found on SD card. Neural network will be skipped.\n");
+        // TODO - do we do this?
+        //selfTest_setErrorBits(1 << SELF_TEST_AI_NN_ERROR);
         g_model_loaded = false;
     }
-    else
-    {
+    else {
         xprintf("Initialised neural network.\n");
         g_model_loaded = true;
     }
@@ -2471,6 +2463,7 @@ TaskHandle_t image_createTask(int8_t priority, APP_WAKE_REASON_E wakeReason)
     }
 
     // Create binary semaphore to protect JPEG buffer from being reused before write completes
+    // semaphore vs mutex: https://chatgpt.com/share/69706528-d250-8005-973b-6ab43c1b4629
     xJpegBufferSemaphore = xSemaphoreCreateBinary();
     if (xJpegBufferSemaphore == NULL)
     {

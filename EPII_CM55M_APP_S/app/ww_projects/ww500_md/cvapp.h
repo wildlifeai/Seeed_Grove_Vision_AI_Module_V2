@@ -11,6 +11,8 @@
 #include "spi_protocol.h"
 #include "c_api_types.h"
 
+#include "ww500_md.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -29,10 +31,14 @@ extern "C" {
 // CGP - TODO - how does MODEL_XIP_ADDR relate to FLASH_VIRTUAL_BASE?
 #define MODEL_XIP_ADDR 			0x3A200000
 #define MODEL_XIP_INFO_SIZE 	16		// Must be divisible by 4
+// // file name: '12345678.jpg' = 12 characters, plus trailing '\0'
+//#define IMAGEFILENAMELEN		13
 
 // Maximum number of classes supported
 #define MAX_CLASSES 			16
 #define MAX_LABEL_LEN 			20	// e.g. 'no person\0'
+#define LABEL_MAGIC    0x4C41424C  // "LABL" - interestingly, treated as a LE so appears as 4C 42 43 4C in memory
+#define MAX_MODEL_NAME_LEN		13
 
 #if 1
 // Structure to hold class confidence scores
@@ -54,7 +60,7 @@ typedef struct {
 
 /********************************** Public Functions Declarations *************************************/
 
-int cv_init(bool security_enable, bool privilege_enable, int project_id, int deploy_version);
+int cv_init(bool security_enable, bool privilege_enable, int project_id, int deploy_version, APP_WAKE_REASON_E woken);
 int cv_deinit(void);
 
 void cv_get_model_info(int *project_id, int *deploy_version);

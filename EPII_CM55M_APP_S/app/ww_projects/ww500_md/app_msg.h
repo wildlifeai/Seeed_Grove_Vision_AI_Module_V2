@@ -197,6 +197,7 @@ typedef enum {
 	APP_MSG_FATFSTASK_LAST		 				=0x0904,
 
 	// Messages directed to image task
+	// IMPORTANT! Values must have a matching string in image_task.c
 	APP_MSG_IMAGETASK_FIRST 					=0x0A00,
 	APP_MSG_IMAGETASK_INACTIVITY 				=0x0A00, // Inactivity detected
 	APP_MSG_IMAGETASK_STARTCAPTURE 				=0x0A01, //
@@ -208,9 +209,10 @@ typedef enum {
 	APP_MSG_IMAGETASK_DISK_READ_COMPLETE		=0x0A07, // Not used. Consider deleting
 	APP_MSG_IMAGETASK_CHANGE_ENABLE 			=0x0A08, // Transition between enabled & disabled.
 	APP_MSG_IMAGETASK_NN_UPDATE_MODEL      		=0x0A09, // 
-	APP_MSG_IMAGETASK_NN_MODEL_UPDATED    		=0x0A0A, // 
-	APP_MSG_IMAGETASK_ERROR 					=0x0A0B, // 
-	APP_MSG_IMAGETASK_LAST 						=0x0A0C,
+	APP_MSG_IMAGETASK_NN_ERASE_MODEL      		=0x0A0A, //
+	APP_MSG_IMAGETASK_NN_MODEL_UPDATED    		=0x0A0B, //
+	APP_MSG_IMAGETASK_ERROR 					=0x0A0C, //
+	APP_MSG_IMAGETASK_LAST 						=0x0A0D,
 
 } APP_MSG_EVENT_E;
 

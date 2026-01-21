@@ -175,7 +175,7 @@ int init_flash(void);
 static inline uint32_t align_down(uint32_t addr, uint32_t align);
 static inline uint32_t align_up(uint32_t size, uint32_t align);
 static bool file_exists(const char *path);
-static void load_labels_from_manifest(void);
+static void load_labels_from_manifest(char * filename);
 
 #ifdef OLD
 int read_persisted_model_info(void);
@@ -233,29 +233,52 @@ static inline uint32_t align_up(uint32_t size, uint32_t align) {
 }
 
 // Check if a file exists on SD
-static bool file_exists(const char *path)
-{
+static bool file_exists(const char *path) {
     FILINFO finfo;
     FRESULT res = f_stat(path, &finfo);
     return (res == FR_OK);
 }
 
 /**
- * Load labels from "/MANIFEST/LABELS.TXT"
+ * Load labels from "/MANIFEST/nnVvv.TXT"
+ *
+ * The parameter is the model name (ends with '.TFL') and the labels are expected in a file
+ * with the same base name but with .TXT ending.
  *
  * If the file exists then the labels are loaded into g_labels[][],
  * the number of labels is in g_label_count
  * and g_labels_loaded is set true
  *
+ * @param - pointer to the string containing the model name
  */
-static void load_labels_from_manifest(void) {
+static void load_labels_from_manifest(char * filename) {
 
-    // Look for "/MANIFEST/LABELS.TXT" - concatenation done by the compiler.
-    const char *labels_path = CONFIG_DIR "/LABELS.TXT";
+	char labels_path[MAX_MODEL_NAME_LEN * 2];   // plenty for "/MANIFEST/xxxxxxxx.TXT"
+	char base[MAX_MODEL_NAME_LEN];          // 8.3 name + NUL
 
-    if (file_exists(labels_path))  {
-        uint8_t count = 0;
-        // TODO - labels to flash
+	// Copy filename so we can modify it
+	strncpy(base, filename, sizeof(base) - 1);
+
+	base[sizeof(base) - 1] = '\0';
+
+	/* Replace extension */
+	char *dot = strrchr(base, '.');
+	if (dot != NULL) {
+		strcpy(dot, ".TXT");
+	}
+	else {
+		// Should not happen
+		return;
+	}
+
+	/* Build full path */
+	snprintf(labels_path, sizeof(labels_path), "%s/%s", CONFIG_DIR, base);
+
+	xprintf("Looking for labels in %s\n", labels_path);
+
+	if (file_exists(labels_path))  {
+		uint8_t count = 0;
+		// TODO - labels to flash
         // https://chatgpt.com/share/696d4dca-4900-8005-a0ad-9a211e8a1d9a
         if (fatfs_load_labels(labels_path, g_labels, &count, MAX_CLASSES, MAX_LABEL_LEN) == 0) {
             g_label_count = count;
@@ -792,7 +815,7 @@ static const tflite::Model *load_model_from_sd(char * filename) {
 		return nullptr;
 	}
 
-	//	Now try to copy LABELS.TXT to the meta data area of teh XIP flash
+	//	Now try to copy labels from ssVvv.TXT to the meta data area of the XIP flash
 	if (!copy_labels_from_sd_to_flash(filename)) {
 		xprintf("SD labels->flash copy failed for %s\n", filename);
 	}
@@ -1821,7 +1844,7 @@ static bool copy_labels_from_sd_to_flash(char * modelName) {
     memset(&metaDataRam, 0, sizeof(ModelMetaData));
 
     // TODO - copy the labels into metaDataRam
-	load_labels_from_manifest();
+	load_labels_from_manifest(modelName);
 
 	// Place fields into metaDataRam
 	build_meta_data(&metaDataRam, modelName, g_labels, g_label_count);
@@ -2038,7 +2061,7 @@ int cv_init(bool security_enable, bool privilege_enable, int project_id, int dep
 			&micro_error_reporter);
 	xprintf("DEBUG: 2\n");
 
-	// TODO fix crach that happens here when running loadmodel 2 3
+	// TODO fix crash that happens here when running loadmodel 2 3
 	// See https://chatgpt.com/s/t_696ab268fa708191abc79f8768b3dffe
 	// later: https://chatgpt.com/s/t_696ab3bc127881918e7ca6e01cc911a7
 	if (static_interpreter->AllocateTensors() != kTfLiteOk) {
@@ -2067,12 +2090,27 @@ int cv_init(bool security_enable, bool privilege_enable, int project_id, int dep
 /**
  *	Initialise TFLM model
  *
+ *	The project_id and deploy_version parameters are used to determine the TFLM file name & model name.
+ *	These are loaded from CONFIG.TXT or default values (1, 1) are used. Models names are like "123V4.TFL"
+ *	and class labels are stored on SD card as "123V4.TXT"
+ *
+ *	Then:
+ *
+ *	Option 1: use named model already in flash
+ *	Option 2: or if named model is on SD card, erase the flash and program the new model
+ *	Option 3: or use any existing model is in flash
+ *	Option 4: or if no model is available then don't use NN
+ *
+ *	When the model is saved to flash, meta data is also saved to flash (just before the model).
+ *	The meta data includes the class label names, and these are the values (read from flash)
+ *	that are reported on the console and used in the EXIF data.
+ *
  * 	@param security_enable
  *	@param privilege_enable
- *	@param project_id
- *	@param deploy_version
+ *	@param project_id - from Operational Parameter OP_PARAMETER_MODEL_PROJECT
+ *	@param deploy_version - from Operational Parameter OP_PARAMETER_MODEL_VERSION
  *	@param woken - used to print info only on cold boots
- *	@return 0 for OK
+ *	@return 0 for OK, -1 if no NN is used
  */
 int cv_init(bool security_enable, bool privilege_enable, int project_id, int deploy_version, APP_WAKE_REASON_E woken) {
 	char filename[IMAGEFILENAMELEN];	// for 8.3 this is 13, including the training \0
@@ -2096,6 +2134,7 @@ int cv_init(bool security_enable, bool privilege_enable, int project_id, int dep
 	snprintf(filename, sizeof(filename), "%dV%d.TFL", (int) project_id, (int) deploy_version);
 
 	xprintf("Looking for model '%s' in flash or SD card\n", filename);
+	xprintf("TODO - can we erase flash for testing no model?\n", filename);
 
 	// Option 1: named model is in flash
 	if (is_model_in_flash(filename)) {
@@ -2129,8 +2168,10 @@ int cv_init(bool security_enable, bool privilege_enable, int project_id, int dep
 	}
 
 #ifdef PRINTMODELFINGERPRINT
-	// Print information about the model
-	tflm_print_ethosu_fingerprint(model);
+	if (coldBoot) {
+		// Print information about the model
+		tflm_print_ethosu_fingerprint(model);
+	}
 #else
 	xprintf("Model schema version: %d\n", model->version());
 #endif // PRINTMODELFINGERPRINT

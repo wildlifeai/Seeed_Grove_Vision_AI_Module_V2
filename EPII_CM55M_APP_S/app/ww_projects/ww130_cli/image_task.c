@@ -124,7 +124,8 @@ const char *imageTaskStateString[APP_IMAGE_TASK_STATE_NUMSTATES] = {
     "Capturing",
     "NN Processing",
     "Wait for Timer",
-    "Busy",
+    "Save State",
+	"Updating NN"
 };
 
 // Strings for expected messages. Values must match messages directed to image Task in app_msg.h
@@ -138,6 +139,9 @@ const char *imageTaskEventString[APP_MSG_IMAGETASK_LAST - APP_MSG_IMAGETASK_FIRS
     "Image Event Disk Write Complete",
     "Image Event Disk Read Complete",
     "Image Event Change Enable",
+    "Image Event Update Model",
+    "Image Event Model Updated",
+	"Image Task Error"
 };
 
 TickType_t xLastWakeTime;

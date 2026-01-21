@@ -265,7 +265,8 @@ const char *imageTaskStateString[APP_IMAGE_TASK_STATE_NUMSTATES] = {
     "Updating NN",
 };
 
-// Strings for expected messages. Values must match messages directed to image Task in app_msg.h
+// Strings for expected messages.
+// IMPORTANT! Values must match messages directed to image Task in app_msg.h
 const char *imageTaskEventString[APP_MSG_IMAGETASK_LAST - APP_MSG_IMAGETASK_FIRST] = {
     "Image Event Inactivity",
     "Image Event Start Capture",
@@ -276,6 +277,7 @@ const char *imageTaskEventString[APP_MSG_IMAGETASK_LAST - APP_MSG_IMAGETASK_FIRS
     "Image Event Disk Write Complete",
     "Image Event Change Enable",
     "Image Event NN Update Model",
+    "Image Event NN Erase Model",
     "Image Event NN Model Updated",
     "Image Event Error",
 };
@@ -593,8 +595,7 @@ static APP_MSG_DEST_T handleEventForInit(APP_MSG_T img_recv_msg)
     event = img_recv_msg.msg_event;
     send_msg.destination = NULL;
 
-    switch (event)
-    {
+    switch (event)  {
 
     case APP_MSG_IMAGETASK_STARTCAPTURE:
         // MD or timer or the CLI task has asked us to start capturing
@@ -669,7 +670,21 @@ static APP_MSG_DEST_T handleEventForInit(APP_MSG_T img_recv_msg)
 
     case APP_MSG_IMAGETASK_NN_UPDATE_MODEL:
         image_task_state = APP_IMAGE_TASK_STATE_UPDATING_NN;
-        send_msg = handleEventForNNUpdate(img_recv_msg);
+
+        uint16_t project_id = (uint16_t)img_recv_msg.msg_data;
+        uint16_t deploy_version = img_recv_msg.msg_parameter;
+        xprintf("DEBUG: request to update to %dV5D.TFL\n", project_id, deploy_version);
+        // Now we must initiate the update. When complete there will be a call to handleEventForNNUpdate()
+
+        // do we do cv_init(); here?
+        cv_init(true, true, project_id, deploy_version, woken);
+        break;
+
+    case APP_MSG_IMAGETASK_NN_ERASE_MODEL:
+        image_task_state = APP_IMAGE_TASK_STATE_UPDATING_NN;
+
+        xprintf("DEBUG: request to erase model\n");
+        // Now we must initiate the erase. When complete there will be a call to handleEventForNNUpdate()
         break;
 
     default:
@@ -1073,14 +1088,19 @@ static APP_MSG_DEST_T handleEventForNNProcessing(APP_MSG_T img_recv_msg)
     return send_msg;
 }
 
+#if 0
+
 // Handles APP_IMAGE_TASK_STATE_UPDATING_NN: loads a new NN model and returns to INIT state
-static APP_MSG_DEST_T handleEventForNNUpdate(APP_MSG_T img_recv_msg)
-{
+static APP_MSG_DEST_T handleEventForNNUpdate(APP_MSG_T img_recv_msg) {
     APP_MSG_DEST_T send_msg;
     send_msg.destination = NULL;
-    int project_id = (int)img_recv_msg.msg_data;
-    int deploy_version = (int)img_recv_msg.msg_parameter;
-    xprintf("Requested to update NN model to %dV%d.TFL (Project ID: %d)\n", project_id, deploy_version, project_id);
+    uint16_t project_id;
+    uint16_t deploy_version;
+
+    project_id = (uint16_t) img_recv_msg.msg_data;
+    deploy_version = (uint16_t) img_recv_msg.msg_parameter;
+
+    xprintf("Requested to update NN model to %dV%d.TFL\n", project_id, deploy_version);
 
     int result_not = cv_deinit();
     if (result_not != 0)  {
@@ -1089,10 +1109,11 @@ static APP_MSG_DEST_T handleEventForNNUpdate(APP_MSG_T img_recv_msg)
 
     // Try to load the new model with project_id and deploy_version
     int result = cv_init(true, true, project_id, deploy_version, woken);
+
     if (result == 0)   {
         // Model loaded successfully - no need to send event, just continue
         XP_GREEN;
-        xprintf("---------MODEL UPDATE SUCCESS: %dV%d.tfl---------\n", project_id, deploy_version);
+        xprintf("-------- MODEL UPDATE SUCCESS: %dV%d.tfl---------\n", project_id, deploy_version);
         XP_WHITE;
         // Don't send any message - state is already set to INIT
         send_msg.destination = NULL;
@@ -1100,7 +1121,7 @@ static APP_MSG_DEST_T handleEventForNNUpdate(APP_MSG_T img_recv_msg)
     else {
         // Model load failed, send error event
         XP_RED;
-        xprintf("------------MODEL UPDATE FAILED for %dV%d.TFT, sending ERROR event\n", project_id, deploy_version);
+        xprintf("----------- MODEL UPDATE FAILED for %dV%d.TFT, sending ERROR event\n", project_id, deploy_version);
         XP_WHITE;
         send_msg.message.msg_event = APP_MSG_IMAGETASK_ERROR;
         send_msg.message.msg_data = project_id;
@@ -1112,6 +1133,42 @@ static APP_MSG_DEST_T handleEventForNNUpdate(APP_MSG_T img_recv_msg)
     image_task_state = APP_IMAGE_TASK_STATE_INIT;
     return send_msg;
 }
+#else
+
+/**
+ * Implements state machine for APP_IMAGE_TASK_STATE_UPDATING_NN
+ *
+ * This is the state when we are erasing the XIF flash and/or writing a new model to the XIP flash
+ *
+ * Expected events:
+ * 		APP_MSG_IMAGETASK_NN_MODEL_UPDATED
+ *
+ * @param APP_MSG_T img_recv_msg
+ * @return APP_MSG_DEST_T send_msg
+ */
+static APP_MSG_DEST_T handleEventForNNUpdate(APP_MSG_T img_recv_msg) {
+    APP_MSG_DEST_T send_msg;
+    APP_MSG_EVENT_E event;
+
+    event = img_recv_msg.msg_event;
+    send_msg.destination = NULL;
+
+    switch (event) {
+
+    case APP_MSG_IMAGETASK_NN_MODEL_UPDATED:
+        image_task_state = APP_IMAGE_TASK_STATE_INIT;
+        // do we do cv_init(); here?
+
+    	break;
+
+    default:
+        flagUnexpectedEvent(img_recv_msg);
+        break;
+    }
+
+    return send_msg;
+}
+#endif
 
 /**
  * Implements state machine for APP_IMAGE_TASK_STATE_WAIT_FOR_TIMER
@@ -1124,8 +1181,7 @@ static APP_MSG_DEST_T handleEventForNNUpdate(APP_MSG_T img_recv_msg)
  * @param APP_MSG_T img_recv_msg
  * @return APP_MSG_DEST_T send_msg
  */
-static APP_MSG_DEST_T handleEventForWaitForTimer(APP_MSG_T img_recv_msg)
-{
+static APP_MSG_DEST_T handleEventForWaitForTimer(APP_MSG_T img_recv_msg) {
     APP_MSG_DEST_T send_msg;
     APP_MSG_EVENT_E event;
 

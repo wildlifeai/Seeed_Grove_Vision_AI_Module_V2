@@ -249,6 +249,7 @@ static BaseType_t prvSetgps(char *pcWriteBuffer, size_t writeBufferLen, const ch
 static BaseType_t prvGetgps(char *writeBuffer, size_t writeBufferLen, const char *commandString);
 static BaseType_t prvExifGpsTests(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 static BaseType_t prvLoadModel(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
+static BaseType_t prvEraseModel(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 
 
 static BaseType_t prvSetOpParam(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
@@ -415,6 +416,14 @@ static const CLI_Command_Definition_t xLoadModel = {
 	"loadmodel <ID> <version>:\r\n Specify NN model to load from SD card (e.g., loadmodel 12 34 loads 21V34.TFL).\n",
 	prvLoadModel, /* The function to run. */
 	2			  /* Two parameters expected */
+};
+
+/* Structure that defines the "erasemodel" command line command. */
+static const CLI_Command_Definition_t xEraseModel = {
+	"erasemodel", /* The command string to type. */
+	"erasemodel:\r\n Erases model from flash\n",
+	prvEraseModel, /* The function to run. */
+	0			  /* No parameters expected */
 };
 
 
@@ -1506,6 +1515,31 @@ static BaseType_t prvLoadModel(char *pcWriteBuffer, size_t xWriteBufferLen, cons
 	return pdFALSE;
 }
 
+
+/**
+ * Erase the NN model
+ */
+static BaseType_t prvEraseModel(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) {
+	(void)pcCommandString;
+	(void)xWriteBufferLen;
+	configASSERT(pcWriteBuffer);
+
+	APP_MSG_T send_msg;
+
+	// Now send a message to Image Task Queue
+	send_msg.msg_event = APP_MSG_IMAGETASK_NN_UPDATE_MODEL;
+
+	if (xQueueSend(xImageTaskQueue, (void *)&send_msg, __QueueSendTicksToWait) == pdTRUE) {
+		snprintf(pcWriteBuffer, xWriteBufferLen, "Requested NN model is erased");
+	}
+	else {
+		snprintf(pcWriteBuffer, xWriteBufferLen, "Failed to send model erase request");
+	}
+
+	/* There is no more data to return after this single string, so return pdFALSE. */
+	return pdFALSE;
+}
+
 /********************************** Private Functions - Other *************************************/
 
 /**
@@ -1942,7 +1976,8 @@ static void vRegisterCLICommands(void)
 	FreeRTOS_CLIRegisterCommand(&xSetGps);
 	FreeRTOS_CLIRegisterCommand(&xGetGps);
 	FreeRTOS_CLIRegisterCommand(&xGpsTests); // Runs several UTC tests
-	FreeRTOS_CLIRegisterCommand(&xLoadModel); // Load model by version number
+	FreeRTOS_CLIRegisterCommand(&xLoadModel); // Load NN model by project and version number
+	FreeRTOS_CLIRegisterCommand(&xEraseModel); // Erase NN model
 	FreeRTOS_CLIRegisterCommand(&xSetUtc);		// Sets time from a UTC string
 	FreeRTOS_CLIRegisterCommand(&xGetUtc);	// Prints UTC time (once)
 

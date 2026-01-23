@@ -87,11 +87,45 @@ jobs:
           echo "GCC Bin Dir: $BIN_DIR"
           echo "GNU_TOOLPATH=$BIN_DIR/" >> $GITHUB_ENV
 
+      - name: Verify Build Configuration
+        working-directory: ./EPII_CM55M_APP_S
+        run: |
+          echo "=== Makefile Configuration ==="
+          echo "PROJECT_FOLDER:"
+          grep '^PROJECT_FOLDER' makefile | grep -v '^#' || true
+          echo ""
+          echo "APP_TYPE check in ww.mk:"
+          grep '^APP_TYPE' app/ww_projects/ww.mk | grep -v '^#' || true
+          echo ""
+          echo "CIS_SUPPORT_INAPP_MODEL check in ww500_md.mk:"
+          grep 'CIS_SUPPORT_INAPP_MODEL' app/ww_projects/ww500_md/ww500_md.mk | grep -v '^#' || true
+          echo ""
+          echo "Expected APPL_DEFINES with HM0360:"
+          grep 'APPL_DEFINES.*HM0360' app/ww_projects/ww500_md/ww500_md.mk || echo "WARNING: No HM0360 defines found!"
+
       - name: Build Firmware (Make)
         working-directory: ./EPII_CM55M_APP_S
         run: |
-          # Use the discovered toolchain path
-          make -j4 GNU_TOOLPATH="${{ env.GNU_TOOLPATH }}"
+          # Use the discovered toolchain path with verbose output
+          echo "Building with verbose output to verify preprocessor defines..."
+          make -j4 V=1 GNU_TOOLPATH="${{ env.GNU_TOOLPATH }}" 2>&1 | tee build.log
+          
+          echo ""
+          echo "=== Checking for USE_HM0360_MD in build flags ==="
+          if grep -i "USE_HM0360" build.log; then
+            echo "✓ USE_HM0360 flags found in build!"
+          else
+            echo "⚠ WARNING: USE_HM0360_MD not found in build flags!"
+            echo "This may explain why HM0360 sensor initialization fails."
+          fi
+
+      - name: Upload Build Log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: EPII_CM55M_APP_S/build.log
+          retention-days: 7
 
       - name: Fetch Correct DPD Image Gen Tool
         run: |
@@ -104,6 +138,25 @@ jobs:
           
           echo "Cleaning up..."
           rm -rf temp_tools
+
+      - name: Analyze Binary Before Image Gen
+        run: |
+          echo "=== Analyzing compiled binary for HM0360 references ==="
+          ELF_FILE="EPII_CM55M_APP_S/obj_epii_evb_icv30_bdv10/gnu_epii_evb_WLCSP65/EPII_CM55M_gnu_epii_evb_WLCSP65_s.elf"
+          if [ -f "$ELF_FILE" ]; then
+            ls -lh "$ELF_FILE"
+            echo ""
+            echo "Searching for HM0360-related strings in ELF:"
+            if strings "$ELF_FILE" | grep -i "hm0360"; then
+              echo "✓ HM0360 strings found in compiled binary"
+            else
+              echo "⚠ WARNING: No HM0360 strings found in ELF file!"
+              echo "This confirms the HM0360 code was NOT compiled into the binary."
+            fi
+          else
+            echo "ERROR: ELF file not found at $ELF_FILE"
+            exit 1
+          fi
 
       - name: Copy ELF to Image Gen Input Directory
         run: |
@@ -119,6 +172,23 @@ jobs:
           chmod -R +x .
           # Run the image generation tool
           ./we2_local_image_gen project_case1_blp_wlcsp_rc24m.json
+
+      - name: Analyze Generated Image
+        run: |
+          echo "=== Analyzing generated firmware image ==="
+          IMG_FILE=$(find ./we2_image_gen_local_dpd/output_case1_sec_wlcsp -name "output.img" | head -n 1)
+          if [ -n "$IMG_FILE" ] && [ -f "$IMG_FILE" ]; then
+            ls -lh "$IMG_FILE"
+            echo ""
+            echo "Searching for HM0360-related strings in IMG:"
+            if strings "$IMG_FILE" | grep -i "hm0360"; then
+              echo "✓ HM0360 strings found in firmware image"
+            else
+              echo "⚠ WARNING: No HM0360 strings found in IMG file!"
+            fi
+          else
+            echo "WARNING: Could not find generated image file"
+          fi
 
       - name: Find Generated Image
         id: find_image

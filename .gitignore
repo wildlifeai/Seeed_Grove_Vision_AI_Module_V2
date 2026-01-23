@@ -45,13 +45,22 @@ we2_image_gen_local/Images*.txt
 *.map
 *.img
 
-# ---- Generated DPD content ----
-# Ignore everything under this tree
-we2_image_gen_local_dpd/**
+# ---------------------------
+# DPD generated files
+# ---------------------------
 
-# But keep the golden reference image
+# Ignore everything inside output_case1_sec_wlcsp
+we2_image_gen_local_dpd/output_case1_sec_wlcsp/**
+
+# But keep the folder itself
 !we2_image_gen_local_dpd/output_case1_sec_wlcsp/
+
+# Keep the golden reference image
 !we2_image_gen_local_dpd/output_case1_sec_wlcsp/output.img
+
+# Track all other subfolders normally (do not ignore their contents)
+# No need to do anything else — they are tracked by default
+
 
 # Editor config
 .vscode/

@@ -2539,7 +2539,7 @@ static void processNNOutput(int8_t * outCategories, uint8_t classCount) {
 	fatfs_incrementOperationalParameter(OP_PARAMETER_NUM_NN_ANALYSES);
 
 	for (uint8_t i=0; i < classCount; i++) {
-		xprintf("Class %d = logit %d\n", i, outCategories[i]);
+		xprintf("Class %d '%s' = logit %d\n", i, cv_getLabel(i), outCategories[i]);
 	}
 
 	// NOTE this only works for the person detection

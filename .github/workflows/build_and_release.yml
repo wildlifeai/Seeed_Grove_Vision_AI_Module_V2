@@ -5,6 +5,7 @@ on:
     branches:
       - dev
       - 'fix/firmware-upload-ci'
+      - 'no-model-load'
   workflow_dispatch: # Allow manual triggering
 
 jobs:
@@ -127,32 +128,21 @@ jobs:
           path: EPII_CM55M_APP_S/build.log
           retention-days: 7
 
-      # DISABLED: This was replacing the local tool with an external version that causes slot offset issues
-      # The external tool's bootloader binaries cause firmware to boot from backup slot (0x00100000)
-      # instead of primary slot (0x00000000), breaking model persistence.
-      # - name: Fetch Correct DPD Image Gen Tool
-      #   run: |
-      #     echo "Cloning external repository to get correct image gen tool..."
-      #     git clone --depth 1 https://github.com/stevehuang82/for_wildlife_ai.git temp_tools
-      #     
-      #     echo "Replacing ENTIRE we2_image_gen_local_dpd directory..."
-      #     rm -rf we2_image_gen_local_dpd
-      #     cp -r temp_tools/we2_image_gen_local_dpd .
-      #     
-      #     echo "Cleaning up..."
-      #     rm -rf temp_tools
-
-      - name: Verify Using Local Image Gen Tool
+      - name: Setup Correct Image Gen Tool
         run: |
-          echo "=== Verifying we2_image_gen_local_dpd tool ===" 
-          if [ -f "we2_image_gen_local_dpd/we2_local_image_gen" ]; then
-            echo "✓ Using LOCAL committed we2_image_gen_local_dpd (same as Eclipse)"
-            echo "  This should produce firmware that boots from primary slot (0x00000000)"
-          else
-            echo "✗ ERROR: we2_image_gen_local_dpd tool not found!"
-            echo "  Make sure this directory is committed to the repository"
-            exit 1
-          fi
+          echo "=== Setting up hybrid toolchain ==="
+          echo "1. Fetching external tool (contains working Linux binary)..."
+          git clone --depth 1 https://github.com/stevehuang82/for_wildlife_ai.git temp_tools
+          
+          echo "2. Copying ONLY the Linux binary to our local directory..."
+          # We prefer our local config/bootloaders, but need the working executable
+          cp temp_tools/we2_image_gen_local_dpd/we2_local_image_gen we2_image_gen_local_dpd/
+          
+          echo "3. Cleaning up external repo..."
+          rm -rf temp_tools
+          
+          echo "4. Verifying execution permissions..."
+          chmod +x we2_image_gen_local_dpd/we2_local_image_gen
 
 
       - name: Analyze Binary Before Image Gen

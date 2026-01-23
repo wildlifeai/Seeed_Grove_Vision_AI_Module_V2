@@ -156,8 +156,10 @@ static SemaphoreHandle_t xSPIMutex = NULL;
 static int g_project_id = 0;
 static int g_deploy_version = 0;
 
+#ifdef USE_PERCENTAGE
 // Global to store the last confidence data for EXIF
 static ClassConfidenceData g_last_confidence_data = {0};
+#endif // USE_PERCENTAGE
 
 static bool coldBoot;
 
@@ -207,6 +209,9 @@ static inline uint32_t phys_to_virt(uint32_t phys) {
 	return phys - FLASH_PHYSICAL_BASE + FLASH_VIRTUAL_BASE;
 }
 
+#ifdef USE_PERCENTAGE
+static void outputAsPercentage(TfLiteTensor *output);
+#endif // USE_PERCENTAGE
 
 /*************************************** Local Function Definitions  *************************************/
 
@@ -2373,7 +2378,7 @@ int cv_deinit(void) {
  * @param categoriesCount = size of the array
  * @return error code
  */
-TfLiteStatus cv_run(int8_t *outCategories, uint16_t categoriesCount) {
+TfLiteStatus cv_run(int8_t *outCategories, uint8_t *categoriesCount) {
 
 	uint16_t input_height = 0;
 	uint16_t input_width = 0;
@@ -2450,6 +2455,54 @@ TfLiteStatus cv_run(int8_t *outCategories, uint16_t categoriesCount) {
     // See here for how TFLM can process outputs:
     // https://chatgpt.com/share/69670b6b-2034-8005-a63b-7c09e3f76cf1
 
+#ifdef USE_PERCENTAGE
+    // Moved all of the percentage processing to its own function
+    outputAsPercentage(output);
+#endif // USE_PERCENTAGE
+
+
+#if ORIGINAL
+    // retrieve output data
+    int8_t model_score = output->data.int8[1];
+    // CGP not used int8_t no_model_score = output->data.int8[0];
+
+    // CGP add some colour to highlight this message
+    if (model_score > 0)
+    {
+        XP_LT_GREEN;
+        xprintf("TARGET OBJECT DETECTED!\n\n");
+    }
+    else
+    {
+        XP_LT_RED;
+        xprintf("No target object detected.\n\n");
+    }
+    XP_WHITE;
+
+    xprintf("model_score: %d\n", model_score);
+
+    // error_reporter not declared...
+    //	error_reporter->Report(
+    //		   "   model score: %d, no model score: %d\n", model_score, no_model_score);
+#else
+    // Write the class count to the caller
+    * categoriesCount = metaDataFlash->class_count;
+
+    for (uint8_t i = 0; i < metaDataFlash->class_count; i++)  {
+        outCategories[i] = output->data.int8[i];
+    }
+#endif
+
+    return invoke_status;
+}
+
+#ifdef USE_PERCENTAGE
+/**
+ * Converts the output tensor to confidence levels expressed as percentages.
+ *
+ * Output are written to the global g_last_confidence_data
+ */
+static void outputAsPercentage(TfLiteTensor *output) {
     //  For int8 output tensor
     int8_t *results = output->data.int8;
     // 2D data use data[1] 1D data use data[0]
@@ -2523,44 +2576,9 @@ TfLiteStatus cv_run(int8_t *outCategories, uint16_t categoriesCount) {
         }
     }
     XP_WHITE;
-
-#if ORIGINAL
-    // retrieve output data
-    int8_t model_score = output->data.int8[1];
-    // CGP not used int8_t no_model_score = output->data.int8[0];
-
-    // CGP add some colour to highlight this message
-    if (model_score > 0)
-    {
-        XP_LT_GREEN;
-        xprintf("TARGET OBJECT DETECTED!\n\n");
-    }
-    else
-    {
-        XP_LT_RED;
-        xprintf("No target object detected.\n\n");
-    }
-    XP_WHITE;
-
-    xprintf("model_score: %d\n", model_score);
-
-    // error_reporter not declared...
-    //	error_reporter->Report(
-    //		   "   model score: %d, no model score: %d\n", model_score, no_model_score);
-#else
-    // TODO - must process > 2 categories!
-    if (categoriesCount != CATEGORIESCOUNT)   {
-        return kTfLiteError; // error
-    }
-
-    for (uint8_t i = 0; i < categoriesCount; i++)  {
-        outCategories[i] = output->data.int8[i];
-    }
-#endif
-
-    return invoke_status;
 }
 
+#endif // USE_PERCENTAGE
 
 /**
  * Checks if a model is loaded
@@ -2588,6 +2606,7 @@ void cv_set_model_info(int project_id, int deploy_version) {
     }
 }
 
+#ifdef USE_PERCENTAGE
 // Public getter for confidence data (for EXIF)
 bool cv_get_confidence_data(ClassConfidenceData *data) {
     if (data != nullptr) {
@@ -2596,4 +2615,22 @@ bool cv_get_confidence_data(ClassConfidenceData *data) {
     }
     return false;
 }
+
+#else
+/**
+ * Return pointer to the class label
+ *
+ * @param index index to the labels
+ * @return pointer to the string
+ */
+const char * cv_getLabel(uint8_t index) {
+	if (index < MAX_CLASSES) {
+		return metaDataFlash->labels[index];
+	}
+	else {
+		return "";
+	}
+}
+
+#endif // USE_PERCENTAGE
 

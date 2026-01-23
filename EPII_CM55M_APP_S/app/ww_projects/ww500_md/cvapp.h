@@ -46,6 +46,14 @@ extern "C" {
 #define LABEL_MAGIC    0x4C41424C  // "LABL" - interestingly, treated as a LE so appears as 4C 42 43 4C in memory
 #define MAX_MODEL_NAME_LEN		13
 
+// Enable/disable transforming of tensor output to percentages
+// Uncomment this to use percentages
+// CGP 24/1/26 - Disable this. Use logits instead
+// When debugged, remove this code
+//#define USE_PERCENTAGE
+
+#ifdef USE_PERCENTAGE
+
 #if 1
 // Structure to hold class confidence scores
 typedef struct {
@@ -64,6 +72,8 @@ typedef struct {
 
 #endif
 
+#endif // USE_PERCENTAGE
+
 /********************************** Public Functions Declarations *************************************/
 
 int cv_init(bool security_enable, bool privilege_enable, uint16_t project_id, uint16_t deploy_version, APP_WAKE_REASON_E woken);
@@ -74,10 +84,14 @@ void cv_get_model_info(int *project_id, int *deploy_version);
 void cv_set_model_info(int project_id, int deploy_version);
 
 // CGP I am asking the NN processing to return an array
-TfLiteStatus cv_run(int8_t *outCategories, uint16_t categoriesCount);
+TfLiteStatus cv_run(int8_t *outCategories, uint8_t *categoriesCount) ;
 
+#ifdef USE_PERCENTAGE
 // Get the most recent confidence scores with labels
 bool cv_get_confidence_data(ClassConfidenceData *data);
+#else
+const char * cv_getLabel(uint8_t index);
+#endif // USE_PERCENTAGE
 
 // App seeks to erase the start of the model XIP flash area
 void cv_eraseModel(void);

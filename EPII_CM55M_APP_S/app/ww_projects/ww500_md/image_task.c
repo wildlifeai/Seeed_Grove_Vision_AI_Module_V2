@@ -63,8 +63,11 @@
 #include "selfTest.h"
 
 // Enable/disable writing per-class confidence/label EXIF tags (0xF300+)
-// Uncomment this to enable confidence data
+// CGP 24/1/26 - Disable this. All processing of NN output tensor including labels is moved to cvapp.cpp
+// When debugged, remove this code
+#ifdef USE_PERCENTAGE
 #define ENABLE_EXIF_CONFIDENCE
+#endif // USE_PERCENTAGE
 
 /*************************************** Definitions *******************************************/
 
@@ -709,8 +712,7 @@ static APP_MSG_DEST_T handleEventForInit(APP_MSG_T img_recv_msg)
  * @param APP_MSG_T img_recv_msg
  * @return APP_MSG_DEST_T send_msg
  */
-static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg)
-{
+static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
     APP_MSG_DEST_T send_msg;
     APP_MSG_EVENT_E event;
     uint32_t jpeg_addr;
@@ -725,7 +727,9 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg)
     bool skip_nn = false;
 
     // Signed integers
-    int8_t outCategories[CATEGORIESCOUNT];
+    // Can we use a pointer to the output tensor instead?
+    uint8_t classCount;
+    int8_t outCategories[MAX_CLASSES];
 
     event = img_recv_msg.msg_event;
     send_msg.destination = NULL;
@@ -763,15 +767,14 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg)
         // This gets the input image address and dimensions from:
         // app_get_raw_addr(), app_get_raw_width(), app_get_raw_height()
         if (cv_modelLoaded())  {
-        	ret = cv_run(outCategories, CATEGORIESCOUNT);
+        	ret = cv_run(outCategories, &classCount);
+        	xprintf("DEBUG: cv_run says there are %d classes\n", classCount);
         }
         else  {
         	xprintf("Skipping NN processing (no model loaded).\n");
         	// TBP - this is hacky but it works for now, could get revised
         	ret = kTfLiteOk; // Treat as successful but no predictions
         	skip_nn = true;
-        	outCategories[0] = 0;
-        	outCategories[1] = 0;
         }
 
         elapsedTime = xTaskGetTickCount() - startTime;
@@ -782,10 +785,11 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg)
         		// OK
         		fatfs_incrementOperationalParameter(OP_PARAMETER_NUM_NN_ANALYSES);
 
+        		// NOTE this only works for the person detection
         		if (outCategories[1] > 0)  {
         			XP_LT_GREEN;
         			xprintf("TARGET OBJECT DETECTED!\n");
-        			// NOTE this only works if CATEGORIESCOUNT == 2
+
         			fatfs_incrementOperationalParameter(OP_PARAMETER_NUM_POSITIVE_NN_ANALYSES);
         			// nnPositive = true;
 
@@ -858,7 +862,7 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg)
         SCB_InvalidateDCache_by_Addr((void *)jpeg_addr, jpeg_sz);
 
         // JPEF buffer exists but this will insert EXIF data and increase jpeg_sz
-        exif_len = insertExif(jpeg_sz, jpeg_addr, outCategories, CATEGORIESCOUNT);
+        exif_len = insertExif(jpeg_sz, jpeg_addr, outCategories, classCount);
 
         // Determine which buffer to use based on whether EXIF insertion succeeded
         uint32_t buffer_to_write;
@@ -2315,13 +2319,13 @@ static void create_gps_ifd(uint8_t *gps_ifd_start)
 static uint16_t build_exif_segment(int8_t *outCategories, uint8_t categoriesCount) {
     char timestamp[EXIFSTRINGLENGTH] = {0}; // 22:20:36 2025:07:06 = 19 characters plus trailing \0
     uint16_t exif_len;
-    uint8_t nnData[CATEGORIESCOUNT + 2];
+    uint8_t nnData[MAX_CLASSES + 2];
 
     // IFD count: base entries (9) + UserComment (1 if has confidence data) + DeploymentID (1 if has deployment ID)
     uint16_t dynamic_ifd_count = IFD0_ENTRY_COUNT;	// 9
 
     // Insert the NN data (raw scores for backwards compatibility)
-    if (categoriesCount > CATEGORIESCOUNT)  {
+    if (categoriesCount > MAX_CLASSES)  {
         // error
         nnData[0] = 1;
         nnData[1] = 0;
@@ -2344,7 +2348,9 @@ static uint16_t build_exif_segment(int8_t *outCategories, uint8_t categoriesCoun
     // This prevents stack overflow during memory-intensive operations like manifest unzip.
     // TODO resolve the above cleanly
     static ClassConfidenceData confidence_data;
+
     static char user_comment[256]; // Buffer for UserComment string
+
     bool has_confidence_data;
 
     memset(&confidence_data, 0, sizeof(confidence_data));
@@ -2477,6 +2483,45 @@ static uint16_t build_exif_segment(int8_t *outCategories, uint8_t categoriesCoun
         xprintf("EXIF: Adding UserComment (%d classes): '%s'\n", confidence_data.class_count, user_comment);
         addIFD(TAG_USER_COMMENT, ifd_start + (entry++ * 12), user_comment);
     }
+#else
+    // Create an IFD containing the NN output tensor plus class labels
+    // TODO is it best to use TAG_USER_COMMENT or make a new tag?
+#define EXIF_COMMENT_LENGTH 256
+    char user_comment[EXIF_COMMENT_LENGTH];
+	user_comment[0] = '\0';
+	size_t offset = 0;
+
+    if (cv_modelLoaded())  {
+
+    	for (uint8_t i = 0; i < categoriesCount; i++) {
+    	    int written = snprintf(
+    	        user_comment + offset,
+    	        EXIF_COMMENT_LENGTH - offset,
+    	        "%s: %d; ",
+				cv_getLabel(i),
+    	        outCategories[i]
+    	    );
+
+    	    if (written < 0) {
+    	        // encoding error
+    	        break;
+    	    }
+
+    	    if ((size_t)written >= EXIF_COMMENT_LENGTH - offset) {
+    	        // buffer full, string truncated
+    	        offset = EXIF_COMMENT_LENGTH - 1;
+    	        break;
+    	    }
+
+    	    offset += written;
+    	}
+
+        xprintf("EXIF: Adding UserComment (%d classes): '%s'\n", categoriesCount, user_comment);
+        addIFD(TAG_USER_COMMENT, ifd_start + (entry++ * 12), user_comment);
+
+        dynamic_ifd_count++; // Add one entry for UserComment
+    }
+
 #endif // ENABLE_EXIF_CONFIDENCE
 
 	// Add deployment ID if present (not all zeros)
@@ -2505,6 +2550,8 @@ static uint16_t build_exif_segment(int8_t *outCategories, uint8_t categoriesCoun
 
     return exif_len;
 }
+
+
 
 /********************************** Public Functions  *************************************/
 

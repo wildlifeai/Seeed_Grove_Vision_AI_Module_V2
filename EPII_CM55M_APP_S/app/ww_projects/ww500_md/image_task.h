@@ -40,7 +40,8 @@ typedef enum {
 } APP_IMAGE_TASK_STATE_E;
 
 // The number of neural network output categories
-#define CATEGORIESCOUNT 2
+// replaced with MAX_CLASSES
+//#define CATEGORIESCOUNT 2
 
 // Sets limits for the capture command
 #define MIN_IMAGE_CAPTURES 1

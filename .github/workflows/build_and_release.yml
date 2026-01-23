@@ -128,21 +128,17 @@ jobs:
           path: EPII_CM55M_APP_S/build.log
           retention-days: 7
 
-      - name: Setup Correct Image Gen Tool
+      - name: Verify Using Local Image Gen Tool
         run: |
-          echo "=== Setting up hybrid toolchain ==="
-          echo "1. Fetching external tool (contains working Linux binary)..."
-          git clone --depth 1 https://github.com/stevehuang82/for_wildlife_ai.git temp_tools
-          
-          echo "2. Copying ONLY the Linux binary to our local directory..."
-          # We prefer our local config/bootloaders, but need the working executable
-          cp temp_tools/we2_image_gen_local_dpd/we2_local_image_gen we2_image_gen_local_dpd/
-          
-          echo "3. Cleaning up external repo..."
-          rm -rf temp_tools
-          
-          echo "4. Verifying execution permissions..."
-          chmod +x we2_image_gen_local_dpd/we2_local_image_gen
+          echo "=== Verifying we2_image_gen_local_dpd tool ===" 
+          if [ -f "we2_image_gen_local_dpd/we2_local_image_gen" ]; then
+            echo "✓ Using LOCAL committed we2_image_gen_local_dpd (same as Eclipse)"
+            echo "  This should produce firmware that boots from primary slot (0x00000000)"
+          else
+            echo "✗ ERROR: we2_image_gen_local_dpd tool not found!"
+            echo "  Make sure this directory is committed to the repository"
+            exit 1
+          fi
 
 
       - name: Analyze Binary Before Image Gen
@@ -170,6 +166,20 @@ jobs:
           mkdir -p we2_image_gen_local_dpd/input_case1_secboot/
           cp EPII_CM55M_APP_S/obj_epii_evb_icv30_bdv10/gnu_epii_evb_WLCSP65/EPII_CM55M_gnu_epii_evb_WLCSP65_s.elf \
              we2_image_gen_local_dpd/input_case1_secboot/ # Destination must exist in repo
+
+      - name: Patch Config Paths for Linux
+        run: |
+          echo "=== Patching JSON config files for Linux ==="
+          # The local tool on Linux (CI) cannot handle Windows backslashes in JSON paths.
+          # We dynamically replace '\' with '/' just for this build.
+          
+          echo "Patching project_case1_blp_wlcsp_rc24m.json..."
+          sed -i 's|\\|/|g' we2_image_gen_local_dpd/project_case1_blp_wlcsp_rc24m.json
+          
+          echo "Patching partition_case1_secboot_blp_wlcsp_nodiv_rc24m.json..."
+          sed -i 's|\\|/|g' we2_image_gen_local_dpd/input_case1_secboot/json/partition_case1_secboot_blp_wlcsp_nodiv_rc24m.json
+          
+          echo "✓ Patch applied successfully"
 
       - name: Generate Firmware Image
         working-directory: ./we2_image_gen_local_dpd

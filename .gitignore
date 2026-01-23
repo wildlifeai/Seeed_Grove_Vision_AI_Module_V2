@@ -1,7 +1,7 @@
-# Ignore the .metadata directory 
+# Ignore the .metadata directory
 .metadata/
 
-# These are desciptions of the chip
+# These are descriptions of the chip
 *.svd
 
 # Prerequisites
@@ -45,8 +45,15 @@ we2_image_gen_local/Images*.txt
 *.map
 *.img
 
-we2_image_gen_local_dpd/
+# ---- Generated DPD content ----
+# Ignore everything under this tree
+we2_image_gen_local_dpd/**
 
+# But keep the golden reference image
+!we2_image_gen_local_dpd/output_case1_sec_wlcsp/
+!we2_image_gen_local_dpd/output_case1_sec_wlcsp/output.img
+
+# Editor config
 .vscode/
 
 # Node.js dependencies

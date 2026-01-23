@@ -2361,7 +2361,7 @@ int cv_deinit(void) {
 /**
  * This runs the neural network processing.
  *
- * The function gets the address and dimesnions of the image from
+ * The function gets the address and dimensions of the image from
  * app_get_raw_addr(), app_get_raw_width(), app_get_raw_height()
  *
  * It rescales the image to INPUT_SIZE_X, INPUT_SIZE_Y
@@ -2408,29 +2408,6 @@ TfLiteStatus cv_run(int8_t *outCategories, uint16_t categoriesCount) {
 			app_get_raw_width(), app_get_raw_height(), app_get_raw_sz());
 
 	xprintf("Input tensor is %d x %d (%d channels)\n", input_height, input_width, input_channels);
-
-    // give image to input tensor
-    /*
-    void img_rescale(
-            const uint8_t*in_image,
-            const int32_t width,
-            const int32_t height,
-            const int32_t nwidth,		96
-            const int32_t nheight,		96
-            int8_t*out_image,
-            const int32_t nxfactor,
-            const int32_t nyfactor)
-
-     */
-
-//    img_rescale((uint8_t *)app_get_raw_addr(),
-//                app_get_raw_width(),
-//                app_get_raw_height(),
-//                INPUT_SIZE_X,
-//                INPUT_SIZE_Y,
-//                input->data.int8,
-//                SC(app_get_raw_width(), INPUT_SIZE_X),
-//                SC(app_get_raw_height(), INPUT_SIZE_Y));
 
 	// TODO - consider hx_lib_image_resize_helium() etc - could be faster.
     img_rescale((uint8_t *)app_get_raw_addr(),

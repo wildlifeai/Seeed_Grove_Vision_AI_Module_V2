@@ -189,6 +189,7 @@ static void sleepNow(void);
 static void captureSequenceComplete(void);
 
 static void changeEnableState(bool setEnabled);
+static void processNNOutput(int8_t * outCategories, uint8_t classCount);
 
 /*************************************** Local EXIF-related Declarations *****************************/
 
@@ -782,34 +783,7 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
 
         if (!skip_nn)  {
         	if (ret == kTfLiteOk)  {
-        		// OK
-        		fatfs_incrementOperationalParameter(OP_PARAMETER_NUM_NN_ANALYSES);
-
-        		// NOTE this only works for the person detection
-        		if (outCategories[1] > 0)  {
-        			XP_LT_GREEN;
-        			xprintf("TARGET OBJECT DETECTED!\n");
-
-        			fatfs_incrementOperationalParameter(OP_PARAMETER_NUM_POSITIVE_NN_ANALYSES);
-        			// nnPositive = true;
-
-        			// Send a message to the BLE processor so it can inform the user on the app immediately.
-        			// Also can be used to flash an LED.
-        			snprintf(msgToMaster, MSGTOMASTERLEN, "NN+");
-        			sendMsgToMaster(msgToMaster);
-        		}
-        		else  {
-        			XP_LT_RED;
-        			xprintf("Target object not detected.\n");
-        			XP_WHITE;
-        			// Send a message to the BLE processor so it can inform the user on the app immediately.
-        			// Also can be used to flash an LED.
-        			snprintf(msgToMaster, MSGTOMASTERLEN, "NN-");
-        			sendMsgToMaster(msgToMaster);
-        		}
-
-        		XP_WHITE;
-        		// TODO this is suitable for person detection only - revisit!
+        		processNNOutput(outCategories, classCount) ;
         		xprintf("Score %d/128. NN processing took %dms\n\n", outCategories[1], elapsedMs);
         	}
         	else  {
@@ -2551,7 +2525,49 @@ static uint16_t build_exif_segment(int8_t *outCategories, uint8_t categoriesCoun
     return exif_len;
 }
 
+/**
+ * Do something with the NN output
+ *
+ * TODO should this be in cvapp.cpp?
+ *
+ * @param outCategories - array of logit values
+ * @param classCount - number of classes
+ */
+static void processNNOutput(int8_t * outCategories, uint8_t classCount) {
 
+	// OK
+	fatfs_incrementOperationalParameter(OP_PARAMETER_NUM_NN_ANALYSES);
+
+	for (uint8_t i=0; i < classCount; i++) {
+		xprintf("Class %d = logit %d\n", i, outCategories[i]);
+	}
+
+	// NOTE this only works for the person detection
+	if (outCategories[1] > 0)  {
+		XP_LT_GREEN;
+		xprintf("TARGET OBJECT DETECTED!\n");
+
+		fatfs_incrementOperationalParameter(OP_PARAMETER_NUM_POSITIVE_NN_ANALYSES);
+		// nnPositive = true;
+
+		// Send a message to the BLE processor so it can inform the user on the app immediately.
+		// Also can be used to flash an LED.
+		snprintf(msgToMaster, MSGTOMASTERLEN, "NN+");
+		sendMsgToMaster(msgToMaster);
+	}
+	else  {
+		XP_LT_RED;
+		xprintf("Target object not detected.\n");
+		XP_WHITE;
+		// Send a message to the BLE processor so it can inform the user on the app immediately.
+		// Also can be used to flash an LED.
+		snprintf(msgToMaster, MSGTOMASTERLEN, "NN-");
+		sendMsgToMaster(msgToMaster);
+	}
+
+	XP_WHITE;
+	// TODO this is suitable for person detection only - revisit!
+}
 
 /********************************** Public Functions  *************************************/
 

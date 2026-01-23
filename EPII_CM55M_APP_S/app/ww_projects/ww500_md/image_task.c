@@ -766,7 +766,7 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg)
         	ret = cv_run(outCategories, CATEGORIESCOUNT);
         }
         else  {
-        	xprintf("Skipping NN processing (no model loaded)...\n");
+        	xprintf("Skipping NN processing (no model loaded).\n");
         	// TBP - this is hacky but it works for now, could get revised
         	ret = kTfLiteOk; // Treat as successful but no predictions
         	skip_nn = true;

@@ -323,7 +323,7 @@ jobs:
         run: npm install @supabase/supabase-js
         working-directory: ./scripts
 
-      - name: Prepare Versioned Firmware File
+      - name: Set Firmware Path
         run: |
           # The artifact contains output.img
           FIRMWARE_FILE="./firmware/output.img"
@@ -334,21 +334,9 @@ jobs:
           fi
 
           if [ -n "$FIRMWARE_FILE" ] && [ -f "$FIRMWARE_FILE" ]; then
-            # Rename file to include version (e.g., output.img -> v0.1.2.123_output.img)
-            VERSION="${{ steps.version.outputs.unique_version }}"
-            DIRNAME=$(dirname "$FIRMWARE_FILE")
-            BASENAME=$(basename "$FIRMWARE_FILE")
-            VERSIONED_NAME="${VERSION}_${BASENAME}"
-            VERSIONED_PATH="${DIRNAME}/${VERSIONED_NAME}"
-            
-            mv "$FIRMWARE_FILE" "$VERSIONED_PATH"
-            
-            FULL_PATH=$(readlink -f "$VERSIONED_PATH")
+            FULL_PATH=$(readlink -f "$FIRMWARE_FILE")
             echo "FIRMWARE_PATH=$FULL_PATH" >> "$GITHUB_ENV"
-            echo "✓ Renamed firmware file:"
-            echo "  From: $BASENAME"
-            echo "  To:   $VERSIONED_NAME"
-            echo "  Path: $FULL_PATH"
+            echo "Found firmware at: $FULL_PATH"
           else
             echo "Error: firmware file not found!"
             ls -R ./firmware/

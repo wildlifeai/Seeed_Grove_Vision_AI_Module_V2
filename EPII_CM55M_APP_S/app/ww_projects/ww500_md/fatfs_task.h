@@ -80,7 +80,6 @@ typedef enum {
 	OP_PARAMETER_NUM_ENTRIES		// Not an Operational Parameters - serves to count the of entries above here
 } OP_PARAMETERS_E;
 
-// OP_PARAMETER_MODEL_PROJECT
 /**
  *
 Preliminary discussions between developers suggest that further operational parameters should be added,

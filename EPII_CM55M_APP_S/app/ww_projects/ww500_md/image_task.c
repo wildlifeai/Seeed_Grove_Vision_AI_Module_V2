@@ -248,9 +248,6 @@ uint32_t g_img_data;
 
 static uint16_t g_imageSeqNum; // 0 indicates no SD card
 
-// Flag to track if neural network model is loaded and available
-static bool g_model_loaded = false;
-
 // Semaphore to ensure JPEG buffer is not reused until disk write completes
 static SemaphoreHandle_t xJpegBufferSemaphore = NULL;
 
@@ -274,12 +271,14 @@ const char *imageTaskEventString[APP_MSG_IMAGETASK_LAST - APP_MSG_IMAGETASK_FIRS
     "Image Event ReCapture",
     "Image Event Frame Ready",
     "Image Event Done",
-    "Image Event Disk Write Complete",
+	"Image Event Disk Write Complete",
+	"Image Event Disk Read Complete",
     "Image Event Change Enable",
     "Image Event NN Update Model",
-    "Image Event NN Erase Model",
     "Image Event NN Model Updated",
-    "Image Event Error",
+    "Image Event NN Erase Model",
+    "Image Event NN Model Erased",
+    "Image Event Error"
 };
 
 // There is only one file name for images - this can be declared here - does not need malloc
@@ -669,22 +668,25 @@ static APP_MSG_DEST_T handleEventForInit(APP_MSG_T img_recv_msg)
         break;
 
     case APP_MSG_IMAGETASK_NN_UPDATE_MODEL:
+    	// App tries to update model
         image_task_state = APP_IMAGE_TASK_STATE_UPDATING_NN;
 
         uint16_t project_id = (uint16_t)img_recv_msg.msg_data;
         uint16_t deploy_version = img_recv_msg.msg_parameter;
-        xprintf("DEBUG: request to update to %dV5D.TFL\n", project_id, deploy_version);
-        // Now we must initiate the update. When complete there will be a call to handleEventForNNUpdate()
-
-        // do we do cv_init(); here?
-        cv_init(true, true, project_id, deploy_version, woken);
+        xprintf("Request to update to %dV%d.TFL\n", project_id, deploy_version);
+        // Now we must initiate the update.
+        configure_image_sensor(CAMERA_CONFIG_STOP);
+        cv_newModel(project_id, deploy_version);
         break;
 
     case APP_MSG_IMAGETASK_NN_ERASE_MODEL:
+    	// App tries to erase model
         image_task_state = APP_IMAGE_TASK_STATE_UPDATING_NN;
 
-        xprintf("DEBUG: request to erase model\n");
-        // Now we must initiate the erase. When complete there will be a call to handleEventForNNUpdate()
+        xprintf("Request to erase model\n");
+        // Now we must initiate the erase.
+        configure_image_sensor(CAMERA_CONFIG_STOP);
+        cv_eraseModel();
         break;
 
     default:
@@ -760,64 +762,62 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg)
         // run NN processing only if model is loaded
         // This gets the input image address and dimensions from:
         // app_get_raw_addr(), app_get_raw_width(), app_get_raw_height()
-        if (g_model_loaded)
-        {
-            ret = cv_run(outCategories, CATEGORIESCOUNT);
+        if (cv_modelLoaded())  {
+        	ret = cv_run(outCategories, CATEGORIESCOUNT);
         }
-        else
-        {
-            xprintf("Skipping NN processing (no model loaded).\n");
-            // TBP - this is hacky but it works for now, could get revised
-            ret = kTfLiteOk; // Treat as successful but no predictions
-            skip_nn = true;
-            outCategories[0] = 0;
-            outCategories[1] = 0;
+        else  {
+        	xprintf("Skipping NN processing (no model loaded).\n");
+        	// TBP - this is hacky but it works for now, could get revised
+        	ret = kTfLiteOk; // Treat as successful but no predictions
+        	skip_nn = true;
+        	outCategories[0] = 0;
+        	outCategories[1] = 0;
         }
 
         elapsedTime = xTaskGetTickCount() - startTime;
         elapsedMs = (elapsedTime * 1000) / configTICK_RATE_HZ;
 
-        if (ret == kTfLiteOk)
-        {
-            // OK
-            fatfs_incrementOperationalParameter(OP_PARAMETER_NUM_NN_ANALYSES);
+        if (!skip_nn)  {
+        	if (ret == kTfLiteOk)  {
+        		// OK
+        		fatfs_incrementOperationalParameter(OP_PARAMETER_NUM_NN_ANALYSES);
 
-            if (outCategories[1] > 0)  {
-                XP_LT_GREEN;
-                xprintf("TARGET OBJECT DETECTED!\n");
-                // NOTE this only works if CATEGORIESCOUNT == 2
-                fatfs_incrementOperationalParameter(OP_PARAMETER_NUM_POSITIVE_NN_ANALYSES);
-                // nnPositive = true;
+        		if (outCategories[1] > 0)  {
+        			XP_LT_GREEN;
+        			xprintf("TARGET OBJECT DETECTED!\n");
+        			// NOTE this only works if CATEGORIESCOUNT == 2
+        			fatfs_incrementOperationalParameter(OP_PARAMETER_NUM_POSITIVE_NN_ANALYSES);
+        			// nnPositive = true;
 
-                // Send a message to the BLE processor so it can inform the user on the app immediately.
-                // Also can be used to flash an LED.
-                snprintf(msgToMaster, MSGTOMASTERLEN, "NN+");
-                sendMsgToMaster(msgToMaster);
-            }
-            else  {
-                if (!skip_nn)
-                {
-                    XP_LT_RED;
-                    xprintf("Target object not detected.\n");
-                    XP_WHITE;
-                }
+        			// Send a message to the BLE processor so it can inform the user on the app immediately.
+        			// Also can be used to flash an LED.
+        			snprintf(msgToMaster, MSGTOMASTERLEN, "NN+");
+        			sendMsgToMaster(msgToMaster);
+        		}
+        		else  {
+        			XP_LT_RED;
+        			xprintf("Target object not detected.\n");
+        			XP_WHITE;
+        			// Send a message to the BLE processor so it can inform the user on the app immediately.
+        			// Also can be used to flash an LED.
+        			snprintf(msgToMaster, MSGTOMASTERLEN, "NN-");
+        			sendMsgToMaster(msgToMaster);
+        		}
 
-                // Send a message to the BLE processor so it can inform the user on the app immediately.
-                // Also can be used to flash an LED.
-                snprintf(msgToMaster, MSGTOMASTERLEN, "NN-");
-                sendMsgToMaster(msgToMaster);
-            }
-            XP_WHITE;
-            xprintf("Score %d/128. NN processing took %dms\n\n", outCategories[1], elapsedMs);
-        }
-        else
-        {
-            // NN error.
-            // What do we do here?
-            XP_RED;
-            xprintf("NN error %d. NN processing took %dms\n\n", ret, elapsedMs);
-            XP_WHITE;
-        }
+        		XP_WHITE;
+        		// TODO this is suitable for person detection only - revisit!
+        		xprintf("Score %d/128. NN processing took %dms\n\n", outCategories[1], elapsedMs);
+        	}
+        	else  {
+        		// NN error.
+        		// What do we do here?
+        		// TODO this is suitable for person detection only - revisit!
+        		XP_RED;
+        		xprintf("NN error %d. NN processing took %dms\n\n", ret, elapsedMs);
+        		XP_WHITE;
+        	}
+        } //   if (!skip_nn)
+
 #if defined(USE_HM0360) || defined(USE_HM0360_MD)
         // This is a test to see if/how these change with illumination
         hm0360_md_getGainRegs(&gain);
@@ -864,16 +864,14 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg)
         uint32_t buffer_to_write;
         uint32_t size_to_write;
 
-        if (exif_len > 0)
-        {
+        if (exif_len > 0)  {
             // EXIF insertion succeeded - use combined buffer
             buffer_to_write = (uint32_t)jpeg_exif_buf;
             size_to_write = jpeg_sz + exif_len;
 
             SCB_CleanDCache_by_Addr((void *)jpeg_exif_buf, size_to_write);
         }
-        else
-        {
+        else {
             // EXIF insertion failed - use original JPEG buffer
             xprintf("EXIF insertion failed, using original JPEG buffer\n");
             buffer_to_write = jpeg_addr;
@@ -1149,16 +1147,34 @@ static APP_MSG_DEST_T handleEventForNNUpdate(APP_MSG_T img_recv_msg) {
 static APP_MSG_DEST_T handleEventForNNUpdate(APP_MSG_T img_recv_msg) {
     APP_MSG_DEST_T send_msg;
     APP_MSG_EVENT_E event;
+    uint32_t data;
 
     event = img_recv_msg.msg_event;
+    data = img_recv_msg.msg_data;
     send_msg.destination = NULL;
 
     switch (event) {
 
     case APP_MSG_IMAGETASK_NN_MODEL_UPDATED:
-        image_task_state = APP_IMAGE_TASK_STATE_INIT;
-        // do we do cv_init(); here?
+    	if (data == 0) {
+    		// success - notify BLE
+    		// TODO we might get 0 even if no model fiel was found
+            snprintf(msgToMaster, MSGTOMASTERLEN, "Updated OK");
+    	}
+    	else {
+    		// fail
+            snprintf(msgToMaster, MSGTOMASTERLEN, "Update failed");
+    	}
+        sendMsgToMaster(msgToMaster);
 
+        image_task_state = APP_IMAGE_TASK_STATE_INIT;
+    	break;
+
+    case APP_MSG_IMAGETASK_NN_MODEL_ERASED:
+    	snprintf(msgToMaster, MSGTOMASTERLEN, "Erased OK");
+        sendMsgToMaster(msgToMaster);
+
+        image_task_state = APP_IMAGE_TASK_STATE_INIT;
     	break;
 
     default:
@@ -1263,6 +1279,7 @@ static APP_MSG_DEST_T handleEventForSaveState(APP_MSG_T img_recv_msg)
 
     return send_msg;
 }
+
 
 /**
  * For state machine: Print a red message to see if there are unhandled events we should manage
@@ -1410,8 +1427,7 @@ static void vImageTask(void *pvParameters)
     cameraInitialised = configure_image_sensor(CAMERA_CONFIG_INIT_COLD);
 #endif // USE_HM0360
 
-    if (!cameraInitialised)
-    {
+    if (!cameraInitialised)  {
         // TODO - deep sleep or what?
         selfTest_setErrorBits(1 << SELF_TEST_AI_NO_CAM);
         xprintf("\nEnter DPD mode because there is no camera!\n\n");
@@ -1464,14 +1480,12 @@ static void vImageTask(void *pvParameters)
 			woken);
 
     if (cv_init_result < 0) {
-        xprintf("No model found on SD card. Neural network will be skipped.\n");
+        xprintf("No model found.\n");
         // TODO - do we do this?
         //selfTest_setErrorBits(1 << SELF_TEST_AI_NN_ERROR);
-        g_model_loaded = false;
     }
     else {
         xprintf("Initialised neural network.\n");
-        g_model_loaded = true;
     }
 
     // A value of 0 means no SD card so we can skip all SD card activities
@@ -1594,6 +1608,7 @@ static void vImageTask(void *pvParameters)
         }
     }
 }
+
 
 /**
  * Initialises camera capturing

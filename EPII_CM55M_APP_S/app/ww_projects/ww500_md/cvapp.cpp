@@ -52,6 +52,7 @@
 #include "common_config.h"
 #include "printf_x.h" // Print colours
 #include "ww500_md.h"
+#include "app_msg.h"
 
 /*************************************** Definitions *******************************************/
 
@@ -107,6 +108,9 @@ extern "C" {
 static uint8_t *tensor_arena_buf = &__tensor_arena_start__;
 static size_t tensor_arena_size = (size_t)(&__tensor_arena_end__ - &__tensor_arena_start__);
 
+// These are the handles for the input queues of tasks. So we can send them messages
+extern QueueHandle_t xImageTaskQueue;
+
 /*************************************** C++ Namespace *******************************************/
 
 // #define OLD
@@ -123,7 +127,7 @@ namespace {
     TfLiteTensor *input, *output;
 #else
     struct ethosu_driver ethosu_drv; /* Default Ethos-U device driver */
-    static const tflite::Model *model = nullptr;
+    static const tflite::Model *modelUsed = nullptr;
     static tflite::MicroInterpreter *interpreter = nullptr;
     static tflite::MicroMutableOpResolver<1> *op_resolver_ptr = nullptr;
     static tflite::MicroErrorReporter micro_error_reporter;
@@ -441,6 +445,11 @@ void tflm_print_ethosu_fingerprint(const tflite::Model* model) {
             model->version(), TFLITE_SCHEMA_VERSION);
 
     const auto* subgraphs = model->subgraphs();
+    if (!subgraphs) {
+        xprintf("Subgraphs      : <none>\r\n");
+        return;
+    }
+
     xprintf("Subgraphs      : %d\r\n", subgraphs->size());
 
     if (subgraphs->size() == 0) return;
@@ -824,7 +833,6 @@ static const tflite::Model *load_model_from_sd(char * filename) {
 	}
 
 	return load_model_from_flash();
-
 }
 
 
@@ -982,6 +990,10 @@ int erase_model_flash_area(uint32_t flashSizeRequired) {
             break;
         }
         sector_addr += FLASH_SECTOR_SIZE;
+
+        // Force as task switch which will ensure the inactivity timeout doesn't happen.
+        // Will cause a call to vApplicationTaskSwitchedIn()
+        vTaskDelay(1);
     }
 #endif	// OLD
 
@@ -1156,10 +1168,14 @@ int load_model_from_sd_to_flash(char *filename) {
             return -1;
         }
 
-        // TODO - Why a delay? In any event, use FreeRTOS delay
-        for (volatile int d = 0; d < 10000; ++d)  {
-            asm volatile("nop");
-        }
+//        // TODO - Why a delay? In any event, use FreeRTOS delay
+//        for (volatile int d = 0; d < 10000; ++d)  {
+//            asm volatile("nop");
+//        }
+
+        // Force as task switch which will ensure the inactivity timeout doesn't happen.
+        // Will cause a call to vApplicationTaskSwitchedIn()
+        vTaskDelay(1);
 
         memset(verify_buf, 0, write_size);
         if (hx_lib_spi_eeprom_word_read(spi_inst,
@@ -1894,7 +1910,7 @@ int cv_init(bool security_enable, bool privilege_enable, int project_id, int dep
 	bool any_model_found = false;
 	char filename[IMAGEFILENAMELEN];	// for 8.3 this is 13, including the training \0
 	char manifest_path[10 + IMAGEFILENAMELEN];			// let's restrict this to "/12345678/" then the filename, so 10 + IMAGEFILENAMELEN
-	static const tflite::Model *model = nullptr;
+	static const tflite::Model *modelUsed = nullptr;
 
 	// TODO - consider an arrangement for multiple models in flash
 	xprintf("cv_init called with ProjectID: %d, Version: %d\n", project_id, deploy_version);
@@ -1929,7 +1945,7 @@ int cv_init(bool security_enable, bool privilege_enable, int project_id, int dep
 	//     model = tflite::GetModel((const void *)g_person_detect_model_data_vela);
 
 #if (MODEL_LOAD_MODE == MODEL_FROM_FLASH)
-	model = load_model_from_flash();
+	modelUsed = load_model_from_flash();
 
 #elif (MODEL_LOAD_MODE == MODEL_FROM_SD_CARD)
 
@@ -1975,7 +1991,7 @@ int cv_init(bool security_enable, bool privilege_enable, int project_id, int dep
 	if (!any_model_found) {
 		// TODO - This implies that the SD card must contain a .tfl file for the NN to work - even if there is a model in flash...
 		xprintf("No .TFL model found in MANIFEST folder. Skipping neural network initialiSation.\n");
-		model = nullptr;
+		modelUsed = nullptr;
 		return 1;
 	}
 	else  {
@@ -2009,12 +2025,12 @@ int cv_init(bool security_enable, bool privilege_enable, int project_id, int dep
 			}
 		}
 
-		model = loaded;
+		modelUsed = loaded;
 	}
 
 #endif // MODEL_LOAD_MODE
 
-	if (!model)  {
+	if (!modelUsed)  {
 		xprintf("Failed to load model\n");
 		return -1;
 	}
@@ -2024,17 +2040,17 @@ int cv_init(bool security_enable, bool privilege_enable, int project_id, int dep
 	// Attempt to load labels so results print friendly names
 	load_labels_from_manifest();
 
-	if (model->version() != TFLITE_SCHEMA_VERSION)  {
+	if (modelUsed->version() != TFLITE_SCHEMA_VERSION)  {
 		xprintf("[ERROR] Model's schema version %d is not equal to supported version %d\n",
-				model->version(), TFLITE_SCHEMA_VERSION);
+				modelUsed->version(), TFLITE_SCHEMA_VERSION);
 		return -1;
 	}
 
 #ifdef PRINTMODELFINGERPRINT
 	// Print information about the model
-	tflm_print_ethosu_fingerprint(model);
+	tflm_print_ethosu_fingerprint(modelUsed);
 #else
-	xprintf("Model schema version: %d\n", model->version());
+	xprintf("Model schema version: %d\n", modelUsed->version());
 #endif // PRINTMODELFINGERPRINT
 
 	static tflite::MicroErrorReporter micro_error_reporter;
@@ -2054,7 +2070,7 @@ int cv_init(bool security_enable, bool privilege_enable, int project_id, int dep
 
 	xprintf("DEBUG: 1\n");
 	static tflite::MicroInterpreter *static_interpreter = new tflite::MicroInterpreter(
-			model,
+			modelUsed,
 			*op_resolver_ptr,
 			tensor_arena_buf,
 			tensor_arena_size,
@@ -2091,13 +2107,14 @@ int cv_init(bool security_enable, bool privilege_enable, int project_id, int dep
  *	Initialise TFLM model
  *
  *	The project_id and deploy_version parameters are used to determine the TFLM file name & model name.
- *	These are loaded from CONFIG.TXT or default values (1, 1) are used. Models names are like "123V4.TFL"
+ *	These are loaded from CONFIG.TXT or default values (0, 0) are used. Models names are like "123V4.TFL"
  *	and class labels are stored on SD card as "123V4.TXT"
  *
  *	Then:
  *
  *	Option 1: use named model already in flash
  *	Option 2: or if named model is on SD card, erase the flash and program the new model
+ *		(but don't look for a model if the project_id is 0).
  *	Option 3: or use any existing model is in flash
  *	Option 4: or if no model is available then don't use NN
  *
@@ -2112,19 +2129,26 @@ int cv_init(bool security_enable, bool privilege_enable, int project_id, int dep
  *	@param woken - used to print info only on cold boots
  *	@return 0 for OK, -1 if no NN is used
  */
-int cv_init(bool security_enable, bool privilege_enable, int project_id, int deploy_version, APP_WAKE_REASON_E woken) {
+int cv_init(bool security_enable, bool privilege_enable, uint16_t project_id, uint16_t deploy_version, APP_WAKE_REASON_E woken) {
 	char filename[IMAGEFILENAMELEN];	// for 8.3 this is 13, including the training \0
 	uint32_t model_xip_address;
+
+	// Enforce clean state
+	cv_deinit();
+
+	XP_GREEN;
+	if (project_id == 0) {
+		xprintf("\nNot initialising NN (project ID is 0)\n");
+		XP_WHITE;
+		return -1;
+	}
+	xprintf("\nInitialising NN\n");
+	XP_WHITE;
 
 	// Allow for printing only on cold boots
 	coldBoot = (woken == APP_WAKE_REASON_COLD);
 
-	XP_GREEN;
-	xprintf("\nInitialising NN\n");
-	XP_WHITE;
 
-	// Enforce clean state
-	cv_deinit();
 
 	if (_arm_npu_init(security_enable, privilege_enable) != 0) {
 		return -1;
@@ -2134,16 +2158,15 @@ int cv_init(bool security_enable, bool privilege_enable, int project_id, int dep
 	snprintf(filename, sizeof(filename), "%dV%d.TFL", (int) project_id, (int) deploy_version);
 
 	xprintf("Looking for model '%s' in flash or SD card\n", filename);
-	xprintf("TODO - can we erase flash for testing no model?\n", filename);
 
 	// Option 1: named model is in flash
 	if (is_model_in_flash(filename)) {
 		xprintf("Flash already contains model '%s'; loading from flash.\n", filename);
-		model = load_model_from_flash();
+		modelUsed = load_model_from_flash();
 	}
 	// Option 2: named model is on SD card
 	else if (is_model_in_sd(filename)) {
-		model = load_model_from_sd(filename);
+		modelUsed = load_model_from_sd(filename);
 	}
 	// Option 3: any model is in flash
 	else if(valid_model_in_flash()) {
@@ -2153,7 +2176,7 @@ int cv_init(bool security_enable, bool privilege_enable, int project_id, int dep
 		if (enableXIP(true)) {
 			// The model starts on a 16-byte boundary beyond the meta data
 			model_xip_address = MODEL_XIP_ADDR + align_up(sizeof(ModelMetaData), 16);
-			model = tflite::GetModel((const void *) model_xip_address);
+			modelUsed = tflite::GetModel((const void *) model_xip_address);
 		}
 		else {
 			// Only happens with error
@@ -2168,12 +2191,12 @@ int cv_init(bool security_enable, bool privilege_enable, int project_id, int dep
 	}
 
 #ifdef PRINTMODELFINGERPRINT
-	if (coldBoot) {
+	//if (coldBoot) {
 		// Print information about the model
-		tflm_print_ethosu_fingerprint(model);
-	}
+		tflm_print_ethosu_fingerprint(modelUsed);
+	//}
 #else
-	xprintf("Model schema version: %d\n", model->version());
+	xprintf("Model schema version: %d\n", modelUsed->version());
 #endif // PRINTMODELFINGERPRINT
 
 	// NOTE: some models might need more than  1 of these
@@ -2188,7 +2211,7 @@ int cv_init(bool security_enable, bool privilege_enable, int project_id, int dep
 	}
 
 	interpreter = new tflite::MicroInterpreter(
-			model,
+			modelUsed,
 			*op_resolver_ptr,
 			tensor_arena_buf,
 			tensor_arena_size,
@@ -2209,7 +2232,70 @@ int cv_init(bool security_enable, bool privilege_enable, int project_id, int dep
 }
 #endif // OLD
 
+/*
+ * Erase just enough flash to remove the metadata and the 'TFTl3' in the model header
+ */
+void cv_eraseModel(void) {
+	APP_MSG_T send_msg;
 
+	cv_deinit();
+
+	// We will erase 4k so any number is OK here
+	erase_model_flash_area(8);
+
+	// Update the numbers in the Operational Parameter array. PROJECT_ID 0 means don't look for a model file
+	fatfs_setOperationalParameter(OP_PARAMETER_MODEL_PROJECT, PROJECT_ID);
+	fatfs_setOperationalParameter(OP_PARAMETER_MODEL_VERSION, PROJECT_VER);
+
+	// Now send a message to Image Task Queue so it knows the job is done.
+	send_msg.msg_event = APP_MSG_IMAGETASK_NN_MODEL_ERASED;
+
+	if (xQueueSend(xImageTaskQueue, (void *)&send_msg, __QueueSendTicksToWait) != pdTRUE) {
+		xprintf("Failed to send message 0x%04x\n", send_msg.msg_event);
+	}
+}
+
+
+/*
+ * Erase just enough flash to remove the metadata and the 'TFTl3' in the model header
+ */
+void cv_newModel(uint16_t project_id, uint16_t deploy_version) {
+	APP_MSG_T send_msg;
+	int cv_init_result;
+
+	cv_init_result = cv_init(true, true, project_id, deploy_version, APP_WAKE_REASON_COLD);
+
+	if (cv_init_result < 0) {
+		xprintf("No model found.\n");
+		// TODO - do we do this?
+		//selfTest_setErrorBits(1 << SELF_TEST_AI_NN_ERROR);
+
+		XP_RED;
+		xprintf("----------- MODEL UPDATE FAILED \n");
+		XP_WHITE;
+		// send an error code?
+		send_msg.msg_data = 1;
+	}
+	else {
+		xprintf("Initialised neural network.\n");
+		XP_GREEN;
+		xprintf("-------- MODEL UPDATE SUCCESS\n");
+		XP_WHITE;
+
+		// Update the numbers in the Operational Parameter array otherwise the previous model will be reloaded
+		fatfs_setOperationalParameter(OP_PARAMETER_MODEL_PROJECT, project_id);
+		fatfs_setOperationalParameter(OP_PARAMETER_MODEL_VERSION, deploy_version);
+		// send an error code?
+		send_msg.msg_data = 0;
+	}
+
+	// Now send a message to Image Task Queue so it knows the job is done.
+	send_msg.msg_event = APP_MSG_IMAGETASK_NN_MODEL_UPDATED;
+
+	if (xQueueSend(xImageTaskQueue, (void *)&send_msg, __QueueSendTicksToWait) != pdTRUE) {
+		xprintf("Failed to send message 0x%04x\n", send_msg.msg_event);
+	}
+}
 // Robust deinit: safely release interpreter and tensor resources before model reloads
 int cv_deinit(void) {
 
@@ -2256,7 +2342,7 @@ int cv_deinit(void) {
     	op_resolver_ptr = nullptr;
     }
 
-    model = nullptr;
+    modelUsed = nullptr;
 
     // IMPORTANT: clear tensor arena
     memset(tensor_arena_buf, 0, tensor_arena_size);
@@ -2292,6 +2378,11 @@ TfLiteStatus cv_run(int8_t *outCategories, uint16_t categoriesCount) {
 	uint16_t input_height = 0;
 	uint16_t input_width = 0;
 	uint8_t input_channels = 0;
+
+	if (modelUsed == nullptr) {
+		// can't run!
+		return kTfLiteError;
+	}
 
 	// Some debug info here:
 	// Expect dimensions = 4, with batch, height, width, channels
@@ -2492,6 +2583,16 @@ TfLiteStatus cv_run(int8_t *outCategories, uint16_t categoriesCount) {
 
     return invoke_status;
 }
+
+
+/**
+ * Checks if a model is loaded
+ * @return // True if a model is ready to be used
+ */
+bool cv_modelLoaded(void) {
+	return (modelUsed != nullptr);
+}
+
 // Public getter for other modules to know the current model
 void cv_get_model_info(int *project_id, int *deploy_version) {
     *project_id = g_project_id;

@@ -17,6 +17,12 @@
 extern "C" {
 #endif
 
+// Project ID (last 4 digits only) for model naming convention: <last4digits>V<version>.tfl
+// Example: for project ID 2782, the model file would be named 2782V24.tfl (where 24 is the version)
+// Set this value to match your Edge Impulse project's last 4 digits
+
+#define PROJECT_ID 0
+#define PROJECT_VER 0
 
 // Flash configuration - based on memory map
 #define FLASH_START_SAFE_ADDR   0x00200000  // Physical flash address after 2MB reserved for firmware
@@ -60,7 +66,7 @@ typedef struct {
 
 /********************************** Public Functions Declarations *************************************/
 
-int cv_init(bool security_enable, bool privilege_enable, int project_id, int deploy_version, APP_WAKE_REASON_E woken);
+int cv_init(bool security_enable, bool privilege_enable, uint16_t project_id, uint16_t deploy_version, APP_WAKE_REASON_E woken);
 int cv_deinit(void);
 
 void cv_get_model_info(int *project_id, int *deploy_version);
@@ -72,6 +78,15 @@ TfLiteStatus cv_run(int8_t *outCategories, uint16_t categoriesCount);
 
 // Get the most recent confidence scores with labels
 bool cv_get_confidence_data(ClassConfidenceData *data);
+
+// App seeks to erase the start of the model XIP flash area
+void cv_eraseModel(void);
+
+// App seeks to load a new model
+void cv_newModel(uint16_t project_id, uint16_t deploy_version);
+
+// True if a model is ready to be used
+bool cv_modelLoaded(void);
 
 #ifdef __cplusplus
 }

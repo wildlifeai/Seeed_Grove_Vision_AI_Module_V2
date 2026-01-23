@@ -1315,6 +1315,8 @@ static BaseType_t prvSetOpParam(char *pcWriteBuffer, size_t xWriteBufferLen, con
 
 	// Parameters are valid
 	fatfs_setOperationalParameter(index, value);
+
+	snprintf(pcWriteBuffer, xWriteBufferLen, "Set OpParam %d = %d", index, value);
 	return pdFALSE;
 }
 
@@ -1353,8 +1355,7 @@ static BaseType_t prvGetOpParam(char *pcWriteBuffer, size_t xWriteBufferLen, con
 
 	// Parameters are valid
 	value = fatfs_getOperationalParameter(index);
-	//snprintf(pcWriteBuffer, xWriteBufferLen, "Op Param %d = %d\r\n", index, value);
-	snprintf(pcWriteBuffer, xWriteBufferLen, "OpParam %d = %d", index, value);	// just the value integer
+	snprintf(pcWriteBuffer, xWriteBufferLen, "OpParam %d = %d", index, value);
 
 	return pdFALSE;
 }
@@ -1527,7 +1528,7 @@ static BaseType_t prvEraseModel(char *pcWriteBuffer, size_t xWriteBufferLen, con
 	APP_MSG_T send_msg;
 
 	// Now send a message to Image Task Queue
-	send_msg.msg_event = APP_MSG_IMAGETASK_NN_UPDATE_MODEL;
+	send_msg.msg_event = APP_MSG_IMAGETASK_NN_ERASE_MODEL;
 
 	if (xQueueSend(xImageTaskQueue, (void *)&send_msg, __QueueSendTicksToWait) == pdTRUE) {
 		snprintf(pcWriteBuffer, xWriteBufferLen, "Requested NN model is erased");

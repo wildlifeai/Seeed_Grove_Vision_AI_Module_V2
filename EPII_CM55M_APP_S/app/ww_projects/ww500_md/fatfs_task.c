@@ -204,7 +204,8 @@ uint16_t op_parameter[OP_PARAMETER_NUM_ENTRIES] = {
 	0,				   // 13 LED bit mask: vis=1, IR=2, none=0
 	PROJECT_ID,		   // 14 OP_PARAMETER_MODEL_PROJECT
 	PROJECT_VER,	   // 15 OP_PARAMETER_MODEL_VERSION
-	0, 0, 0, 0,	   // 15-19 Reserved for future use
+	MODEL_THRESHOLD,   // 16 OP_PARAMETER_MODEL_THRESHOLD default
+	0, 0, 0,	   		// 17-19 Reserved for future use
 	0, 0, 0, 0, 0, 0, 0, 0  // 20-27 Deployment ID chunks
 };
 

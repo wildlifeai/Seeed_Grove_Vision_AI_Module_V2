@@ -20,9 +20,10 @@ extern "C" {
 // Project ID (last 4 digits only) for model naming convention: <last4digits>V<version>.tfl
 // Example: for project ID 2782, the model file would be named 2782V24.tfl (where 24 is the version)
 // Set this value to match your Edge Impulse project's last 4 digits
-
 #define PROJECT_ID 0
 #define PROJECT_VER 0
+// Logit value (0-127)
+#define MODEL_THRESHOLD 15
 
 // Flash configuration - based on memory map
 #define FLASH_START_SAFE_ADDR   0x00200000  // Physical flash address after 2MB reserved for firmware

@@ -784,7 +784,7 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
         if (!skip_nn)  {
         	if (ret == kTfLiteOk)  {
         		processNNOutput(outCategories, classCount) ;
-        		xprintf("Score %d/128. NN processing took %dms\n\n", outCategories[1], elapsedMs);
+        		xprintf("NN processing took %dms\n\n", elapsedMs);
         	}
         	else  {
         		// NN error.
@@ -981,8 +981,7 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
  * @param APP_MSG_T img_recv_msg
  * @return APP_MSG_DEST_T send_msg
  */
-static APP_MSG_DEST_T handleEventForNNProcessing(APP_MSG_T img_recv_msg)
-{
+static APP_MSG_DEST_T handleEventForNNProcessing(APP_MSG_T img_recv_msg) {
     APP_MSG_DEST_T send_msg;
     APP_MSG_EVENT_E event;
     uint32_t diskStatus;
@@ -1064,52 +1063,6 @@ static APP_MSG_DEST_T handleEventForNNProcessing(APP_MSG_T img_recv_msg)
     return send_msg;
 }
 
-#if 0
-
-// Handles APP_IMAGE_TASK_STATE_UPDATING_NN: loads a new NN model and returns to INIT state
-static APP_MSG_DEST_T handleEventForNNUpdate(APP_MSG_T img_recv_msg) {
-    APP_MSG_DEST_T send_msg;
-    send_msg.destination = NULL;
-    uint16_t project_id;
-    uint16_t deploy_version;
-
-    project_id = (uint16_t) img_recv_msg.msg_data;
-    deploy_version = (uint16_t) img_recv_msg.msg_parameter;
-
-    xprintf("Requested to update NN model to %dV%d.TFL\n", project_id, deploy_version);
-
-    int result_not = cv_deinit();
-    if (result_not != 0)  {
-        xprintf("Failed to deinit cv\n");
-    }
-
-    // Try to load the new model with project_id and deploy_version
-    int result = cv_init(true, true, project_id, deploy_version, woken);
-
-    if (result == 0)   {
-        // Model loaded successfully - no need to send event, just continue
-        XP_GREEN;
-        xprintf("-------- MODEL UPDATE SUCCESS: %dV%d.tfl---------\n", project_id, deploy_version);
-        XP_WHITE;
-        // Don't send any message - state is already set to INIT
-        send_msg.destination = NULL;
-    }
-    else {
-        // Model load failed, send error event
-        XP_RED;
-        xprintf("----------- MODEL UPDATE FAILED for %dV%d.TFT, sending ERROR event\n", project_id, deploy_version);
-        XP_WHITE;
-        send_msg.message.msg_event = APP_MSG_IMAGETASK_ERROR;
-        send_msg.message.msg_data = project_id;
-        send_msg.message.msg_parameter = deploy_version;
-        send_msg.destination = xImageTaskQueue;
-    }
-
-    // Set state back to INIT
-    image_task_state = APP_IMAGE_TASK_STATE_INIT;
-    return send_msg;
-}
-#else
 
 /**
  * Implements state machine for APP_IMAGE_TASK_STATE_UPDATING_NN
@@ -1136,7 +1089,7 @@ static APP_MSG_DEST_T handleEventForNNUpdate(APP_MSG_T img_recv_msg) {
     case APP_MSG_IMAGETASK_NN_MODEL_UPDATED:
     	if (data == 0) {
     		// success - notify BLE
-    		// TODO we might get 0 even if no model fiel was found
+    		// TODO we might get 0 even if no model file was found
             snprintf(msgToMaster, MSGTOMASTERLEN, "Updated OK");
     	}
     	else {
@@ -1162,7 +1115,7 @@ static APP_MSG_DEST_T handleEventForNNUpdate(APP_MSG_T img_recv_msg) {
 
     return send_msg;
 }
-#endif
+
 
 /**
  * Implements state machine for APP_IMAGE_TASK_STATE_WAIT_FOR_TIMER
@@ -2529,26 +2482,28 @@ static uint16_t build_exif_segment(int8_t *outCategories, uint8_t categoriesCoun
  * Do something with the NN output
  *
  * TODO should this be in cvapp.cpp?
+ * TODO this is suitable for person detection only - revisit!
  *
  * @param outCategories - array of logit values
  * @param classCount - number of classes
  */
 static void processNNOutput(int8_t * outCategories, uint8_t classCount) {
+	uint8_t threshold;
 
-	// OK
+	threshold = fatfs_getOperationalParameter(OP_PARAMETER_MODEL_THRESHOLD);
+
 	fatfs_incrementOperationalParameter(OP_PARAMETER_NUM_NN_ANALYSES);
 
 	for (uint8_t i=0; i < classCount; i++) {
 		xprintf("Class %d '%s' = logit %d\n", i, cv_getLabel(i), outCategories[i]);
 	}
 
-	// NOTE this only works for the person detection
-	if (outCategories[1] > 0)  {
+	// TODO This only works for the person detection
+	if (outCategories[1] > threshold)  {
 		XP_LT_GREEN;
 		xprintf("TARGET OBJECT DETECTED!\n");
 
 		fatfs_incrementOperationalParameter(OP_PARAMETER_NUM_POSITIVE_NN_ANALYSES);
-		// nnPositive = true;
 
 		// Send a message to the BLE processor so it can inform the user on the app immediately.
 		// Also can be used to flash an LED.
@@ -2566,7 +2521,7 @@ static void processNNOutput(int8_t * outCategories, uint8_t classCount) {
 	}
 
 	XP_WHITE;
-	// TODO this is suitable for person detection only - revisit!
+	xprintf("Score %d/128 (Threshold %d)\n", outCategories[1], threshold);
 }
 
 /********************************** Public Functions  *************************************/

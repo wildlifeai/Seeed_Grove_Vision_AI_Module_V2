@@ -64,10 +64,6 @@
 #define LOCAL_FRAQ_BITS (8)
 #define SC(A, B) ((A << 8) / B)
 
-// TODO can we make these in the model file?
-#define INPUT_SIZE_X 96
-#define INPUT_SIZE_Y 96
-
 #ifdef TRUSTZONE_SEC
 #define U55_BASE BASE_ADDR_APB_U55_CTRL_ALIAS
 #else
@@ -84,6 +80,7 @@
 // oRIGINALLY, SOME META DATA WAS STORED THIS NUMBER OF BYTES BEFORE THE MODEL
 #define MODEL_OLD_META_SIZE	24
 
+// Metadata stored in XIP flash just before the model itself.
 typedef struct {
     uint32_t magic;
     uint16_t class_count;
@@ -95,7 +92,6 @@ typedef struct {
 
 // This version becomes available if a valid structure is written to flash - only at the virtual address 0x3A200000
 #define metaDataFlash ((const ModelMetaData *)MODEL_XIP_ADDR)
-
 
 /*************************************** External variables *******************************************/
 
@@ -120,12 +116,6 @@ extern QueueHandle_t xImageTaskQueue;
 using namespace std;
 namespace {
 
-#ifdef OLD
-    struct ethosu_driver ethosu_drv; /* Default Ethos-U device driver */
-    static tflite::MicroInterpreter *interpreter = nullptr;
-    static tflite::MicroMutableOpResolver<1> *op_resolver_ptr = nullptr;
-    TfLiteTensor *input, *output;
-#else
     struct ethosu_driver ethosu_drv; /* Default Ethos-U device driver */
     static const tflite::Model *modelUsed = nullptr;
     static tflite::MicroInterpreter *interpreter = nullptr;
@@ -133,12 +123,9 @@ namespace {
     static tflite::MicroErrorReporter micro_error_reporter;
     TfLiteTensor *input;
     TfLiteTensor *output;
-#endif // OLD
 
-    // Labels loaded from SD (one per line) – used for printing class names
-    static char g_labels[MAX_CLASSES][MAX_LABEL_LEN];
     static uint8_t g_label_count = 0;
-//    static bool g_labels_loaded = false;
+    static uint8_t g_class_count = 0;	// These should be teh same
 };
 
 /*************************************** Local variables *******************************************/
@@ -153,8 +140,8 @@ static SemaphoreHandle_t xSPIMutex = NULL;
 
 // Globals to hold the current model identifiers
 // TODO should these really be 32-bits?
-static int g_project_id = 0;
-static int g_deploy_version = 0;
+static uint16_t g_project_id = 0;
+static uint16_t g_deploy_version = 0;
 
 #ifdef USE_PERCENTAGE
 // Global to store the last confidence data for EXIF
@@ -181,21 +168,12 @@ int init_flash(void);
 static inline uint32_t align_down(uint32_t addr, uint32_t align);
 static inline uint32_t align_up(uint32_t size, uint32_t align);
 static bool file_exists(const char *path);
-static void load_labels_from_manifest(char * filename);
-
-#ifdef OLD
-int read_persisted_model_info(void);
-int write_persisted_model_info(void);
-#endif // OLD
-
-void build_meta_data(ModelMetaData * metaDataRam, const char *model_name,
-                        const char src_labels[MAX_CLASSES][MAX_LABEL_LEN],
-                        uint16_t classCount);
+static uint8_t load_labels_from_manifest(char * filename, char (*labels)[MAX_LABEL_LEN]);
 
 int32_t write_meta_data_to_flash(ModelMetaData * metaDataRam);
 
 static bool copy_model_from_sd_to_flash(char * filename);
-static bool copy_labels_from_sd_to_flash(char * modelName);
+static bool copy_metadata_to_flash(char * modelName);
 
 static bool valid_model_in_flash(void);
 
@@ -212,6 +190,8 @@ static inline uint32_t phys_to_virt(uint32_t phys) {
 #ifdef USE_PERCENTAGE
 static void outputAsPercentage(TfLiteTensor *output);
 #endif // USE_PERCENTAGE
+
+static void tflm_print_ethosu_fingerprint(const tflite::Model* model);
 
 /*************************************** Local Function Definitions  *************************************/
 
@@ -254,13 +234,14 @@ static bool file_exists(const char *path) {
  * The parameter is the model name (ends with '.TFL') and the labels are expected in a file
  * with the same base name but with .TXT ending.
  *
- * If the file exists then the labels are loaded into g_labels[][],
+ * If the file exists then the labels are loaded into the metaDataRam structure
  * the number of labels is in g_label_count
- * and g_labels_loaded is set true
  *
- * @param - pointer to the string containing the model name
+ * @param filename- pointer to the string containing the model name
+ * @param labels - pointer to the metaDataRam structure, labels section
+ * return - number of labels in file (0 if no file etc)
  */
-static void load_labels_from_manifest(char * filename) {
+static uint8_t load_labels_from_manifest(char * filename, char (*labels)[MAX_LABEL_LEN]) {
 
 	char labels_path[MAX_MODEL_NAME_LEN * 2];   // plenty for "/MANIFEST/xxxxxxxx.TXT"
 	char base[MAX_MODEL_NAME_LEN];          // 8.3 name + NUL
@@ -277,7 +258,7 @@ static void load_labels_from_manifest(char * filename) {
 	}
 	else {
 		// Should not happen
-		return;
+		return 0;
 	}
 
 	/* Build full path */
@@ -289,122 +270,21 @@ static void load_labels_from_manifest(char * filename) {
 		uint8_t count = 0;
 		// TODO - labels to flash
         // https://chatgpt.com/share/696d4dca-4900-8005-a0ad-9a211e8a1d9a
-        if (fatfs_load_labels(labels_path, g_labels, &count, MAX_CLASSES, MAX_LABEL_LEN) == 0) {
+        if (fatfs_load_labels(labels_path, labels, &count, MAX_CLASSES, MAX_LABEL_LEN) == 0) {
             g_label_count = count;
-            //g_labels_loaded = (label_count > 0);
             xprintf("Loaded %d labels from %s\n", g_label_count, labels_path);
-            return;
+            return g_label_count;
         }
         else  {
             xprintf("Labels load failed from %s\n", labels_path);
+            return 0;
         }
     }
-    xprintf("No labels found on SD\n");
+	else {
+		xprintf("File %s not found\n", labels_path);
+		return 0;
+	}
 }
-
-#ifdef OLD
-/**
- *  Read the persisted model info from flash
- *
- *  Flash layout:
- *  	project_id (4 bytes)
- *  	deploy_version (4 bytes)
- *  	filename (16 bytes)
- *  	model data...
- */
-int read_persisted_model_info(void) {
-	uint32_t model_info_xip_addr;
-	uint32_t model_info_phys_addr;
-    uint32_t stored_info[2] = {0}; // [0] = project_id, [1] = deploy_version
-
-    if (init_flash() != 0)   {
-        xprintf("Flash init failed, using default model info\n");
-        return -1;
-    }
-
-    // Take semaphore
-    if (xSemaphoreTake(xSPIMutex, portMAX_DELAY) != pdTRUE) {
-        xprintf("Failed to take SPI mutex for read_persisted_model_info\n");
-        return -1;
-    }
-
-    // Disable XIP before SPI read
-    hx_lib_spi_eeprom_enable_XIP(spi_inst, false, FLASH_QUAD, false);
-
-    // Model info is stored 24 bytes before the model data
-    // (4 bytes project_id + 4 bytes version + 16 bytes filename header)
-
-//    uint32_t model_xip_addr = 0x3A200000;
-//    uint32_t model_info_xip_addr = model_xip_addr - 24;
-//    uint32_t model_info_phys_addr = virt_to_phys(model_info_xip_addr);
-
-    // CGP - TODO -surely we should be placing model_info_xip_addr at the start of a EEPROM sector?
-    // TODO - remove magic numbers
-    model_info_xip_addr = MODEL_XIP_ADDR - MODEL_OLD_META_SIZE;
-    model_info_phys_addr = virt_to_phys(model_info_xip_addr);
-
-    if (hx_lib_spi_eeprom_word_read(spi_inst, model_info_phys_addr, stored_info, 8) != 0)  {
-        xprintf("Failed to read persisted model info, using defaults\n");
-        xSemaphoreGive(xSPIMutex);
-        return -1;
-    }
-
-    xSemaphoreGive(xSPIMutex);
-
-    // Basic validation: check if values are not 0xFFFFFFFF (uninitialized)
-    if ((stored_info[0] != 0xFFFFFFFF) && (stored_info[1] != 0xFFFFFFFF)) {
-        g_project_id = stored_info[0];
-        g_deploy_version = stored_info[1];
-        xprintf("Read persisted model info from flash at 0x%08x: Project=%d, Version=%d\n",
-        		model_info_phys_addr, g_project_id, g_deploy_version);
-        return 0;
-    }
-    else  {
-        xprintf("Invalid persisted model info (0x%08lX, 0x%08lX), using defaults\n", stored_info[0], stored_info[1]);
-        return -1;
-    }
-}
-
-// Write the model info to flash
-int write_persisted_model_info() {
-    if (init_flash() != 0)
-    {
-        return -1;
-    }
-
-    // Take semaphore
-    if (xSemaphoreTake(xSPIMutex, portMAX_DELAY) != pdTRUE)
-    {
-        xprintf("Failed to take SPI mutex for write_persisted_model_info\n");
-        return -1;
-    }
-
-    // Disable XIP before write
-    hx_lib_spi_eeprom_enable_XIP(spi_inst, false, FLASH_QUAD, false);
-
-    uint32_t model_xip_addr = MODEL_XIP_ADDR;
-    uint32_t model_info_xip_addr = model_xip_addr - MODEL_OLD_META_SIZE;
-    uint32_t model_info_phys_addr = virt_to_phys(model_info_xip_addr);
-
-    uint32_t info_to_write[2] = {(uint32_t)g_project_id, (uint32_t)g_deploy_version};
-    if (hx_lib_spi_eeprom_word_write(spi_inst, model_info_phys_addr, info_to_write, 8) != 0)
-    {
-        xprintf("Failed to write persisted model info\n");
-        xSemaphoreGive(xSPIMutex);
-        return -1;
-    }
-
-    // Small delay for write to complete
-    for (volatile int d = 0; d < 20000; ++d)
-    {
-        asm volatile("nop");
-    }
-
-    xSemaphoreGive(xSPIMutex);
-    xprintf("Persisted model info to flash: Project=%d, Version=%d\n", g_project_id, g_deploy_version);
-    return 0;
-}
-#endif //OLD
 
 #ifdef PRINTMODELFINGERPRINT
 #include "tensorflow/lite/schema/schema_generated.h"
@@ -438,7 +318,7 @@ static const char* BuiltinOpName(tflite::BuiltinOperator op) {
 }
 
 // Enhanced Ethos-U55-aware fingerprint
-void tflm_print_ethosu_fingerprint(const tflite::Model* model) {
+static void tflm_print_ethosu_fingerprint(const tflite::Model* model) {
     if (!model) {
         xprintf("TFLM: model = NULL\r\n");
         return;
@@ -515,7 +395,9 @@ void tflm_print_ethosu_fingerprint(const tflite::Model* model) {
                 TfLiteTypeName(static_cast<TfLiteType>(t->type())));
         for (uint32_t i = 0; i < t->shape()->size(); i++) {
             xprintf("%d", t->shape()->Get(i));
-            if (i != t->shape()->size() - 1) xprintf(",");
+            if (i != t->shape()->size() - 1) {
+            	xprintf(",");
+            }
         }
         xprintf("]\r\n");
     }
@@ -830,7 +712,7 @@ static const tflite::Model *load_model_from_sd(char * filename) {
 	}
 
 	//	Now try to copy labels from ssVvv.TXT to the meta data area of the XIP flash
-	if (!copy_labels_from_sd_to_flash(filename)) {
+	if (!copy_metadata_to_flash(filename)) {
 		xprintf("SD labels->flash copy failed for %s\n", filename);
 	}
 	else {
@@ -1587,44 +1469,6 @@ static bool enableXIP(bool enable) {
 
 /********************************** Functions to support saving and fetching meta data from flash ********/
 
-
-/**
- *
- * @param model_name - string containing model name e.g. 12V23.TFL
- * @param src_labels - array of strings containing class names, read from SD card LABELS.TXT
- * @param classCount - number of classes used
- */
-void build_meta_data(ModelMetaData * metaDataRam, const char *model_name,
-                        const char src_labels[MAX_CLASSES][MAX_LABEL_LEN],
-                        uint16_t class_count) {
-
-    metaDataRam->magic       = LABEL_MAGIC;
-    metaDataRam->class_count = class_count;
-    metaDataRam->label_len   = MAX_LABEL_LEN;
-
-    // Copy model name e.g. 1234V567.TFL - 8.3 format
-    strncpy(metaDataRam->modelName, model_name, MAX_MODEL_NAME_LEN - 1);
-
-    // Copy label strings
-    for (uint8_t i = 0; i < MAX_CLASSES; i++) {
-        strncpy(metaDataRam->labels[i], src_labels[i], MAX_LABEL_LEN - 1);
-    }
-
-    // test that the structure is OK
-	XP_LT_GREY;
-	xprintf("Built this metadata:\n");
-    printf_x_printBuffer((const uint8_t *)metaDataRam, sizeof(ModelMetaData));
-	XP_WHITE;
-
-//    /* Optional CRC over everything except crc field */
-//
-//	crc16_ccitt_generate(gWrite_buf, I2CFMT_PAYLOAD_OFFSET + length, &checksum);
-//
-//    model_labels_ram.crc =
-//        crc32((uint8_t *)&model_labels_ram,
-//              offsetof(FlashModelLabels, crc));
-}
-
 /**
  * Copies the meta object to flash
  *
@@ -1634,7 +1478,6 @@ int32_t write_meta_data_to_flash(ModelMetaData * metaDataRam) {
     uint32_t meta_physical_addr;
     int32_t res;
 
-    //const ModelMetaData *src = &label_table_ram; // label_table_ram
     uint32_t numBytes = sizeof(ModelMetaData);
 
     /* Sanity checks */
@@ -1854,21 +1697,43 @@ static bool copy_model_from_sd_to_flash(char * filename) {
 
 /**
  * Copies model labels from the SD card to the flash memory
+ * Also other metadata.
  *
  * @param modelName = same as filename e.g. '12345V67.TFL'
  * @return true on success
  */
-static bool copy_labels_from_sd_to_flash(char * modelName) {
+static bool copy_metadata_to_flash(char * modelName) {
     ModelMetaData metaDataRam;
+    uint8_t numLabels;
 
     // Initialise
     memset(&metaDataRam, 0, sizeof(ModelMetaData));
 
-    // TODO - copy the labels into metaDataRam
-	load_labels_from_manifest(modelName);
+    metaDataRam.magic       = LABEL_MAGIC;
+    //metaDataRam.class_count = g_class_count;	// This is not yet known!
+    metaDataRam.label_len   = MAX_LABEL_LEN;
 
-	// Place fields into metaDataRam
-	build_meta_data(&metaDataRam, modelName, g_labels, g_label_count);
+    // Copy model name e.g. 1234V567.TFL - 8.3 format
+    strncpy(metaDataRam.modelName, modelName, MAX_MODEL_NAME_LEN - 1);
+
+    // Copy the labels into metaDataRam
+    numLabels = load_labels_from_manifest(modelName, metaDataRam.labels);
+
+    metaDataRam.class_count = numLabels;
+
+    // Optional CRC over everything except crc field
+    //
+    //	crc16_ccitt_generate(gWrite_buf, I2CFMT_PAYLOAD_OFFSET + length, &checksum);
+    //
+    //    model_labels_ram.crc =
+    //        crc32((uint8_t *)&model_labels_ram,
+    //              offsetof(FlashModelLabels, crc));
+
+    // test that the structure is OK
+	XP_LT_GREY;
+	xprintf("Built this metadata:\n");
+    printf_x_printBuffer((uint8_t *)&metaDataRam, sizeof(ModelMetaData));
+	XP_WHITE;
 
 	// Write metaDataRam to flash
 	write_meta_data_to_flash(&metaDataRam);
@@ -1893,220 +1758,6 @@ static bool copy_labels_from_sd_to_flash(char * modelName) {
 }
 
 /********************************** Public Functions  *************************************/
-
-#ifdef OLD
-// Add a flag to track if we've already loaded from SD card
-// TODO - omit as never used
-static bool model_loaded_from_sd = false;
-
-// Optional model number parameter, default to 1
-/**
- *	Initialise TFLM model
- *
- * 	@param security_enable
- *	@param privilege_enable
- *	@param project_id
- *	@param deploy_version
- *	@return 0 for OK
- */
-int cv_init(bool security_enable, bool privilege_enable, int project_id, int deploy_version) {
-	DIR dir;
-	FILINFO fno;
-	bool any_model_found = false;
-	char filename[IMAGEFILENAMELEN];	// for 8.3 this is 13, including the training \0
-	char manifest_path[10 + IMAGEFILENAMELEN];			// let's restrict this to "/12345678/" then the filename, so 10 + IMAGEFILENAMELEN
-	static const tflite::Model *modelUsed = nullptr;
-
-	// TODO - consider an arrangement for multiple models in flash
-	xprintf("cv_init called with ProjectID: %d, Version: %d\n", project_id, deploy_version);
-
-	// On first boot (g_project_id == 0), read the persisted model info from flash
-	if (g_project_id == 0)  {
-		if (read_persisted_model_info() != 0)  {
-			// If flash is empty or invalid, use the values passed to init
-			g_project_id = project_id;
-			g_deploy_version = deploy_version;
-			xprintf("First boot: No valid info in flash, using provided: Project=%d, Version=%d\n",
-					g_project_id, g_deploy_version);
-		}
-	}
-	else if ((project_id != g_project_id) || (deploy_version != g_deploy_version))  {
-		g_project_id = project_id;
-		g_deploy_version = deploy_version;
-		model_loaded_from_sd = false; // reset flag to allow reloading
-		xprintf("------------------------Model changed to Project=%d, Version=%d. Resetting load flag.\n",
-				g_project_id, g_deploy_version);
-	}
-
-	xprintf("cv_init now loading with Project: %d, Version: %d\n", g_project_id, g_deploy_version);
-
-	// Initialise Ethos-U55 device
-	if (_arm_npu_init(security_enable, privilege_enable) != 0) {
-		return -1;
-	}
-
-	// TBP - I've removed the static model data inclusion here and all refernces to the embedded model within the app
-	// #if (MODEL_LOAD_MODE == MODEL_FROM_C_FILE)
-	//     model = tflite::GetModel((const void *)g_person_detect_model_data_vela);
-
-#if (MODEL_LOAD_MODE == MODEL_FROM_FLASH)
-	modelUsed = load_model_from_flash();
-
-#elif (MODEL_LOAD_MODE == MODEL_FROM_SD_CARD)
-
-	const tflite::Model *loaded = nullptr;
-
-	// Manifest unzip is handled by directory_manager during SD init.
-	// (We expect either /Manifest/model.tfl exists, or the model may be in root.)
-
-	// Build the expected filename and path
-	// TODO put file and path names using #define
-	snprintf(filename, sizeof(filename), "%dV%d.TFL",
-			(unsigned int)(g_project_id % 10000), (unsigned int)g_deploy_version);
-
-	snprintf(manifest_path, sizeof(manifest_path), "%s/%s", CONFIG_DIR, filename);
-
-	xprintf("DEBUG: Looking for %s\n", manifest_path);
-	// Check if any .tfl model exists in /Manifest
-
-	// Searches for the first .TFL file on the SD card and exits if found
-	if (fatfs_mounted()) {
-		if (f_opendir(&dir, CONFIG_DIR) == FR_OK) {
-			while ((f_readdir(&dir, &fno) == FR_OK) && (fno.fname[0] != '\0')) {
-				const char *ext = strrchr(fno.fname, '.');
-				// The strcasecmp function is case-insensitive: matches .tfl and .TFL
-				if (ext && strcasecmp(ext, ".TFL") == 0) {
-					// Use this specific model filename
-					snprintf(filename, sizeof(filename), "%s", fno.fname);
-					// Update manifest_path to point to the discovered model
-					snprintf(manifest_path, sizeof(manifest_path), "%s/%s", CONFIG_DIR, filename);
-					any_model_found = true;
-					xprintf("----------------- Found model file '%s' on SD card\n", filename);
-					break;
-				}
-			}
-			f_closedir(&dir);
-		}
-	}
-	else  {
-		// Don't attempt disk access if filesystem not mounted
-		xprintf("FatFS not mounted, skipping model search\n");
-	}
-
-	if (!any_model_found) {
-		// TODO - This implies that the SD card must contain a .tfl file for the NN to work - even if there is a model in flash...
-		xprintf("No .TFL model found in MANIFEST folder. Skipping neural network initialiSation.\n");
-		modelUsed = nullptr;
-		return 1;
-	}
-	else  {
-		// Check if the model from manifest matches what's in flash
-		if (is_model_in_flash(filename))  {
-			xprintf("Flash already contains '%s'; loading from flash.\n", filename);
-			loaded = load_model_from_flash();
-		}
-		else  {
-			xprintf("Flash model differs or missing; copying '%s' to flash...\n", filename);
-
-//			// Try manifest path first, then fallback to root
-//			// TODO surely we should restrict to a single location?
-//			const char *src_path = file_exists(manifest_path) ? manifest_path : filename;
-//			xprintf("Source chosen: %s\n", src_path);
-//
-//			if (load_model_from_sd_to_flash((char *)src_path) == 0) {
-//				xprintf("Copied %s to flash OK; loading from flash...\n", src_path);
-//				loaded = load_model_from_flash();
-//			}
-//			else {
-//				xprintf("SD->flash copy failed for %s\n", src_path);
-//			}
-
-			if (load_model_from_sd_to_flash(filename) == 0) {
-				xprintf("Copied %s to flash OK\n", filename);
-				loaded = load_model_from_flash();
-			}
-			else {
-				xprintf("SD->flash copy failed for %s\n", filename);
-			}
-		}
-
-		modelUsed = loaded;
-	}
-
-#endif // MODEL_LOAD_MODE
-
-	if (!modelUsed)  {
-		xprintf("Failed to load model\n");
-		return -1;
-	}
-
-	xprintf("Model loaded successfully\n");
-
-	// Attempt to load labels so results print friendly names
-	load_labels_from_manifest();
-
-	if (modelUsed->version() != TFLITE_SCHEMA_VERSION)  {
-		xprintf("[ERROR] Model's schema version %d is not equal to supported version %d\n",
-				modelUsed->version(), TFLITE_SCHEMA_VERSION);
-		return -1;
-	}
-
-#ifdef PRINTMODELFINGERPRINT
-	// Print information about the model
-	tflm_print_ethosu_fingerprint(modelUsed);
-#else
-	xprintf("Model schema version: %d\n", modelUsed->version());
-#endif // PRINTMODELFINGERPRINT
-
-	static tflite::MicroErrorReporter micro_error_reporter;
-
-	// Allocate op_resolver on heap so it persists beyond cv_init() scope
-	// The interpreter keeps a reference to it, so it must live as long as the interpreter
-	if (op_resolver_ptr != nullptr) {
-		delete op_resolver_ptr;
-	}
-	op_resolver_ptr = new tflite::MicroMutableOpResolver<1>();
-	xprintf("DEBUG: 0\n");
-
-	if (kTfLiteOk != op_resolver_ptr->AddEthosU())  {
-		xprintf("Failed to add Arm NPU support to op resolver.\n");
-		return -1;
-	}
-
-	xprintf("DEBUG: 1\n");
-	static tflite::MicroInterpreter *static_interpreter = new tflite::MicroInterpreter(
-			modelUsed,
-			*op_resolver_ptr,
-			tensor_arena_buf,
-			tensor_arena_size,
-			&micro_error_reporter);
-	xprintf("DEBUG: 2\n");
-
-	// TODO fix crash that happens here when running loadmodel 2 3
-	// See https://chatgpt.com/s/t_696ab268fa708191abc79f8768b3dffe
-	// later: https://chatgpt.com/s/t_696ab3bc127881918e7ca6e01cc911a7
-	if (static_interpreter->AllocateTensors() != kTfLiteOk) {
-		xprintf("Failed to allocate tensors\n");
-		return -1;
-	}
-	else {
-#if 0
-		xprintf("Used %lu/%lu bytes for tensors. Tensor arena is at 0x%08x\n",
-				static_interpreter->arena_used_bytes(), tensor_arena_size, tensor_arena_buf);
-#else
-		xprintf("DEBUG 3\n");
-#endif // 0
-	}
-
-	interpreter = static_interpreter;
-	input = static_interpreter->input(0);
-	output = static_interpreter->output(0);
-	xprintf("DEBUG: 4\n");
-
-	return 0;
-}
-
-#else
 
 /**
  *	Initialise TFLM model
@@ -2195,11 +1846,12 @@ int cv_init(bool security_enable, bool privilege_enable, uint16_t project_id, ui
 		return -1;
 	}
 
+
 #ifdef PRINTMODELFINGERPRINT
-	//if (coldBoot) {
+	if (coldBoot) {
 		// Print information about the model
 		tflm_print_ethosu_fingerprint(modelUsed);
-	//}
+	}
 #else
 	xprintf("Model schema version: %d\n", modelUsed->version());
 #endif // PRINTMODELFINGERPRINT
@@ -2233,9 +1885,32 @@ int cv_init(bool security_enable, bool privilege_enable, uint16_t project_id, ui
 	input  = interpreter->input(0);
 	output = interpreter->output(0);
 
+    const TfLiteIntArray* dims = output->dims;
+
+    // Common cases:
+    // [classes]
+    // [1, classes]
+    if (dims->size == 1) {
+    	g_class_count = dims->data[0];
+    }
+    else if (dims->size >= 2) {
+    	g_class_count = dims->data[dims->size - 1];
+    }
+    else {
+    	// error
+    	g_class_count = 0;
+    }
+
+    xprintf("There are %d classes (%d)\n", g_class_count, metaDataFlash->class_count);
+    // Warning: the number of classes in the metadata has been set by the number of labels in the label text file. This must be the same!
+    if (g_class_count != metaDataFlash->class_count) {
+    	XP_RED;
+    	xprintf("WARNING: Number of classes and labels unmatched\n");
+    	XP_WHITE;
+    }
+
 	return 0;
 }
-#endif // OLD
 
 /*
  * Erase just enough flash to remove the metadata and the 'TFTl3' in the model header
@@ -2304,39 +1979,6 @@ void cv_newModel(uint16_t project_id, uint16_t deploy_version) {
 // Robust deinit: safely release interpreter and tensor resources before model reloads
 int cv_deinit(void) {
 
-#ifdef OLD
-    // Disable interrupts or enter critical section if needed (to prevent concurrent access)
-    taskENTER_CRITICAL();
-
-    // Free the TFLite interpreter if it exists
-    if (interpreter != nullptr)
-    {
-        delete interpreter;
-        interpreter = nullptr;
-    }
-
-    // Free the op_resolver if it exists
-    if (op_resolver_ptr != nullptr)
-    {
-        delete op_resolver_ptr;
-        op_resolver_ptr = nullptr;
-    }
-
-    // Reset tensor pointers
-    input = nullptr;
-    output = nullptr;
-
-    // Reset model loaded flag
-    model_loaded_from_sd = false;
-
-    // NOTE: We do NOT reset flash_initialized here!
-    // The flash hardware remains initialized, we just need to manage XIP mode properly
-
-    // Leave critical section
-    taskEXIT_CRITICAL();
-    return 0;
-
-#else
     if (interpreter) {
     	delete interpreter;
     	interpreter = nullptr;
@@ -2359,7 +2001,6 @@ int cv_deinit(void) {
     // Optional: shut down Ethos-U if required
     //_arm_npu_deinit();
     return 0;
-#endif // OLD
 }
 
 
@@ -2369,7 +2010,7 @@ int cv_deinit(void) {
  * The function gets the address and dimensions of the image from
  * app_get_raw_addr(), app_get_raw_width(), app_get_raw_height()
  *
- * It rescales the image to INPUT_SIZE_X, INPUT_SIZE_Y
+ * It rescales the image to match what the model requires
  * then runs the NN.
  *
  * I have modified the code so it returns the result of the calculation
@@ -2460,38 +2101,12 @@ TfLiteStatus cv_run(int8_t *outCategories, uint8_t *categoriesCount) {
     outputAsPercentage(output);
 #endif // USE_PERCENTAGE
 
-
-#if ORIGINAL
-    // retrieve output data
-    int8_t model_score = output->data.int8[1];
-    // CGP not used int8_t no_model_score = output->data.int8[0];
-
-    // CGP add some colour to highlight this message
-    if (model_score > 0)
-    {
-        XP_LT_GREEN;
-        xprintf("TARGET OBJECT DETECTED!\n\n");
-    }
-    else
-    {
-        XP_LT_RED;
-        xprintf("No target object detected.\n\n");
-    }
-    XP_WHITE;
-
-    xprintf("model_score: %d\n", model_score);
-
-    // error_reporter not declared...
-    //	error_reporter->Report(
-    //		   "   model score: %d, no model score: %d\n", model_score, no_model_score);
-#else
     // Write the class count to the caller
-    * categoriesCount = metaDataFlash->class_count;
+    * categoriesCount = g_class_count;
 
-    for (uint8_t i = 0; i < metaDataFlash->class_count; i++)  {
+    for (uint8_t i = 0; i < g_class_count; i++)  {
         outCategories[i] = output->data.int8[i];
     }
-#endif
 
     return invoke_status;
 }

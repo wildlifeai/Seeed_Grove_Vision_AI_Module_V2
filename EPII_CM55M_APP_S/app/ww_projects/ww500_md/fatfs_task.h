@@ -69,6 +69,7 @@ typedef enum {
 	OP_PARAMETER_FLASH_LED,			// 13 LED bit mask: visible LED used = 1, infra-red LED used =2, none = 0
 	OP_PARAMETER_MODEL_PROJECT,		// 14 Model project ID used for the NN model
 	OP_PARAMETER_MODEL_VERSION,		// 15 Model version number used for the NN model
+	OP_PARAMETER_MODEL_THRESHOLD,	// 16 Logit threshold for detection (0-127)
 	OP_PARAMETER_DEPLOYMENT_ID_CHUNK_1 = 20, // 20 Deployment ID Chunk 1 (Hex chars 0-3) - OP15-19 reserved for future use
 	OP_PARAMETER_DEPLOYMENT_ID_CHUNK_2,	  // 21 Deployment ID Chunk 2 (Hex chars 4-7)
 	OP_PARAMETER_DEPLOYMENT_ID_CHUNK_3,	  // 22 Deployment ID Chunk 3 (Hex chars 8-11)

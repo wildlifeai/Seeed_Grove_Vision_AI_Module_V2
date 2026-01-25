@@ -152,9 +152,9 @@ Those comments preceding the first index/value pair are preserved when the file 
 |    11 | OP_PARAMETER_MD_INTERVAL              | 1000          | Interval (ms) between frames in motion detect mode (0 inhibits motion detection)|
 |    12 | OP_PARAMETER_FLASH_DURATION           | 100           | Duration (ms) that LED flash is on                  |
 |    13 | OP_PARAMETER_FLASH_LED                | 0             | LED bit mask: visible LED used = 1, infra-red LED used =2, none = 0              |
-|    14 | OP_PARAMETER_MODEL_NUMBER             | 0             | Model number used for the NN model |
-|    15 | Reserved                              | 0             | Reserved for future use |
-|    16 | Reserved                              | 0             | Reserved for future use |
+|    14 | OP_PARAMETER_MODEL_PROJECT             | 0             |Model project ID used for the NN model|
+|    15 | OP_PARAMETER_MODEL_VERSION             | 0             | Model version number used for the NN model |
+|    16 | OP_PARAMETER_MODEL_THRESHOLD            | 0             | Logit threshold for detection (0-127) |
 |    17 | Reserved                              | 0             | Reserved for future use |
 |    18 | Reserved                              | 0             | Reserved for future use |
 |    19 | Reserved                              | 0             | Reserved for future use |

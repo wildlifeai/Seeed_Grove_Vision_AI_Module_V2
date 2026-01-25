@@ -115,6 +115,9 @@
 #define GPS_IFD_ENTRY_COUNT 6
 #define GPS_IFD_SIZE (2 + GPS_IFD_ENTRY_COUNT * 12 + 4)
 
+// Buffer for EXIF comment
+#define EXIF_COMMENT_LENGTH 256
+
 // Tag IDs enum
 typedef enum
 {
@@ -2319,7 +2322,7 @@ static uint16_t build_exif_segment(int8_t *outCategories, uint8_t categoriesCoun
 #endif //ENABLE_EXIF_CONFIDENCE
 
 	// Get deployment ID from operational parameters
-	char deployment_id[37];
+	char deployment_id[UUIDLENGTH];
 	fatfs_getDeploymentId(deployment_id, sizeof(deployment_id));
 	
 	// Only include in EXIF if not all zeros (i.e., a deployment is active)
@@ -2413,7 +2416,7 @@ static uint16_t build_exif_segment(int8_t *outCategories, uint8_t categoriesCoun
 #else
     // Create an IFD containing the NN output tensor plus class labels
     // TODO is it best to use TAG_USER_COMMENT or make a new tag?
-#define EXIF_COMMENT_LENGTH 256
+
     char user_comment[EXIF_COMMENT_LENGTH];
 	user_comment[0] = '\0';
 	size_t offset = 0;

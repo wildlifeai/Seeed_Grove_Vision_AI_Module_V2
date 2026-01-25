@@ -1,5 +1,5 @@
 # Description of the CONFIG.TXT File
-#### CGP - 25 November 2025
+#### CGP - 26 January 2026
 
 The CONFIG.TXT file contains "Operational Parameters" for the WW500.
 
@@ -47,6 +47,20 @@ Operational Parameters which are not present in CONFIG.TXT are given their defau
 |    11 | OP_PARAMETER_MD_INTERVAL              | 1000          | Interval (ms) between frames in motion detect mode (0 inhibits motion detection)|
 |    12 | OP_PARAMETER_FLASH_DURATION           | 100           | Duration (ms) that LED flash is on                  |
 |    13 | OP_PARAMETER_FLASH_LED                | 0             | LED bit mask: visible LED used = 1, infra-red LED used =2, none = 0              |
+|    14 | OP_PARAMETER_MODEL_PROJECT            | 0             | Model project ID used for the NN model|
+|    15 | OP_PARAMETER_MODEL_VERSION            | 0             | Model version number used for the NN model |
+|    16 | OP_PARAMETER_MODEL_THRESHOLD          | 0             | Logit threshold for detection (0-127) |
+|    17 | Reserved                              | 0             | Reserved for future use |
+|    18 | Reserved                              | 0             | Reserved for future use |
+|    19 | Reserved                              | 0             | Reserved for future use |
+|    20 | OP_PARAMETER_DEPLOYMENT_ID_CHUNK_1    | 0             | Deployment ID hex chars 0-3 |
+|    21 | OP_PARAMETER_DEPLOYMENT_ID_CHUNK_2    | 0             | Deployment ID hex chars 4-7 |
+|    22 | OP_PARAMETER_DEPLOYMENT_ID_CHUNK_3    | 0             | Deployment ID hex chars 8-11 |
+|    23 | OP_PARAMETER_DEPLOYMENT_ID_CHUNK_4    | 0             | Deployment ID hex chars 12-15 |
+|    24 | OP_PARAMETER_DEPLOYMENT_ID_CHUNK_5    | 0             | Deployment ID hex chars 16-19 |
+|    25 | OP_PARAMETER_DEPLOYMENT_ID_CHUNK_6    | 0             | Deployment ID hex chars 20-23 |
+|    26 | OP_PARAMETER_DEPLOYMENT_ID_CHUNK_7    | 0             | Deployment ID hex chars 24-27 |
+|    27 | OP_PARAMETER_DEPLOYMENT_ID_CHUNK_8    | 0             | Deployment ID hex chars 28-31 |
 
 ## More Details
 

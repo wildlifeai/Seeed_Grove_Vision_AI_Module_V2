@@ -35,6 +35,8 @@ extern "C" {
 
 // TODO Experimental: set a limit on the name of files
 #define	FNAMELEN 16
+// required length for a 128-bit UUID (including trailing '\0')
+#define	UUIDLENGTH	37
 
 // Uncomment this to include the unzipping code
 // See error report 12/01/26 in MANIFEST_info.md

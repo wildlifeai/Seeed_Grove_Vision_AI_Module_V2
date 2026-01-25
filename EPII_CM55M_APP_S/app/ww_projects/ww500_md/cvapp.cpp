@@ -56,6 +56,9 @@
 
 /*************************************** Definitions *******************************************/
 
+// Experiment to add multiple resolvers to NN
+#define EXTRARESOLVERS
+
 // Read file contents in chunks this size
 #define FILE_CHUNK_SIZE 512
 
@@ -113,13 +116,25 @@ extern QueueHandle_t xImageTaskQueue;
 // see https://chatgpt.com/share/696ae627-6f60-8005-92cb-6030e56990cc
 // for fix of dynamic model
 
+
+#ifdef TFLM_2412
+#pragma message "Using tflmtag2412_u55tag2411"
+#else
+#pragma message "Using tflmtag2209_u55tag2205"
+#endif // TFLM_2412
+
 using namespace std;
 namespace {
 
     struct ethosu_driver ethosu_drv; /* Default Ethos-U device driver */
     static const tflite::Model *modelUsed = nullptr;
     static tflite::MicroInterpreter *interpreter = nullptr;
+#ifdef EXTRARESOLVERS
+    static tflite::MicroMutableOpResolver<4> *op_resolver_ptr = nullptr;
+#else
     static tflite::MicroMutableOpResolver<1> *op_resolver_ptr = nullptr;
+#endif //
+
     static tflite::MicroErrorReporter micro_error_reporter;
     TfLiteTensor *input;
     TfLiteTensor *output;
@@ -504,7 +519,8 @@ static int _arm_npu_init(bool security_enable, bool privilege_enable) {
     _arm_npu_irq_init();
 
     /* Initialise Ethos-U55 device */
-    const void *ethosu_base_address = (void *)(U55_BASE);
+    //const void *ethosu_base_address = (void *)(U55_BASE);
+    void *ethosu_base_address = (void *)(U55_BASE);
 
     if (0 != (err = ethosu_init(
                   &ethosu_drv,         /* Ethos-U driver device pointer */
@@ -1798,13 +1814,16 @@ int cv_init(bool security_enable, bool privilege_enable, uint16_t project_id, ui
 		XP_WHITE;
 		return -1;
 	}
-	xprintf("\nInitialising NN\n");
+#ifdef TFLM_2412
+    xprintf("Initialising NN with 2412/ETHOS-U 2411 library. Arena size %ul\n", tensor_arena_size);
+#else
+    xprintf("Initialising NN 2209/ETHOS-U 2205 library. Arena size %ul\n", tensor_arena_size);
+#endif // TFLM_2412
+
 	XP_WHITE;
 
 	// Allow for printing only on cold boots
 	coldBoot = (woken == APP_WAKE_REASON_COLD);
-
-
 
 	if (_arm_npu_init(security_enable, privilege_enable) != 0) {
 		return -1;
@@ -1856,7 +1875,44 @@ int cv_init(bool security_enable, bool privilege_enable, uint16_t project_id, ui
 	xprintf("Model schema version: %d\n", modelUsed->version());
 #endif // PRINTMODELFINGERPRINT
 
-	// NOTE: some models might need more than  1 of these
+	// NOTE: some models might need more than  1 of these.
+	/* The allon_sensor_tflm_cmsis_nn loads all of these:
+    op_resolver.AddDepthwiseConv2D();
+	op_resolver.AddRelu6();
+	op_resolver.AddConv2D();
+	op_resolver.AddAveragePool2D();
+	op_resolver.AddReshape();
+	op_resolver.AddSoftmax();
+	*/
+#ifdef EXTRARESOLVERS
+	// experimental
+	op_resolver_ptr = new tflite::MicroMutableOpResolver<4>();
+	if (!op_resolver_ptr) {
+		return -1;
+	}
+
+	if (op_resolver_ptr->AddEthosU() != kTfLiteOk) {
+		xprintf("Failed to add Arm NPU support to op resolver.\n");
+		return -1;
+	}
+	if (op_resolver_ptr->AddPad() != kTfLiteOk) {
+		xprintf("Failed to add Padding ");
+		return -1;
+	}
+
+	if (op_resolver_ptr->AddTranspose() != kTfLiteOk) {
+		xprintf("Failed to add Transpose\n");
+		return -1;
+	}
+#ifdef TFLM_2412
+	// Only present in the later library
+	if (op_resolver_ptr->AddBatchMatMul() != kTfLiteOk) {
+		xprintf("Failed to add MatMul\n");
+		return -1;
+	}
+#endif // TFLM_2412
+
+#else
 	op_resolver_ptr = new tflite::MicroMutableOpResolver<1>();
 	if (!op_resolver_ptr) {
 		return -1;
@@ -1866,13 +1922,25 @@ int cv_init(bool security_enable, bool privilege_enable, uint16_t project_id, ui
 		xprintf("Failed to add Arm NPU support to op resolver.\n");
 		return -1;
 	}
+#endif // EXTRARESOLVERS
 
+#ifdef TFLM_2412
+//    // New API: different signature
+
+    interpreter = new tflite::MicroInterpreter(
+			modelUsed,
+			*op_resolver_ptr,
+			tensor_arena_buf,
+			tensor_arena_size);
+#else
+    // Old API:
 	interpreter = new tflite::MicroInterpreter(
 			modelUsed,
 			*op_resolver_ptr,
 			tensor_arena_buf,
 			tensor_arena_size,
 			&micro_error_reporter);
+#endif // TFLM_2412
 
 	if (!interpreter) {
 		return -1;
@@ -1946,7 +2014,7 @@ void cv_newModel(uint16_t project_id, uint16_t deploy_version) {
 	cv_init_result = cv_init(true, true, project_id, deploy_version, APP_WAKE_REASON_COLD);
 
 	if (cv_init_result < 0) {
-		xprintf("No model found.\n");
+		xprintf("Nwe model init failed.\n");
 		// TODO - do we do this?
 		//selfTest_setErrorBits(1 << SELF_TEST_AI_NN_ERROR);
 

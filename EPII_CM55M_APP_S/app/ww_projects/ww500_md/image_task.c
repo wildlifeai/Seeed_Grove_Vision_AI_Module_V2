@@ -186,7 +186,10 @@ static void generateImageFileName(uint16_t number);
 static void setFileOpFromJpeg(uint32_t jpeg_sz, uint32_t jpeg_addr);
 
 // When final activity from the FatFS Task and IF Task are complete, enter DPD
+#ifndef SHUTDOWNBARRIER
 static void sleepWhenPossible(void);
+#endif // SHUTDOWNBARRIER
+
 static void sleepNow(void);
 
 static void captureSequenceComplete(void);
@@ -656,8 +659,7 @@ static APP_MSG_DEST_T handleEventForInit(APP_MSG_T img_recv_msg)
         // Inactivity detected. Prepare to enter DPD
         configure_image_sensor(CAMERA_CONFIG_STOP); // run some sensordplib_stop functions then run HM0360_stream_off commands to the HM0360
 
-        if (fatfs_getImageSequenceNumber() > 0)
-        {
+        if (fatfs_getImageSequenceNumber() > 0)  {
             // TODO - can we call this without the if() and expect fatfs_task to handle it?
             // Ask the FatFS task to save state onto the SD card
             send_msg.destination = xFatTaskQueue;
@@ -665,11 +667,12 @@ static APP_MSG_DEST_T handleEventForInit(APP_MSG_T img_recv_msg)
             send_msg.message.msg_data = 0;
             image_task_state = APP_IMAGE_TASK_STATE_SAVE_STATE;
         }
-        else
-        {
+        else {
             // No SD card therefore can't save state
+#ifndef SHUTDOWNBARRIER
             // Wait till the IF Task is also ready, then sleep
             sleepWhenPossible(); // does not return
+#endif //  SHUTDOWNBARRIER
         }
 
         break;
@@ -949,8 +952,7 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
         // Fault detected. Prepare to enter DPD
         configure_image_sensor(CAMERA_CONFIG_STOP); // run some sensordplib_stop functions then run HM0360_stream_off commands to the HM0360
 
-        if (fatfs_getImageSequenceNumber() > 0)
-        {
+        if (fatfs_getImageSequenceNumber() > 0)  {
             // TODO - can we call this without the if() and expect fatfs_task to handle it?
             // Ask the FatFS task to save state onto the SD card
             send_msg.destination = xFatTaskQueue;
@@ -958,11 +960,12 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
             send_msg.message.msg_data = 0;
             image_task_state = APP_IMAGE_TASK_STATE_SAVE_STATE;
         }
-        else
-        {
+        else  {
             // No SD card therefore can't save state
+#ifndef SHUTDOWNBARRIER
             // Wait till the IF Task is also ready, then sleep
             sleepWhenPossible(); // does not return
+#endif // SHUTDOWNBARRIER
         };
         break;
 
@@ -1196,8 +1199,10 @@ static APP_MSG_DEST_T handleEventForSaveState(APP_MSG_T img_recv_msg)
 
     case APP_MSG_IMAGETASK_DISK_WRITE_COMPLETE:
         // Here when the FatFS task has saved state
+#ifndef SHUTDOWNBARRIER
         // Wait till the IF Task is also ready, then sleep
         sleepWhenPossible(); // does not return
+#endif // SHUTDOWNBARRIER
         break;
 
     case APP_MSG_IMAGETASK_CHANGE_ENABLE:
@@ -1758,28 +1763,29 @@ static void sendMsgToMaster(char *str)
     }
 }
 
+
+#ifndef SHUTDOWNBARRIER
 /**
  * When final activity from the FatFS Task and IF Task are complete, enter DPD
  *
  * A message has also been sent to the If Tasks asking it to send its final message.
  * When complete it will give its semaphore.
  */
-static void sleepWhenPossible(void)
-{
+static void sleepWhenPossible(void) {
 
     xprintf("Waiting for IF task to finish.\n");
     xSemaphoreTake(xIfCanSleepSemaphore, portMAX_DELAY);
 
     sleepNow();
 }
+#endif //  SHUTDOWNBARRIER
 
 /**
  * Enter DPD
  *
  * This is a separate routine from sleepWhenPossible since it is called from 2 places
  */
-static void sleepNow(void)
-{
+static void sleepNow(void) {
     uint32_t timelapseDelay;
     uint8_t brightnessPercent;
 

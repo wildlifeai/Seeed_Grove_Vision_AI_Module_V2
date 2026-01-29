@@ -79,7 +79,7 @@ HX_CIS_ERROR_E pca9574_init(uint8_t deviceAddr) {
 
 	// Test for the I2C extender
 	if (hm0360_md_isSensorPresent(deviceAddr)) {
-		xprintf("PCA9574 present at 0x%02x\n", deviceAddr);
+		//xprintf("PCA9574 present at 0x%02x\n", deviceAddr);
 	}
 	else {
 		xprintf("PCA9574 not present at 0x%02x\n", deviceAddr);
@@ -89,10 +89,16 @@ HX_CIS_ERROR_E pca9574_init(uint8_t deviceAddr) {
 	}
 
 	// Initialise registers of PCA9574 I/O expander and set outputs inactive
+	// My reading of the data sheet is that at reset the pins are floating.
+	// p.u. or p.d. are set by PCA9574_REG_PUPD but only if PCA9574_REG_BKEN bit 1 = 1
 
-	ret = pca9574_write(deviceAddr, PCA9574_REG_PUPD, 0);	// pull-down on all pins
-	ret = pca9574_write(deviceAddr, PCA9574_REG_INVRT, 0);	// Don't invert inputs
-	ret |= pca9574_write(deviceAddr, PCA9574_REG_BKEN, 2);	// Disable bus hold, enable pu/pd
+	// For the WW500 it is probably 'don't care' whether pins have bus-hold or p.u./p.d. as all pins are outputs.
+	// But add an external p.d. on FLASHEN (bit P7)
+
+
+	ret = pca9574_write(deviceAddr, PCA9574_REG_BKEN, 2);	// Disable bus hold, enable pu/pd
+	ret |= pca9574_write(deviceAddr, PCA9574_REG_PUPD, 0);	// add pull-down on all pins
+	ret |= pca9574_write(deviceAddr, PCA9574_REG_INVRT, 0);	// Don't invert inputs
 	ret |= pca9574_write(deviceAddr, PCA9574_REG_OUT, 0);	// output: all output bits set to 0
 	ret |= pca9574_write(deviceAddr, PCA9574_REG_CFG, 0);	// configuration: all bits set to output
 	ret |= pca9574_write(deviceAddr, PCA9574_REG_MSK, 0xff);	// Interrupt mask (interrupt not used, disable all)

@@ -97,6 +97,7 @@ extern QueueHandle_t     xImageTaskQueue;
 
 // This will be available to all of the tasks:
 Barrier_t startupBarrier;
+Barrier_t shutdownBarrier;
 
 /*************************************** Local variables *******************************************/
 
@@ -246,6 +247,29 @@ static void checkForCameras(void) {
 
 	XP_LT_GREY;
 
+#ifdef WW500_C00
+	// Test for the I2C extender
+	if (hm0360_md_isSensorPresent(PCA9574_I2C_ADDRESS_0)) {
+		xprintf("PCA9574 present at 0x%02x\n", PCA9574_I2C_ADDRESS_0);
+
+		// Place this early as PCA9574 has floating pins at reset.
+		if (ledFlashInit()) {
+			xprintf("Initialised LED Flash\n");
+		}
+		else {
+			xprintf("Can't initialise LED Flash\n");
+		}
+	}
+	else {
+		xprintf("PCA9574 not present at 0x%02x\n", PCA9574_I2C_ADDRESS_0);
+		// expect a driver error message as well...
+
+		selfTest_setErrorBits(1 << SELF_TEST_AI_NO_FLASH);
+	}
+#endif // WW500_C00
+
+	XP_LT_GREY;
+
 #ifdef USE_HM0360_MD
 	// Test for the HM0360, if it is in use for motion detection
 	hm0360Present = hm0360_md_isSensorPresent(HM0360_SENSOR_I2CID);
@@ -269,20 +293,6 @@ static void checkForCameras(void) {
 		// expect a driver error message as well...
 		selfTest_setErrorBits(1 << SELF_TEST_AI_NO_CAM);
 	}
-
-#ifdef WW500_C00
-	// Test for the I2C extender
-	if (hm0360_md_isSensorPresent(PCA9574_I2C_ADDRESS_0)) {
-		xprintf("PCA9574 present at 0x%02x\n", PCA9574_I2C_ADDRESS_0);
-		//pca9574_readWriteTests(PCA9574_I2C_ADDRESS_0);
-	}
-	else {
-		xprintf("PCA9574 not present at 0x%02x\n", PCA9574_I2C_ADDRESS_0);
-		// expect a driver error message as well...
-
-		selfTest_setErrorBits(1 << SELF_TEST_AI_NO_FLASH);
-	}
-#endif // WW500_C00
 
 	XP_WHITE;
 	// Disable even if not using RP camera so this pin is set to output, 0
@@ -465,6 +475,9 @@ void app_onInactivityDetection(void) {
 	xprintf("Inactive for %dms\n", inactivity_getPeriod());
 	XP_WHITE;
 
+#ifdef SHUTDOWNBARRIER
+
+#else
 	send_msg.msg_data = 0;
 	send_msg.msg_parameter = 0;
 	send_msg.msg_event = APP_MSG_IMAGETASK_INACTIVITY;
@@ -483,6 +496,8 @@ void app_onInactivityDetection(void) {
 	}
 
 	// TODO - can I send the APP_MSG_FATFSTASK_SAVE_STATE message to the fatfs task from here?
+#endif //  SHUTDOWNBARRIER
+
 }
 
 
@@ -602,7 +617,7 @@ int app_main(void){
 	xprintf("Camera: Unknown\n");
 #endif	// USE_HM0360
 
-	checkForCameras();	// see which I2C devices respond
+	checkForCameras();	// see which I2C devices respond (and disable LED flash!)
 
 	if ((wakeup_event == PMU_WAKEUP_NONE) && (wakeup_event1 == PMU_WAKEUPEVENT1_NONE)) {
 		showResetOnLeds(3);	// pattern on LEDs to show cold boot
@@ -731,18 +746,6 @@ int app_main(void){
 #endif	// USE_HM0360
 	}
 
-#ifdef WW500_C00
-	// TODO remove this. It is present in CLI-commands.
-	// Need to enable it based on the operational parameters setting.
-		// The CLI 'flash n m" command allows testing
-	if (ledFlashInit()) {
-		xprintf("Initialised LED Flash\n");
-	}
-	else {
-		xprintf("Can't initialise LED Flash\n");
-	}
-#endif // WW500_C00
-
 	xprintf("Initialising FreeRTOS tasks\n");
 
 	// Each task has its own file. Call these to do the task creation and initialisation
@@ -802,9 +805,12 @@ int app_main(void){
 	internalStates[taskIndex++] = internalState;
 	xprintf("Created task '%s' Priority %d\n", pcTaskGetName(task_id), priority);
 
-	// Now create a barrier entity so that a function is called when all tasks are ready in their
-	// for(;;) loop
+	// Now create a barrier entity so that a function is called when all tasks are ready in their for(;;) loop
 	barrier_init(&startupBarrier, taskIndex, ifTask_allTasksReady);
+#ifdef SHUTDOWNBARRIER
+	// Also a barrier to entering DPD -
+	barrier_init(&shutdownBarrier, 2, ifTask_allTasksShutdown);
+#endif //  SHUTDOWNBARRIER
 
 	xprintf("FreeRTOS scheduler started.\n");
 	vTaskStartScheduler();

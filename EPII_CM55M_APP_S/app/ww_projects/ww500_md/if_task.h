@@ -119,4 +119,10 @@ const char * ifTask_getStateString(void);
 // Callback for when all tasks have started and done their initialisation
 void ifTask_allTasksReady(void);
 
+#ifdef SHUTDOWNBARRIER
+// Callback for when all tasks are ready for shutdown
+void ifTask_allTasksShutdown(void);
+
+#endif //  SHUTDOWNBARRIER
+
 #endif /* APP_WW_PROJECTS_WW500_MD_IF_TASK_H_ */

@@ -10,6 +10,7 @@ APPL_DEFINES += -DWW500
 # Select one of these:
 #APPL_DEFINES += -DWW500_A00
 #APPL_DEFINES += -DWW500_B00
+# WW500_C00 means WW500_C02 as well
 APPL_DEFINES += -DWW500_C00
 
 # String available to code using app_get_board_name_string()

@@ -604,7 +604,7 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 		// Here when the last FreeRTOStask has done its one-off initialisation
 		// Time to send selfTest bits to BLE processor.
 
-		// Report any error bits to the AT processor
+		// Report any error bits to the BLE processor
 		snprintf(message, sizeof(message), "selfTest %04x", selfTest_getErrorBits());
 
 		sendI2CMessage((uint8_t *) message, AI_PROCESSOR_MSG_RX_STRING, strlen(message) );
@@ -1647,10 +1647,10 @@ const char * ifTask_getStateString(void) {
 	return * &ifTaskStateString[if_task_state];
 }
 
-// Callback for when all tasks have started and done their initialisation
 
 /**
  * Callback for when all tasks have started and done their initialisation
+ *
  * - when the barrier mechanism determines all tasks have reached their for(;;) loop
  */
 void ifTask_allTasksReady(void) {
@@ -1665,5 +1665,33 @@ void ifTask_allTasksReady(void) {
 		xprintf("send_msg=0x%x fail\r\n", send_msg.msg_event);
 	}
 }
+
+#ifdef SHUTDOWNBARRIER
+/**
+ * Callback for when certain tasks have completed their work prior to entering DPD
+ *
+ * When the barrier mechanism determines all tasks are ready to sleep.
+ *
+ * We need if_task to ?
+ * We need _task to ?
+ */
+void ifTask_allTasksShutdown(void) {
+#if 0
+	APP_MSG_T send_msg;
+
+	// Send back to MKL62BA - msg_data is the string
+	send_msg.msg_data = 0;
+	send_msg.msg_parameter = 0;
+	send_msg.msg_event = APP_MSG_IFTASK_FREERTOS_INIT;
+
+	if (xQueueSend(xIfTaskQueue, (void *)&send_msg, __QueueSendTicksToWait) != pdTRUE) {
+		xprintf("send_msg=0x%x fail\r\n", send_msg.msg_event);
+	}
+#else
+	xprintf("DEBUG: ready to enter DPD\n");
+#endif
+}
+
+#endif //  SHUTDOWNBARRIER
 
 

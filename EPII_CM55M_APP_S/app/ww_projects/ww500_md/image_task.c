@@ -212,11 +212,7 @@ static size_t get_gps_ifd_size(void);
 extern QueueHandle_t xFatTaskQueue;
 extern QueueHandle_t xIfTaskQueue;
 
-#ifdef SHUTDOWNBARRIER
 extern Barrier_t shutdownBarrier;
-#else
-extern SemaphoreHandle_t xIfCanSleepSemaphore;
-#endif // SHUTDOWNBARRIER
 
 extern SemaphoreHandle_t xSDInitDoneSemaphore;
 
@@ -1766,15 +1762,8 @@ static void sendMsgToMaster(char *str)
  * When complete it will give its semaphore.
  */
 static void sleepWhenPossible(void) {
-#ifdef SHUTDOWNBARRIER
 	xprintf("Image task ready to sleep.\n");
 	barrier_ready(&shutdownBarrier);
-#else
-	xprintf("Waiting for IF task to finish.\n");
-	xSemaphoreTake(xIfCanSleepSemaphore, portMAX_DELAY);
-
-	image_sleepNow();
-#endif // SHUTDOWNBARRIER
 }
 
 

@@ -108,9 +108,7 @@ bool hm0360Present = false;
 
 // This will be available to all of the tasks:
 Barrier_t startupBarrier;
-#ifdef SHUTDOWNBARRIER
 Barrier_t shutdownBarrier;  // Object that calls a function when all tasks are ready to shut down
-#endif // SHUTDOWNBARRIER
 
 /*************************************** Local routine prototypes  *************************************/
 
@@ -801,10 +799,8 @@ int app_main(void){
 
 	// Now create a barrier entity so that a function is called when all tasks are ready in their for(;;) loop
 	barrier_init(&startupBarrier, taskIndex, ifTask_allTasksReady);
-#ifdef SHUTDOWNBARRIER
 	// Also a barrier to entering DPD -
 	barrier_init(&shutdownBarrier, 2, image_sleepNow);
-#endif //  SHUTDOWNBARRIER
 
 	xprintf("FreeRTOS scheduler started.\n");
 	vTaskStartScheduler();

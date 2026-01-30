@@ -92,4 +92,7 @@ void image_hackInactive(void);
 // Returns whether the camera system is enabled
 bool image_getEnabled(void);
 
+// Call to shut down cameras and enter DPD
+void image_sleepNow(void);
+
 #endif /* APP_WW_PROJECTS_WW500_MD_IMAGE_TASK_H_ */

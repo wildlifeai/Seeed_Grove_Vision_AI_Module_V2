@@ -144,6 +144,10 @@ extern QueueHandle_t xImageTaskQueue;
 
 extern Barrier_t startupBarrier; // Object that calls a function when all tasks are ready
 
+#ifdef SHUTDOWNBARRIER
+extern Barrier_t shutdownBarrier;  // Object that calls a function when all tasks are ready to shut down
+#endif // SHUTDOWNBARRIER
+
 /*************************************** Local variables *******************************************/
 
 SemaphoreHandle_t xSDInitDoneSemaphore;

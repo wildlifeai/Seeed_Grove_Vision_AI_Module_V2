@@ -95,9 +95,6 @@
 extern QueueHandle_t     xIfTaskQueue;
 extern QueueHandle_t     xImageTaskQueue;
 
-// This will be available to all of the tasks:
-Barrier_t startupBarrier;
-Barrier_t shutdownBarrier;
 
 /*************************************** Local variables *******************************************/
 
@@ -108,6 +105,12 @@ static char versionString[64]; // Make sure the buffer is large enough
 #ifdef USE_HM0360_MD
 bool hm0360Present = false;
 #endif // USE_HM0360_MD
+
+// This will be available to all of the tasks:
+Barrier_t startupBarrier;
+#ifdef SHUTDOWNBARRIER
+Barrier_t shutdownBarrier;  // Object that calls a function when all tasks are ready to shut down
+#endif // SHUTDOWNBARRIER
 
 /*************************************** Local routine prototypes  *************************************/
 
@@ -475,14 +478,9 @@ void app_onInactivityDetection(void) {
 	xprintf("Inactive for %dms\n", inactivity_getPeriod());
 	XP_WHITE;
 
-#ifdef SHUTDOWNBARRIER
-
-#else
 	send_msg.msg_data = 0;
 	send_msg.msg_parameter = 0;
 	send_msg.msg_event = APP_MSG_IMAGETASK_INACTIVITY;
-
-	// TODO - RECONSIDER SEQUENCE TO AVOID RACE CONDITIONS
 
 	// Send a message to the image state machine to start the motion detection mechanism
 	if (xQueueSend(xImageTaskQueue, (void *)&send_msg, __QueueSendTicksToWait) != pdTRUE) {
@@ -494,10 +492,6 @@ void app_onInactivityDetection(void) {
 	if (xQueueSend(xIfTaskQueue, (void *)&send_msg, __QueueSendTicksToWait) != pdTRUE) {
 		xprintf("send_msg=0x%x fail\r\n", send_msg.msg_event);
 	}
-
-	// TODO - can I send the APP_MSG_FATFSTASK_SAVE_STATE message to the fatfs task from here?
-#endif //  SHUTDOWNBARRIER
-
 }
 
 
@@ -809,7 +803,7 @@ int app_main(void){
 	barrier_init(&startupBarrier, taskIndex, ifTask_allTasksReady);
 #ifdef SHUTDOWNBARRIER
 	// Also a barrier to entering DPD -
-	barrier_init(&shutdownBarrier, 2, ifTask_allTasksShutdown);
+	barrier_init(&shutdownBarrier, 2, image_sleepNow);
 #endif //  SHUTDOWNBARRIER
 
 	xprintf("FreeRTOS scheduler started.\n");

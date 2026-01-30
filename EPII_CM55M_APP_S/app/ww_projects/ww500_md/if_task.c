@@ -136,6 +136,9 @@ extern QueueHandle_t     xCliTaskQueue;
 extern QueueHandle_t     xFatTaskQueue;
 extern Barrier_t startupBarrier;  // Object that calls a function when all tasks are ready
 
+#ifdef SHUTDOWNBARRIER
+extern Barrier_t shutdownBarrier;  // Object that calls a function when all tasks are ready to shut down
+#endif // SHUTDOWNBARRIER
 
 /*************************************** Local variables *******************************************/
 
@@ -145,7 +148,10 @@ static APP_WAKE_REASON_E woken;
 static USE_DW_IIC_SLV_E iic_id;
 
 SemaphoreHandle_t xI2CTxSemaphore;
+
+#ifndef SHUTDOWNBARRIER
 SemaphoreHandle_t xIfCanSleepSemaphore;
+#endif //  SHUTDOWNBARRIER
 
 // This is the handle of the task
 TaskHandle_t 	ifTask_task_id;
@@ -735,9 +741,14 @@ static APP_MSG_DEST_T  handleEventForStateI2CTx(APP_MSG_T rxMessage) {
 
 		if (lastMessageSent) {
 			// special case just before entering DPD.
+#ifdef SHUTDOWNBARRIER
+			xprintf("IF task ready to sleep.\n");
+			barrier_ready(&shutdownBarrier);
+#else
 			xprintf("DEBUG: giving semaphore\n");
 			// The semaphore lets the Image Task enter DPD
 			xSemaphoreGive(xIfCanSleepSemaphore);
+#endif // SHUTDOWNBARRIER
 		}
 		break;
 
@@ -1611,6 +1622,7 @@ TaskHandle_t ifTask_createTask(int8_t priority, uint8_t wakeReason) {
 		configASSERT(0);	// TODO add debug messages?
 	}
 
+#ifndef SHUTDOWNBARRIER
 	// Semaphore to flag that the final message has been sent and we can enter DPD
 	xIfCanSleepSemaphore = xSemaphoreCreateBinary();
 
@@ -1618,6 +1630,7 @@ TaskHandle_t ifTask_createTask(int8_t priority, uint8_t wakeReason) {
 		xprintf("Failed to create xIfCanSleepSemaphore\n");
 		configASSERT(0);	// TODO add debug messages?
 	}
+#endif //  SHUTDOWNBARRIER
 
 	// Now must release the I2C semaphore
 	xSemaphoreGive(xI2CTxSemaphore);
@@ -1666,33 +1679,5 @@ void ifTask_allTasksReady(void) {
 		xprintf("send_msg=0x%x fail\r\n", send_msg.msg_event);
 	}
 }
-
-#ifdef SHUTDOWNBARRIER
-/**
- * Callback for when certain tasks have completed their work prior to entering DPD
- *
- * When the barrier mechanism determines all tasks are ready to sleep.
- *
- * We need if_task to ?
- * We need _task to ?
- */
-void ifTask_allTasksShutdown(void) {
-#if 0
-	APP_MSG_T send_msg;
-
-	// Send back to MKL62BA - msg_data is the string
-	send_msg.msg_data = 0;
-	send_msg.msg_parameter = 0;
-	send_msg.msg_event = APP_MSG_IFTASK_FREERTOS_INIT;
-
-	if (xQueueSend(xIfTaskQueue, (void *)&send_msg, __QueueSendTicksToWait) != pdTRUE) {
-		xprintf("send_msg=0x%x fail\r\n", send_msg.msg_event);
-	}
-#else
-	xprintf("DEBUG: ready to enter DPD\n");
-#endif
-}
-
-#endif //  SHUTDOWNBARRIER
 
 

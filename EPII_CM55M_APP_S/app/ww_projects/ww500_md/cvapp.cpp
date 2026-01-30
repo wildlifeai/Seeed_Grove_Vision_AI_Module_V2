@@ -595,7 +595,7 @@ void debug_flash_status(void) {
     uint8_t id_info = 0;
     int result;
 
-    xprintf("=== FLASH DEBUG STATUS ===\n");
+    //xprintf("=== FLASH DEBUG STATUS ===\n");
     xprintf("Flash initialized: %s\n", flash_initialized ? "YES" : "NO");
 
     // Disable XIP before reading ID
@@ -751,7 +751,7 @@ int init_flash(void) {
 		return 0;
 	}
 
-	xprintf("Init EEPROM...\r\n");
+	//xprintf("Init EEPROM...\r\n");
 
 	// Create mutex on first call
 	// TODO for consistenacy this should be in image_createTask()
@@ -802,7 +802,7 @@ int init_flash(void) {
 
 	xSemaphoreGive(xSPIMutex);
 
-	xprintf("Flash ID: 0x%02X\n", id_info);
+	xprintf("Flash ID 0x%02X Initialised\n", id_info);
 	flash_initialized = true;
 
 	return 0;

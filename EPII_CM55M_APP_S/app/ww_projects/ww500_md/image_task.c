@@ -186,11 +186,7 @@ static void generateImageFileName(uint16_t number);
 static void setFileOpFromJpeg(uint32_t jpeg_sz, uint32_t jpeg_addr);
 
 // When final activity from the FatFS Task and IF Task are complete, enter DPD
-#ifndef SHUTDOWNBARRIER
 static void sleepWhenPossible(void);
-#endif // SHUTDOWNBARRIER
-
-static void sleepNow(void);
 
 static void captureSequenceComplete(void);
 
@@ -216,8 +212,12 @@ static size_t get_gps_ifd_size(void);
 extern QueueHandle_t xFatTaskQueue;
 extern QueueHandle_t xIfTaskQueue;
 
-// extern SemaphoreHandle_t xFatCanSleepSemaphore;
+#ifdef SHUTDOWNBARRIER
+extern Barrier_t shutdownBarrier;
+#else
 extern SemaphoreHandle_t xIfCanSleepSemaphore;
+#endif // SHUTDOWNBARRIER
+
 extern SemaphoreHandle_t xSDInitDoneSemaphore;
 
 extern Barrier_t startupBarrier; // Object that calls a function when all tasks are ready
@@ -669,10 +669,9 @@ static APP_MSG_DEST_T handleEventForInit(APP_MSG_T img_recv_msg)
         }
         else {
             // No SD card therefore can't save state
-#ifndef SHUTDOWNBARRIER
             // Wait till the IF Task is also ready, then sleep
             sleepWhenPossible(); // does not return
-#endif //  SHUTDOWNBARRIER
+            image_task_state = APP_IMAGE_TASK_STATE_UNINIT;
         }
 
         break;
@@ -961,16 +960,15 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
             image_task_state = APP_IMAGE_TASK_STATE_SAVE_STATE;
         }
         else  {
-            // No SD card therefore can't save state
-#ifndef SHUTDOWNBARRIER
-            // Wait till the IF Task is also ready, then sleep
-            sleepWhenPossible(); // does not return
-#endif // SHUTDOWNBARRIER
+        	// No SD card therefore can't save state
+        	// Wait till the IF Task is also ready, then sleep
+        	sleepWhenPossible(); // does not return
+            image_task_state = APP_IMAGE_TASK_STATE_UNINIT;
         };
         break;
 
     default:
-        flagUnexpectedEvent(img_recv_msg);
+    	flagUnexpectedEvent(img_recv_msg);
     }
 
     return send_msg;
@@ -1199,10 +1197,9 @@ static APP_MSG_DEST_T handleEventForSaveState(APP_MSG_T img_recv_msg)
 
     case APP_MSG_IMAGETASK_DISK_WRITE_COMPLETE:
         // Here when the FatFS task has saved state
-#ifndef SHUTDOWNBARRIER
         // Wait till the IF Task is also ready, then sleep
         sleepWhenPossible(); // does not return
-#endif // SHUTDOWNBARRIER
+        image_task_state = APP_IMAGE_TASK_STATE_UNINIT;
         break;
 
     case APP_MSG_IMAGETASK_CHANGE_ENABLE:
@@ -1762,8 +1759,6 @@ static void sendMsgToMaster(char *str)
     }
 }
 
-
-#ifndef SHUTDOWNBARRIER
 /**
  * When final activity from the FatFS Task and IF Task are complete, enter DPD
  *
@@ -1771,87 +1766,18 @@ static void sendMsgToMaster(char *str)
  * When complete it will give its semaphore.
  */
 static void sleepWhenPossible(void) {
+#ifdef SHUTDOWNBARRIER
+	xprintf("Image task ready to sleep.\n");
+	barrier_ready(&shutdownBarrier);
+#else
+	xprintf("Waiting for IF task to finish.\n");
+	xSemaphoreTake(xIfCanSleepSemaphore, portMAX_DELAY);
 
-    xprintf("Waiting for IF task to finish.\n");
-    xSemaphoreTake(xIfCanSleepSemaphore, portMAX_DELAY);
-
-    sleepNow();
+	image_sleepNow();
+#endif // SHUTDOWNBARRIER
 }
-#endif //  SHUTDOWNBARRIER
 
-/**
- * Enter DPD
- *
- * This is a separate routine from sleepWhenPossible since it is called from 2 places
- */
-static void sleepNow(void) {
-    uint32_t timelapseDelay;
-    uint8_t brightnessPercent;
 
-    FlashLeds_t ledInUse;
-
-    brightnessPercent = (uint8_t)fatfs_getOperationalParameter(OP_PARAMETER_LED_BRIGHTNESS_PERCENT);
-    ledInUse = fatfs_getOperationalParameter(OP_PARAMETER_FLASH_LED);
-
-#ifdef USE_HM0360
-    // HM0360 as main camera
-    if (nnSystemEnabled) {
-        xprintf("Preparing HM0360 for MD\n");
-        configure_image_sensor(CAMERA_CONFIG_MD);
-
-        // Consider turning on the LED flashes, controlled by the HM0360 STROBE output
-        if ((brightnessPercent == 0) || (ledInUse == 0))  {
-            // No STROBE pulses
-            xprintf("Preparing HM0360 for MD - no LED flashes.\n");
-            hm0360_md_configureStrobe(0);
-        }
-        else {
-            // Create STROBE pulses
-            xprintf("Preparing HM0360 for MD - with LED flashes.\n");
-            hm0360_md_configureStrobe(0x0B);
-        }
-    }
-    else {
-        // camera system is not enabled.
-        // I think something else has already set its mode to SLEEP
-    }
-#endif // USE_HM0360
-
-#ifdef USE_HM0360_MD
-    // HM0360 for motion detection only.
-
-    hm0360_md_prepare(); // select CONTEXT_B registers
-
-    // Consider turning on the LED flashes, controlled by the HM0360 STROBE output
-    if ((brightnessPercent == 0) || (ledInUse == 0))  {
-        // No STROBE pulses
-        xprintf("Preparing HM0360 for MD - no LED flashes\n");
-        hm0360_md_configureStrobe(0);
-    }
-    else   {
-        // Create STROBE pulses
-        xprintf("Preparing HM0360 for MD - with LED flashes\n");
-        hm0360_md_configureStrobe(0x0B);
-    }
-
-#endif // USE_HM0360_MD
-
-    xprintf("\nEnter DPD mode!\n\n");
-
-    timelapseDelay = fatfs_getOperationalParameter(OP_PARAMETER_TIMELAPSE_INTERVAL);
-
-    if (timelapseDelay > 0)
-    {
-        // Enable wakeup on WAKE pin and timer
-        sleep_mode_enter_dpd(SLEEPMODE_WAKE_SOURCE_WAKE_PIN | SLEEPMODE_WAKE_SOURCE_RTC,
-                             timelapseDelay, false); // Does not return
-    }
-    else
-    {
-        // If the OP_PARAMETER_TIMELAPSE_INTERVAL setting is 0 then we don't enable a timer wakeup
-        sleep_mode_enter_dpd(SLEEPMODE_WAKE_SOURCE_WAKE_PIN, 0, false); // Does not return
-    }
-}
 
 /*************************************** Local EXIF-related Definitions *****************************/
 
@@ -2633,7 +2559,7 @@ void image_hackInactive(void)
 
     configure_image_sensor(CAMERA_CONFIG_STOP); // run some sensordplib_stop functions then run HM0360_stream_off commands to the HM0360
 
-    sleepNow();
+    image_sleepNow();
 }
 
 // Not used...
@@ -2649,14 +2575,91 @@ void image_hackInactive(void)
  *
  * @return state of the nnSystemEnabled variable
  */
-bool image_getEnabled(void)
-{
-    if (nnSystemEnabled == 0)
-    {
+bool image_getEnabled(void) {
+    if (nnSystemEnabled == 0) {
         return false;
     }
-    else
-    {
+    else {
         return true;
+    }
+}
+
+/**
+ * Enter DPD
+ *
+ * This is a separate routine from sleepWhenPossible since it is called from 2 places
+ *
+ * Callback for when certain tasks have completed their work prior to entering DPD
+ *
+ * When the barrier mechanism determines all tasks are ready to sleep.
+ *
+ * We need fatfs_task to save state to SD card
+ * We need if_task to notify BLE processor it is sleeping
+ *
+ */
+void image_sleepNow(void) {
+    uint32_t timelapseDelay;
+    uint8_t brightnessPercent;
+
+    FlashLeds_t ledInUse;
+
+    brightnessPercent = (uint8_t)fatfs_getOperationalParameter(OP_PARAMETER_LED_BRIGHTNESS_PERCENT);
+    ledInUse = fatfs_getOperationalParameter(OP_PARAMETER_FLASH_LED);
+
+#ifdef USE_HM0360
+    // HM0360 as main camera
+    if (nnSystemEnabled) {
+        xprintf("Preparing HM0360 for MD\n");
+        configure_image_sensor(CAMERA_CONFIG_MD);
+
+        // Consider turning on the LED flashes, controlled by the HM0360 STROBE output
+        if ((brightnessPercent == 0) || (ledInUse == 0))  {
+            // No STROBE pulses
+            xprintf("Preparing HM0360 for MD - no LED flashes.\n");
+            hm0360_md_configureStrobe(0);
+        }
+        else {
+            // Create STROBE pulses
+            xprintf("Preparing HM0360 for MD - with LED flashes.\n");
+            hm0360_md_configureStrobe(0x0B);
+        }
+    }
+    else {
+        // camera system is not enabled.
+        // I think something else has already set its mode to SLEEP
+    }
+#endif // USE_HM0360
+
+#ifdef USE_HM0360_MD
+    // HM0360 for motion detection only.
+
+    hm0360_md_prepare(); // select CONTEXT_B registers
+
+    // Consider turning on the LED flashes, controlled by the HM0360 STROBE output
+    if ((brightnessPercent == 0) || (ledInUse == 0))  {
+        // No STROBE pulses
+        xprintf("Preparing HM0360 for MD - no LED flashes\n");
+        hm0360_md_configureStrobe(0);
+    }
+    else   {
+        // Create STROBE pulses
+        xprintf("Preparing HM0360 for MD - with LED flashes\n");
+        hm0360_md_configureStrobe(0x0B);
+    }
+
+#endif // USE_HM0360_MD
+
+    xprintf("\nEnter DPD mode!\n\n");
+
+    timelapseDelay = fatfs_getOperationalParameter(OP_PARAMETER_TIMELAPSE_INTERVAL);
+
+    if (timelapseDelay > 0) {
+        // Enable wakeup on WAKE pin and timer
+        sleep_mode_enter_dpd(SLEEPMODE_WAKE_SOURCE_WAKE_PIN | SLEEPMODE_WAKE_SOURCE_RTC,
+                             timelapseDelay, false); // Does not return
+    }
+    else  {
+        // If the OP_PARAMETER_TIMELAPSE_INTERVAL setting is 0 then we don't enable a timer wakeup
+        sleep_mode_enter_dpd(SLEEPMODE_WAKE_SOURCE_WAKE_PIN, 0, false); // Does not return
     }
 }

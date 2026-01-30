@@ -470,13 +470,11 @@ static APP_MSG_DEST_T handleEventForInit(APP_MSG_T img_recv_msg)
             break;
 
         case APP_MSG_IMAGETASK_DISK_WRITE_COMPLETE:
-            if (img_recv_msg.msg_data == 0)
-            {
+            if (img_recv_msg.msg_data == 0)  {
                 send_msg.message.msg_event = APP_MSG_IMAGETASK_DONE;
                 image_task_state = APP_IMAGE_TASK_STATE_INIT;
             }
-            else
-            {
+            else  {
                 dbg_printf(DBG_LESS_INFO, "Image not written, error occured: %d", event);
                 flagUnexpectedEvent(img_recv_msg);
             }

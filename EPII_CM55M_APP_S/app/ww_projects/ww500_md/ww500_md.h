@@ -60,6 +60,11 @@ extern "C" {
 // Use an extended period if the user starts to use the console, for debugging
 #define INACTIVITYTIMEOUTCLI 60000
 
+// Use barrier function to determine when we can enter DPD
+#define SHUTDOWNBARRIER
+
+
+
 // Define function pointer types
 typedef uint16_t (*int_func_ptr)(void);
 typedef const char* (*str_func_ptr)(void);

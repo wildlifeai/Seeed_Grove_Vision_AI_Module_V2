@@ -608,6 +608,7 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 		snprintf(message, sizeof(message), "selfTest %04x", selfTest_getErrorBits());
 
 		sendI2CMessage((uint8_t *) message, AI_PROCESSOR_MSG_RX_STRING, strlen(message) );
+		if_task_state = APP_IF_STATE_I2C_TX;
 
 		break;
 

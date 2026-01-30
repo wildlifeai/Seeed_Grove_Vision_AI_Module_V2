@@ -1718,8 +1718,7 @@ static bool configure_image_sensor(CAMERA_CONFIG_E operation)
 /**
  * Common code to prepare the LED flash after cold and warm boots
  */
-static void setupLEDFlash(void)
-{
+static void setupLEDFlash(void) {
     uint8_t brightnessPercent;
     FlashLeds_t ledInUse;
 
@@ -1789,31 +1788,30 @@ static void sleepNow(void) {
     uint32_t timelapseDelay;
     uint8_t brightnessPercent;
 
+    FlashLeds_t ledInUse;
+
     brightnessPercent = (uint8_t)fatfs_getOperationalParameter(OP_PARAMETER_LED_BRIGHTNESS_PERCENT);
+    ledInUse = fatfs_getOperationalParameter(OP_PARAMETER_FLASH_LED);
 
 #ifdef USE_HM0360
     // HM0360 as main camera
-    if (nnSystemEnabled)
-    {
+    if (nnSystemEnabled) {
         xprintf("Preparing HM0360 for MD\n");
         configure_image_sensor(CAMERA_CONFIG_MD);
 
         // Consider turning on the LED flashes, controlled by the HM0360 STROBE output
-        if (brightnessPercent == 0)
-        {
+        if ((brightnessPercent == 0) || (ledInUse == 0))  {
             // No STROBE pulses
             xprintf("Preparing HM0360 for MD - no LED flashes.\n");
             hm0360_md_configureStrobe(0);
         }
-        else
-        {
+        else {
             // Create STROBE pulses
             xprintf("Preparing HM0360 for MD - with LED flashes.\n");
             hm0360_md_configureStrobe(0x0B);
         }
     }
-    else
-    {
+    else {
         // camera system is not enabled.
         // I think something else has already set its mode to SLEEP
     }
@@ -1825,14 +1823,12 @@ static void sleepNow(void) {
     hm0360_md_prepare(); // select CONTEXT_B registers
 
     // Consider turning on the LED flashes, controlled by the HM0360 STROBE output
-    if (brightnessPercent == 0)
-    {
+    if ((brightnessPercent == 0) || (ledInUse == 0))  {
         // No STROBE pulses
         xprintf("Preparing HM0360 for MD - no LED flashes\n");
         hm0360_md_configureStrobe(0);
     }
-    else
-    {
+    else   {
         // Create STROBE pulses
         xprintf("Preparing HM0360 for MD - with LED flashes\n");
         hm0360_md_configureStrobe(0x0B);

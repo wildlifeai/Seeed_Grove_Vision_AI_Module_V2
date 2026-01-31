@@ -495,6 +495,7 @@ static BaseType_t prvReadCommand( char *pcWriteBuffer, size_t xWriteBufferLen, c
 	if (res == FR_OK) {
 		memcpy(pcWriteBuffer, line, br);
 		binaryLength = br;	// Changed here from -1 to the actual data length, to be accessed in processWW130Command()
+		// If binaryLength >=0 then the message is a APP_MSG_IFTASK_I2CCOMM_CLI_BINARY_RESPONSE or APP_MSG_IFTASK_I2CCOMM_CLI_BINARY_CONTINUES
 		if (br == (CLI_OUTPUT_BUF_SIZE - 3)) {
 			// We have read 241 bytes and there are probably more to come.
 			return pdTRUE;
@@ -577,6 +578,7 @@ static BaseType_t prvTxFileCommand( char *pcWriteBuffer, size_t xWriteBufferLen,
 	if (res == FR_OK) {
 		memcpy(pcWriteBuffer, line, br);
 		binaryLength = br;	// Changed here from -1 to the actual data length, to be accessed in processWW130Command()
+		// If binaryLength >=0 then the message is a APP_MSG_IFTASK_I2CCOMM_CLI_BINARY_RESPONSE or APP_MSG_IFTASK_I2CCOMM_CLI_BINARY_CONTINUES
 		if (br == (CLI_OUTPUT_BUF_SIZE - 3)) {
 			// We have read 241 bytes and there are probably more to come.
 			return pdTRUE;

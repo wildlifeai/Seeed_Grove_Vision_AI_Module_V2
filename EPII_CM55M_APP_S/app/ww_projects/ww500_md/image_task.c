@@ -300,6 +300,7 @@ static char msgToMaster[MSGTOMASTERLEN];
 // static bool nnPositive;
 
 // True means we capture images and run NN processing and report results.
+// TODO - this is probably redundant. We are probably better to use op_parameter[OP_PARAMETER_CAMERA_ENABLED];
 static uint8_t nnSystemEnabled; // 0 = disabled 1 = enabled
 
 // Support for EXIF
@@ -312,6 +313,7 @@ static uint8_t *tiff_start;
 
 // Measure duration between events
 TickType_t startTime;
+
 
 /********************************** Local Functions  *************************************/
 
@@ -1274,16 +1276,13 @@ static void captureSequenceComplete(void)
  *
  * @param setEnabled enable if true
  */
-static void changeEnableState(bool setEnabled)
-{
+static void changeEnableState(bool setEnabled) {
 
-    if (setEnabled)
-    {
+    if (setEnabled){
         nnSystemEnabled = 1;
         fatfs_setOperationalParameter(OP_PARAMETER_CAMERA_ENABLED, 1);
     }
-    else
-    {
+    else {
         nnSystemEnabled = 0;
         fatfs_setOperationalParameter(OP_PARAMETER_CAMERA_ENABLED, 0);
     }
@@ -1333,12 +1332,12 @@ static void vImageTask(void *pvParameters)
     xprintf("Starting Image Task\n");
     XP_WHITE;
 
-    // Report whether dynamic EXIF confidence tags are enabled at build time
-#ifdef ENABLE_EXIF_CONFIDENCE
-    xprintf("EXIF confidence tags: ENABLED\n");
-#else
-    xprintf("EXIF confidence tags: DISABLED\n");
-#endif // ENABLE_EXIF_CONFIDENCE
+//    // Report whether dynamic EXIF confidence tags are enabled at build time
+//#ifdef ENABLE_EXIF_CONFIDENCE
+//    xprintf("EXIF confidence tags: ENABLED\n");
+//#else
+//    xprintf("EXIF confidence tags: DISABLED\n");
+//#endif // ENABLE_EXIF_CONFIDENCE
 
     // Should initialise the camera but not start taking images
 #ifdef USE_HM0360
@@ -1370,8 +1369,7 @@ static void vImageTask(void *pvParameters)
 #ifdef USE_HM0360_MD
     // The HM0360 is not our main camera but we are using it for motion detection.
     // There is some more initialisation required.
-    if (woken == APP_WAKE_REASON_COLD)
-    {
+    if (woken == APP_WAKE_REASON_COLD) {
         hm0360_md_init();
     }
 
@@ -2621,11 +2619,18 @@ void image_sleepNow(void) {
 
 #ifdef USE_HM0360_MD
     // HM0360 for motion detection only.
-
-    hm0360_md_prepare(); // select CONTEXT_B registers
+    // If the camera system is disabled then ensure MD is off and flash LED is off
+    bool enabled;
+    enabled = fatfs_getOperationalParameter(OP_PARAMETER_CAMERA_ENABLED);
+    hm0360_md_prepare(enabled); // select CONTEXT_B registers (if enabled)
 
     // Consider turning on the LED flashes, controlled by the HM0360 STROBE output
-    if ((brightnessPercent == 0) || (ledInUse == 0))  {
+    if (!enabled) {
+        // No STROBE pulses
+        xprintf("Camera disabled - no LED flashes\n");
+        hm0360_md_configureStrobe(0);
+    }
+    else if ((brightnessPercent == 0) || (ledInUse == 0))  {
         // No STROBE pulses
         xprintf("Preparing HM0360 for MD - no LED flashes\n");
         hm0360_md_configureStrobe(0);

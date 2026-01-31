@@ -952,7 +952,7 @@ static APP_MSG_DEST_T flagUnexpectedEvent(APP_MSG_T rxMessage) {
 static void sendI2CMessage(uint8_t * data, aiProcessor_msg_type_t messageType, uint16_t payloadLength) {
 
 	interprocessor_interrupt_assert();
-	i2ccomm_write_enable(data, messageType, payloadLength);	// Get the I2C dat ready to transmit.
+	i2ccomm_write_enable(data, messageType, payloadLength);	// Get the I2C datA ready to transmit.
 	interprocessor_interrupt_negate();	// WW130 responds on the rising edge. It starts the I2Cread process
 }
 

@@ -36,6 +36,8 @@ static uint8_t mainCameraID;
 
 static bool hm0360MainCamera = false;
 
+static bool hm0360_present;
+
 static HX_CIS_SensorSetting_t HM0360_md_init_setting[] = {
 #include "../../../ww500_md/cis_sensor/cis_hm0360/HM0360_OSC_Bayer_640x480_setA_VGA_setB_QVGA_md_8b_ParallelOutput_R2.i"
 };
@@ -116,7 +118,9 @@ bool hm0360_md_isSensorPresent(uint8_t sensorAddress) {
 	*/
 	ret = hx_drv_i2cm_read_data(USE_DW_IIC_1, sensorAddress, &rBuffer, 1);
 
-	return (ret == IIC_ERR_OK);
+	hm0360_present = (ret == IIC_ERR_OK);
+
+	return hm0360_present;
 }
 
 /**
@@ -154,8 +158,12 @@ void hm0360_md_init(void) {
 
 	if (ret != HX_CIS_NO_ERROR) {
 		dbg_printf(DBG_LESS_INFO, "HM0360 initialisation failed %d\r\n", ret);
+		hm0360_present = false;
 		restoreMainCameraConfig();
 		return;
+	}
+	else {
+		hm0360_present = true;
 	}
 
 	// Only at cold boot do we need to initialise all of the registers.
@@ -186,17 +194,19 @@ void hm0360_md_init(void) {
  * @return error code
  */
 HX_CIS_ERROR_E hm0360_md_setMode(uint8_t context, mode_select_t newMode,
-		uint8_t numFrames, uint16_t sleepTm) {
+		uint8_t numFrames, uint16_t sleepTime) {
 	mode_select_t currentMode;
 	HX_CIS_ERROR_E ret;
 	uint16_t sleepCount;
-	uint16_t sleepTime;
 
-	sleepTime = sleepTm;
+	// Don't proceed if the HM0360 is missing or faulty
+	if (!hm0360_present) {
+		return HX_CIS_UNKNOWN_ERROR;
+	}
 
     saveMainCameraConfig();
 //
-//	I wanted to allow for noMD, so I thought id sleepTime == 0 then switch to MODE_SLEEP
+//	I wanted to allow for no MD, so I thought id sleepTime == 0 then switch to MODE_SLEEP
 //	However it results in c. 700uA current vs c.270uA for MODE_SW_NFRAMES_SLEEP
 
 //	mode_select_t newMode;
@@ -220,7 +230,7 @@ HX_CIS_ERROR_E hm0360_md_setMode(uint8_t context, mode_select_t newMode,
 //	}
 
 
-	ret = hx_drv_cis_get_reg(MODE_SELECT , &currentMode);
+	ret = hx_drv_cis_get_reg(MODE_SELECT, &currentMode);
 	if (ret != HX_CIS_NO_ERROR) {
 	    restoreMainCameraConfig();
 		return ret;
@@ -306,6 +316,11 @@ HX_CIS_ERROR_E hm0360_md_getInterruptStatus(uint8_t * val) {
 	uint8_t currentStatus;
 	HX_CIS_ERROR_E ret;
 
+	// Don't proceed if the HM0360 is missing or faulty
+	if (!hm0360_present) {
+		return HX_CIS_UNKNOWN_ERROR;
+	}
+
     saveMainCameraConfig();
 
 	ret = hx_drv_cis_get_reg(INT_INDIC , &currentStatus);
@@ -328,6 +343,11 @@ HX_CIS_ERROR_E hm0360_md_getInterruptStatus(uint8_t * val) {
 HX_CIS_ERROR_E hm0360_md_clearInterrupt(uint8_t val) {
 	HX_CIS_ERROR_E ret;
 
+	// Don't proceed if the HM0360 is missing or faulty
+	if (!hm0360_present) {
+		return HX_CIS_UNKNOWN_ERROR;
+	}
+
     saveMainCameraConfig();
 
 	ret = hx_drv_cis_set_reg(INT_CLEAR, val, 0);
@@ -344,6 +364,11 @@ HX_CIS_ERROR_E hm0360_md_clearInterrupt(uint8_t val) {
  */
 HX_CIS_ERROR_E hm0360_md_enableInterrupt(void) {
 	HX_CIS_ERROR_E ret;
+
+	// Don't proceed if the HM0360 is missing or faulty
+	if (!hm0360_present) {
+		return HX_CIS_UNKNOWN_ERROR;
+	}
 
 	saveMainCameraConfig();
 
@@ -363,6 +388,11 @@ HX_CIS_ERROR_E hm0360_md_enableInterrupt(void) {
 HX_CIS_ERROR_E hm0360_md_disableInterrupt(void) {
 	HX_CIS_ERROR_E ret;
 
+	// Don't proceed if the HM0360 is missing or faulty
+	if (!hm0360_present) {
+		return HX_CIS_UNKNOWN_ERROR;
+	}
+
 	saveMainCameraConfig();
 
 	ret = hx_drv_cis_set_reg(MD_CTRL1, 0, 0);
@@ -378,22 +408,37 @@ HX_CIS_ERROR_E hm0360_md_disableInterrupt(void) {
  * Get the HM0360 ready to detect motion
  *
  *  Select CONTEXT_B registers
+ *
+ *  @param cameraSystemEnabled - true if OP_PARAMETER_CAMERA_ENABLED is set
  */
-HX_CIS_ERROR_E hm0360_md_prepare(void) {
+HX_CIS_ERROR_E hm0360_md_prepare(bool cameraSystemEnabled) {
 	HX_CIS_ERROR_E ret;
+	uint16_t mdInterval;
+
+	// Don't proceed if the HM0360 is missing or faulty
+	if (!hm0360_present) {
+		return HX_CIS_UNKNOWN_ERROR;
+	}
+
+	if (cameraSystemEnabled) {
+		mdInterval = fatfs_getOperationalParameter(OP_PARAMETER_MD_INTERVAL);
+	}
+	else {
+		mdInterval = 0;
+	}
 
 	// This writes to register 0x2065
+	// MD interrupt will be enabled in hm0360_md_setMode() if MD is enabled
 	hm0360_md_clearInterrupt(0xff);		// clear all bits
-	// MD interrupt will be enabled in hm0360_md_setMode()
 
-	ret = hm0360_md_setMode(CONTEXT_B, MODE_SW_NFRAMES_SLEEP, 1,
-			fatfs_getOperationalParameter(OP_PARAMETER_MD_INTERVAL));
+	// Don't use MODE_SLEEP even if camera system is disabled, as it draws more power!
+	ret = hm0360_md_setMode(CONTEXT_B, MODE_SW_NFRAMES_SLEEP, 1, mdInterval);
 
 	return ret;
 }
 
 /**
- * Reads status regsiters related to Automatic Exposure
+ * Reads status registers related to Automatic Exposure
 
  * @param val - pointer to a structure that accepts the results
  * @return error code
@@ -402,6 +447,11 @@ HX_CIS_ERROR_E hm0360_md_getGainRegs(HM0360_GAIN_T * val) {
 	HX_CIS_ERROR_E ret;
 	uint8_t valueH;
 	uint8_t valueL;
+
+	// Don't proceed if the HM0360 is missing or faulty
+	if (!hm0360_present) {
+		return HX_CIS_UNKNOWN_ERROR;
+	}
 
     saveMainCameraConfig();
 
@@ -440,6 +490,11 @@ HX_CIS_ERROR_E hm0360_md_getGainRegs(HM0360_GAIN_T * val) {
 void hm0360_md_getMDOutput(uint8_t * regTable, uint8_t length) {
 	uint8_t val;
 
+	// Don't proceed if the HM0360 is missing or faulty
+	if (!hm0360_present) {
+		return;
+	}
+
 	if (length != ROIOUTENTRIES) {
 		return;
 	}
@@ -474,6 +529,11 @@ void hm0360_md_getMDOutput(uint8_t * regTable, uint8_t length) {
 HX_CIS_ERROR_E hm0360_md_configureStrobe(uint8_t val) {
 	HX_CIS_ERROR_E ret;
 
+	// Don't proceed if the HM0360 is missing or faulty
+	if (!hm0360_present) {
+		return HX_CIS_UNKNOWN_ERROR;
+	}
+
     saveMainCameraConfig();
 
     ret = hx_drv_cis_set_reg(STROBE_CFG, val, 0);
@@ -492,6 +552,11 @@ HX_CIS_ERROR_E hm0360_md_configureStrobe(uint8_t val) {
  */
 HX_CIS_ERROR_E hm0360_md_enableMD(uint16_t mdFrameInterval) {
 	HX_CIS_ERROR_E ret;
+
+	// Don't proceed if the HM0360 is missing or faulty
+	if (!hm0360_present) {
+		return HX_CIS_UNKNOWN_ERROR;
+	}
 
     saveMainCameraConfig();
 

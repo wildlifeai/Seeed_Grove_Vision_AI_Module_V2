@@ -640,8 +640,7 @@ void cisdp_sensor_start()
 }
 
 
-void cisdp_sensor_stop()
-{
+void cisdp_sensor_stop() {
     sensordplib_stop_capture();
     sensordplib_start_swreset();
     sensordplib_stop_swreset_WoSensorCtrl();
@@ -649,12 +648,10 @@ void cisdp_sensor_stop()
     /*
      * Stream Off
      */
-    if(hx_drv_cis_setRegTable(IMX708_stream_off, HX_CIS_SIZE_N(IMX708_stream_off, HX_CIS_SensorSetting_t))!= HX_CIS_NO_ERROR)
-    {
+    if(hx_drv_cis_setRegTable(IMX708_stream_off, HX_CIS_SIZE_N(IMX708_stream_off, HX_CIS_SensorSetting_t))!= HX_CIS_NO_ERROR){
     	dbg_printf(DBG_LESS_INFO, "IMX708 off by app fail\r\n");
     }
-    else
-    {
+    else {
     	dbg_printf(DBG_LESS_INFO, "IMX708 off by app \n");
     }
 

@@ -153,23 +153,31 @@ void hm0360_md_init(void) {
 
 	saveMainCameraConfig();
 
+	// This might have been called earlier as well
+	hm0360_present = hm0360_md_isSensorPresent(HM0360_SENSOR_I2CID);
+
+	// Don't proceed if the HM0360 is missing or faulty
+	if (!hm0360_present) {
+		dbg_printf(DBG_LESS_INFO, "  HM0360 not present\n");
+		restoreMainCameraConfig();
+		return ;
+	}
+
 	// Set HM0360 mode to SLEEP before initialisation
 	ret = hm0360_md_setMode(CONTEXT_A, MODE_SLEEP, 0, 0);
 
 	if (ret != HX_CIS_NO_ERROR) {
-		dbg_printf(DBG_LESS_INFO, "HM0360 initialisation failed %d\r\n", ret);
+		dbg_printf(DBG_LESS_INFO, "HM0360 initialisation failed. Error %d\r\n", ret);
 		hm0360_present = false;
 		restoreMainCameraConfig();
 		return;
-	}
-	else {
-		hm0360_present = true;
 	}
 
 	// Only at cold boot do we need to initialise all of the registers.
 	// This is the long list...
 	if(hx_drv_cis_setRegTable(HM0360_md_init_setting, HX_CIS_SIZE_N(HM0360_md_init_setting, HX_CIS_SensorSetting_t))!= HX_CIS_NO_ERROR) {
 		dbg_printf(DBG_LESS_INFO, "HM0360 Init fail \r\n");
+		hm0360_present = false;
 		restoreMainCameraConfig();
 		return;
 	}

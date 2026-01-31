@@ -1676,7 +1676,7 @@ static bool configure_image_sensor(CAMERA_CONFIG_E operation)
 
     case CAMERA_CONFIG_STOP:
         xprintf("Stopping sensor\n");
-        cisdp_sensor_stop(); // run some sensordplib_stop functions then run HM0360_stream_off commands to the HM0360
+        cisdp_sensor_stop(); // run some sensordplib_stop functions then run IMX708_stream_off commands to the IMX708 (or other sensor)
 
 #if defined(USE_RP2) || defined(USE_RP3)
         // Only needed if using a RP camera

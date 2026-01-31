@@ -1299,8 +1299,7 @@ static void changeEnableState(bool setEnabled) {
  * After some one-off activities it waits for events to arrive in its xImageTaskQueue
  *
  */
-static void vImageTask(void *pvParameters)
-{
+static void vImageTask(void *pvParameters) {
     APP_MSG_T img_recv_msg;
     APP_MSG_T internal_msg;
     APP_MSG_DEST_T send_msg;
@@ -1343,12 +1342,10 @@ static void vImageTask(void *pvParameters)
 #ifdef USE_HM0360
     // HM0360 is the main cameras
     hm0360_md_setIsMainCamera(true);
-    if (woken == APP_WAKE_REASON_COLD)
-    {
+    if (woken == APP_WAKE_REASON_COLD) {
         cameraInitialised = configure_image_sensor(CAMERA_CONFIG_INIT_COLD);
     }
-    else
-    {
+    else {
         cameraInitialised = configure_image_sensor(CAMERA_CONFIG_INIT_WARM);
     }
 
@@ -1359,10 +1356,10 @@ static void vImageTask(void *pvParameters)
 #endif // USE_HM0360
 
     if (!cameraInitialised)  {
-        // TODO - deep sleep or what?
         selfTest_setErrorBits(1 << SELF_TEST_AI_NO_CAM);
         xprintf("\nEnter DPD mode because there is no camera!\n\n");
-        sleep_mode_enter_dpd(SLEEPMODE_WAKE_SOURCE_WAKE_PIN, 0, false); // Does not return
+        // TODO - deep sleep or what?
+        //sleep_mode_enter_dpd(SLEEPMODE_WAKE_SOURCE_WAKE_PIN, 0, false); // Does not return
     }
 
 #ifndef USE_HM0360
@@ -1403,20 +1400,23 @@ static void vImageTask(void *pvParameters)
 #endif // USE_HM0360_MD
 #endif // 0
 
+	// Initialise NN but only of the camera system is enabled
+	if ((nnSystemEnabled == 1) && cameraInitialised) {
+		int cv_init_result = cv_init(true, true,
+				fatfs_getOperationalParameter(OP_PARAMETER_MODEL_PROJECT),
+				fatfs_getOperationalParameter(OP_PARAMETER_MODEL_VERSION),
+				woken);
 
-    int cv_init_result = cv_init(true, true,
-    		fatfs_getOperationalParameter(OP_PARAMETER_MODEL_PROJECT),
-			fatfs_getOperationalParameter(OP_PARAMETER_MODEL_VERSION),
-			woken);
 
-    if (cv_init_result < 0) {
-        xprintf("No model found.\n");
-        // TODO - do we do this?
-        //selfTest_setErrorBits(1 << SELF_TEST_AI_NN_ERROR);
-    }
-    else {
-        xprintf("Initialised neural network.\n");
-    }
+		if (cv_init_result < 0) {
+			xprintf("No model found.\n");
+			// TODO - do we do this?
+			//selfTest_setErrorBits(1 << SELF_TEST_AI_NN_ERROR);
+		}
+		else {
+			xprintf("Initialised neural network.\n");
+		}
+	}
 
     // A value of 0 means no SD card so we can skip all SD card activities
     g_imageSeqNum = fatfs_getImageSequenceNumber();
@@ -1712,8 +1712,13 @@ static bool configure_image_sensor(CAMERA_CONFIG_E operation)
 static void setupLEDFlash(void) {
     uint8_t brightnessPercent;
     FlashLeds_t ledInUse;
+    uint16_t mdInterval;
+    uint16_t cameraEnabled;
 
     brightnessPercent = (uint8_t)fatfs_getOperationalParameter(OP_PARAMETER_LED_BRIGHTNESS_PERCENT);
+    mdInterval = fatfs_getOperationalParameter(OP_PARAMETER_MD_INTERVAL);
+    cameraEnabled = fatfs_getOperationalParameter(OP_PARAMETER_CAMERA_ENABLED);
+
     ledFlashBrightness(brightnessPercent);
 
     // Select the LED
@@ -1722,14 +1727,23 @@ static void setupLEDFlash(void) {
     ledFlashDisable(); // This writes the control bits to the PCA9574
 
     XP_LT_BLUE;
+    xprintf("Image sensor and data path initialised:\n");
+    xprintf("  Camera system %s.\n", (cameraEnabled > 0) ? "enabled": "disabled");
+    xprintf("  LED(s) in use: %d\n", ledInUse);
+    xprintf("  Flash brightness: %d%%\n", brightnessPercent);
+
 #ifdef USE_HM0360
     // Flash duration is not used when HM0360 is the main camera
-    xprintf("Image sensor and data path initialised. LED(s) in use %d. Flash brightness %d%%\r\n",
-            ledInUse, brightnessPercent);
 #else
-    xprintf("Image sensor and data path initialised. LED(s) in use %d. Flash brightness %d%% duration %dms\r\n",
-            ledInUse, brightnessPercent, fatfs_getOperationalParameter(OP_PARAMETER_FLASH_DURATION));
+    xprintf("  Flash duration %dms\r\n", fatfs_getOperationalParameter(OP_PARAMETER_FLASH_DURATION));
 #endif // USE_HM0360
+
+    if (mdInterval > 0) {
+    	xprintf("  MD sampling: %dms\n", mdInterval);
+    }
+    else {
+    	xprintf("  MD disabled\n");
+    }
 
     XP_WHITE;
 }

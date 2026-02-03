@@ -1752,8 +1752,7 @@ static void setupLEDFlash(void) {
  * Send an unsolicited message to the MKL62BA.
  *
  */
-static void sendMsgToMaster(char *str)
-{
+static void sendMsgToMaster(char *str) {
     APP_MSG_T send_msg;
 
     // Send back to MKL62BA - msg_data is the string
@@ -1761,8 +1760,7 @@ static void sendMsgToMaster(char *str)
     send_msg.msg_parameter = strnlen(str, MSGTOMASTERLEN);
     send_msg.msg_event = APP_MSG_IFTASK_MSG_TO_MASTER;
 
-    if (xQueueSend(xIfTaskQueue, (void *)&send_msg, __QueueSendTicksToWait) != pdTRUE)
-    {
+    if (xQueueSend(xIfTaskQueue, (void *)&send_msg, __QueueSendTicksToWait) != pdTRUE) {
         xprintf("send_msg=0x%x fail\r\n", send_msg.msg_event);
     }
 }

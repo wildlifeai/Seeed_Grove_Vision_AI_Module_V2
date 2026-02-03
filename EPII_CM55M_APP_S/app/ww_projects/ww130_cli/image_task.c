@@ -866,8 +866,7 @@ void app_start_state(CAMERA_CONFIG_E state)
  *
  * This is experimental...
  */
-static void sendMsgToMaster(char *str)
-{
+static void sendMsgToMaster(char *str) {
     APP_MSG_T send_msg;
 
     // Send back to MKL62BA - msg_data is the string
@@ -875,8 +874,7 @@ static void sendMsgToMaster(char *str)
     send_msg.msg_parameter = strnlen(str, MSGTOMASTERLEN);
     send_msg.msg_event = APP_MSG_IFTASK_MSG_TO_MASTER;
 
-    if (xQueueSend(xIfTaskQueue, (void *)&send_msg, __QueueSendTicksToWait) != pdTRUE)
-    {
+    if (xQueueSend(xIfTaskQueue, (void *)&send_msg, __QueueSendTicksToWait) != pdTRUE) {
         xprintf("send_msg=0x%x fail\r\n", send_msg.msg_event);
     }
 }
@@ -888,8 +886,7 @@ static void sendMsgToMaster(char *str)
  *
  * The task itself initialises the Image sensor and then manages requests to access it.
  */
-TaskHandle_t image_createTask(int8_t priority)
-{
+TaskHandle_t image_createTask(int8_t priority) {
     if (priority < 0)
     {
         priority = 0;

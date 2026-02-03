@@ -132,6 +132,7 @@
 #endif // WW500_C00
 #include "cvapp.h"
 #include "common_config.h"
+#include "selfTest.h"
 
 /*************************************** Definitions *******************************************/
 
@@ -250,7 +251,7 @@ static BaseType_t prvGetgps(char *writeBuffer, size_t writeBufferLen, const char
 static BaseType_t prvExifGpsTests(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 static BaseType_t prvLoadModel(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 static BaseType_t prvEraseModel(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
-
+static BaseType_t prvGetSelfTest(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 
 static BaseType_t prvSetOpParam(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 static BaseType_t prvGetOpParam(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
@@ -489,6 +490,14 @@ static const CLI_Command_Definition_t xGetOpParam = {
 	"getop <index>:\r\n Get Operational Parameter <index>\r\n",
 	prvGetOpParam, /* The function to run. */
 	1			/* One parameter expected */
+};
+
+/* Structure that defines the "selftest" command line command. */
+static const CLI_Command_Definition_t xGetSelfTest = {
+	"selftest", /* The command string to type. */
+	"selftest:\r\n Get Self Test bits\r\n",
+	prvGetSelfTest, /* The function to run. */
+	0			/* No parameters expected */
 };
 
 /********************************** Private Functions - for CLI commands *************************************/
@@ -1360,6 +1369,22 @@ static BaseType_t prvGetOpParam(char *pcWriteBuffer, size_t xWriteBufferLen, con
 	return pdFALSE;
 }
 
+
+/**
+ * Return current self test bits
+ */
+static BaseType_t prvGetSelfTest(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) {
+	(void)pcCommandString;
+	(void)xWriteBufferLen;
+	configASSERT(pcWriteBuffer);
+
+	pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen, "selfTest %04x", selfTest_getErrorBits());
+
+	/* There is no more data to return after this single string, so return pdFALSE. */
+	return pdFALSE;
+}
+
+
 /**
  * Extract a GPS string and set the device GPS coordinates
  *
@@ -1987,6 +2012,7 @@ static void vRegisterCLICommands(void)
 
 	FreeRTOS_CLIRegisterCommand(&xSetOpParam);	// Sets an Operational Parameter
 	FreeRTOS_CLIRegisterCommand(&xGetOpParam);	// Gets an Operational Parameter
+	FreeRTOS_CLIRegisterCommand(&xGetSelfTest);	// Gets self test bits
 
 #ifdef WW500_C00
 	FreeRTOS_CLIRegisterCommand(&xLedFlash);	// Test the ledFlash code

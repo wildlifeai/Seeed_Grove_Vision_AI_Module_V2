@@ -222,6 +222,8 @@ const char *cmdString[] = {
 
 bool lastMessageSent = false;
 
+bool sendWakeMsg = false;
+
 /*********************************** I2C Local Function Definitions ************************************************/
 
 /**
@@ -565,6 +567,8 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 		break;
 
 	case APP_MSG_IFTASK_AWAKE:
+#ifdef SENDMSGEARLY
+		// else send when APP_MSG_IFTASK_FREERTOS_INIT arrives
 		// We have just woken, so send a message to the BLE processor
 		// Include the AI's time
 		if (woken == APP_WAKE_REASON_MD) {
@@ -576,7 +580,30 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 			snprintf(message, sizeof(message), "Wake ");
 			exif_utc_get_rtc_as_utc_string(&message[5], UTCSTRINGLENGTH );
 		}
-		sendI2CMessage((uint8_t *) message, AI_PROCESSOR_MSG_RX_STRING, 5 + UTCSTRINGLENGTH );
+
+		if_task_state = APP_IF_STATE_I2C_TX;
+#endif // SENDMSGEARLY
+		break;
+
+	case APP_MSG_IFTASK_FREERTOS_INIT:
+		// Here when the last FreeRTOStask has done its one-off initialisation
+		// Time to send selfTest bits to BLE processor.
+#ifdef SENDMSGEARLY
+		// Report any error bits to the BLE processor
+		snprintf(message, sizeof(message), "selfTest %04x", selfTest_getErrorBits());
+#else
+		if (woken == APP_WAKE_REASON_MD) {
+			// Special wake message if the wake was due to motion detection
+			snprintf(message, sizeof(message), "MD ");
+			exif_utc_get_rtc_as_utc_string(&message[3], UTCSTRINGLENGTH );
+		}
+		else {
+			snprintf(message, sizeof(message), "Wake ");
+			exif_utc_get_rtc_as_utc_string(&message[5], UTCSTRINGLENGTH );
+		}
+#endif // SENDMSGEARLY
+
+		sendI2CMessage((uint8_t *) message, AI_PROCESSOR_MSG_RX_STRING, strlen(message) );
 		if_task_state = APP_IF_STATE_I2C_TX;
 		break;
 
@@ -599,17 +626,6 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 
 		break;
 
-	case APP_MSG_IFTASK_FREERTOS_INIT:
-		// Here when the last FreeRTOStask has done its one-off initialisation
-		// Time to send selfTest bits to BLE processor.
-
-		// Report any error bits to the BLE processor
-		snprintf(message, sizeof(message), "selfTest %04x", selfTest_getErrorBits());
-
-		sendI2CMessage((uint8_t *) message, AI_PROCESSOR_MSG_RX_STRING, strlen(message) );
-		if_task_state = APP_IF_STATE_I2C_TX;
-
-		break;
 
 #ifdef TEST_INT_PULSE
 	case APP_MSG_IFTASK_I2CCOMM_PA0_INT_OUT:

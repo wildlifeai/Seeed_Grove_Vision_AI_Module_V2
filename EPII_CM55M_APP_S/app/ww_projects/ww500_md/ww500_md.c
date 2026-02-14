@@ -503,6 +503,22 @@ char * app_get_board_name_string(void) {
 	return boardString;
 }
 
+/**
+ * Return a string indicating main camera type
+ */
+char * app_get_camera_string(void) {
+#ifdef USE_HM0360
+	static char * cameraString = "HM0360";
+#elif defined (USE_RP2)
+	static char * cameraString = "RP2";
+#elif defined (USE_RP3)
+	static char * cameraString = "RP3";
+#else
+	static char * cameraString = "Unknown";
+#endif
+	return cameraString;
+}
+
 
 /**
  * activates the green LED

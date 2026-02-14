@@ -258,6 +258,7 @@ static BaseType_t prvGetOpParam(char *pcWriteBuffer, size_t xWriteBufferLen, con
 
 // A few commands to make the AI processor consistent with the MKL62BA
 static BaseType_t prvVer(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
+static BaseType_t prvCamera(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 
 #ifdef WW500_C00
 static BaseType_t prvLedFlash(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
@@ -318,11 +319,19 @@ static const CLI_Command_Definition_t xStatus = {
 	0		   /* No parameters expected */
 };
 
-/* Structure that defines the "status" command line command. */
+/* Structure that defines the "ver" command line command. */
 static const CLI_Command_Definition_t xVer = {
 	"ver", /* The command string to type. */
 	"ver:\r\n Report software version\r\n",
 	prvVer, /* The function to run. */
+	0		   /* No parameters expected */
+};
+
+/* Structure that defines the "camera" command line command. */
+static const CLI_Command_Definition_t xCamera = {
+	"camera", /* The command string to type. */
+	"camera:\r\n Report main camera type\r\n",
+	prvCamera, /* The function to run. */
 	0		   /* No parameters expected */
 };
 
@@ -665,6 +674,17 @@ static BaseType_t prvVer(char *pcWriteBuffer, size_t xWriteBufferLen, const char
 	configASSERT(pcWriteBuffer);
 
 	sprintf(pcWriteBuffer, "%s %s", app_get_board_name_string(), app_get_version_string());
+
+	return pdFALSE;
+}
+
+// Reports on camera type  - something like: 'RP3'
+static BaseType_t prvCamera(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) {
+	(void)pcCommandString;
+	(void)xWriteBufferLen;
+	configASSERT(pcWriteBuffer);
+
+	sprintf(pcWriteBuffer, "%s", app_get_camera_string());
 
 	return pdFALSE;
 }
@@ -1732,8 +1752,7 @@ static bool startsWith(char *a, const char *b)
  *
  * TODO - fix the case when FreeRTOS_CLIProcessCommand() returns > 1 line.
  */
-static void processCommand(char *rxString)
-{
+static void processCommand(char *rxString) {
 	BaseType_t xMore = false;
 	APP_MSG_T send_msg;
 
@@ -1771,13 +1790,11 @@ static void processCommand(char *rxString)
 		}
 		else {
 			// If there is more than one line from the CLI response then send this message:
-			if (binaryLength >= 0)
-			{
+			if (binaryLength >= 0) {
 				send_msg.msg_event = APP_MSG_IFTASK_I2CCOMM_CLI_BINARY_CONTINUES;
 				send_msg.msg_parameter = (uint32_t)binaryLength; // msg_parameter is the length passed to us from the cli-parsing functions.
 			}
-			else
-			{
+			else {
 				xprintf("%s\n", cliOutBuffer);
 				send_msg.msg_parameter = strnlen((char *)cliOutBuffer, CLI_OUTPUT_BUF_SIZE);
 				send_msg.msg_event = APP_MSG_IFTASK_I2CCOMM_CLI_STRING_CONTINUES;
@@ -1988,6 +2005,7 @@ static void vRegisterCLICommands(void)
 
 	FreeRTOS_CLIRegisterCommand(&xStatus);
 	FreeRTOS_CLIRegisterCommand(&xVer);
+	FreeRTOS_CLIRegisterCommand(&xCamera);
 	FreeRTOS_CLIRegisterCommand(&xEnable);
 	FreeRTOS_CLIRegisterCommand(&xDisable);
 

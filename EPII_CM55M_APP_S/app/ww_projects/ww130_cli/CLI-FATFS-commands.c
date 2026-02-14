@@ -587,7 +587,8 @@ static BaseType_t prvTxFileCommand( char *pcWriteBuffer, size_t xWriteBufferLen,
 			// No data left
 			f_close(&fil);
 			transmitting = false;
-			return pdFALSE;
+			// return true because we want to return one more time to print a summary text message
+			return pdTRUE;
 		}
 	}
 	else {

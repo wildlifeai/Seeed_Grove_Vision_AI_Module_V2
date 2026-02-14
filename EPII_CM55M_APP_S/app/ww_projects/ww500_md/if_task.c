@@ -774,6 +774,10 @@ static APP_MSG_DEST_T  handleEventForStateI2CTx(APP_MSG_T rxMessage) {
 		// Not used at the moment
 		break;
 
+	case APP_MSG_IFTASK_MSG_TO_MASTER:
+		// Here when a second request to send a message happens while still sending the first
+		// fall through deliverately
+
 	case APP_MSG_IFTASK_I2CCOMM_CLI_STRING_RESPONSE ... APP_MSG_IFTASK_I2CCOMM_CLI_BINARY_CONTINUES:
 		// This could happen if the ifTask is still sending a previous message
 		// and APP_MSG_IFTASK_I2CCOMM_TX has not yet arrived. So save the response and process it when we return to IDLE

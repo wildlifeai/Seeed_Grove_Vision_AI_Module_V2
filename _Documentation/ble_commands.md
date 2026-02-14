@@ -154,6 +154,7 @@ The "Reqd?" column indicates whether the command should be implemented by the ap
 |----------------|---------------|-----------------------------------------------|-------|
 | AI (unrecognised) |            | "Unrecognised"                                | -     |
 | AI ver         |               | Returns device name and s/w build date        | Y     |
+| AI camera      |               | Returns main camera type e.g. 'RP3'           | Y     |
 | AI enable      |               | Enables the camera system                     | Y     |
 | AI disable     |               | Disabled the camera system                    | Y     |
 | AI status      |               | Reports whether the camera is enabled         | Y     |

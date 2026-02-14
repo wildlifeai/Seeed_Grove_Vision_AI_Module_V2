@@ -91,6 +91,7 @@ void app_ledBlue(bool on);
 
 char * app_get_version_string(void);
 char * app_get_board_name_string(void);
+char * app_get_camera_string(void);
 
 void app_onInactivityDetection(void);
 

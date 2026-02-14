@@ -127,7 +127,7 @@ void printf_x_printBuffer(const void *buff, size_t length) {
 
 		xprintf("%03x: ", addr);
 		for (uint8_t i = 0; i < IN_LINE_PRINT_CNT; i++)  {
-			if (i == 7) {
+			if (i == 8) {
 				// Extra space to separate 1st and 2nd 8 bytes
 				xprintf(" ");
 			}

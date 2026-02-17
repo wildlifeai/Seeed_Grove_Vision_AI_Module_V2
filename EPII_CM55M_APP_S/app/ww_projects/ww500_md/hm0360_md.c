@@ -36,7 +36,7 @@ static uint8_t mainCameraID;
 
 static bool hm0360MainCamera = false;
 
-static bool hm0360_present;
+static bool hm0360_present = false;
 
 static HX_CIS_SensorSetting_t HM0360_md_init_setting[] = {
 #include "../../../ww500_md/cis_sensor/cis_hm0360/HM0360_OSC_Bayer_640x480_setA_VGA_setB_QVGA_md_8b_ParallelOutput_R2.i"
@@ -100,10 +100,10 @@ static uint16_t calculateSleepTime(uint32_t interval) {
 /********************************** Public Function Definitions ***********************/
 
 /**
- * Tests whether the HM0360 is present, by doing a read from the I2C address
+ * Tests whether _any_ sensor is present, by doing a read from the I2C address
  *
- * If the HM0360 is present the I2C read will work. Otherwise the driver code will
- * print an error and the call will fail.
+ * If the sensor is present at the sensorAddress the I2C read will work.
+ * Otherwise the driver code will print an error and the call will fail.
  *
  *@param sensorAddress = I2C address of target image sensor
  *@param @return = true if present
@@ -111,6 +111,7 @@ static uint16_t calculateSleepTime(uint32_t interval) {
 bool hm0360_md_isSensorPresent(uint8_t sensorAddress) {
 	IIC_ERR_CODE_E ret;
 	uint8_t rBuffer;
+	bool sensorPresent = false;
 
 	/*    Usage-4: reads data from a specified I2C slave device using the I2C Master 0
 	*      uint8_t rBuffer[2] = {0};
@@ -118,8 +119,23 @@ bool hm0360_md_isSensorPresent(uint8_t sensorAddress) {
 	*/
 	ret = hx_drv_i2cm_read_data(USE_DW_IIC_1, sensorAddress, &rBuffer, 1);
 
-	hm0360_present = (ret == IIC_ERR_OK);
+	sensorPresent = (ret == IIC_ERR_OK);
 
+	if (sensorPresent  && (sensorAddress == HM0360_SENSOR_I2CID))  {
+		hm0360_present = true;
+	}
+
+	return sensorPresent ;
+}
+
+/**
+ * Returns whether the HM0360 is present or not
+ *
+ * NOTE: It is important to call hm0360_md_isSensorPresent(HM0360_SENSOR_I2CID) first
+ *
+ * @return true if present
+ */
+bool hm0360_md_isHM0360Present(void) {
 	return hm0360_present;
 }
 
@@ -142,7 +158,11 @@ bool hm0360_md_getIsMainCamera(void) {
 }
 
 /**
- * Initialises the HM0360 if it is used for motion detection while using a RP camera
+ * Initialises the HM0360 if it is used for motion detection while using a RP camera.
+ * Called only at cold boot as the HM0360 retains its regsiter settings during DPD.
+ *
+ * NOTE: It is important to call hm0360_md_isSensorPresent(HM0360_SENSOR_I2CID) first
+ * otherwise hm0360_present will be invalid (false).
  *
  * @param coldBoot - true if it is a cold boot.
  */
@@ -152,9 +172,6 @@ void hm0360_md_init(void) {
 	dbg_printf(DBG_LESS_INFO, "Initialising HM0360 at 0x%02x for MD only.\r\n", HM0360_SENSOR_I2CID);
 
 	saveMainCameraConfig();
-
-	// This might have been called earlier as well
-	hm0360_present = hm0360_md_isSensorPresent(HM0360_SENSOR_I2CID);
 
 	// Don't proceed if the HM0360 is missing or faulty
 	if (!hm0360_present) {

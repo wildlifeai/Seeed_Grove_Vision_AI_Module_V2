@@ -1069,8 +1069,7 @@ static BaseType_t prvWriteFile(char *pcWriteBuffer, size_t xWriteBufferLen, cons
 
 	/* Get parameter */
 	pcParameter = FreeRTOS_CLIGetParameter(pcCommandString, 1, &lParameterStringLength);
-	if ((pcParameter != NULL) && (lParameterStringLength <= FNAMELEN))
-	{
+	if ((pcParameter != NULL) && (lParameterStringLength <= FNAMELEN)) {
 		// TODO should really check for a valid file name...
 		// prepare the file operation structure
 		strncpy(fName, pcParameter, FNAMELEN-1);	// Ensure there is space for string terminator
@@ -1147,6 +1146,7 @@ static BaseType_t prvReadFile(char *pcWriteBuffer, size_t xWriteBufferLen, const
 		fileOp.unmountWhenDone = false;
 		fileOp.senderQueue = xCliTaskQueue; // This is the queue for this task. It provides the destination for the result message
 		fileOp.length = CLIFILELEN;
+
 
 		sendMsg.msg_event = APP_MSG_FATFSTASK_READ_FILE;
 		sendMsg.msg_data = (uint32_t)&fileOp;
@@ -1529,8 +1529,7 @@ static BaseType_t prvLoadModel(char *pcWriteBuffer, size_t xWriteBufferLen, cons
 	paramLong = strtol(pcParameter, &endptr, 10);
 
 	if (endptr == pcParameter || paramLong < 0 || paramLong > 65535) {
-		pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen,
-				"Must supply project ID in range 0-65535");
+		snprintf(pcWriteBuffer, xWriteBufferLen, "Must supply project ID in range 0-65535");
 		return pdFALSE;
 	}
 	projectId = (uint16_t)paramLong;
@@ -1540,8 +1539,7 @@ static BaseType_t prvLoadModel(char *pcWriteBuffer, size_t xWriteBufferLen, cons
 	paramLong = strtol(pcParameter, &endptr, 10);
 
 	if (endptr == pcParameter || paramLong < 1 || paramLong > 65535) {
-		pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen,
-				"Must supply deploy_version in range 0-65535");
+		snprintf(pcWriteBuffer, xWriteBufferLen, "Must supply deploy_version in range 0-65535");
 		return pdFALSE;
 	}
 	deploy_version = (uint16_t)paramLong;

@@ -547,11 +547,12 @@ static BaseType_t prvTxFileCommand( char *pcWriteBuffer, size_t xWriteBufferLen,
 	FRESULT res;
 	const char *pcParameter;
 	char fileName[FF_MAX_LFN];	// should we use this? I think it is 255
-
 	BaseType_t lParameterStringLength;
 	char line[CLI_OUTPUT_BUF_SIZE]; /* Line buffer */
 
 	static txfile_type_t state = TXFILE_START;
+	static uint8_t packetNum = 0;
+	static bool asciiReplacement = false;
 
 	static UINT brTotal = 0; // Accumulate bytes
 	static FIL fil;
@@ -560,17 +561,26 @@ static BaseType_t prvTxFileCommand( char *pcWriteBuffer, size_t xWriteBufferLen,
 	switch (state) {
 
 	case TXFILE_START:
+
 		// This is stuff to do the first time we enter this function.
 		pcParameter = FreeRTOS_CLIGetParameter(pcCommandString, 1, &lParameterStringLength);
+		asciiReplacement = false;
+		packetNum = 0;
 
 		if (pcParameter[0] == '.') {
 			// special case - use the "latest" picture file
 			// For now just hard code this
 			snprintf(fileName, IMAGEFILENAMELEN, "%s", image_getLastImageFile());
 		}
+		else if (pcParameter[0] == '-') {
+			// special case - replace file contents with ASCII
+			snprintf(fileName, FF_MAX_LFN, "%s", &pcParameter[1]);
+			asciiReplacement = true;
+		}
 		else {
 			snprintf(fileName, FF_MAX_LFN, "%s", pcParameter);
 		}
+
 
 		// Must change directory to the dirManager->current_capture_dir
 		res = f_chdir(dirManager.current_capture_dir);
@@ -599,7 +609,16 @@ static BaseType_t prvTxFileCommand( char *pcWriteBuffer, size_t xWriteBufferLen,
 		res = f_read(&fil, line, (CLI_OUTPUT_BUF_SIZE - 3), &br);
 
 		if (res == FR_OK) {
-			memcpy(pcWriteBuffer, line, br);
+			if (asciiReplacement) {
+				// send ASCII binary pattern instead
+				// always in the range 0-9
+				memset(pcWriteBuffer, ((packetNum % 10) + '0'), br);
+			}
+			else {
+				memcpy(pcWriteBuffer, line, br);
+			}
+			packetNum++;
+
 			binaryLength = br;	// Changed here from -1 to the actual data length, to be accessed in processCommand()
 			brTotal += br;
 			if (br == (CLI_OUTPUT_BUF_SIZE - 3)) {
@@ -629,9 +648,14 @@ static BaseType_t prvTxFileCommand( char *pcWriteBuffer, size_t xWriteBufferLen,
 		// Send a text message to move the BLE processor out of binary mode
 		binaryLength = NOTBINARY;	// Indicate the message is text, not binary
 
-		pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen, "Finished sending %u bytes.", brTotal);
+		pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen,
+				"Finished sending %u bytes (%d packets)", brTotal, packetNum);
 		state = TXFILE_START;
 		brTotal = 0;
+
+		packetNum = 0;
+		asciiReplacement = false;
+
 		return pdFALSE;
 		break;
 
@@ -639,6 +663,8 @@ static BaseType_t prvTxFileCommand( char *pcWriteBuffer, size_t xWriteBufferLen,
 		// should not happen
 		state = TXFILE_START;
 		brTotal = 0;
+		packetNum = 0;
+		asciiReplacement = false;
 		return pdFALSE;
 		break;
 	} // switch

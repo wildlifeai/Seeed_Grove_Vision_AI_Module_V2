@@ -1179,6 +1179,12 @@ static bool is_model_in_flash(char *filename) {
     	return false;
     }
 
+	// Check the magic word
+	if (metaDataRam.magic != LABEL_MAGIC) {
+		xprintf("Missing signature 0x%08x\n", LABEL_MAGIC);
+		return false;
+	}
+
 	// Enable XIP mode to permit memory access to the XIP Flash
     if (enableXIP(true)) {
 		xprintf("XIP mode re-enabled\n");
@@ -1188,32 +1194,30 @@ static bool is_model_in_flash(char *filename) {
     	return false;
     }
 
-	XP_LT_GREY;
-	xprintf("Meta data found in flash\n");
-	printf_x_printBuffer((const uint8_t *)&metaDataRam, sizeof(ModelMetaData));
+    // Only print this info at cold boot (for testing)
+    if (coldBoot) {
+    	XP_LT_GREY;
+    	xprintf("Meta data found in flash\n");
+    	printf_x_printBuffer((const uint8_t *)&metaDataRam, sizeof(ModelMetaData));
 
-	// Small delay for buffer to print
-	vTaskDelay(pdMS_TO_TICKS(10));
+    	// Small delay for buffer to print
+    	vTaskDelay(pdMS_TO_TICKS(10));
 
-	XP_WHITE;
-	// Check the magic word
-	if (metaDataRam.magic != LABEL_MAGIC) {
-    	xprintf("Missing signature 0x%08x\n", LABEL_MAGIC);
-    	return false;
-	}
+    	XP_WHITE;
 
-	printf("Magic: 0x%08x Model '%s' has %d labels of %d bytes:\n",
-			(int) metaDataRam.magic, metaDataRam.modelName,
-			metaDataRam.class_count, metaDataRam.label_len);
+    	xprintf("Magic: 0x%08x Model '%s' has %d labels of %d bytes:\n",
+    			(int) metaDataRam.magic, metaDataRam.modelName,
+				metaDataRam.class_count, metaDataRam.label_len);
 
-	maxLabels = metaDataRam.class_count;
-	if (maxLabels > MAX_CLASSES) {
-		maxLabels = MAX_CLASSES;
-	}
+    	maxLabels = metaDataRam.class_count;
+    	if (maxLabels > MAX_CLASSES) {
+    		maxLabels = MAX_CLASSES;
+    	}
 
-	for (uint8_t i=0; i < maxLabels; i++) {
-		xprintf("%d = '%s'\n", i, metaDataRam.labels[i]);
-	}
+    	for (uint8_t i=0; i < maxLabels; i++) {
+    		xprintf("%d = '%s'\n", i, metaDataRam.labels[i]);
+    	}
+    }
 
     // Compare filename
     // Use the filename length of 13 bytes - IMAGEFILENAMELEN
@@ -1228,6 +1232,7 @@ static bool is_model_in_flash(char *filename) {
     	xprintf("Model file name in flash is '%s', not '%s'\n", flashName, filename);
     	return false;
     }
+
 }
 
 /**

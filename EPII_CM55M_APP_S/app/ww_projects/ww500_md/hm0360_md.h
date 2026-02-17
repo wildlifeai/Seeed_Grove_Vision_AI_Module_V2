@@ -50,6 +50,8 @@ typedef enum {
 
 bool hm0360_md_isSensorPresent(uint8_t sensorAddress);
 
+bool hm0360_md_isHM0360Present(void);
+
 // Setter and getter for whether the HM0360 is the main camera
 void hm0360_md_setIsMainCamera(bool hm0360IsMainCamera);
 bool hm0360_md_getIsMainCamera(void);

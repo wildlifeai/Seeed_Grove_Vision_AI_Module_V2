@@ -301,7 +301,7 @@ static char msgToMaster[MSGTOMASTERLEN];
 
 // True means we capture images and run NN processing and report results.
 // TODO - this is probably redundant. We are probably better to use op_parameter[OP_PARAMETER_CAMERA_ENABLED];
-static uint8_t nnSystemEnabled; // 0 = disabled 1 = enabled
+static uint8_t cameraSystemEnabled; // 0 = disabled 1 = enabled
 
 // Support for EXIF
 static uint8_t exif_buffer[EXIF_MAX_LEN];
@@ -325,8 +325,7 @@ TickType_t startTime;
  *
  * This sends a APP_MSG_IMAGETASK_RECAPTURE event
  */
-static void capture_timer_callback(TimerHandle_t xTimer)
-{
+static void capture_timer_callback(TimerHandle_t xTimer) {
     APP_MSG_T send_msg;
 
     // Send back to our own queue
@@ -589,8 +588,7 @@ void os_app_dplib_cb(SENSORDPLIB_STATUS_E event)
  * @param APP_MSG_T img_recv_msg
  * @return APP_MSG_DEST_T send_msg
  */
-static APP_MSG_DEST_T handleEventForInit(APP_MSG_T img_recv_msg)
-{
+static APP_MSG_DEST_T handleEventForInit(APP_MSG_T img_recv_msg) {
     APP_MSG_DEST_T send_msg;
     APP_MSG_EVENT_E event;
     uint16_t requested_captures;
@@ -609,14 +607,17 @@ static APP_MSG_DEST_T handleEventForInit(APP_MSG_T img_recv_msg)
         requested_captures = (uint16_t)img_recv_msg.msg_data;
         requested_period = img_recv_msg.msg_parameter;
 
+        if (!cameraSystemEnabled) {
+        	xprintf("Can't capture - camera system not enabled\n");
+        	snprintf(msgToMaster, MSGTOMASTERLEN, "Camera system not enabled");
+        	sendMsgToMaster(msgToMaster);
+        }
         // Check parameters are acceptable
-        if ((requested_captures < MIN_IMAGE_CAPTURES) || (requested_captures > MAX_IMAGE_CAPTURES) ||
-            (requested_period < MIN_IMAGE_INTERVAL) || (requested_period > MAX_IMAGE_INTERVAL))
-        {
+        else if ((requested_captures < MIN_IMAGE_CAPTURES) || (requested_captures > MAX_IMAGE_CAPTURES) ||
+            (requested_period < MIN_IMAGE_INTERVAL) || (requested_period > MAX_IMAGE_INTERVAL))  {
             xprintf("Invalid parameter values %d or %d\n", requested_captures, requested_period);
         }
-        else
-        {
+        else  {
             g_captures_to_take = requested_captures;
             g_timer_period = requested_period;
             XP_LT_GREEN
@@ -654,8 +655,9 @@ static APP_MSG_DEST_T handleEventForInit(APP_MSG_T img_recv_msg)
         break;
 
     case APP_MSG_IMAGETASK_INACTIVITY:
-        // Inactivity detected. Prepare to enter DPD
-        configure_image_sensor(CAMERA_CONFIG_STOP); // run some sensordplib_stop functions then run HM0360_stream_off commands to the HM0360
+        // Inactivity detected. Prepare to enter DPD, saving state if possible.
+    	// run some sensordplib_stop functions then run HM0360_stream_off commands to the HM0360
+        configure_image_sensor(CAMERA_CONFIG_STOP);
 
         if (fatfs_getImageSequenceNumber() > 0)  {
             // TODO - can we call this without the if() and expect fatfs_task to handle it?
@@ -748,7 +750,7 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
         // Here when the image sub-system has captured an image.
 
 #if defined(USE_HM0360) || defined(USE_HM0360_MD)
-        // By deferring the clearing of the interrupt til her we can measure the latency of interrupt to image captured.
+        // By deferring the clearing of the interrupt till here we can measure the latency of interrupt to image captured.
         // This writes to register 0x2065 - we could put this into the big config file?
         hm0360_md_clearInterrupt(0xff); // clear all bits
 #endif
@@ -931,10 +933,10 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
     case APP_MSG_IMAGETASK_INACTIVITY:
         // I have seen this, followed soon after by the WDT messages.
         // This should not happen in this state as APP_MSG_IMAGETASK_FRAME_READY should arrive
-        XP_RED;
-        dbg_printf(DBG_LESS_INFO, "Inactive - expect WDT timeout soon?\n");
-        XP_WHITE;
-        break;
+    	XP_RED;
+    	dbg_printf(DBG_LESS_INFO, "Inactive - expect WDT timeout soon?\n");
+    	XP_WHITE;
+    	break;
 
     case APP_MSG_DPEVENT_EDM_WDT1_TIMEOUT:   // 0x011d
     case APP_MSG_DPEVENT_EDM_WDT2_TIMEOUT:   // 0x011c
@@ -1029,20 +1031,17 @@ static APP_MSG_DEST_T handleEventForNNProcessing(APP_MSG_T img_recv_msg) {
             image_task_state = APP_IMAGE_TASK_STATE_CAPTURING;
         }
 #else
-        else
-        {
+        else  {
             // Start a timer that delays for the defined interval.
             // When it expires, switch to CAPTURUNG state and request another image
-            if (captureTimer != NULL)
-            {
+            if (captureTimer != NULL)  {
                 // Change the period and start the timer
                 // The callback issues a APP_MSG_IMAGETASK_RECAPTURE event
                 xTimerChangePeriod(captureTimer, pdMS_TO_TICKS(g_timer_period), 0);
                 // Expect a APP_MSG_IMAGETASK_RECAPTURE event from the capture_timer
                 image_task_state = APP_IMAGE_TASK_STATE_WAIT_FOR_TIMER;
             }
-            else
-            {
+            else  {
                 // error
                 flagUnexpectedEvent(img_recv_msg);
                 image_task_state = APP_IMAGE_TASK_STATE_INIT;
@@ -1154,6 +1153,35 @@ static APP_MSG_DEST_T handleEventForWaitForTimer(APP_MSG_T img_recv_msg) {
 
         image_task_state = APP_IMAGE_TASK_STATE_CAPTURING;
         break;
+
+    case APP_MSG_IMAGETASK_INACTIVITY:
+    	// Probably the timer interval is greater than the inactivity interval = bad planning
+    	// but we better deal with it properly.
+
+#ifndef USE_HM0360
+    	xTimerStop(captureTimer, portMAX_DELAY);
+#endif // USE_HM0360
+
+        // Inactivity detected. Prepare to enter DPD, saving state if possible.
+    	// run some sensordplib_stop functions then run HM0360_stream_off commands to the HM0360
+        configure_image_sensor(CAMERA_CONFIG_STOP);
+
+        if (fatfs_getImageSequenceNumber() > 0)  {
+            // TODO - can we call this without the if() and expect fatfs_task to handle it?
+            // Ask the FatFS task to save state onto the SD card
+            send_msg.destination = xFatTaskQueue;
+            send_msg.message.msg_event = APP_MSG_FATFSTASK_SAVE_STATE;
+            send_msg.message.msg_data = 0;
+            image_task_state = APP_IMAGE_TASK_STATE_SAVE_STATE;
+        }
+        else {
+            // No SD card therefore can't save state
+            // Wait till the IF Task is also ready, then sleep
+            sleepWhenPossible(); // does not return
+            image_task_state = APP_IMAGE_TASK_STATE_UNINIT;
+        }
+
+    	break;
 
     case APP_MSG_IMAGETASK_CHANGE_ENABLE:
         // We have received an instruction to enable or disable the NN processing system
@@ -1279,14 +1307,15 @@ static void captureSequenceComplete(void)
 static void changeEnableState(bool setEnabled) {
 
     if (setEnabled){
-        nnSystemEnabled = 1;
+        cameraSystemEnabled = 1;
         fatfs_setOperationalParameter(OP_PARAMETER_CAMERA_ENABLED, 1);
     }
     else {
-        nnSystemEnabled = 0;
+        cameraSystemEnabled = 0;
         fatfs_setOperationalParameter(OP_PARAMETER_CAMERA_ENABLED, 0);
     }
 }
+
 
 /********************************** FreeRTOS Task  *************************************/
 
@@ -1321,10 +1350,7 @@ static void vImageTask(void *pvParameters) {
     xSemaphoreTake(xSDInitDoneSemaphore, portMAX_DELAY);
 
     // True means we capture images and run NN processing and report results.
-    nnSystemEnabled = fatfs_getOperationalParameter(OP_PARAMETER_CAMERA_ENABLED);
-    // xprintf("DEBUG: nnSystemEnabled initialised to %d\n", nnSystemEnabled);
-
-    // nnPositive = false;	// true if the NN analysis detects something
+    cameraSystemEnabled = fatfs_getOperationalParameter(OP_PARAMETER_CAMERA_ENABLED);
 
     XP_CYAN;
     // Observing these messages confirms the initialisation sequence
@@ -1357,9 +1383,8 @@ static void vImageTask(void *pvParameters) {
 
     if (!cameraInitialised)  {
         selfTest_setErrorBits(1 << SELF_TEST_AI_NO_CAM);
-        xprintf("\nEnter DPD mode because there is no camera!\n\n");
-        // TODO - deep sleep or what?
-        //sleep_mode_enter_dpd(SLEEPMODE_WAKE_SOURCE_WAKE_PIN, 0, false); // Does not return
+        xprintf("\nDisabling camera functions because there is no camera!\n\n");
+        cameraSystemEnabled = 0;
     }
 
 #ifndef USE_HM0360
@@ -1367,12 +1392,17 @@ static void vImageTask(void *pvParameters) {
     // The HM0360 is not our main camera but we are using it for motion detection.
     // There is some more initialisation required.
     if (woken == APP_WAKE_REASON_COLD) {
-        hm0360_md_init();
-    }
+    	if (hm0360_md_isHM0360Present()) {
+    		hm0360_md_init();	// Initialise for MD only
 
-    // Turn off the LED flashes, controlled by the HM0360 STROBE output.
-    // If LED flash is required this will be controlled by code when the main camera takes a pic
-    hm0360_md_configureStrobe(0);
+    		// Turn off the LED flashes, controlled by the HM0360 STROBE output.
+    		// If LED flash is required this will be controlled by code when the main camera takes a pic
+    		hm0360_md_configureStrobe(0);
+    	}
+    	else {
+    		xprintf("HM0360 missing...\n");
+    	}
+    }
 
 #endif // USE_HM0360_MD
 #endif // USE_HM0360
@@ -1401,12 +1431,11 @@ static void vImageTask(void *pvParameters) {
 #endif // 0
 
 	// Initialise NN but only of the camera system is enabled
-	if ((nnSystemEnabled == 1) && cameraInitialised) {
+	if ((cameraSystemEnabled == 1) && cameraInitialised) {
 		int cv_init_result = cv_init(true, true,
 				fatfs_getOperationalParameter(OP_PARAMETER_MODEL_PROJECT),
 				fatfs_getOperationalParameter(OP_PARAMETER_MODEL_VERSION),
 				woken);
-
 
 		if (cv_init_result < 0) {
 			xprintf("No model found.\n");
@@ -1427,10 +1456,9 @@ static void vImageTask(void *pvParameters) {
     // If we woke because of motion detection or timer then let's send ourselves an initial
     // message to take some photos.
 
-    // But only if nnSystemEnabled!
+    // But only if nnSystemEnabled and cameraInitialised!
 
-    if ((nnSystemEnabled == 1) && ((woken == APP_WAKE_REASON_MD) || (woken == APP_WAKE_REASON_TIMER)))
-    {
+    if ((cameraSystemEnabled == 1)  && cameraInitialised && ((woken == APP_WAKE_REASON_MD) || (woken == APP_WAKE_REASON_TIMER))) {
         // Pass the parameters in the ImageTask message queue
         internal_msg.msg_data = fatfs_getOperationalParameter(OP_PARAMETER_NUM_PICTURES);
         internal_msg.msg_parameter = fatfs_getOperationalParameter(OP_PARAMETER_PICTURE_INTERVAL);
@@ -1445,11 +1473,9 @@ static void vImageTask(void *pvParameters) {
     barrier_ready(&startupBarrier); // Call a function when every task reaches this point
 
     // Loop forever, taking events from xImageTaskQueue as they arrive
-    for (;;)
-    {
+    for (;;)  {
         // Wait for a message in the queue
-        if (xQueueReceive(xImageTaskQueue, &(img_recv_msg), __QueueRecvTicksToWait) == pdTRUE)
-        {
+        if (xQueueReceive(xImageTaskQueue, &(img_recv_msg), __QueueRecvTicksToWait) == pdTRUE) {
             event = img_recv_msg.msg_event;
             recv_data = img_recv_msg.msg_data;
 
@@ -1571,8 +1597,7 @@ static bool configure_image_sensor(CAMERA_CONFIG_E operation)
     hx_drv_cis_get_slaveID(&cameraID);
     xprintf("Camera ID 0x%02x\n", cameraID);
 
-    switch (operation)
-    {
+    switch (operation)  {
 
     case CAMERA_CONFIG_INIT_COLD:
         // Called when image task starts - only at cold boot for H0360
@@ -1583,108 +1608,112 @@ static bool configure_image_sensor(CAMERA_CONFIG_E operation)
         rp_sensor_enable(true);
 #endif
 
-        if (cisdp_sensor_init(true) != 0)
-        {
-            xprintf("\r\nCIS Init fail\r\n");
-            processedOK = false;
+        if (!cameraSystemEnabled) {
+        	processedOK = false;
         }
-        else
-        {
-            // Initialise extra registers from file
-            cis_file_process(CAMERA_EXTRA_FILE);
-
-            // if wdma variable is zero when not init yet, then this step is a must be to retrieve wdma address
-            //  Datapath events give callbacks to os_app_dplib_cb() in dp_task
-            if (cisdp_dp_init(true, SENSORDPLIB_PATH_INT_INP_HW5X5_JPEG, os_app_dplib_cb, g_img_data, APP_DP_RES_YUV640x480_INP_SUBSAMPLE_1X) < 0)
-            {
-                xprintf("\r\nDATAPATH Init fail\r\n");
-                return false;
-            }
+        else if (cisdp_sensor_init(true) != 0)    {
+        	xprintf("\r\nCIS Init fail\r\n");
+        	processedOK = false;
         }
+        else  {
+        	// Initialise extra registers from file
+        	cis_file_process(CAMERA_EXTRA_FILE);
 
-        setupLEDFlash();
+        	// if wdma variable is zero when not init yet, then this step is a must be to retrieve wdma address
+        	//  Datapath events give callbacks to os_app_dplib_cb() in dp_task
+        	if (cisdp_dp_init(true, SENSORDPLIB_PATH_INT_INP_HW5X5_JPEG, os_app_dplib_cb, g_img_data, APP_DP_RES_YUV640x480_INP_SUBSAMPLE_1X) < 0) {
+        		xprintf("\r\nDATAPATH Init fail\r\n");
+        		return false;
+        	}
 
+            setupLEDFlash();
+        }
         break;
 
     case CAMERA_CONFIG_INIT_WARM:
         // Called at warm boot, only for HM0360
 
-        // Not needed for HM0360
-        // sensor_enable(true);
-
-        if (cisdp_sensor_init(false) != 0)
-        {
+        if (!cameraSystemEnabled) {
+        	processedOK = false;
+        }
+        else if (cisdp_sensor_init(false) != 0)  {
             xprintf("\r\nCIS Init fail\r\n");
             processedOK = false;
         }
-        else
-        {
+        else  {
             // if wdma variable is zero when not init yet, then this step is a must be to retrieve wdma address
             //  Datapath events give callbacks to os_app_dplib_cb() in dp_task
-            if (cisdp_dp_init(true, SENSORDPLIB_PATH_INT_INP_HW5X5_JPEG, os_app_dplib_cb, g_img_data, APP_DP_RES_YUV640x480_INP_SUBSAMPLE_1X) < 0)
-            {
+            if (cisdp_dp_init(true, SENSORDPLIB_PATH_INT_INP_HW5X5_JPEG, os_app_dplib_cb, g_img_data, APP_DP_RES_YUV640x480_INP_SUBSAMPLE_1X) < 0)  {
                 xprintf("\r\nDATAPATH Init fail\r\n");
                 return false;
             }
+
+            setupLEDFlash();
         }
-
-        setupLEDFlash();
-
         break;
 
     case CAMERA_CONFIG_RUN:
-        if (cisdp_dp_init(true, SENSORDPLIB_PATH_INT_INP_HW5X5_JPEG, os_app_dplib_cb, g_img_data, APP_DP_RES_YUV640x480_INP_SUBSAMPLE_1X) < 0)
-        {
-            xprintf("\r\nDATAPATH Init fail\r\n");
-            processedOK = false;
-        }
-        else
-        {
-            // xprintf("DEBUG: starting sensor\n");
-        }
+    	if (!cameraSystemEnabled) {
+    		processedOK = false;
+    	}
+    	else if (cisdp_dp_init(true, SENSORDPLIB_PATH_INT_INP_HW5X5_JPEG, os_app_dplib_cb, g_img_data, APP_DP_RES_YUV640x480_INP_SUBSAMPLE_1X) < 0) {
+    		xprintf("\r\nDATAPATH Init fail\r\n");
+    		processedOK = false;
+    	}
+    	else  {
+    		// xprintf("DEBUG: starting sensor\n");
+
 #if defined(USE_HM0360) || defined(USE_HM0360_MD)
-        // Overide HM0360 STROBE setting
-//    	if (brightnessPercent == 0) {
-//    		hm0360_md_configureStrobe(0);
-//    	}
+    		// Overide HM0360 STROBE setting
+    		//    	if (brightnessPercent == 0) {
+    		//    		hm0360_md_configureStrobe(0);
+    		//    	}
 #endif
 
 #ifdef USE_HM0360
-        hm0360_md_setMode(CONTEXT_A, MODE_SW_NFRAMES_SLEEP, 1, g_timer_period);
+    		hm0360_md_setMode(CONTEXT_A, MODE_SW_NFRAMES_SLEEP, 1, g_timer_period);
 #else
-        ledFlashEnable(fatfs_getOperationalParameter(OP_PARAMETER_FLASH_DURATION));
+    		ledFlashEnable(fatfs_getOperationalParameter(OP_PARAMETER_FLASH_DURATION));
 #endif // USE_HM0360
 
-        cisdp_sensor_start(); // Starts data path sensor control block
-        break;
+    		cisdp_sensor_start(); // Starts data path sensor control block
+    	}
+    	break;
 
     case CAMERA_CONFIG_CONTINUE:
-        // Only used for HM0360
-        if (cisdp_dp_init(true, SENSORDPLIB_PATH_INT_INP_HW5X5_JPEG, os_app_dplib_cb, g_img_data, APP_DP_RES_YUV640x480_INP_SUBSAMPLE_1X) < 0)
-        {
-            xprintf("\r\nDATAPATH Init fail\r\n");
-            processedOK = false;
-        }
+    	if (!cameraSystemEnabled) {
+    		processedOK = false;
+    	}
+    	else if (cisdp_dp_init(true, SENSORDPLIB_PATH_INT_INP_HW5X5_JPEG, os_app_dplib_cb, g_img_data, APP_DP_RES_YUV640x480_INP_SUBSAMPLE_1X) < 0) {
+    		xprintf("\r\nDATAPATH Init fail\r\n");
+    		processedOK = false;
+    	}
+    	else {
 
 #ifdef USE_HM0360
-        // Apparently it is necessary to have this here (changes mode 2->2). TODO figure out why.
-        hm0360_md_setMode(CONTEXT_A, MODE_SW_NFRAMES_SLEEP, 1, g_timer_period);
+    		// Apparently it is necessary to have this here (changes mode 2->2). TODO figure out why.
+    		hm0360_md_setMode(CONTEXT_A, MODE_SW_NFRAMES_SLEEP, 1, g_timer_period);
 #endif // USE_HM0360
 
-        cisdp_sensor_start(); // Starts data path sensor control block
-        break;
+    		cisdp_sensor_start(); // Starts data path sensor control block
+    	}
+    	break;
 
     case CAMERA_CONFIG_STOP:
-        xprintf("Stopping sensor\n");
-        cisdp_sensor_stop(); // run some sensordplib_stop functions then run IMX708_stream_off commands to the IMX708 (or other sensor)
+    	xprintf("Stopping sensor\n");
+    	if (!cameraSystemEnabled) {
+    		processedOK = false;
+    	}
+    	else {
+    		cisdp_sensor_stop(); // run some sensordplib_stop functions then run IMX708_stream_off commands to the IMX708 (or other sensor)
 
 #if defined(USE_RP2) || defined(USE_RP3)
-        // Only needed if using a RP camera
-        // Explicitly take SENSOR_ENABLE low. (Previously I think this relied on the HX6538 powering off)
-        rp_sensor_enable(false);
+    		// Only needed if using a RP camera
+    		// Explicitly take SENSOR_ENABLE low. (Previously I think this relied on the HX6538 powering off)
+    		rp_sensor_enable(false);
 #endif
-
-        break;
+    	}
+    	break;
 
 #ifdef USE_HM0360
     case CAMERA_CONFIG_MD:
@@ -2461,8 +2490,7 @@ static void processNNOutput(int8_t * outCategories, uint8_t classCount) {
  *
  * The task itself initialises the Image sensor and then manages requests to access it.
  */
-TaskHandle_t image_createTask(int8_t priority, APP_WAKE_REASON_E wakeReason)
-{
+TaskHandle_t image_createTask(int8_t priority, APP_WAKE_REASON_E wakeReason) {
 
     if (priority < 0)
     {
@@ -2501,8 +2529,7 @@ TaskHandle_t image_createTask(int8_t priority, APP_WAKE_REASON_E wakeReason)
                                 NULL,                // timer ID (optional)
                                 capture_timer_callback);
 
-    if (captureTimer == NULL)
-    {
+    if (captureTimer == NULL) {
         xprintf("Failed to create captureTimer\n");
         configASSERT(0); // TODO add debug messages?
     }
@@ -2575,7 +2602,7 @@ void image_hackInactive(void)
  * @return state of the nnSystemEnabled variable
  */
 bool image_getEnabled(void) {
-    if (nnSystemEnabled == 0) {
+    if (cameraSystemEnabled == 0) {
         return false;
     }
     else {
@@ -2607,7 +2634,7 @@ void image_sleepNow(void) {
 
 #ifdef USE_HM0360
     // HM0360 as main camera
-    if (nnSystemEnabled) {
+    if (cameraSystemEnabled && hm0360_md_isHM0360Present()) {
         xprintf("Preparing HM0360 for MD\n");
         configure_image_sensor(CAMERA_CONFIG_MD);
 
@@ -2624,33 +2651,40 @@ void image_sleepNow(void) {
         }
     }
     else {
-        // camera system is not enabled.
+        // camera system is not enabled or HM0360 is missing
         // I think something else has already set its mode to SLEEP
+    	xprintf("NN disabled or HM0360 missing...\n");
     }
 #endif // USE_HM0360
 
 #ifdef USE_HM0360_MD
     // HM0360 for motion detection only.
     // If the camera system is disabled then ensure MD is off and flash LED is off
-    bool enabled;
-    enabled = fatfs_getOperationalParameter(OP_PARAMETER_CAMERA_ENABLED);
-    hm0360_md_prepare(enabled); // select CONTEXT_B registers (if enabled)
+    if (hm0360_md_isHM0360Present()) {
+    	bool enabled;
+    	enabled = fatfs_getOperationalParameter(OP_PARAMETER_CAMERA_ENABLED);
+    	hm0360_md_prepare(enabled); // select CONTEXT_B registers (if enabled)
 
-    // Consider turning on the LED flashes, controlled by the HM0360 STROBE output
-    if (!enabled) {
-        // No STROBE pulses
-        xprintf("Camera disabled - no LED flashes\n");
-        hm0360_md_configureStrobe(0);
+    	// Consider turning on the LED flashes, controlled by the HM0360 STROBE output
+    	if (!enabled) {
+    		// No STROBE pulses
+    		xprintf("Camera disabled - no LED flashes\n");
+    		hm0360_md_configureStrobe(0);
+    	}
+    	else if ((brightnessPercent == 0) || (ledInUse == 0))  {
+    		// No STROBE pulses
+    		xprintf("Preparing HM0360 for MD - no LED flashes\n");
+    		hm0360_md_configureStrobe(0);
+    	}
+    	else   {
+    		// Create STROBE pulses
+    		xprintf("Preparing HM0360 for MD - with LED flashes\n");
+    		hm0360_md_configureStrobe(0x0B);
+    	}
     }
-    else if ((brightnessPercent == 0) || (ledInUse == 0))  {
-        // No STROBE pulses
-        xprintf("Preparing HM0360 for MD - no LED flashes\n");
-        hm0360_md_configureStrobe(0);
-    }
-    else   {
-        // Create STROBE pulses
-        xprintf("Preparing HM0360 for MD - with LED flashes\n");
-        hm0360_md_configureStrobe(0x0B);
+    else {
+    	// HM0360 is missing
+    	xprintf("HM0360 missing...\n");
     }
 
 #endif // USE_HM0360_MD

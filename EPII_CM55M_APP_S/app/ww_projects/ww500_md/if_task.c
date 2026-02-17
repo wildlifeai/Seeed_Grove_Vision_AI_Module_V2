@@ -319,13 +319,17 @@ static void i2csErrorEvent(void *param) {
  *
  * Called from within the ifTask loop in response to the interrupt callback in i2cs_cb_tx()
  *
+ * I think this will only happen if the BLE processor (which is the I2C master)
+ * has performed the I2C read and so has accepted the previous packet from us.
+ *
  * This readies us for a new command from the master
  */
 static void i2cTransmissionComplete(void) {
 
 	dbg_evt_iics_cmd("I2C transmission complete.\n");
 
-	// Release the I2C semaphore
+	// Release the I2C semaphore - the CLI task may be waiting on this before processing
+	// further commands (including transfer of multiple chunks of JPEG file data).
 	xSemaphoreGive(xI2CTxSemaphore);
 
     // Prepare for the next incoming message
@@ -358,7 +362,7 @@ static void i2cRxDataReady(void) {
 	dbg_evt_iics_cmd("Received I2C message.\n");
 
 	XP_LT_GREY;
-	// Let's print the message
+	// Let's print the message: 4 bytes header, payload, 2 bytes CRC
 	printf_x_printBuffer(gRead_buf, (I2CCOMM_HEADER_SIZE + length + I2CCOMM_CHECKSUM_SIZE ));
 	XP_WHITE;
 
@@ -439,7 +443,7 @@ static void i2cError(void) {
  *
  * Calls hx_lib_i2ccomm_enable_write() and response arrives in i2cs_cb_rx()
  *
- * @param message = pointer to the buffer containing the message
+ * @param message = pointer to the buffer containing the message (null-terminated if a string)
  * @param messageType =
  * @param length = number of bytes to send
  */
@@ -465,8 +469,20 @@ static void i2ccomm_write_enable(uint8_t * message, aiProcessor_msg_type_t messa
     gWrite_buf[I2CCOMM_HEADER_SIZE + length] = (checksum >> 8) & 0xff;
     gWrite_buf[I2CCOMM_HEADER_SIZE + length + 1] = checksum & 0xff;
 
-    dbg_evt_iics_cmd("Sending %d payload bytes. Checksum generated: 0x%04x Sending %d bytes in total\n",
-    		length, checksum, (I2CCOMM_HEADER_SIZE + length + I2CCOMM_CHECKSUM_SIZE));
+    dbg_evt_iics_cmd("Sending %d bytes: Header %d, payload %d, checksum %d",
+    		(I2CCOMM_HEADER_SIZE + length + I2CCOMM_CHECKSUM_SIZE),
+			I2CCOMM_HEADER_SIZE,
+			length,
+			I2CCOMM_CHECKSUM_SIZE
+    );
+
+    // if it's s atring then print it (it will be null-terminated)
+    if (messageType == AI_PROCESSOR_MSG_RX_STRING) {
+    	dbg_evt_iics_cmd(" '%s'\n", (char *) message);
+    }
+    else {
+    	dbg_evt_iics_cmd("\n");
+    }
 
     // This is a wrapper around SCB_CleanDCache_by_Addr() - ensures that any data in the D-cache is committed to RAM
     hx_CleanDCache_by_Addr((void *) gWrite_buf, I2CCOMM_MAX_RBUF_SIZE);
@@ -596,6 +612,11 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 			// Special wake message if the wake was due to motion detection
 			snprintf(message, sizeof(message), "MD ");
 			exif_utc_get_rtc_as_utc_string(&message[3], UTCSTRINGLENGTH );
+		}
+		else if (woken == APP_WAKE_REASON_TIMER) {
+			// Special wake message if the wake was due to timer
+			snprintf(message, sizeof(message), "Timer ");
+			exif_utc_get_rtc_as_utc_string(&message[6], UTCSTRINGLENGTH );
 		}
 		else {
 			snprintf(message, sizeof(message), "Wake ");
@@ -744,6 +765,7 @@ static APP_MSG_DEST_T  handleEventForStateI2CTx(APP_MSG_T rxMessage) {
 	//data = rxMessage.msg_data;
 
 	switch (event) {
+
 	case APP_MSG_IFTASK_I2CCOMM_TX_DONE:
 		i2cTransmissionComplete();
 		if_task_state = APP_IF_STATE_IDLE;
@@ -774,9 +796,13 @@ static APP_MSG_DEST_T  handleEventForStateI2CTx(APP_MSG_T rxMessage) {
 		// Not used at the moment
 		break;
 
+	case APP_MSG_IFTASK_I2CCOMM_RX_READY:
+		// Message has arrive while we are trying to send one ourselves!
+		// TODO check this is safe to defer this event
+
 	case APP_MSG_IFTASK_MSG_TO_MASTER:
 		// Here when a second request to send a message happens while still sending the first
-		// fall through deliverately
+		// fall through deliberately
 
 	case APP_MSG_IFTASK_I2CCOMM_CLI_STRING_RESPONSE ... APP_MSG_IFTASK_I2CCOMM_CLI_BINARY_CONTINUES:
 		// This could happen if the ifTask is still sending a previous message
@@ -1543,6 +1569,9 @@ static uint16_t app_i2ccomm_init(void) {
  * Called in preparation for receiving a command from the I2C master
  */
 static void clear_read_buf_header(void) {
+
+	// TODO - why? it trashes anything in the gRead_buf
+	return;
     memset((void *)gRead_buf, 0xff, 4);
 
     // This is a wrapper around SCB_CleanDCache_by_Addr() - ensures that any data in the D-cache is committed to RAM

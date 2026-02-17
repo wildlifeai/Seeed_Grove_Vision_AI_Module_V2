@@ -102,10 +102,6 @@ internal_state_t internalStates[NUMBEROFTASKS];
 
 static char versionString[64]; // Make sure the buffer is large enough
 
-#ifdef USE_HM0360_MD
-bool hm0360Present = false;
-#endif // USE_HM0360_MD
-
 // This will be available to all of the tasks:
 Barrier_t startupBarrier;
 Barrier_t shutdownBarrier;  // Object that calls a function when all tasks are ready to shut down
@@ -229,6 +225,8 @@ static void showResetOnLeds(uint8_t numFlashes) {
  * RP v2 should be at 0x10
  * RP v3 should be at 0x1a
  *
+ * Sets self test bits.
+ *
  * WARNING: this may fail for cameras which rely on the SENSOR_ENABLE being on.
  */
 static void checkForCameras(void) {
@@ -271,10 +269,9 @@ static void checkForCameras(void) {
 
 	XP_LT_GREY;
 
-#ifdef USE_HM0360_MD
-	// Test for the HM0360, if it is in use for motion detection
-	hm0360Present = hm0360_md_isSensorPresent(HM0360_SENSOR_I2CID);
-	if (hm0360Present) {
+#if defined (USE_HM0360) || defined (USE_HM0360_MD)
+	// Test for the HM0360, if it is our main camera or in use for motion detection
+	if (hm0360_md_isSensorPresent(HM0360_SENSOR_I2CID)) {
 		xprintf("HM0360 present at 0x%02x\n", HM0360_SENSOR_I2CID);
 	}
 	else {
@@ -283,7 +280,7 @@ static void checkForCameras(void) {
 
 		selfTest_setErrorBits(1 << SELF_TEST_AI_NO_MD);
 	}
-#endif // USE_HM0360_MD
+#endif // (USE_HM0360) || (USE_HM0360_MD)
 
 	// Test for the main camera, whose address is managed in the cis_sensor folders
 	if (hm0360_md_isSensorPresent(CIS_I2C_ID)) {
@@ -298,7 +295,6 @@ static void checkForCameras(void) {
 	XP_WHITE;
 	// Disable even if not using RP camera so this pin is set to output, 0
  	rp_sensor_enable(false);	// Negate SENSOR_ENABLE
-
 }
 
 /**
@@ -492,7 +488,6 @@ void app_onInactivityDetection(void) {
 	}
 }
 
-
 // So the version can be reported
 char * app_get_version_string(void) {
 	return versionString;
@@ -548,7 +543,6 @@ void app_ledBlue(bool on) {
 	}
 #endif // PB10ISLEDBLUE
 }
-
 
 /*************************************** Main()  *************************************/
 
@@ -642,10 +636,10 @@ int app_main(void){
 			xprintf("FreeRTOS tickless idle is disabled. configMAX_PRIORITIES = %d\n", configMAX_PRIORITIES);
 			XP_WHITE;
 		}
-#ifdef configUSE_NEWLIB_REENTRANT
-		// Guards against issues when using FreeRTOS and nano-lib?
-		xprintf("configUSE_NEWLIB_REENTRANT is defined\n");
-#endif	// configUSE_NEWLIB_REENTRANT
+//#ifdef configUSE_NEWLIB_REENTRANT
+//		// Guards against issues when using FreeRTOS and nano-lib?
+//		xprintf("configUSE_NEWLIB_REENTRANT is defined\n");
+//#endif	// configUSE_NEWLIB_REENTRANT
 
 		// Initialises clock and sets a time to be going on with...
 		// A date prior to 2025 flags "not set"
@@ -672,51 +666,21 @@ int app_main(void){
 
 		xprintf("Woke at %s \n", timeString);
 
-#ifdef USE_HM0360_MD
-		// Test for the HM0360 (to be used for motion detection)
-		hm0360Present = hm0360_md_isSensorPresent(HM0360_SENSOR_I2CID);
-#endif // USE_HM0360_MD
-
-#if defined(USE_HM0360)
+#if defined(USE_HM0360) || defined (USE_HM0360_MD)
 		// HM0360 is main camera
-		hm0360_md_getInterruptStatus(&hm0360_interrupt_status);
-		// Wait till image_task before clearing the interrupt as this allows simple measurement of latency
-    	hm0360_md_disableInterrupt();	/// stop further MD activity
-
-		XP_YELLOW;
-		if (wakeup_event1 == PMU_WAKEUPEVENT1_DPD_PAD_AON_GPIO_0) {
-			// The WAKE pin has woken us...
-			if ((hm0360_interrupt_status & MD_INT) == MD_INT) {
-				xprintf("Motion detected INT_INDIC = 0x%02x\n", hm0360_interrupt_status);
-				wakeReason = APP_WAKE_REASON_MD;
-			}
-			else {
-				xprintf("BLE wake\n");
-				wakeReason = APP_WAKE_REASON_BLE;
-			}
-		}
-		else if (wakeup_event == PMU_WAKEUP_DPD_RTC_INT) {
-			xprintf("Timer wake\n");
-			wakeReason = APP_WAKE_REASON_TIMER;
-		}
-		else {
-			// else I don't know! Add more reason in the future
-			wakeReason = APP_WAKE_REASON_UNKNOWN;
-		}
-		XP_WHITE;
-
-#elif defined(USE_HM0360_MD)
-		// HM0360 is used for MD with a RP camera
-		if (hm0360Present) {
+		if (hm0360_md_isHM0360Present()) {
 			hm0360_md_getInterruptStatus(&hm0360_interrupt_status);
 			// Wait till image_task before clearing the interrupt as this allows simple measurement of latency
-	    	hm0360_md_disableInterrupt();	/// stop further MD activity
+			hm0360_md_disableInterrupt();	/// stop further MD activity
+		}
+		else {
+			// HM0360 should be present but is faulty or missing
 		}
 
 		XP_YELLOW;
 		if (wakeup_event1 == PMU_WAKEUPEVENT1_DPD_PAD_AON_GPIO_0) {
 			// The WAKE pin has woken us...
-			if (hm0360Present && ((hm0360_interrupt_status & MD_INT) == MD_INT)) {
+			if (hm0360_md_isHM0360Present() && ((hm0360_interrupt_status & MD_INT) == MD_INT)) {
 				xprintf("Motion detected INT_INDIC = 0x%02x\n", hm0360_interrupt_status);
 				wakeReason = APP_WAKE_REASON_MD;
 			}
@@ -734,6 +698,36 @@ int app_main(void){
 			wakeReason = APP_WAKE_REASON_UNKNOWN;
 		}
 		XP_WHITE;
+
+//#elif defined(USE_HM0360_MD)
+//		// HM0360 is used for MD with a RP camera
+//		if (hm0360_md_isHM0360Present()) {
+//			hm0360_md_getInterruptStatus(&hm0360_interrupt_status);
+//			// Wait till image_task before clearing the interrupt as this allows simple measurement of latency
+//	    	hm0360_md_disableInterrupt();	/// stop further MD activity
+//		}
+//
+//		XP_YELLOW;
+//		if (wakeup_event1 == PMU_WAKEUPEVENT1_DPD_PAD_AON_GPIO_0) {
+//			// The WAKE pin has woken us...
+//			if (hm0360_md_isHM0360Present() && ((hm0360_interrupt_status & MD_INT) == MD_INT)) {
+//				xprintf("Motion detected INT_INDIC = 0x%02x\n", hm0360_interrupt_status);
+//				wakeReason = APP_WAKE_REASON_MD;
+//			}
+//			else {
+//				xprintf("BLE wake\n");
+//				wakeReason = APP_WAKE_REASON_BLE;
+//			}
+//		}
+//		else if (wakeup_event == PMU_WAKEUP_DPD_RTC_INT) {
+//			xprintf("Timer wake\n");
+//			wakeReason = APP_WAKE_REASON_TIMER;
+//		}
+//		else {
+//			// else I don't know! Add more reason in the future
+//			wakeReason = APP_WAKE_REASON_UNKNOWN;
+//		}
+//		XP_WHITE;
 
 #else
 		// RP camera alone - no HM0360

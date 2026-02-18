@@ -1357,34 +1357,34 @@ static void vImageTask(void *pvParameters) {
     xprintf("Starting Image Task\n");
     XP_WHITE;
 
-//    // Report whether dynamic EXIF confidence tags are enabled at build time
-//#ifdef ENABLE_EXIF_CONFIDENCE
-//    xprintf("EXIF confidence tags: ENABLED\n");
-//#else
-//    xprintf("EXIF confidence tags: DISABLED\n");
-//#endif // ENABLE_EXIF_CONFIDENCE
-
-    // Should initialise the camera but not start taking images
+    if (cameraSystemEnabled) {
+    	// The CONFIG.TXT intends the came system to operate,
+    	// So let's see if the hardware is present and working
+    	// The next lines should initialise the camera but not start taking images
 #ifdef USE_HM0360
-    // HM0360 is the main cameras
-    hm0360_md_setIsMainCamera(true);
-    if (woken == APP_WAKE_REASON_COLD) {
-        cameraInitialised = configure_image_sensor(CAMERA_CONFIG_INIT_COLD);
-    }
-    else {
-        cameraInitialised = configure_image_sensor(CAMERA_CONFIG_INIT_WARM);
-    }
+    	// HM0360 is the main cameras
+    	hm0360_md_setIsMainCamera(true);
+    	if (woken == APP_WAKE_REASON_COLD) {
+    		cameraInitialised = configure_image_sensor(CAMERA_CONFIG_INIT_COLD);
+    	}
+    	else {
+    		cameraInitialised = configure_image_sensor(CAMERA_CONFIG_INIT_WARM);
+    	}
 
 #else
-    hm0360_md_setIsMainCamera(false);
-    // For RP camera the SENSOR_ENABLE signal has been turned off during DPD, so must re-initialise all registers
-    cameraInitialised = configure_image_sensor(CAMERA_CONFIG_INIT_COLD);
+    	hm0360_md_setIsMainCamera(false);
+    	// For RP camera the SENSOR_ENABLE signal has been turned off during DPD, so must re-initialise all registers
+    	cameraInitialised = configure_image_sensor(CAMERA_CONFIG_INIT_COLD);
 #endif // USE_HM0360
 
-    if (!cameraInitialised)  {
-        selfTest_setErrorBits(1 << SELF_TEST_AI_NO_CAM);
-        xprintf("\nDisabling camera functions because there is no camera!\n\n");
-        cameraSystemEnabled = 0;
+    	if (!cameraInitialised)  {
+    		selfTest_setErrorBits(1 << SELF_TEST_AI_NO_CAM);
+    		xprintf("\nDisabling camera functions because there is no camera!\n\n");
+    		cameraSystemEnabled = 0;
+    	}
+    }
+    else {
+    	xprintf("\nCamera system is disabled.\n\n");
     }
 
 #ifndef USE_HM0360
@@ -1431,7 +1431,7 @@ static void vImageTask(void *pvParameters) {
 #endif // 0
 
 	// Initialise NN but only of the camera system is enabled
-	if ((cameraSystemEnabled == 1) && cameraInitialised) {
+	if (cameraSystemEnabled) {
 		int cv_init_result = cv_init(true, true,
 				fatfs_getOperationalParameter(OP_PARAMETER_MODEL_PROJECT),
 				fatfs_getOperationalParameter(OP_PARAMETER_MODEL_VERSION),
@@ -1452,6 +1452,30 @@ static void vImageTask(void *pvParameters) {
 
     // Initial state of the image task (initialized)
     image_task_state = APP_IMAGE_TASK_STATE_INIT;
+
+    // Report now:
+    XP_LT_BLUE;
+    xprintf("Image sensor and data path initialised:\n");
+    xprintf("  Camera system %s.\n", (cameraSystemEnabled > 0) ? "enabled": "disabled");
+    xprintf("  LED(s) in use: %d\n", fatfs_getOperationalParameter(OP_PARAMETER_FLASH_LED));
+    xprintf("  Flash brightness: %d%%\n", (uint8_t) fatfs_getOperationalParameter(OP_PARAMETER_LED_BRIGHTNESS_PERCENT));
+
+#ifdef USE_HM0360
+    // Flash duration is not used when HM0360 is the main camera
+#else
+    xprintf("  Flash duration %dms\r\n", fatfs_getOperationalParameter(OP_PARAMETER_FLASH_DURATION));
+#endif // USE_HM0360
+
+    uint16_t mdInterval = fatfs_getOperationalParameter(OP_PARAMETER_MD_INTERVAL);
+
+    if (mdInterval > 0) {
+    	xprintf("  MD sampling: %dms\n", mdInterval);
+    }
+    else {
+    	xprintf("  MD disabled\n");
+    }
+
+    XP_WHITE;
 
     // If we woke because of motion detection or timer then let's send ourselves an initial
     // message to take some photos.
@@ -1585,8 +1609,7 @@ static void vImageTask(void *pvParameters) {
  * @param CAMERA_CONFIG_E operation
  * @return true if initialised. false if no working camera
  */
-static bool configure_image_sensor(CAMERA_CONFIG_E operation)
-{
+static bool configure_image_sensor(CAMERA_CONFIG_E operation) {
     bool processedOK = true;
 
     // Print in grey as there is lots of output for some sensors
@@ -1625,7 +1648,6 @@ static bool configure_image_sensor(CAMERA_CONFIG_E operation)
         		xprintf("\r\nDATAPATH Init fail\r\n");
         		return false;
         	}
-
             setupLEDFlash();
         }
         break;
@@ -1647,7 +1669,6 @@ static bool configure_image_sensor(CAMERA_CONFIG_E operation)
                 xprintf("\r\nDATAPATH Init fail\r\n");
                 return false;
             }
-
             setupLEDFlash();
         }
         break;
@@ -1739,42 +1760,17 @@ static bool configure_image_sensor(CAMERA_CONFIG_E operation)
  * Common code to prepare the LED flash after cold and warm boots
  */
 static void setupLEDFlash(void) {
-    uint8_t brightnessPercent;
-    FlashLeds_t ledInUse;
-    uint16_t mdInterval;
-    uint16_t cameraEnabled;
+	uint8_t brightnessPercent;
+	FlashLeds_t ledInUse;
 
-    brightnessPercent = (uint8_t)fatfs_getOperationalParameter(OP_PARAMETER_LED_BRIGHTNESS_PERCENT);
-    mdInterval = fatfs_getOperationalParameter(OP_PARAMETER_MD_INTERVAL);
-    cameraEnabled = fatfs_getOperationalParameter(OP_PARAMETER_CAMERA_ENABLED);
+	brightnessPercent = (uint8_t)fatfs_getOperationalParameter(OP_PARAMETER_LED_BRIGHTNESS_PERCENT);
+	ledFlashBrightness(brightnessPercent);
 
-    ledFlashBrightness(brightnessPercent);
+	// Select the LED
+	ledInUse = fatfs_getOperationalParameter(OP_PARAMETER_FLASH_LED);
+	ledFlashSelectLED(ledInUse);
 
-    // Select the LED
-    ledInUse = fatfs_getOperationalParameter(OP_PARAMETER_FLASH_LED);
-    ledFlashSelectLED(ledInUse);
-    ledFlashDisable(); // This writes the control bits to the PCA9574
-
-    XP_LT_BLUE;
-    xprintf("Image sensor and data path initialised:\n");
-    xprintf("  Camera system %s.\n", (cameraEnabled > 0) ? "enabled": "disabled");
-    xprintf("  LED(s) in use: %d\n", ledInUse);
-    xprintf("  Flash brightness: %d%%\n", brightnessPercent);
-
-#ifdef USE_HM0360
-    // Flash duration is not used when HM0360 is the main camera
-#else
-    xprintf("  Flash duration %dms\r\n", fatfs_getOperationalParameter(OP_PARAMETER_FLASH_DURATION));
-#endif // USE_HM0360
-
-    if (mdInterval > 0) {
-    	xprintf("  MD sampling: %dms\n", mdInterval);
-    }
-    else {
-    	xprintf("  MD disabled\n");
-    }
-
-    XP_WHITE;
+	ledFlashDisable(); // This writes the control bits to the PCA9574
 }
 
 /**

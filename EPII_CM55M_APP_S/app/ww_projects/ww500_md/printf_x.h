@@ -12,6 +12,12 @@
 
 
 #include <stdint.h>
+#include <stddef.h>
+
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 // Define macros for stringification
 #define XSTR(x) STR(x)
@@ -57,6 +63,10 @@
 // print test string in each colour
 void printf_x_test(void);
 
-void printf_x_printBuffer(uint8_t * buff, uint16_t length);
+void printf_x_printBuffer(const void *buff, size_t length);;
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* APP_SCENARIO_APP_ALLON_SENSOR_TFLM_FREERTOS_PRINTF_X_H_ */

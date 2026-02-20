@@ -1760,7 +1760,7 @@ static void vCmdLineTask(void *pvParameters)
 				break;
 
 			case APP_MSG_CLITASK_RXI2C:
-				// String has arrived via I2C from WW130
+				// String has arrived via I2C from BLE processor
 				processWW130Command((char *)rxData);
 				break;
 

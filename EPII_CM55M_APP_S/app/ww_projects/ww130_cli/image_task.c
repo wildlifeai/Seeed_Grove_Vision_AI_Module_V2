@@ -124,7 +124,8 @@ const char *imageTaskStateString[APP_IMAGE_TASK_STATE_NUMSTATES] = {
     "Capturing",
     "NN Processing",
     "Wait for Timer",
-    "Busy",
+    "Save State",
+	"Updating NN"
 };
 
 // Strings for expected messages. Values must match messages directed to image Task in app_msg.h
@@ -138,6 +139,9 @@ const char *imageTaskEventString[APP_MSG_IMAGETASK_LAST - APP_MSG_IMAGETASK_FIRS
     "Image Event Disk Write Complete",
     "Image Event Disk Read Complete",
     "Image Event Change Enable",
+    "Image Event Update Model",
+    "Image Event Model Updated",
+	"Image Task Error"
 };
 
 TickType_t xLastWakeTime;
@@ -466,13 +470,11 @@ static APP_MSG_DEST_T handleEventForInit(APP_MSG_T img_recv_msg)
             break;
 
         case APP_MSG_IMAGETASK_DISK_WRITE_COMPLETE:
-            if (img_recv_msg.msg_data == 0)
-            {
+            if (img_recv_msg.msg_data == 0)  {
                 send_msg.message.msg_event = APP_MSG_IMAGETASK_DONE;
                 image_task_state = APP_IMAGE_TASK_STATE_INIT;
             }
-            else
-            {
+            else  {
                 dbg_printf(DBG_LESS_INFO, "Image not written, error occured: %d", event);
                 flagUnexpectedEvent(img_recv_msg);
             }
@@ -864,8 +866,7 @@ void app_start_state(CAMERA_CONFIG_E state)
  *
  * This is experimental...
  */
-static void sendMsgToMaster(char *str)
-{
+static void sendMsgToMaster(char *str) {
     APP_MSG_T send_msg;
 
     // Send back to MKL62BA - msg_data is the string
@@ -873,8 +874,7 @@ static void sendMsgToMaster(char *str)
     send_msg.msg_parameter = strnlen(str, MSGTOMASTERLEN);
     send_msg.msg_event = APP_MSG_IFTASK_MSG_TO_MASTER;
 
-    if (xQueueSend(xIfTaskQueue, (void *)&send_msg, __QueueSendTicksToWait) != pdTRUE)
-    {
+    if (xQueueSend(xIfTaskQueue, (void *)&send_msg, __QueueSendTicksToWait) != pdTRUE) {
         xprintf("send_msg=0x%x fail\r\n", send_msg.msg_event);
     }
 }
@@ -886,8 +886,7 @@ static void sendMsgToMaster(char *str)
  *
  * The task itself initialises the Image sensor and then manages requests to access it.
  */
-TaskHandle_t image_createTask(int8_t priority)
-{
+TaskHandle_t image_createTask(int8_t priority) {
     if (priority < 0)
     {
         priority = 0;

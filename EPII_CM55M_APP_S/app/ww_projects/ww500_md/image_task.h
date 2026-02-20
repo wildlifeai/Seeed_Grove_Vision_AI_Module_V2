@@ -40,7 +40,8 @@ typedef enum {
 } APP_IMAGE_TASK_STATE_E;
 
 // The number of neural network output categories
-#define CATEGORIESCOUNT 2
+// replaced with MAX_CLASSES
+//#define CATEGORIESCOUNT 2
 
 // Sets limits for the capture command
 #define MIN_IMAGE_CAPTURES 1
@@ -90,5 +91,8 @@ void image_hackInactive(void);
 
 // Returns whether the camera system is enabled
 bool image_getEnabled(void);
+
+// Call to shut down cameras and enter DPD
+void image_sleepNow(void);
 
 #endif /* APP_WW_PROJECTS_WW500_MD_IMAGE_TASK_H_ */

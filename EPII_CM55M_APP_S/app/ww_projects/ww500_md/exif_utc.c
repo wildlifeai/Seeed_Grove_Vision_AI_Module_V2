@@ -246,7 +246,7 @@ RTC_ERROR_E exif_utc_get_rtc_as_exif_string(char *str, uint8_t length) {
 
 /**
  * reads the RTC hardware to produce an EXIF timestamp string
- * Example: 2025-06-23T2:33:22Z
+ * Example: 2025-06-23T12:33:22Z
  */
 RTC_ERROR_E exif_utc_get_rtc_as_utc_string(char *str, uint8_t length) {
 	rtc_time tm;

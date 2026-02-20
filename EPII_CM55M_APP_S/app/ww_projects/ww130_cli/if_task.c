@@ -669,6 +669,7 @@ static APP_MSG_DEST_T  handleEventForStateI2CTx(APP_MSG_T rxMessage) {
 		break;
 
 	case APP_MSG_IFTASK_I2CCOMM_MM_TIMER:
+	case APP_MSG_IFTASK_I2CCOMM_ERR:
 		// Master failed to respond to our attempt to send I2C data
 		XP_LT_RED;
 		xprintf("I2C master did not read our I2C message\n");
@@ -725,6 +726,7 @@ static APP_MSG_DEST_T  handleEventForStateI2CSlaveTx(APP_MSG_T rxMessage) {
 
 	switch (event) {
 	case APP_MSG_IFTASK_I2CCOMM_TX_DONE:
+	case APP_MSG_IFTASK_I2CCOMM_ERR:
 		// I2C transmission has finished. Expecting a response from the MKL62BA soon.
 		if_task_state = APP_IF_STATE_I2C_SLAVE_RX;
 		i2cTransmissionComplete();
@@ -733,6 +735,7 @@ static APP_MSG_DEST_T  handleEventForStateI2CSlaveTx(APP_MSG_T rxMessage) {
 		break;
 
 	case APP_MSG_IFTASK_I2CCOMM_MM_TIMER:
+	case APP_MSG_IFTASK_I2CCOMM_ERR:
 		// Missing Master timer expired. Master failed to respond to our attempt to send I2C data
 		XP_LT_RED;
 		xprintf("I2C master did not read our I2C message\n");
@@ -952,7 +955,7 @@ static APP_MSG_DEST_T flagUnexpectedEvent(APP_MSG_T rxMessage) {
 static void sendI2CMessage(uint8_t * data, aiProcessor_msg_type_t messageType, uint16_t payloadLength) {
 
 	interprocessor_interrupt_assert();
-	i2ccomm_write_enable(data, messageType, payloadLength);	// Get the I2C dat ready to transmit.
+	i2ccomm_write_enable(data, messageType, payloadLength);	// Get the I2C datA ready to transmit.
 	interprocessor_interrupt_negate();	// WW130 responds on the rising edge. It starts the I2Cread process
 }
 

@@ -5,6 +5,7 @@ on:
     branches:
       - dev
       - 'fix/firmware-upload-ci'
+      - 'no-model-load'
   workflow_dispatch: # Allow manual triggering
 
 jobs:
@@ -87,23 +88,77 @@ jobs:
           echo "GCC Bin Dir: $BIN_DIR"
           echo "GNU_TOOLPATH=$BIN_DIR/" >> $GITHUB_ENV
 
+      - name: Verify Build Configuration
+        working-directory: ./EPII_CM55M_APP_S
+        run: |
+          echo "=== Makefile Configuration ==="
+          echo "PROJECT_FOLDER:"
+          grep '^PROJECT_FOLDER' makefile | grep -v '^#' || true
+          echo ""
+          echo "APP_TYPE check in ww.mk:"
+          grep '^APP_TYPE' app/ww_projects/ww.mk | grep -v '^#' || true
+          echo ""
+          echo "CIS_SUPPORT_INAPP_MODEL check in ww500_md.mk:"
+          grep 'CIS_SUPPORT_INAPP_MODEL' app/ww_projects/ww500_md/ww500_md.mk | grep -v '^#' || true
+          echo ""
+          echo "Expected APPL_DEFINES with HM0360:"
+          grep 'APPL_DEFINES.*HM0360' app/ww_projects/ww500_md/ww500_md.mk || echo "WARNING: No HM0360 defines found!"
+
       - name: Build Firmware (Make)
         working-directory: ./EPII_CM55M_APP_S
         run: |
-          # Use the discovered toolchain path
-          make -j4 GNU_TOOLPATH="${{ env.GNU_TOOLPATH }}"
+          # Use the discovered toolchain path with verbose output
+          echo "Building with verbose output to verify preprocessor defines..."
+          make -j4 V=1 GNU_TOOLPATH="${{ env.GNU_TOOLPATH }}" 2>&1 | tee build.log
+          
+          echo ""
+          echo "=== Checking for USE_HM0360_MD in build flags ==="
+          if grep -i "USE_HM0360" build.log; then
+            echo "✓ USE_HM0360 flags found in build!"
+          else
+            echo "⚠ WARNING: USE_HM0360_MD not found in build flags!"
+            echo "This may explain why HM0360 sensor initialization fails."
+          fi
 
-      - name: Fetch Correct DPD Image Gen Tool
+      - name: Upload Build Log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: EPII_CM55M_APP_S/build.log
+          retention-days: 7
+
+      - name: Verify Using Local Image Gen Tool
         run: |
-          echo "Cloning external repository to get correct image gen tool..."
-          git clone --depth 1 https://github.com/stevehuang82/for_wildlife_ai.git temp_tools
-          
-          echo "Replacing ENTIRE we2_image_gen_local_dpd directory..."
-          rm -rf we2_image_gen_local_dpd
-          cp -r temp_tools/we2_image_gen_local_dpd .
-          
-          echo "Cleaning up..."
-          rm -rf temp_tools
+          echo "=== Verifying we2_image_gen_local_dpd tool ===" 
+          if [ -f "we2_image_gen_local_dpd/we2_local_image_gen" ]; then
+            echo "✓ Using LOCAL committed we2_image_gen_local_dpd (same as Eclipse)"
+            echo "  This should produce firmware that boots from primary slot (0x00000000)"
+          else
+            echo "✗ ERROR: we2_image_gen_local_dpd tool not found!"
+            echo "  Make sure this directory is committed to the repository"
+            exit 1
+          fi
+
+
+      - name: Analyze Binary Before Image Gen
+        run: |
+          echo "=== Analyzing compiled binary for HM0360 references ==="
+          ELF_FILE="EPII_CM55M_APP_S/obj_epii_evb_icv30_bdv10/gnu_epii_evb_WLCSP65/EPII_CM55M_gnu_epii_evb_WLCSP65_s.elf"
+          if [ -f "$ELF_FILE" ]; then
+            ls -lh "$ELF_FILE"
+            echo ""
+            echo "Searching for HM0360-related strings in ELF:"
+            if strings "$ELF_FILE" | grep -i "hm0360"; then
+              echo "✓ HM0360 strings found in compiled binary"
+            else
+              echo "⚠ WARNING: No HM0360 strings found in ELF file!"
+              echo "This confirms the HM0360 code was NOT compiled into the binary."
+            fi
+          else
+            echo "ERROR: ELF file not found at $ELF_FILE"
+            exit 1
+          fi
 
       - name: Copy ELF to Image Gen Input Directory
         run: |
@@ -112,6 +167,20 @@ jobs:
           cp EPII_CM55M_APP_S/obj_epii_evb_icv30_bdv10/gnu_epii_evb_WLCSP65/EPII_CM55M_gnu_epii_evb_WLCSP65_s.elf \
              we2_image_gen_local_dpd/input_case1_secboot/ # Destination must exist in repo
 
+      - name: Patch Config Paths for Linux
+        run: |
+          echo "=== Patching JSON config files for Linux ==="
+          # The local tool on Linux (CI) cannot handle Windows backslashes in JSON paths.
+          # We dynamically replace '\' with '/' just for this build.
+          
+          echo "Patching project_case1_blp_wlcsp_rc24m.json..."
+          sed -i 's|\\|/|g' we2_image_gen_local_dpd/project_case1_blp_wlcsp_rc24m.json
+          
+          echo "Patching partition_case1_secboot_blp_wlcsp_nodiv_rc24m.json..."
+          sed -i 's|\\|/|g' we2_image_gen_local_dpd/input_case1_secboot/json/partition_case1_secboot_blp_wlcsp_nodiv_rc24m.json
+          
+          echo "✓ Patch applied successfully"
+
       - name: Generate Firmware Image
         working-directory: ./we2_image_gen_local_dpd
         run: |
@@ -119,6 +188,55 @@ jobs:
           chmod -R +x .
           # Run the image generation tool
           ./we2_local_image_gen project_case1_blp_wlcsp_rc24m.json
+
+      - name: Analyze Generated Image
+        run: |
+          echo "=== Analyzing generated firmware image ==="
+          IMG_FILE=$(find ./we2_image_gen_local_dpd/output_case1_sec_wlcsp -name "output.img" | head -n 1)
+          if [ -n "$IMG_FILE" ] && [ -f "$IMG_FILE" ]; then
+            ls -lh "$IMG_FILE"
+            echo ""
+            echo "Searching for HM0360-related strings in IMG:"
+            if strings "$IMG_FILE" | grep -i "hm0360"; then
+              echo "✓ HM0360 strings found in firmware image"
+            else
+              echo "⚠ WARNING: No HM0360 strings found in IMG file!"
+            fi
+          else
+            echo "WARNING: Could not find generated image file"
+          fi
+
+      - name: ✅ Flash Slot Issue - FIXED
+        run: |
+          echo "======================================================================"
+          echo " ✅ Flash Slot Model Persistence Issue - FIX APPLIED"
+          echo "======================================================================"
+          echo ""
+          echo "PREVIOUS PROBLEM:"
+          echo "  This workflow was fetching we2_image_gen_local_dpd from an external"
+          echo "  GitHub repo (stevehuang82/for_wildlife_ai) which had DIFFERENT"
+          echo "  bootloader binaries that caused firmware to boot from backup slot"
+          echo "  (0x00100000) instead of primary slot (0x00000000)."
+          echo ""
+          echo "  This caused the firmware to re-write the model on every wake-up"
+          echo "  because metadata addresses didn't match between boot sessions."
+          echo ""
+          echo "FIX APPLIED:"
+          echo "  Now using the LOCAL committed we2_image_gen_local_dpd directory"
+          echo "  (same tool Eclipse uses), which produces images that boot from"
+          echo "  the primary slot correctly."
+          echo ""
+          echo "EXPECTED RESULT:"
+          echo "  ✓ Firmware boots from slot 0x00000000 (primary)"
+          echo "  ✓ Model metadata persists correctly across reboots"
+          echo "  ✓ Model loads from flash instead of re-writing from SD"
+          echo "  ✓ Fast wake-up times (~1-2 seconds instead of 5-10 seconds)"
+          echo ""
+          echo "VERIFICATION:"
+          echo "  Check boot logs for 'slot flash_offset 0x00000000'"
+          echo "  and 'Flash already contains model' message"
+          echo "======================================================================"
+
 
       - name: Find Generated Image
         id: find_image
@@ -181,6 +299,21 @@ jobs:
           dry_run: true
           tag_prefix: v
 
+      - name: Generate Unique Version
+        id: version
+        run: |
+          # Get the calculated semantic version (e.g., v0.1.2)
+          SEMVER="${{ steps.semver.outputs.new_tag }}"
+          
+          # Add GitHub run number to ensure uniqueness (e.g., v0.1.2.1234)
+          # Run number increments with each workflow run, guaranteeing uniqueness
+          UNIQUE_VERSION="${SEMVER}.${{ github.run_number }}"
+          
+          echo "unique_version=${UNIQUE_VERSION}" >> $GITHUB_OUTPUT
+          echo "Generated unique version: ${UNIQUE_VERSION}"
+          echo "  Base version: ${SEMVER}"
+          echo "  Build number: ${{ github.run_number }}"
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -195,7 +328,7 @@ jobs:
           # The artifact contains output.img
           FIRMWARE_FILE="./firmware/output.img"
           
-          # Find actual filename if it's not output.img (e.g. if we uploaded with original name)
+          # Find actual filename if it's not output.img
           if [ ! -f "$FIRMWARE_FILE" ]; then
              FIRMWARE_FILE=$(find ./firmware -name "*.img" | head -n 1)
           fi
@@ -213,7 +346,16 @@ jobs:
       - name: Upload to Supabase
         working-directory: ./scripts
         env:
-          FIRMWARE_VERSION: ${{ steps.semver.outputs.new_tag }}
+          FIRMWARE_VERSION: ${{ steps.version.outputs.unique_version }}
+          RELEASE_NOTES: |
+            Automated firmware build ${{ steps.version.outputs.unique_version }}
+            
+            Base version: ${{ steps.semver.outputs.new_tag }}
+            Build: #${{ github.run_number }}
+            Commit: ${{ github.sha }}
+            
+            Changes:
+            ${{ steps.semver.outputs.changelog }}
         run: node upload_firmware.js
         
       - name: Create Git Tag

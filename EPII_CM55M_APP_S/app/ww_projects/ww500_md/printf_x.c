@@ -5,6 +5,8 @@
  *      Author: charl
  */
 
+
+
 #include "printf_x.h"
 #include "xprintf.h"
 #include "ctype.h"
@@ -116,25 +118,47 @@ void printf_x_test(void) {
 /**
  * Utility to print the contents of a buffer
  */
-void printf_x_printBuffer(uint8_t * buff, uint16_t length) {
-    uint8_t lineBuff[IN_LINE_PRINT_CNT + 1];	  // +1 for '\0'
+void printf_x_printBuffer(const void *buff, size_t length) {
+	const uint8_t *src = (const uint8_t *)buff;
+	uint8_t lineBuff[IN_LINE_PRINT_CNT + 1];   // +1 for '\0'
+	size_t remaining;
+	size_t bytesThisLine;
 
-    for (uint16_t addr = 0; addr < length; addr += IN_LINE_PRINT_CNT)  {
-    	memcpy(lineBuff, buff + addr, IN_LINE_PRINT_CNT);
-        lineBuff[IN_LINE_PRINT_CNT] = '\0';
+	for (size_t addr = 0; addr < length; addr += IN_LINE_PRINT_CNT)  {
+		remaining = length - addr;
+		bytesThisLine = (remaining < IN_LINE_PRINT_CNT) ? remaining : IN_LINE_PRINT_CNT;
 
-        xprintf("%03x: ", addr);
-        for (uint8_t i = 0; i < IN_LINE_PRINT_CNT; i++)  {
-        	xprintf("%02x ", lineBuff[i]);
-            if (i == 7) {
-            	// Extra space to separate 1st and 2nd 8 bytes
-            	xprintf(" ");
-            }
-            if (!isprint((int)lineBuff[i]))  {
-                lineBuff[i] = '.';
-            }
-        }
-        // Now the string version
-        xprintf("%s\n", lineBuff);
-    }
+		// Copy only the valid bytes
+		memcpy(lineBuff, src + addr, bytesThisLine);
+
+		// Pad the rest so the ASCII print section is well-defined
+		if (bytesThisLine < IN_LINE_PRINT_CNT) {
+			memset(lineBuff + bytesThisLine, ' ', IN_LINE_PRINT_CNT - bytesThisLine);
+		}
+
+		lineBuff[IN_LINE_PRINT_CNT] = '\0';
+
+		xprintf("%03x: ", (unsigned)addr);
+
+		for (uint8_t i = 0; i < IN_LINE_PRINT_CNT; i++) {
+			if (i == 8) {
+				xprintf(" ");
+			}
+
+			if (i < bytesThisLine)  {
+				xprintf("%02x ", lineBuff[i]);
+
+				if (!isprint((int)lineBuff[i])) {
+					lineBuff[i] = '.';
+				}
+			}
+			else  {
+				xprintf("   ");
+			}
+		}
+
+		xprintf("%s\n", lineBuff);
+	}
 }
+
+

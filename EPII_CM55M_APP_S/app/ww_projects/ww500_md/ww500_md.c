@@ -95,8 +95,6 @@
 extern QueueHandle_t     xIfTaskQueue;
 extern QueueHandle_t     xImageTaskQueue;
 
-// This will be available to all of the tasks:
-Barrier_t startupBarrier;
 
 /*************************************** Local variables *******************************************/
 
@@ -104,9 +102,9 @@ internal_state_t internalStates[NUMBEROFTASKS];
 
 static char versionString[64]; // Make sure the buffer is large enough
 
-#ifdef USE_HM0360_MD
-bool hm0360Present = false;
-#endif // USE_HM0360_MD
+// This will be available to all of the tasks:
+Barrier_t startupBarrier;
+Barrier_t shutdownBarrier;  // Object that calls a function when all tasks are ready to shut down
 
 /*************************************** Local routine prototypes  *************************************/
 
@@ -227,6 +225,8 @@ static void showResetOnLeds(uint8_t numFlashes) {
  * RP v2 should be at 0x10
  * RP v3 should be at 0x1a
  *
+ * Sets self test bits.
+ *
  * WARNING: this may fail for cameras which rely on the SENSOR_ENABLE being on.
  */
 static void checkForCameras(void) {
@@ -246,10 +246,32 @@ static void checkForCameras(void) {
 
 	XP_LT_GREY;
 
-#ifdef USE_HM0360_MD
-	// Test for the HM0360, if it is in use for motion detection
-	hm0360Present = hm0360_md_isSensorPresent(HM0360_SENSOR_I2CID);
-	if (hm0360Present) {
+#ifdef WW500_C00
+	// Test for the I2C extender
+	if (hm0360_md_isSensorPresent(PCA9574_I2C_ADDRESS_0)) {
+		xprintf("PCA9574 present at 0x%02x\n", PCA9574_I2C_ADDRESS_0);
+
+		// Place this early as PCA9574 has floating pins at reset.
+		if (ledFlashInit()) {
+			xprintf("Initialised LED Flash\n");
+		}
+		else {
+			xprintf("Can't initialise LED Flash\n");
+		}
+	}
+	else {
+		xprintf("PCA9574 not present at 0x%02x\n", PCA9574_I2C_ADDRESS_0);
+		// expect a driver error message as well...
+
+		selfTest_setErrorBits(1 << SELF_TEST_AI_NO_FLASH);
+	}
+#endif // WW500_C00
+
+	XP_LT_GREY;
+
+#if defined (USE_HM0360) || defined (USE_HM0360_MD)
+	// Test for the HM0360, if it is our main camera or in use for motion detection
+	if (hm0360_md_isSensorPresent(HM0360_SENSOR_I2CID)) {
 		xprintf("HM0360 present at 0x%02x\n", HM0360_SENSOR_I2CID);
 	}
 	else {
@@ -258,7 +280,7 @@ static void checkForCameras(void) {
 
 		selfTest_setErrorBits(1 << SELF_TEST_AI_NO_MD);
 	}
-#endif // USE_HM0360_MD
+#endif // (USE_HM0360) || (USE_HM0360_MD)
 
 	// Test for the main camera, whose address is managed in the cis_sensor folders
 	if (hm0360_md_isSensorPresent(CIS_I2C_ID)) {
@@ -270,24 +292,9 @@ static void checkForCameras(void) {
 		selfTest_setErrorBits(1 << SELF_TEST_AI_NO_CAM);
 	}
 
-#ifdef WW500_C00
-	// Test for the I2C extender
-	if (hm0360_md_isSensorPresent(PCA9574_I2C_ADDRESS_0)) {
-		xprintf("PCA9574 present at 0x%02x\n", PCA9574_I2C_ADDRESS_0);
-		//pca9574_readWriteTests(PCA9574_I2C_ADDRESS_0);
-	}
-	else {
-		xprintf("PCA9574 not present at 0x%02x\n", PCA9574_I2C_ADDRESS_0);
-		// expect a driver error message as well...
-
-		selfTest_setErrorBits(1 << SELF_TEST_AI_NO_FLASH);
-	}
-#endif // WW500_C00
-
 	XP_WHITE;
 	// Disable even if not using RP camera so this pin is set to output, 0
  	rp_sensor_enable(false);	// Negate SENSOR_ENABLE
-
 }
 
 /**
@@ -469,8 +476,6 @@ void app_onInactivityDetection(void) {
 	send_msg.msg_parameter = 0;
 	send_msg.msg_event = APP_MSG_IMAGETASK_INACTIVITY;
 
-	// TODO - RECONSIDER SEQUENCE TO AVOID RACE CONDITIONS
-
 	// Send a message to the image state machine to start the motion detection mechanism
 	if (xQueueSend(xImageTaskQueue, (void *)&send_msg, __QueueSendTicksToWait) != pdTRUE) {
 		xprintf("send_msg=0x%x fail\r\n", send_msg.msg_event);
@@ -481,10 +486,7 @@ void app_onInactivityDetection(void) {
 	if (xQueueSend(xIfTaskQueue, (void *)&send_msg, __QueueSendTicksToWait) != pdTRUE) {
 		xprintf("send_msg=0x%x fail\r\n", send_msg.msg_event);
 	}
-
-	// TODO - can I send the APP_MSG_FATFSTASK_SAVE_STATE message to the fatfs task from here?
 }
-
 
 // So the version can be reported
 char * app_get_version_string(void) {
@@ -494,6 +496,22 @@ char * app_get_version_string(void) {
 char * app_get_board_name_string(void) {
 	static char * boardString = BOARD_NAME_STRING;
 	return boardString;
+}
+
+/**
+ * Return a string indicating main camera type
+ */
+char * app_get_camera_string(void) {
+#ifdef USE_HM0360
+	static char * cameraString = "HM0360";
+#elif defined (USE_RP2)
+	static char * cameraString = "RP2";
+#elif defined (USE_RP3)
+	static char * cameraString = "RP3";
+#else
+	static char * cameraString = "Unknown";
+#endif
+	return cameraString;
 }
 
 
@@ -525,7 +543,6 @@ void app_ledBlue(bool on) {
 	}
 #endif // PB10ISLEDBLUE
 }
-
 
 /*************************************** Main()  *************************************/
 
@@ -602,7 +619,7 @@ int app_main(void){
 	xprintf("Camera: Unknown\n");
 #endif	// USE_HM0360
 
-	checkForCameras();	// see which I2C devices respond
+	checkForCameras();	// see which I2C devices respond (and disable LED flash!)
 
 	if ((wakeup_event == PMU_WAKEUP_NONE) && (wakeup_event1 == PMU_WAKEUPEVENT1_NONE)) {
 		showResetOnLeds(3);	// pattern on LEDs to show cold boot
@@ -619,10 +636,10 @@ int app_main(void){
 			xprintf("FreeRTOS tickless idle is disabled. configMAX_PRIORITIES = %d\n", configMAX_PRIORITIES);
 			XP_WHITE;
 		}
-#ifdef configUSE_NEWLIB_REENTRANT
-		// Guards against issues when using FreeRTOS and nano-lib?
-		xprintf("configUSE_NEWLIB_REENTRANT is defined\n");
-#endif	// configUSE_NEWLIB_REENTRANT
+//#ifdef configUSE_NEWLIB_REENTRANT
+//		// Guards against issues when using FreeRTOS and nano-lib?
+//		xprintf("configUSE_NEWLIB_REENTRANT is defined\n");
+//#endif	// configUSE_NEWLIB_REENTRANT
 
 		// Initialises clock and sets a time to be going on with...
 		// A date prior to 2025 flags "not set"
@@ -649,51 +666,21 @@ int app_main(void){
 
 		xprintf("Woke at %s \n", timeString);
 
-#ifdef USE_HM0360_MD
-		// Test for the HM0360 (to be used for motion detection)
-		hm0360Present = hm0360_md_isSensorPresent(HM0360_SENSOR_I2CID);
-#endif // USE_HM0360_MD
-
-#if defined(USE_HM0360)
+#if defined(USE_HM0360) || defined (USE_HM0360_MD)
 		// HM0360 is main camera
-		hm0360_md_getInterruptStatus(&hm0360_interrupt_status);
-		// Wait till image_task before clearing the interrupt as this allows simple measurement of latency
-    	hm0360_md_disableInterrupt();	/// stop further MD activity
-
-		XP_YELLOW;
-		if (wakeup_event1 == PMU_WAKEUPEVENT1_DPD_PAD_AON_GPIO_0) {
-			// The WAKE pin has woken us...
-			if ((hm0360_interrupt_status & MD_INT) == MD_INT) {
-				xprintf("Motion detected INT_INDIC = 0x%02x\n", hm0360_interrupt_status);
-				wakeReason = APP_WAKE_REASON_MD;
-			}
-			else {
-				xprintf("BLE wake\n");
-				wakeReason = APP_WAKE_REASON_BLE;
-			}
-		}
-		else if (wakeup_event == PMU_WAKEUP_DPD_RTC_INT) {
-			xprintf("Timer wake\n");
-			wakeReason = APP_WAKE_REASON_TIMER;
-		}
-		else {
-			// else I don't know! Add more reason in the future
-			wakeReason = APP_WAKE_REASON_UNKNOWN;
-		}
-		XP_WHITE;
-
-#elif defined(USE_HM0360_MD)
-		// HM0360 is used for MD with a RP camera
-		if (hm0360Present) {
+		if (hm0360_md_isHM0360Present()) {
 			hm0360_md_getInterruptStatus(&hm0360_interrupt_status);
 			// Wait till image_task before clearing the interrupt as this allows simple measurement of latency
-	    	hm0360_md_disableInterrupt();	/// stop further MD activity
+			hm0360_md_disableInterrupt();	/// stop further MD activity
+		}
+		else {
+			// HM0360 should be present but is faulty or missing
 		}
 
 		XP_YELLOW;
 		if (wakeup_event1 == PMU_WAKEUPEVENT1_DPD_PAD_AON_GPIO_0) {
 			// The WAKE pin has woken us...
-			if (hm0360Present && ((hm0360_interrupt_status & MD_INT) == MD_INT)) {
+			if (hm0360_md_isHM0360Present() && ((hm0360_interrupt_status & MD_INT) == MD_INT)) {
 				xprintf("Motion detected INT_INDIC = 0x%02x\n", hm0360_interrupt_status);
 				wakeReason = APP_WAKE_REASON_MD;
 			}
@@ -711,6 +698,36 @@ int app_main(void){
 			wakeReason = APP_WAKE_REASON_UNKNOWN;
 		}
 		XP_WHITE;
+
+//#elif defined(USE_HM0360_MD)
+//		// HM0360 is used for MD with a RP camera
+//		if (hm0360_md_isHM0360Present()) {
+//			hm0360_md_getInterruptStatus(&hm0360_interrupt_status);
+//			// Wait till image_task before clearing the interrupt as this allows simple measurement of latency
+//	    	hm0360_md_disableInterrupt();	/// stop further MD activity
+//		}
+//
+//		XP_YELLOW;
+//		if (wakeup_event1 == PMU_WAKEUPEVENT1_DPD_PAD_AON_GPIO_0) {
+//			// The WAKE pin has woken us...
+//			if (hm0360_md_isHM0360Present() && ((hm0360_interrupt_status & MD_INT) == MD_INT)) {
+//				xprintf("Motion detected INT_INDIC = 0x%02x\n", hm0360_interrupt_status);
+//				wakeReason = APP_WAKE_REASON_MD;
+//			}
+//			else {
+//				xprintf("BLE wake\n");
+//				wakeReason = APP_WAKE_REASON_BLE;
+//			}
+//		}
+//		else if (wakeup_event == PMU_WAKEUP_DPD_RTC_INT) {
+//			xprintf("Timer wake\n");
+//			wakeReason = APP_WAKE_REASON_TIMER;
+//		}
+//		else {
+//			// else I don't know! Add more reason in the future
+//			wakeReason = APP_WAKE_REASON_UNKNOWN;
+//		}
+//		XP_WHITE;
 
 #else
 		// RP camera alone - no HM0360
@@ -730,18 +747,6 @@ int app_main(void){
 		XP_WHITE;
 #endif	// USE_HM0360
 	}
-
-#ifdef WW500_C00
-	// TODO remove this. It is present in CLI-commands.
-	// Need to enable it based on the operational parameters setting.
-		// The CLI 'flash n m" command allows testing
-	if (ledFlashInit()) {
-		xprintf("Initialised LED Flash\n");
-	}
-	else {
-		xprintf("Can't initialise LED Flash\n");
-	}
-#endif // WW500_C00
 
 	xprintf("Initialising FreeRTOS tasks\n");
 
@@ -802,9 +807,10 @@ int app_main(void){
 	internalStates[taskIndex++] = internalState;
 	xprintf("Created task '%s' Priority %d\n", pcTaskGetName(task_id), priority);
 
-	// Now create a barrier entity so that a function is called when all tasks are ready in their
-	// for(;;) loop
+	// Now create a barrier entity so that a function is called when all tasks are ready in their for(;;) loop
 	barrier_init(&startupBarrier, taskIndex, ifTask_allTasksReady);
+	// Also a barrier to entering DPD -
+	barrier_init(&shutdownBarrier, 2, image_sleepNow);
 
 	xprintf("FreeRTOS scheduler started.\n");
 	vTaskStartScheduler();

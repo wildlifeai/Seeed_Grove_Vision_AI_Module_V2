@@ -18,8 +18,14 @@ APPL_DEFINES += -DDBG_MORE
 # Add new library here
 # The source code should be loacted in ~\library\{lib_name}\
 ##
-LIB_SEL = pwrmgmt sensordp tflmtag2209_u55tag2205 spi_ptl spi_eeprom i2c_comm #hxevent
-#LIB_SEL = pwrmgmt sensordp tflmtag2209_u55tag2205 spi_ptl spi_eeprom hxevent
+#LIB_SEL = pwrmgmt sensordp tflmtag2209_u55tag2205 spi_ptl spi_eeprom i2c_comm #hxevent
+LIB_SEL = pwrmgmt sensordp tflmtag2412_u55tag2411 spi_ptl spi_eeprom i2c_comm #hxevent
+
+# Add a compiler switch if we select the later TFLM library:
+ifeq ($(filter tflmtag2412_u55tag2411,$(LIB_SEL)),tflmtag2412_u55tag2411)
+    APPL_DEFINES += -DTFLM_2412
+endif
+
 
 ##
 # middleware support feature
@@ -42,14 +48,14 @@ override CIS_SEL := HM_COMMON
 override EPII_USECASE_SEL := drv_onecore_cm55m_s
 
 CIS_SUPPORT_INAPP = cis_sensor
-CIS_SUPPORT_INAPP_MODEL = cis_hm0360
+#CIS_SUPPORT_INAPP_MODEL = cis_hm0360
 # OV5647 for RP v1 camera
 #CIS_SUPPORT_INAPP_MODEL = cis_ov5647
 # IMX219 for RP v2 camera
 #CIS_SUPPORT_INAPP_MODEL = cis_imx219
 #CIS_SUPPORT_INAPP_MODEL = cis_imx477
 # IMX708 for RP v3 camera
-# CIS_SUPPORT_INAPP_MODEL = cis_imx708
+CIS_SUPPORT_INAPP_MODEL = cis_imx708
 
 # CGP added to indicate HM0360 is used:
 

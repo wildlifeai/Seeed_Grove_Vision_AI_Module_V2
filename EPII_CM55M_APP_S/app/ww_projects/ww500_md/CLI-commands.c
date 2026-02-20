@@ -496,7 +496,7 @@ static const CLI_Command_Definition_t xSetOpParam = {
 /* Structure that defines the "getop" command line command. */
 static const CLI_Command_Definition_t xGetOpParam = {
 	"getop", /* The command string to type. */
-	"getop <index>:\r\n Get Operational Parameter <index>\r\n",
+	"getop <index>:\r\n Get Operational Parameter <index> -1 for all\r\n",
 	prvGetOpParam, /* The function to run. */
 	1			/* One parameter expected */
 };
@@ -1376,16 +1376,24 @@ static BaseType_t prvGetOpParam(char *pcWriteBuffer, size_t xWriteBufferLen, con
 		return pdFALSE;
 	}
 
-	if ((index < 0) || (index >= OP_PARAMETER_NUM_ENTRIES)) {
-		snprintf(pcWriteBuffer, xWriteBufferLen, "Error: index must be between 0 and %d.\r\n",
+	if ((index < -1) || (index >= OP_PARAMETER_NUM_ENTRIES)) {
+		snprintf(pcWriteBuffer, xWriteBufferLen, "Error: index must be between -1 and %d.\r\n",
 				OP_PARAMETER_NUM_ENTRIES - 1);
 		return pdFALSE;
 	}
 
 	// Parameters are valid
-	value = fatfs_getOperationalParameter(index);
-	snprintf(pcWriteBuffer, xWriteBufferLen, "OpParam %d = %d", index, value);
-
+	if (index == -1) {
+		// Send them all
+		snprintf(pcWriteBuffer, xWriteBufferLen, "OpParams ");
+		for (uint8_t i=0; i < OP_PARAMETER_NUM_ENTRIES; i++) {
+			pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen, "%d ", fatfs_getOperationalParameter(i));
+		}
+	}
+	else {
+		value = fatfs_getOperationalParameter(index);
+		snprintf(pcWriteBuffer, xWriteBufferLen, "OpParam %d = %d", index, value);
+	}
 	return pdFALSE;
 }
 

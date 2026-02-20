@@ -1362,7 +1362,7 @@ static BaseType_t prvSetOpParam(char *pcWriteBuffer, size_t xWriteBufferLen, con
 static BaseType_t prvGetOpParam(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) {
 	const char *pcParameter1;
 	BaseType_t xParameter1StringLength;
-	uint16_t index = 0;
+	int16_t index = 0;
 	uint16_t value = 0;
 
 	/* Get the first parameter */
@@ -1377,15 +1377,15 @@ static BaseType_t prvGetOpParam(char *pcWriteBuffer, size_t xWriteBufferLen, con
 	}
 
 	if ((index < -1) || (index >= OP_PARAMETER_NUM_ENTRIES)) {
-		snprintf(pcWriteBuffer, xWriteBufferLen, "Error: index must be between -1 and %d.\r\n",
-				OP_PARAMETER_NUM_ENTRIES - 1);
+		snprintf(pcWriteBuffer, xWriteBufferLen, "Error: index (%d) must be between -1 and %d.\r\n",
+				index, OP_PARAMETER_NUM_ENTRIES - 1);
 		return pdFALSE;
 	}
 
 	// Parameters are valid
 	if (index == -1) {
 		// Send them all
-		snprintf(pcWriteBuffer, xWriteBufferLen, "OpParams ");
+		pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen, "OpParams ");
 		for (uint8_t i=0; i < OP_PARAMETER_NUM_ENTRIES; i++) {
 			pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen, "%d ", fatfs_getOperationalParameter(i));
 		}

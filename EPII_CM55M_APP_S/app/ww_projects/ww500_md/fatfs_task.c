@@ -670,7 +670,11 @@ static FRESULT load_configuration(const char *filename, directoryManager_t * dir
 
 	if(!dirManager->configOpen) {
 		res = f_chdir(dirManager->current_config_dir);
-		if (res != FR_OK) return res;
+		if (res != FR_OK) {
+			return res;
+		}
+    	xprintf("Loading configuration from: ");
+    	fatfs_printCwd();	// will print CWD
 
 		// Open the file
 		res = f_open(&dirManager->configFile, filename, FA_READ);
@@ -758,12 +762,16 @@ static FRESULT save_configuration(const char *filename, directoryManager_t * dir
 
     if (!fatfs_mounted()) {
         xprintf("SD card not mounted.\n");
-        return FR_NO_FILESYSTEM;
+    	return FR_NO_FILESYSTEM;
     }
 
     if (!dirManager->configOpen) {		
 		res = f_chdir(dirManager->current_config_dir);
-		if (res != FR_OK) return res;
+		if (res != FR_OK) {
+			return res;
+		}
+    	xprintf("Saving configuration: ");
+    	fatfs_printCwd();	// will print CWD
 
         // --- First Pass: Try to read existing comment lines ---
         res = f_open(&dirManager->configFile, filename, FA_READ);
@@ -893,6 +901,7 @@ static void vFatFsTask(void *pvParameters) {
     	if (res == FR_OK) {
 
     		xprintf("SD card initialised. ");
+			fatfs_printCwd();	// for debug purposes
 
     		// Load all the saved configuration values, including the image sequence number
     		res = load_configuration(STATE_FILE, &dirManager);
@@ -1161,6 +1170,24 @@ void fatfs_incrementOperationalParameter(OP_PARAMETERS_E parameter) {
 	}
 	else {
 		// error
+	}
+}
+
+/**
+ * Prints the CWD
+ *
+ */
+void fatfs_printCwd(void) {
+	FRESULT res;
+	char cur_dir[128]; //8.3? or full path?
+	UINT len = 128;
+
+	res = f_getcwd(cur_dir, len);      /* Get current directory */
+	if (res) {
+		xprintf("Error %d with f_getcwd\n", res);
+	}
+	else {
+		xprintf("CWD is '%s'\n", cur_dir);
 	}
 }
 

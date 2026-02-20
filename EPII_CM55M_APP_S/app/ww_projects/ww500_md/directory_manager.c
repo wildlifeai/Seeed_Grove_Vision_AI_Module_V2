@@ -45,8 +45,7 @@ directoryManager_t dirManager; // Added definition for dirManager
  * TODO - this should probably be the responsibility of the image task?
  * Or else: move generateImageFileName() to the fatfs task as well.
  */
-FRESULT dir_mgr_init_directories(directoryManager_t *dirManager)
-{
+FRESULT dir_mgr_init_directories(directoryManager_t *dirManager) {
 	FRESULT res;
 	char path_buf[IMAGEFILENAMELEN];
 	FILINFO fno;
@@ -57,16 +56,13 @@ FRESULT dir_mgr_init_directories(directoryManager_t *dirManager)
 	// === CONFIG DIRECTORY ===
 	xsprintf(path_buf, CONFIG_DIR);
 	res = f_stat(path_buf, &fno);
-	if (res == FR_OK)
-	{
+	if (res == FR_OK) {
 		xprintf("Directory '%s' exists\r\n", path_buf);
 	}
-	else
-	{
+	else {
 		xprintf("Creating directory '%s'\r\n", path_buf);
 		res = f_mkdir(path_buf);
-		if (res != FR_OK)
-		{
+		if (res != FR_OK) {
 			xprintf("f_mkdir(config) failed (%d)\r\n", res);
 			dirManager->configRes = res;
 			return dirManager->configRes;

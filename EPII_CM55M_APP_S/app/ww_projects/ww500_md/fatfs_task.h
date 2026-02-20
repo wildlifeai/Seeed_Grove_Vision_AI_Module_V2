@@ -115,4 +115,6 @@ uint16_t fatfs_getImageSequenceNumber(void);
 // Increment one of the Operational Parameters
 void fatfs_incrementOperationalParameter(OP_PARAMETERS_E parameter);
 
+void fatfs_printCwd(void);
+
 #endif /* APP_WW_PROJECTS_WW500_MD_FATFS_TASK_H_ */

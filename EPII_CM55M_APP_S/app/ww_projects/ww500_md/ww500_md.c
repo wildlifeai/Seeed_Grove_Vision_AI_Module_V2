@@ -585,6 +585,10 @@ int app_main(void){
 	xprintf("\n**** WW500 MD. (%s) Built: %s %s ****\r\n\n", app_get_board_name_string(), __TIME__, __DATE__);
 	XP_WHITE;
 
+	// Two different ways of printing the compiler version?
+	xprintf("GCC version: %d.%d.%d\n", __GNUC__, __GNUC_MINOR__, __GNUC_PATCHLEVEL__);
+	xprintf("Compiler Version: ARM GNU, %s\n\n", __VERSION__);
+
 	//	// We seem to have version D. Note that chipid & version both report 8536000d
 	//	hx_drv_scu_get_version(&chipid, &version);
 	//	xprintf("ChipID: 0x%08x, version 0x%08x\r\n", chipid, version);

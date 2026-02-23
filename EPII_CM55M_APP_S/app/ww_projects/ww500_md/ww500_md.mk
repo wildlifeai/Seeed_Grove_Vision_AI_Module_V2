@@ -1,5 +1,35 @@
 override SCENARIO_APP_SUPPORT_LIST := $(APP_TYPE)
 
+
+# Get git info
+GIT_BRANCH := $(shell git rev-parse --abbrev-ref HEAD 2>NUL)
+GIT_COMMIT := $(shell git rev-parse --short HEAD 2>NUL)
+GIT_DIRTY  := $(shell git diff --quiet 2>NUL || echo -dirty)
+ifeq ($(GIT_BRANCH),)
+GIT_BRANCH := nogit
+endif
+
+ifeq ($(GIT_COMMIT),)
+GIT_COMMIT := nogit
+endif
+
+ifeq ($(GIT_DIRTY),)
+GIT_DIRTY :=
+endif
+$(info Git information: GIT_BRANCH='${GIT_BRANCH}' GIT_COMMIT='${GIT_COMMIT}' GIT_DIRTY='${GIT_DIRTY}') 
+
+APPL_DEFINES += \
+    -DGIT_BRANCH=\"$(GIT_BRANCH)\" \
+    -DGIT_COMMIT=\"$(GIT_COMMIT)\" \
+    -DGIT_DIRTY=\"$(GIT_DIRTY)\"
+
+# force rebuild of the main .c file which has __TIME__ and __DATE__
+.PHONY: force_rebuild_main
+force_rebuild_main:
+	@echo Forcing rebuild
+obj_epii_evb_icv30_bdv10/gnu_epii_evb_WLCSP65/app/ww_projects/$(APP_TYPE)/$(APP_TYPE).o: force_rebuild_main
+all: force_rebuild_main
+	
 # The APPL_DEFINES line below must match this line in ww.mk:
 # APP_TYPE = ww500_md
 APPL_DEFINES += -DWW500_MD

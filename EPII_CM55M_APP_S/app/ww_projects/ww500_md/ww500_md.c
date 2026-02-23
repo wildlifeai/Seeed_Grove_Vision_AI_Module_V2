@@ -90,6 +90,19 @@
 // Uncomment this to print linker stats
 //#define PRINTLINKERSTATS
 
+// To print git information
+#ifndef GIT_BRANCH
+#define GIT_BRANCH "unknown"
+#endif
+
+#ifndef GIT_COMMIT
+#define GIT_COMMIT "unknown"
+#endif
+
+#ifndef GIT_DIRTY
+#define GIT_DIRTY ""
+#endif
+
 /*************************************** External variables *******************************************/
 
 extern QueueHandle_t     xIfTaskQueue;
@@ -587,8 +600,11 @@ int app_main(void){
 	xprintf("\n**** WW500 MD. (%s) Built: %s %s ****\r\n\n", app_get_board_name_string(), __TIME__, __DATE__);
 	XP_WHITE;
 
+	// print git information
+	xprintf("Git branch: '%s' %s%s\n",  GIT_BRANCH, GIT_COMMIT, GIT_DIRTY);
+
 	// Two different ways of printing the compiler version?
-	xprintf("GCC version: %d.%d.%d\n", __GNUC__, __GNUC_MINOR__, __GNUC_PATCHLEVEL__);
+	//xprintf("GCC version: %d.%d.%d\n", __GNUC__, __GNUC_MINOR__, __GNUC_PATCHLEVEL__);
 	xprintf("Compiler Version: ARM GNU, %s\n\n", __VERSION__);
 
 	//	// We seem to have version D. Note that chipid & version both report 8536000d

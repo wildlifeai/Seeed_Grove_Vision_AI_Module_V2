@@ -1709,7 +1709,7 @@ static bool configure_image_sensor(CAMERA_CONFIG_E operation) {
     		//    	}
 #endif
 
-#if 0
+#if 1
     		// This is the code I used to have. For the HM0360 it seems to assume that the HM0360 will turn on the flash itself.
 #ifdef USE_HM0360
     		hm0360_md_setMode(CONTEXT_A, MODE_SW_NFRAMES_SLEEP, 1, g_timer_period);
@@ -2649,7 +2649,7 @@ void image_sleepNow(void) {
         configure_image_sensor(CAMERA_CONFIG_MD);
 
         // Consider turning on the LED flashes, controlled by the HM0360 STROBE output
-        if ((brightnessPercent == 0) || (ledInUse == 0) | (mdInterval == 0))  {
+        if ((brightnessPercent == 0) || (ledInUse == 0) || (mdInterval == 0))  {
             // No STROBE pulses because brightnees=0 or neither LED selected or MD is disabled
             xprintf("Preparing HM0360 for MD - no LED flashes.\n");
             hm0360_md_configureStrobe(0);

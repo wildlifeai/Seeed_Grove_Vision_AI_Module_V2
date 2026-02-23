@@ -102,6 +102,9 @@ static uint16_t calculateSleepTime(uint32_t interval) {
 /**
  * Tests whether _any_ sensor is present, by doing a read from the I2C address
  *
+ * Side effect: if the sensor address is for the HM0360 then the variable
+ * 'hm0360_present' will also be updated.
+ *
  * If the sensor is present at the sensorAddress the I2C read will work.
  * Otherwise the driver code will print an error and the call will fail.
  *
@@ -542,7 +545,7 @@ void hm0360_md_getMDOutput(uint8_t * regTable, uint8_t length) {
  *
  * The default register settings file leaves the strobe disabled:
  *
-		{HX_CIS_I2C_Action_W, 0x3080, 0x00},	// STROBE_CFG diasable
+		{HX_CIS_I2C_Action_W, 0x3080, 0x00},	// STROBE_CFG disable
 		or:
 		{HX_CIS_I2C_Action_W, 0x3080, 0x0B},	// STROBE_CFG enable 1: Static, 3 = Dynamic 1, B = Dynamic 2, Multiple = 13
 
@@ -583,24 +586,28 @@ HX_CIS_ERROR_E hm0360_md_enableMD(uint16_t mdFrameInterval) {
 		return HX_CIS_UNKNOWN_ERROR;
 	}
 
-    saveMainCameraConfig();
+	saveMainCameraConfig();
 
 	// Clear interrupts
-    hx_drv_cis_set_reg(INT_CLEAR, 0xff, 0x01);
+	hx_drv_cis_set_reg(INT_CLEAR, 0xff, 0x01);
 
-    // Set HM0360 mode to SLEEP before initialisation
-    ret = hm0360_md_setMode(CONTEXT_B, MODE_SW_NFRAMES_SLEEP, 1, mdFrameInterval);
+	// Set HM0360 mode to SLEEP before initialisation
+	ret = hm0360_md_setMode(CONTEXT_B, MODE_SW_NFRAMES_SLEEP, 1, mdFrameInterval);
 
-    if (ret != HX_CIS_NO_ERROR) {
-    	dbg_printf(DBG_LESS_INFO, "HM0360 md on fail\r\n");
-        restoreMainCameraConfig();
-        return -1;
-    }
+	if (ret != HX_CIS_NO_ERROR) {
+		dbg_printf(DBG_LESS_INFO, "HM0360 md on fail\r\n");
+		restoreMainCameraConfig();
+		return -1;
+	}
 
-    // This version has no delay
-    dbg_printf(DBG_LESS_INFO, "HM0360 Motion Detection on! %dms frame interval\r\n", mdFrameInterval);
+	if (mdFrameInterval == 0) {
+		// MD has been disabled in hm0360_md_setMode() - so don't print the following line
+	}
+	else {
+		dbg_printf(DBG_LESS_INFO, "HM0360 Motion Detection on! %dms frame interval\r\n", mdFrameInterval);
+	}
 
-    restoreMainCameraConfig();
+	restoreMainCameraConfig();
 
 	return 0;
 }

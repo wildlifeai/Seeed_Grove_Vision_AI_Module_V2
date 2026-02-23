@@ -220,7 +220,8 @@
 #define         STROBE_FRONT_H					0x3082
 #define         STROBE_FRONT_L					0x3083
 #define         STROBE_END_H					0x3084
-#define         STROBE_LINE_H					0x3085
+#define         STROBE_END_L					0x3085
+#define         STROBE_LINE_H					0x3086
 #define         STROBE_LINE_L					0x3087
 #define         STROBE_FRAME_H					0x3088
 #define         STROBE_FRAME_L					0x3089

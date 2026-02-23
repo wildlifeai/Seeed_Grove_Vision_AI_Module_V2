@@ -81,14 +81,6 @@ const char * image_getStateString(void);
 
 const char * image_getLastImageFile(void);
 
-// Temporary until I can make this work through the state machine
-void image_hackInactive(void);
-
-// returns true if neural network has detected target
-// Not used
-// bool image_nnDetected(void);
-
-
 // Returns whether the camera system is enabled
 bool image_getEnabled(void);
 

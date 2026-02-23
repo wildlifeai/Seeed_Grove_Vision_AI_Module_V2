@@ -637,10 +637,8 @@ static BaseType_t prvDpd(char *pcWriteBuffer, size_t xWriteBufferLen, const char
 	(void)xWriteBufferLen;
 	configASSERT(pcWriteBuffer);
 
-	// TODO clean this up when there is a proper way to enter DPD with the state machine.
-	//app_pmu_enter_dpd(false);
-	// TODO send a message to the state machine
-	image_hackInactive();	// this sets up the HM0360 to do motion detection, then enters DPD
+	sprintf(pcWriteBuffer, "Forcing DPD by clearing inactivity period");
+	inactivity_setPeriod(1);	// small number > 0
 
 	/* There is no more data to return after this single string, so return pdFALSE. */
 	return pdFALSE;
@@ -1664,16 +1662,14 @@ static void processSingleCharacter(char rxChar)
 		// Ignore. Take action on '\n' only
 		break;
 
-	case '\n':
-	{
+	case '\n': {
 		xprintf("\r\n");
 		// Null terminate the string in the receive buffer for safety
 		cliInBuffer[index] = '\0';
 
 		// Evaluate the command - loop while the registered command returns true.
 		// e.g. a "dir" command loops through for every directory entry
-		do
-		{
+		do {
 			memset(cliOutBuffer, 0, CLI_OUTPUT_BUF_SIZE);
 			binaryLength = NOTBINARY; // This is the default if the response is a string. A function returning binary data will set this to the length of the bainary data
 			xMore = FreeRTOS_CLIProcessCommand(cliInBuffer, cliOutBuffer, CLI_OUTPUT_BUF_SIZE);
@@ -1902,6 +1898,10 @@ static void vCmdLineTask(void *pvParameters) {
 
 			case APP_MSG_CLITASK_RXCHAR:
 				// Character has arrived from the UART (user types at console)
+
+				// extend the inactivity period (e.g. from 3s to 60s) so the deveice does not enter DPD while debugging
+				inactivity_setPeriod(INACTIVITYTIMEOUTCLI);
+
 				// process the character - calling the CLI command as necessary, for a console output
 				processSingleCharacter(rxChar);
 
@@ -1911,9 +1911,6 @@ static void vCmdLineTask(void *pvParameters) {
 
 				dev_uart_ptr->uart_control(UART_CMD_SET_RXINT_BUF, (UART_CTRL_PARAM)&rx_buffer);
 				dev_uart_ptr->uart_control(UART_CMD_SET_RXINT, (UART_CTRL_PARAM)1);
-
-				// extend the inactivity period (e.g. from 3s to 60s) so the deveice does not enter DPD while debugging
-				inactivity_setPeriod(INACTIVITYTIMEOUTCLI);
 
 				break;
 

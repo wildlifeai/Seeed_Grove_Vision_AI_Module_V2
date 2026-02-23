@@ -48,14 +48,14 @@ override CIS_SEL := HM_COMMON
 override EPII_USECASE_SEL := drv_onecore_cm55m_s
 
 CIS_SUPPORT_INAPP = cis_sensor
-#CIS_SUPPORT_INAPP_MODEL = cis_hm0360
+CIS_SUPPORT_INAPP_MODEL = cis_hm0360
 # OV5647 for RP v1 camera
 #CIS_SUPPORT_INAPP_MODEL = cis_ov5647
 # IMX219 for RP v2 camera
 #CIS_SUPPORT_INAPP_MODEL = cis_imx219
 #CIS_SUPPORT_INAPP_MODEL = cis_imx477
 # IMX708 for RP v3 camera
-CIS_SUPPORT_INAPP_MODEL = cis_imx708
+#CIS_SUPPORT_INAPP_MODEL = cis_imx708
 
 # CGP added to indicate HM0360 is used:
 
@@ -101,5 +101,4 @@ $(info In ww500_md.mk LINKER_SCRIPT_FILE='${LINKER_SCRIPT_FILE}')
 $(info In ww500_md.mk CIS_SUPPORT_INAPP_MODEL='${CIS_SUPPORT_INAPP_MODEL}' SCENARIO_APP_INCDIR='${SCENARIO_APP_INCDIR}')
 # CGP this should have printed useful information, but does not:
 # $(info USE_SPECS='${USE_SPECS}' USE_NANO='${USE_NANO}')
-
 

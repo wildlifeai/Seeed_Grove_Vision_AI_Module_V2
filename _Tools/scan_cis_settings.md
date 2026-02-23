@@ -1,5 +1,5 @@
 # Python script to facilitate loading HM0360 Settings from a file
-#### CGP 15/6/25
+#### CGP 23/2/26
   
 This document describes the `scan_cis_settings.py` script and how it is used.
   
@@ -35,7 +35,7 @@ The `scan_cis_settings.py` script is a python script to parse a text file (such 
 		{HX_CIS_I2C_Action_W, 0x3089, 0x04},	// STROBE_FRAME_L
 
 ```
-The output is a file containing binary data, such as `hm0360_extra.bin`.
+The output is a file containing binary data, such as `HM0360EX.BIN`.
 
 This script reads an input text file containing I2C action commands, parses each line, 
 and writes the corresponding binary data to an output file.
@@ -49,16 +49,16 @@ and writes the corresponding binary data to an output file.
 ### Usage:
 Run the script from the command line with specified input and output file names:
   ```sh
-  python scan_cis_settings.py hm0360_strobe_1.txt hm0360_extra.bin
+  python scan_cis_settings.py hm0360_strobe_1.txt HM0360EX.BIN
   ```
 
 Code running on the HX6538 reads the binary file and processes it. Key lines from the source code are as follows:
 ```
 // Name of file containing extra HM0360 register settings
-#define HM0360_EXTRA_FILE "hm0360_extra.bin"
+#define CAMERA_EXTRA_FILE "HM0360EX.BIN"
 
 // Initialise extra registers from file
-cis_file_process(HM0360_EXTRA_FILE);
+cis_file_process(CAMERA_EXTRA_FILE);
 ```
 
 The function `cis_file_process()` is (typically) used during the cold boot sequence, after the large list of 

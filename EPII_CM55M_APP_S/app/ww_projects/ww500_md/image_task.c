@@ -1700,31 +1700,11 @@ static bool configure_image_sensor(CAMERA_CONFIG_E operation) {
     		processedOK = false;
     	}
     	else  {
-    		// xprintf("DEBUG: starting sensor\n");
-
-#if defined(USE_HM0360) || defined(USE_HM0360_MD)
-    		// Overide HM0360 STROBE setting
-    		//    	if (brightnessPercent == 0) {
-    		//    		hm0360_md_configureStrobe(0);
-    		//    	}
-#endif
-
-#if 1
-    		// This is the code I used to have. For the HM0360 it seems to assume that the HM0360 will turn on the flash itself.
 #ifdef USE_HM0360
     		hm0360_md_setMode(CONTEXT_A, MODE_SW_NFRAMES_SLEEP, 1, g_timer_period);
-#else
-    		ledFlashEnable(fatfs_getOperationalParameter(OP_PARAMETER_FLASH_DURATION));
 #endif // USE_HM0360
-
-#else
     		// turn on the LED regardless of the camera
     		ledFlashEnable(fatfs_getOperationalParameter(OP_PARAMETER_FLASH_DURATION));
-#ifdef USE_HM0360
-    		hm0360_md_setMode(CONTEXT_A, MODE_SW_NFRAMES_SLEEP, 1, g_timer_period);
-#endif // USE_HM0360
-#endif
-
     		cisdp_sensor_start(); // Starts data path sensor control block
     	}
     	break;
@@ -1738,12 +1718,12 @@ static bool configure_image_sensor(CAMERA_CONFIG_E operation) {
     		processedOK = false;
     	}
     	else {
-
 #ifdef USE_HM0360
     		// Apparently it is necessary to have this here (changes mode 2->2). TODO figure out why.
     		hm0360_md_setMode(CONTEXT_A, MODE_SW_NFRAMES_SLEEP, 1, g_timer_period);
 #endif // USE_HM0360
-
+    		// turn on the LED regardless of the camera
+    		ledFlashEnable(fatfs_getOperationalParameter(OP_PARAMETER_FLASH_DURATION));
     		cisdp_sensor_start(); // Starts data path sensor control block
     	}
     	break;
@@ -2655,7 +2635,7 @@ void image_sleepNow(void) {
             hm0360_md_configureStrobe(0);
         }
         else {
-            // Create STROBE pulses
+            // Configure STROBE pulses - NOTE: normal mode is 0x0b = 'dynamic 2'
             xprintf("Preparing HM0360 for MD - with LED flashes 0x%02x\n", fatfs_getOperationalParameter(OP_PARAMETER_STROBE_MODE));
             //hm0360_md_configureStrobe(0x0B);
             hm0360_md_configureStrobe(fatfs_getOperationalParameter(OP_PARAMETER_STROBE_MODE));
@@ -2688,6 +2668,7 @@ void image_sleepNow(void) {
     		hm0360_md_configureStrobe(0);
     	}
     	else   {
+            // Configure STROBE pulses - NOTE: normal mode is 0x0b = 'dynamic 2'
             xprintf("Preparing HM0360 for MD - with LED flashes 0x%02x\n", fatfs_getOperationalParameter(OP_PARAMETER_STROBE_MODE));
             //hm0360_md_configureStrobe(0x0B);
             hm0360_md_configureStrobe(fatfs_getOperationalParameter(OP_PARAMETER_STROBE_MODE));

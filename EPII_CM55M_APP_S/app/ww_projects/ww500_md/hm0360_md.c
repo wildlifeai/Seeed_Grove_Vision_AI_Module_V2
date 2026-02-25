@@ -10,6 +10,12 @@
 /********************************** Includes ******************************************/
 
 #include <stdbool.h>
+
+// FreeRTOS kernel includes.
+#include "FreeRTOS.h"
+#include "queue.h"
+#include "semphr.h"
+
 #include "xprintf.h"
 #include "printf_x.h"	// Print colours
 #include "hm0360_md.h"
@@ -20,6 +26,7 @@
 
 
 /*************************************** Defines **************************************/
+
 
 /*************************************** Local Function Declarations ******************/
 
@@ -52,10 +59,12 @@ static HX_CIS_SensorSetting_t HM0360_md_init_setting[] = {
  * Configure the image sensor I2C address to be the HM0360.
  */
 static void saveMainCameraConfig(void) {
+
 	if (hm0360MainCamera) {
 		// Don't waste time saving and restoring this
 		return;
 	}
+
 	hx_drv_cis_get_slaveID(&mainCameraID);
     hx_drv_cis_set_slaveID(HM0360_SENSOR_I2CID);
 }

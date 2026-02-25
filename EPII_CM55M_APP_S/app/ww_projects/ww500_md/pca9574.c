@@ -21,6 +21,11 @@
 #include "stdio.h"
 #include "stdbool.h"
 
+// FreeRTOS kernel includes.
+#include "FreeRTOS.h"
+#include "queue.h"
+#include "semphr.h"
+
 #include "hx_drv_CIS_common.h"
 #include "pca9574.h"
 #include "hm0360_md.h"
@@ -54,7 +59,6 @@ static void restoreMainCameraConfig(void);
  *  @param - I2C address of the PCA9574 to be selected.
  */
 static void saveMainCameraConfig(uint8_t deviceAddress) {
-
 	hx_drv_cis_get_slaveID(&mainCameraID);
     hx_drv_cis_set_slaveID(deviceAddress);
 }

@@ -708,10 +708,6 @@ static APP_MSG_DEST_T handleEventForInit(APP_MSG_T img_recv_msg) {
         cv_eraseModel();
         break;
 
-    case APP_MSG_IMAGETASK_FLASH_OFF:
-    	ledFlashDisable();
-    	break;
-
     default:
         flagUnexpectedEvent(img_recv_msg);
 
@@ -838,7 +834,9 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
         // Proceed to write the jpeg file, even if there is no SD card
         // since the fatfs_task will handle that.
 
-
+        // Take semaphore FIRST before modifying jpeg_exif_buf
+        // This prevents jpeg_exif_buf from being overwritten before previous write completes
+        xSemaphoreTake(xJpegBufferSemaphore, portMAX_DELAY);
 
         cisdp_get_jpginfo(&jpeg_sz, &jpeg_addr); // Gets JPEG buffer from hardware encoder
         // Clearing cache between each capture
@@ -971,10 +969,6 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
         };
         break;
 
-    case APP_MSG_IMAGETASK_FLASH_OFF:
-    	ledFlashDisable();
-    	break;
-
     default:
     	flagUnexpectedEvent(img_recv_msg);
     }
@@ -1061,10 +1055,6 @@ static APP_MSG_DEST_T handleEventForNNProcessing(APP_MSG_T img_recv_msg) {
         changeEnableState(setEnabled); // 0 means disabled; 1 means enabled
         break;
 
-    case APP_MSG_IMAGETASK_FLASH_OFF:
-    	ledFlashDisable();
-    	break;
-
     default:
         flagUnexpectedEvent(img_recv_msg);
         break;
@@ -1116,10 +1106,6 @@ static APP_MSG_DEST_T handleEventForNNUpdate(APP_MSG_T img_recv_msg) {
         sendMsgToMaster(msgToMaster);
 
         image_task_state = APP_IMAGE_TASK_STATE_INIT;
-    	break;
-
-    case APP_MSG_IMAGETASK_FLASH_OFF:
-    	ledFlashDisable();
     	break;
 
     default:
@@ -1202,10 +1188,6 @@ static APP_MSG_DEST_T handleEventForWaitForTimer(APP_MSG_T img_recv_msg) {
         changeEnableState(setEnabled); // 0 means disabled; 1 means enabled
         break;
 
-    case APP_MSG_IMAGETASK_FLASH_OFF:
-    	ledFlashDisable();
-    	break;
-
     default:
         flagUnexpectedEvent(img_recv_msg);
         break;
@@ -1250,10 +1232,6 @@ static APP_MSG_DEST_T handleEventForSaveState(APP_MSG_T img_recv_msg)
         setEnabled = (bool)img_recv_msg.msg_data;
         changeEnableState(setEnabled); // 0 means disabled; 1 means enabled
         break;
-
-    case APP_MSG_IMAGETASK_FLASH_OFF:
-    	ledFlashDisable();
-    	break;
 
     default:
         flagUnexpectedEvent(img_recv_msg);
@@ -1543,76 +1521,79 @@ static void vImageTask(void *pvParameters) {
 
     // Loop forever, taking events from xImageTaskQueue as they arrive
     for (;;)  {
-        // Wait for a message in the queue
-        if (xQueueReceive(xImageTaskQueue, &(img_recv_msg), __QueueRecvTicksToWait) == pdTRUE) {
-            event = img_recv_msg.msg_event;
-            recv_data = img_recv_msg.msg_data;
+    	// Wait for a message in the queue
+    	if (xQueueReceive(xImageTaskQueue, &(img_recv_msg), __QueueRecvTicksToWait) == pdTRUE) {
+    		event = img_recv_msg.msg_event;
+    		recv_data = img_recv_msg.msg_data;
 
-            // convert event to a string
-            if ((event >= APP_MSG_IMAGETASK_FIRST) && (event < APP_MSG_IMAGETASK_LAST))
-            {
-                event_string = imageTaskEventString[event - APP_MSG_IMAGETASK_FIRST];
-            }
-            else
-            {
-                event_string = "Unrecognised";
-            }
+    		// convert event to a string
+    		if ((event >= APP_MSG_IMAGETASK_FIRST) && (event < APP_MSG_IMAGETASK_LAST))  {
+    			event_string = imageTaskEventString[event - APP_MSG_IMAGETASK_FIRST];
+    		}
+    		else   {
+    			event_string = "Unrecognised";
+    		}
 
-            XP_LT_CYAN
-            xprintf("IMAGE Task ");
-            XP_WHITE;
-            xprintf("received event '%s' (0x%04x). Rx data = 0x%08x\r\n", event_string, event, recv_data);
+    		XP_LT_CYAN
+			xprintf("IMAGE Task ");
+    		XP_WHITE;
+    		xprintf("received event '%s' (0x%04x). Rx data = 0x%08x\r\n", event_string, event, recv_data);
 
-            old_state = image_task_state;
+    		old_state = image_task_state;
 
-            switch (image_task_state)
-            {
-            case APP_IMAGE_TASK_STATE_UNINIT:
-                send_msg = flagUnexpectedEvent(img_recv_msg);
-                break;
+    		// Special case (temporary?) to ensure the LED is switched off regardless of the state:
+    		if (img_recv_msg.msg_event == APP_MSG_IMAGETASK_FLASH_OFF) {
+    			ledFlashDisable();
+    		}
+    		else {
+    			switch (image_task_state)   {
+    			case APP_IMAGE_TASK_STATE_UNINIT:
+    				send_msg = flagUnexpectedEvent(img_recv_msg);
+    				break;
 
-            case APP_IMAGE_TASK_STATE_INIT:
-                send_msg = handleEventForInit(img_recv_msg);
-                break;
+    			case APP_IMAGE_TASK_STATE_INIT:
+    				send_msg = handleEventForInit(img_recv_msg);
+    				break;
 
-            case APP_IMAGE_TASK_STATE_CAPTURING:
-                send_msg = handleEventForCapturing(img_recv_msg);
-                break;
-                //
-                //            case APP_IMAGE_TASK_STATE_BUSY:
-                //                send_msg = handleEventForBusy(img_recv_msg);
-                //                break;
+    			case APP_IMAGE_TASK_STATE_CAPTURING:
+    				send_msg = handleEventForCapturing(img_recv_msg);
+    				break;
+    				//
+					//            case APP_IMAGE_TASK_STATE_BUSY:
+						//                send_msg = handleEventForBusy(img_recv_msg);
+    				//                break;
 
-            case APP_IMAGE_TASK_STATE_NN_PROCESSING:
-                send_msg = handleEventForNNProcessing(img_recv_msg);
-                break;
+    			case APP_IMAGE_TASK_STATE_NN_PROCESSING:
+    				send_msg = handleEventForNNProcessing(img_recv_msg);
+    				break;
 
-            case APP_IMAGE_TASK_STATE_WAIT_FOR_TIMER:
-                send_msg = handleEventForWaitForTimer(img_recv_msg);
-                break;
+    			case APP_IMAGE_TASK_STATE_WAIT_FOR_TIMER:
+    				send_msg = handleEventForWaitForTimer(img_recv_msg);
+    				break;
 
-            case APP_IMAGE_TASK_STATE_SAVE_STATE:
-                send_msg = handleEventForSaveState(img_recv_msg);
-                break;
+    			case APP_IMAGE_TASK_STATE_SAVE_STATE:
+    				send_msg = handleEventForSaveState(img_recv_msg);
+    				break;
 
-            case APP_IMAGE_TASK_STATE_UPDATING_NN:
-                send_msg = handleEventForNNUpdate(img_recv_msg);
-                break;
+    			case APP_IMAGE_TASK_STATE_UPDATING_NN:
+    				send_msg = handleEventForNNUpdate(img_recv_msg);
+    				break;
 
-            default:
-                send_msg = flagUnexpectedEvent(img_recv_msg);
-                break;
-            }
+    			default:
+    				send_msg = flagUnexpectedEvent(img_recv_msg);
+    				break;
+    			} // swicth
+    		}
 
-            if (old_state != image_task_state)   {
-                // state has changed
-                XP_LT_CYAN;
-                xprintf("IMAGE Task state changed ");
-                XP_WHITE;
-                xprintf("from '%s' (%d) to '%s' (%d)\r\n",
-                        imageTaskStateString[old_state], old_state,
-                        imageTaskStateString[image_task_state], image_task_state);
-            }
+    		if (old_state != image_task_state)   {
+    			// state has changed
+    			XP_LT_CYAN;
+    			xprintf("IMAGE Task state changed ");
+    			XP_WHITE;
+    			xprintf("from '%s' (%d) to '%s' (%d)\r\n",
+    					imageTaskStateString[old_state], old_state,
+						imageTaskStateString[image_task_state], image_task_state);
+    		}
 
             // Passes message to other tasks if required (commonly fatfs)
             if (send_msg.destination != NULL)   {

@@ -13,6 +13,7 @@
 #define APP_WW_PROJECTS_WW_TEMPLATE_APP_MSG_H_
 
 // FreeRTOS kernel includes.
+// Has been necessary sometimes so compiler knows about QueueHandle_t
 #include "FreeRTOS.h"
 #include "task.h"
 #include "queue.h"

@@ -21,11 +21,6 @@
 #include "stdio.h"
 #include "stdbool.h"
 
-// FreeRTOS kernel includes.
-#include "FreeRTOS.h"
-#include "queue.h"
-#include "semphr.h"
-
 #include "hx_drv_CIS_common.h"
 #include "pca9574.h"
 #include "hm0360_md.h"

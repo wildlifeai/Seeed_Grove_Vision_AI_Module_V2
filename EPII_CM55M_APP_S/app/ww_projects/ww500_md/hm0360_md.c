@@ -11,11 +11,6 @@
 
 #include <stdbool.h>
 
-// FreeRTOS kernel includes.
-#include "FreeRTOS.h"
-#include "queue.h"
-#include "semphr.h"
-
 #include "xprintf.h"
 #include "printf_x.h"	// Print colours
 #include "hm0360_md.h"

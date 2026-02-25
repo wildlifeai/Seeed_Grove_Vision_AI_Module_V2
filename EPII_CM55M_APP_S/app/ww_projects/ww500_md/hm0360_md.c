@@ -101,7 +101,7 @@ static uint16_t calculateSleepTime(uint32_t interval) {
 		sleepCount = 0xffff;
 	}
 
-	xprintf("Interval of %dms gives sleep count = 0x%04x\n", interval, sleepCount);
+	xprintf("   Interval of %dms gives sleep count = 0x%04x\n", interval, sleepCount);
 
 	return (uint16_t) sleepCount;
 }
@@ -292,7 +292,7 @@ HX_CIS_ERROR_E hm0360_md_setMode(uint8_t context, mode_select_t newMode,
 		hm0360_md_enableInterrupt();
 	}
 
-	xprintf("  Changing mode from %d to %d with nFrames=%d, sleepTime=%d sleepCount = 0x%04x\r\n",
+	xprintf("   Changing mode from %d to %d with nFrames=%d, sleepTime=%d sleepCount = 0x%04x\r\n",
 			currentMode, newMode, numFrames, sleepTime, sleepCount);
 
 	// Disable before making changes by going to MODE_SLEEP

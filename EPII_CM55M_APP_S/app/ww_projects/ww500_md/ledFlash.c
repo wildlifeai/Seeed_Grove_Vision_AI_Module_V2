@@ -220,7 +220,10 @@ void ledFlashSelectLED(FlashLeds_t led) {
 
 /**
  * Turns on the Flash LED
- * The LED will be turned off later by a timer.
+ * The LED will be turned off when the Frame Ready message arrives.
+ * At present the LED will also be turned off later by a timer,
+ * but this is redundant. Left in at present as a precaution.
+ * Also turned off explicitly before entering DPD, again as a precaution.
  *
  * NOTE: this turns on the FLASHEN bit but does NOT affect the HM0360 whose STROBE pin might also flash the LED.
  *

@@ -431,41 +431,6 @@ HX_CIS_ERROR_E hm0360_md_disableInterrupt(void) {
 }
 
 /**
- * Called when the AI processor is about to enter DPD.
- *
- * Get the HM0360 ready to detect motion
- *
- *  Select CONTEXT_B registers
- *
- *  @param cameraSystemEnabled - true if OP_PARAMETER_CAMERA_ENABLED is set
- */
-HX_CIS_ERROR_E hm0360_md_prepare(bool cameraSystemEnabled) {
-	HX_CIS_ERROR_E ret;
-	uint16_t mdInterval;
-
-	// Don't proceed if the HM0360 is missing or faulty
-	if (!hm0360_present) {
-		return HX_CIS_UNKNOWN_ERROR;
-	}
-
-	if (cameraSystemEnabled) {
-		mdInterval = fatfs_getOperationalParameter(OP_PARAMETER_MD_INTERVAL);
-	}
-	else {
-		mdInterval = 0;
-	}
-
-	// This writes to register 0x2065
-	// MD interrupt will be enabled in hm0360_md_setMode() if MD is enabled
-	hm0360_md_clearInterrupt(0xff);		// clear all bits
-
-	// Don't use MODE_SLEEP even if camera system is disabled, as it draws more power!
-	ret = hm0360_md_setMode(CONTEXT_B, MODE_SW_NFRAMES_SLEEP, 1, mdInterval);
-
-	return ret;
-}
-
-/**
  * Reads status registers related to Automatic Exposure
 
  * @param val - pointer to a structure that accepts the results
@@ -572,42 +537,86 @@ HX_CIS_ERROR_E hm0360_md_configureStrobe(uint8_t val) {
 
 }
 
+
 /**
- * Sets HM0360 for motion detection, prior to entering deep sleep.
+ * Called when the AI processor is about to enter DPD.
  *
- * @param mdInterval - interval in ms between frames in MD mode
- * @return error code
+ * Get the HM0360 ready to detect motion
+ *
+ *  Select CONTEXT_B registers
+ *
+ *  @param cameraSystemEnabled - true if OP_PARAMETER_CAMERA_ENABLED is set
  */
-HX_CIS_ERROR_E hm0360_md_enableMD(uint16_t mdFrameInterval) {
+HX_CIS_ERROR_E hm0360_md_prepare(bool cameraSystemEnabled, uint16_t mdFrameInterval) {
 	HX_CIS_ERROR_E ret;
+	uint16_t mdInterval;
 
 	// Don't proceed if the HM0360 is missing or faulty
 	if (!hm0360_present) {
 		return HX_CIS_UNKNOWN_ERROR;
 	}
 
-	saveMainCameraConfig();
-
-	// Clear interrupts
-	hx_drv_cis_set_reg(INT_CLEAR, 0xff, 0x01);
-
-	// Set HM0360 mode to SLEEP before initialisation
-	ret = hm0360_md_setMode(CONTEXT_B, MODE_SW_NFRAMES_SLEEP, 1, mdFrameInterval);
-
-	if (ret != HX_CIS_NO_ERROR) {
-		dbg_printf(DBG_LESS_INFO, "HM0360 md on fail\r\n");
-		restoreMainCameraConfig();
-		return -1;
-	}
-
-	if (mdFrameInterval == 0) {
-		// MD has been disabled in hm0360_md_setMode() - so don't print the following line
+	if (cameraSystemEnabled) {
+		mdInterval = mdFrameInterval;
+		dbg_printf(DBG_LESS_INFO, "   HM0360 Motion Detection on! %dms frame interval\r\n", mdFrameInterval);
 	}
 	else {
-		dbg_printf(DBG_LESS_INFO, "HM0360 Motion Detection on! %dms frame interval\r\n", mdFrameInterval);
+		mdInterval = 0;
+		dbg_printf(DBG_LESS_INFO, "   HM0360 Motion Detection off.\r\n");
 	}
+
+	saveMainCameraConfig();
+
+	// This writes to register 0x2065
+	// MD interrupt will be enabled in hm0360_md_setMode() if MD is enabled
+	hm0360_md_clearInterrupt(0xff);		// clear all bits
+
+	// Don't use MODE_SLEEP even if camera system is disabled, as it draws more power!
+	ret = hm0360_md_setMode(CONTEXT_B, MODE_SW_NFRAMES_SLEEP, 1, mdInterval);
 
 	restoreMainCameraConfig();
 
-	return 0;
+	return ret;
 }
+
+//// Replaced by hm0360_md_prepare()
+///**
+// * Sets HM0360 for motion detection, prior to entering deep sleep.
+// * Only called when HM0360 is the main camera
+// *
+// * @param mdInterval - interval in ms between frames in MD mode
+// * @return error code
+// */
+//HX_CIS_ERROR_E hm0360_md_enableMD(uint16_t mdFrameInterval) {
+//	HX_CIS_ERROR_E ret;
+//
+//	// Don't proceed if the HM0360 is missing or faulty
+//	if (!hm0360_present) {
+//		return HX_CIS_UNKNOWN_ERROR;
+//	}
+//
+//	saveMainCameraConfig();
+//
+//	// Clear interrupts
+//	hx_drv_cis_set_reg(INT_CLEAR, 0xff, 0x01);
+//
+//	// Set HM0360 mode to SLEEP before initialisation
+//	ret = hm0360_md_setMode(CONTEXT_B, MODE_SW_NFRAMES_SLEEP, 1, mdFrameInterval);
+//
+//	if (ret != HX_CIS_NO_ERROR) {
+//		dbg_printf(DBG_LESS_INFO, "HM0360 md on fail\r\n");
+//		restoreMainCameraConfig();
+//		return -1;
+//	}
+//
+//	if (mdFrameInterval == 0) {
+//		// MD has been disabled in hm0360_md_setMode() - so don't print the following line
+//	}
+//	else {
+//		dbg_printf(DBG_LESS_INFO, "HM0360 Motion Detection on! %dms frame interval\r\n", mdFrameInterval);
+//	}
+//
+//	restoreMainCameraConfig();
+//
+//	return 0;
+//}

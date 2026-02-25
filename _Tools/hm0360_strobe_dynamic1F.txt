@@ -1,8 +1,11 @@
-// Set 'static' mode
-//
+// change Mode from dynamic 2 (0x0b) to dynamic 1 (0x03)
+// And (experiment with changing the other regsiters to see if they have an effect:
+// set STROBE_FRAME 0x04 -> rstired to 4
+// Note this also require changing op param OP_PARAMETER_STROBE_MODE 
+// But later a different pattern! Much wider pulse
 // Strobe Control Registers - 0x3080-0x3089 
-		{HX_CIS_I2C_Action_W, 0x3080, 0x05},	// STROBE_CFG Modes: Static=5; Dynamic 1=3; Dynamic 2=B; Multiple = 13
-		{HX_CIS_I2C_Action_W, 0x3081, 0x00},	// STROBE_SEL		0: align to start of reset field 1: align to end of reset field	
+		{HX_CIS_I2C_Action_W, 0x3080, 0x03},	// STROBE_CFG Modes: Static=5; Dynamic 1=3; Dynamic 2=B; Multiple = 13
+		{HX_CIS_I2C_Action_W, 0x3081, 0x01},	// STROBE_SEL		0: align to start of reset field 1: align to end of reset field	
 		{HX_CIS_I2C_Action_W, 0x3082, 0x00},	// STROBE_FRONT_H 	= front porch (in PCLKO clocks)
 		{HX_CIS_I2C_Action_W, 0x3083, 0x20},	// STROBE_FRONT_L
 		{HX_CIS_I2C_Action_W, 0x3084, 0x00},	// STROBE_END_H		= back porch

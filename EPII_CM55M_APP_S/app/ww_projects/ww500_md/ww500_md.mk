@@ -23,11 +23,14 @@ APPL_DEFINES += \
     -DGIT_COMMIT=\"$(GIT_COMMIT)\" \
     -DGIT_DIRTY=\"$(GIT_DIRTY)\"
 
-# force rebuild of the main .c file which has __TIME__ and __DATE__
+# Force rebuild of the main .c file which has __TIME__ and __DATE__ so the latest time and date is printed on every build.
+# Define a place where the object file is placed:
+OBJECT_DESTINATION = obj_epii_evb_icv30_bdv10/gnu_epii_evb_WLCSP65
 .PHONY: force_rebuild_main
 force_rebuild_main:
 	@echo Forcing rebuild
-obj_epii_evb_icv30_bdv10/gnu_epii_evb_WLCSP65/app/ww_projects/$(APP_TYPE)/$(APP_TYPE).o: force_rebuild_main
+#obj_epii_evb_icv30_bdv10/gnu_epii_evb_WLCSP65/app/ww_projects/$(APP_TYPE)/$(APP_TYPE).o: force_rebuild_main
+$(OBJECT_DESTINATION)/app/ww_projects/$(APP_TYPE)/$(APP_TYPE).o: force_rebuild_main
 all: force_rebuild_main
 	
 # The APPL_DEFINES line below must match this line in ww.mk:

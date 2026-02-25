@@ -144,6 +144,8 @@ static APP_WAKE_REASON_E woken;
 // which I2C slave instance to use
 static USE_DW_IIC_SLV_E iic_id;
 
+// semaphore which grants permission to send messages to the BLE processor
+// via the inter-processor I2C port
 SemaphoreHandle_t xI2CTxSemaphore;
 
 // This is the handle of the task

@@ -20,7 +20,8 @@
 
 #define HM0360_SENSOR_I2CID				(0x24)
 
-// CGP some defines here
+// Use Dynamic 1 mode (value 3) as default strobe enabe setting for STROBE_CFG (0x3080)
+#define HM0360_SENSOR_STROBE_MODE		(0x03)
 
 #define HM0360NUMGAINREGS 5
 

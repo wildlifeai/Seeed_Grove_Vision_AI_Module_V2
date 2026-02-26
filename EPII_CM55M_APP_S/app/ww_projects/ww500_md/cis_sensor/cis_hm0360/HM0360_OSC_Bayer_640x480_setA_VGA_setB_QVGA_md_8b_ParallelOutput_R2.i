@@ -124,7 +124,7 @@
 		{HX_CIS_I2C_Action_W, 0x3021, 0x00},
 		{HX_CIS_I2C_Action_W, 0x3024, 0x00},	// CTX_SEL [1] = 0 (SW, I2C), [0] 0 : Context A, 1 : Context B
 		{HX_CIS_I2C_Action_W, 0x3025, 0x12},
-		{HX_CIS_I2C_Action_W, 0x3026, 0x03},
+		{HX_CIS_I2C_Action_W, 0x3026, 0x03},	// PMU_CFG_5 premeter
 		{HX_CIS_I2C_Action_W, 0x3027, 0x81},
 		{HX_CIS_I2C_Action_W, 0x3028, 0x01},
 		{HX_CIS_I2C_Action_W, 0x3029, 0x15},
@@ -171,7 +171,7 @@
 		{HX_CIS_I2C_Action_W, 0x307d, 0xff},
 		{HX_CIS_I2C_Action_W, 0x307e, 0xff},
 		{HX_CIS_I2C_Action_W, 0x307f, 0xff},
-		{HX_CIS_I2C_Action_W, 0x3080, 0x00},	// STROBE_CFG 		Modes: Static=5; Dynamic 1=3; Dynamic 2=B; Multiple = 13
+		{HX_CIS_I2C_Action_W, 0x3080, 0x03},	// STROBE_CFG Modes: Static=5; Dynamic 1=3; Dynamic 2=B; Multiple = 13
 		{HX_CIS_I2C_Action_W, 0x3081, 0x00},	// STROBE_SEL		0: align to start of reset field 1: align to end of reset field	
 		{HX_CIS_I2C_Action_W, 0x3082, 0x00},	// STROBE_FRONT_H 	= front porch (in PCLKO clocks)
 		{HX_CIS_I2C_Action_W, 0x3083, 0x20},	// STROBE_FRONT_L

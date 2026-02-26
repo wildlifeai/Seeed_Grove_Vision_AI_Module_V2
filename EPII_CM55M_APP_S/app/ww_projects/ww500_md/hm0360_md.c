@@ -516,7 +516,7 @@ void hm0360_md_getMDOutput(uint8_t * regTable, uint8_t length) {
  *
 		{HX_CIS_I2C_Action_W, 0x3080, 0x00},	// STROBE_CFG disable
 		or:
-		{HX_CIS_I2C_Action_W, 0x3080, 0x0B},	// STROBE_CFG enable 1: Static, 3 = Dynamic 1, B = Dynamic 2, Multiple = 13
+		{HX_CIS_I2C_Action_W, 0x3080, 0x03},	// STROBE_CFG Modes: Static=5; Dynamic 1=3; Dynamic 2=B; Multiple = 13
 
  * Bit 0 - 1 enables, 0 disables
  *

@@ -2632,9 +2632,9 @@ void image_sleepNow(void) {
     	}
     	else {
     		// Configure STROBE pulses - NOTE: normal mode is 0x0b = 'dynamic 2'
-    		xprintf("   LED flashes (Strobe mode 0x%02x)\n", fatfs_getOperationalParameter(OP_PARAMETER_STROBE_MODE));
-    		//hm0360_md_configureStrobe(0x0B);
-    		hm0360_md_configureStrobe(fatfs_getOperationalParameter(OP_PARAMETER_STROBE_MODE));
+    		xprintf("   LED flashes (Strobe mode 0x%02x)\n", HM0360_SENSOR_STROBE_MODE);
+    		hm0360_md_configureStrobe(HM0360_SENSOR_STROBE_MODE);
+    		//hm0360_md_configureStrobe(fatfs_getOperationalParameter(OP_PARAMETER_STROBE_MODE));
     	}
     }
     else {
@@ -2663,8 +2663,8 @@ void image_sleepNow(void) {
 //    	else   {
 //            // Configure STROBE pulses - NOTE: normal mode is 0x0b = 'dynamic 2'
 //            xprintf("Preparing HM0360 for MD - with LED flashes 0x%02x\n", fatfs_getOperationalParameter(OP_PARAMETER_STROBE_MODE));
-//            //hm0360_md_configureStrobe(0x0B);
-//            hm0360_md_configureStrobe(fatfs_getOperationalParameter(OP_PARAMETER_STROBE_MODE));
+//            hm0360_md_configureStrobe(HM0360_SENSOR_STROBE_MODE);
+//            //hm0360_md_configureStrobe(fatfs_getOperationalParameter(OP_PARAMETER_STROBE_MODE));
 //    	}
 //    }
 //    else {

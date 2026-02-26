@@ -1,8 +1,8 @@
 # LED Flash: Timing of STROBE vs VSYNC
 #### CGP 26 Feb 2026
 
-The challenge: what regsister settings ensure that the STROBE pin is asserted soon enough
-so the LED is on in time for the image capture - i.e. some tome before VSYNC.
+The challenge: what register settings ensure that the STROBE pin is asserted soon enough
+so the LED is on in time for the image capture - i.e. some time before VSYNC.
 
 ## Original settings
 

@@ -1544,6 +1544,7 @@ static void vImageTask(void *pvParameters) {
     		// Special case (temporary?) to ensure the LED is switched off regardless of the state:
     		if (img_recv_msg.msg_event == APP_MSG_IMAGETASK_FLASH_OFF) {
     			ledFlashDisable();
+				send_msg.destination = NULL;
     		}
     		else {
     			switch (image_task_state)   {
@@ -1582,7 +1583,7 @@ static void vImageTask(void *pvParameters) {
     			default:
     				send_msg = flagUnexpectedEvent(img_recv_msg);
     				break;
-    			} // swicth
+    			} // switch
     		}
 
     		if (old_state != image_task_state)   {

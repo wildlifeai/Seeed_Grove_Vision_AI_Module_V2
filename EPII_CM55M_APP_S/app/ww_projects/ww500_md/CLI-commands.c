@@ -82,6 +82,7 @@
 #include <stdio.h>
 #include <stdbool.h>
 #include <stdlib.h>
+#include <stdarg.h>
 
 /* FreeRTOS includes. */
 #include "FreeRTOS.h"
@@ -653,7 +654,7 @@ static BaseType_t prvStatus(char *pcWriteBuffer, size_t xWriteBufferLen, const c
 
 	enabled = image_getEnabled();
 
-	sprintf(pcWriteBuffer, "Status: %s", enabled ? "enabled" : "disabled");
+	cli_append(&pcWriteBuffer, &xWriteBufferLen, "Status: %s", enabled ? "enabled" : "disabled");
 
 	/* There is no more data to return after this single string, so return pdFALSE. */
 	return pdFALSE;
@@ -665,7 +666,7 @@ static BaseType_t prvVer(char *pcWriteBuffer, size_t xWriteBufferLen, const char
 	(void)xWriteBufferLen;
 	configASSERT(pcWriteBuffer);
 
-	sprintf(pcWriteBuffer, "%s %s", app_get_board_name_string(), app_get_version_string());
+	cli_append(&pcWriteBuffer, &xWriteBufferLen, "%s %s", app_get_board_name_string(), app_get_version_string());
 
 	return pdFALSE;
 }
@@ -676,7 +677,7 @@ static BaseType_t prvCamera(char *pcWriteBuffer, size_t xWriteBufferLen, const c
 	(void)xWriteBufferLen;
 	configASSERT(pcWriteBuffer);
 
-	sprintf(pcWriteBuffer, "%s", app_get_camera_string());
+	cli_append(&pcWriteBuffer, &xWriteBufferLen, "%s", app_get_camera_string());
 
 	return pdFALSE;
 }
@@ -692,7 +693,7 @@ static BaseType_t prvEnable(char *pcWriteBuffer, size_t xWriteBufferLen, const c
 
 	APP_MSG_T send_msg;
 
-	sprintf(pcWriteBuffer, "Enabled Camera System");
+	cli_append(&pcWriteBuffer, &xWriteBufferLen, "Enabled Camera System");
 
 	// Inform the ImageTask message queue
 	send_msg.msg_data = 1;	// 0 means disabled; 1 means enabled
@@ -718,7 +719,7 @@ static BaseType_t prvDisable(char *pcWriteBuffer, size_t xWriteBufferLen, const 
 
 	APP_MSG_T send_msg;
 
-	sprintf(pcWriteBuffer, "Disabled Camera System");
+	cli_append(&pcWriteBuffer, &xWriteBufferLen, "Disabled Camera System");
 
 	// Inform the ImageTask message queue
 	send_msg.msg_data = 0;	// 0 means disabled; 1 means enabled
@@ -1470,7 +1471,7 @@ static BaseType_t prvSetgps(char *pcWriteBuffer, size_t writeBufferLen, const ch
 	exif_gps_parse_full_string(&exif_gps_deviceLat, &exif_gps_deviceLon, &exif_gps_deviceAlt, parsedGpsString);
 
 	// String to return to the app
-	sprintf(pcWriteBuffer, "Device GPS set");
+	cli_append(&pcWriteBuffer, &writeBufferLen, "Device GPS set");
 
     return pdFALSE; // Command execution complete
 }

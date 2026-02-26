@@ -1,12 +1,12 @@
 # LED Flash: Timing of STROBE vs VSYNC
 #### CGP 26 Feb 2026
 
-The challenge: waht regsister settings ensure that the STROBE pin is asserted soon enough
+The challenge: what regsister settings ensure that the STROBE pin is asserted soon enough
 so the LED is on in time for the image capture - i.e. some tome before VSYNC.
 
 ## Original settings
 
-Prior to the investigations of Feb 2026 these were the STROBE regsoter settings (with STROBE_CFG
+Prior to the investigations of Feb 2026 these were the STROBE register settings (with STROBE_CFG
 set to 0x0B to make the pulses):
 ```
 		{HX_CIS_I2C_Action_W, 0x3080, 0x00},	// STROBE_CFG 		Modes: Static=5; Dynamic 1=3; Dynamic 2=B; Multiple = 13

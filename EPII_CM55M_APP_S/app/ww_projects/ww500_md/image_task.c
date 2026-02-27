@@ -76,6 +76,8 @@
 
 #include "selfTest.h"
 
+/*************************************** Definitions *******************************************/
+
 // Enable/disable writing per-class confidence/label EXIF tags (0xF300+)
 // CGP 24/1/26 - Disable this. All processing of NN output tensor including labels is moved to cvapp.cpp
 // When debugged, remove this code
@@ -83,7 +85,9 @@
 #define ENABLE_EXIF_CONFIDENCE
 #endif // USE_PERCENTAGE
 
-/*************************************** Definitions *******************************************/
+// Experimental: if defined then use the HM0360 STROBE pin to control the flash
+// else use the timer as is the case with RP3 camera
+#define STROBE_CONTROLS_FLASH
 
 // TODO sort out how to allocate priorities
 #define image_task_PRIORITY (configMAX_PRIORITIES - 2)
@@ -649,8 +653,7 @@ static APP_MSG_DEST_T handleEventForInit(APP_MSG_T img_recv_msg) {
         // We have received an instruction to enable or disable the NN processing system
         setEnabled = (bool)img_recv_msg.msg_data;
         changeEnableState(setEnabled); // 0 means disabled; 1 means enabled
-        if (setEnabled)
-        {
+        if (setEnabled) {
             xprintf("DEBUG: Time to start capturing images!\n");
             // Pass the parameters in the ImageTask message queue
             internal_msg.msg_data = fatfs_getOperationalParameter(OP_PARAMETER_NUM_PICTURES);
@@ -750,8 +753,7 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
     HM0360_GAIN_T gain;
 #endif
 
-    switch (event)
-    {
+    switch (event) {
 
     case APP_MSG_IMAGETASK_FRAME_READY:
         // Here when the image sub-system has captured an image.
@@ -769,7 +771,7 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
         g_frames_total++;      // The number since the start of time.
 
         // measure time for the frame capture just completed
-        xprintf("Image capture took %dms\n\n", app_getElapsedMs(startTime));
+        xprintf("Image capture %d/%d took %dms\n\n", g_cur_jpegenc_frame, g_captures_to_take, app_getElapsedMs(startTime));
 
         // Now measure NN duration
         startTime = xTaskGetTickCount();
@@ -956,8 +958,11 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
     case APP_MSG_DPEVENT_SENSORCTRL_WDT_OUT: // 0x011e
         // Unfortunately I see this. EDM WDT2 Timeout = 0x011c
         // probably if HM0360 is not receiving I2C commands...
+    	//NOTE: can we extend the timeout? with sensordplib_edm_wdt_config() or WDT_TIMEOUT_PERIOD
         XP_RED;
-        dbg_printf(DBG_LESS_INFO, ">>>> Received a timeout event 0x%04x. TODO - re-initialise camera? <<<<\n", event);
+        dbg_printf(DBG_LESS_INFO, ">>>> Received a timeout event 0x%04x after %dms <<<<\n", event, app_getElapsedMs(startTime));
+        dbg_printf(DBG_LESS_INFO, ">>>> TODO - re-initialise camera? <<<<\n", event);
+
         XP_WHITE;
 
         // Fault detected. Prepare to enter DPD
@@ -1035,6 +1040,7 @@ static APP_MSG_DEST_T handleEventForNNProcessing(APP_MSG_T img_recv_msg) {
         else  {
             // The HM0360 uses an internal timer to determine the time for the next image
             // Re-start the image sensor.
+        	// Do we need to call hm0360_md_setMode() here?
             configure_image_sensor(CAMERA_CONFIG_CONTINUE);
             // Expect another frame ready event
             image_task_state = APP_IMAGE_TASK_STATE_CAPTURING;
@@ -1729,9 +1735,21 @@ static bool configure_image_sensor(CAMERA_CONFIG_E operation) {
     	else  {
 #ifdef USE_HM0360
     		hm0360_md_setMode(CONTEXT_A, MODE_SW_NFRAMES_SLEEP, 1, g_timer_period);
-#endif // USE_HM0360
+#ifdef STROBE_CONTROLS_FLASH
+    		// experimental: get the HM0360 STROBE pin to drive the LED
+
+    		if ((fatfs_getOperationalParameter(OP_PARAMETER_LED_BRIGHTNESS_PERCENT) > 0)
+    				&& (fatfs_getOperationalParameter(OP_PARAMETER_FLASH_LED) != 0) )  {
+    			hm0360_md_configureStrobe(HM0360_SENSOR_STROBE_MODE);
+    		}
+    		// else no strobe
+#else
+    		ledFlashEnable(fatfs_getOperationalParameter(OP_PARAMETER_FLASH_DURATION));
+#endif //  STROBE_CONTROLS_FLASH
+#else
     		// turn on the LED regardless of the camera
     		ledFlashEnable(fatfs_getOperationalParameter(OP_PARAMETER_FLASH_DURATION));
+#endif // USE_HM0360
     		cisdp_sensor_start(); // Starts data path sensor control block
     	}
     	break;
@@ -1746,8 +1764,14 @@ static bool configure_image_sensor(CAMERA_CONFIG_E operation) {
     	}
     	else {
 #ifdef USE_HM0360
+    		// TODO can we enable the flash using STROBE instead of manual control?
     		// Apparently it is necessary to have this here (changes mode 2->2). TODO figure out why.
-    		hm0360_md_setMode(CONTEXT_A, MODE_SW_NFRAMES_SLEEP, 1, g_timer_period);
+    		//hm0360_md_setMode(CONTEXT_A, MODE_SW_NFRAMES_SLEEP, 1, g_timer_period);
+#ifdef STROBE_CONTROLS_FLASH
+    		// Do nothing as the STROBE has been set up
+#else
+    		ledFlashEnable(fatfs_getOperationalParameter(OP_PARAMETER_FLASH_DURATION));
+#endif //  STROBE_CONTROLS_FLASH
     		cisdp_sensor_start(); // Starts data path sensor control block
 #else
     		// turn on the LED regardless of the camera
@@ -2649,15 +2673,14 @@ void image_sleepNow(void) {
 
     	// Consider turning on the LED flashes, controlled by the HM0360 STROBE output
     	if ((brightnessPercent == 0) || (ledInUse == 0) || (mdInterval == 0))  {
-    		// No STROBE pulses because brightnees=0 or neither LED selected or MD is disabled
+    		// No STROBE pulses because brightness=0 or neither LED selected or MD is disabled
     		xprintf("   No LED flashes.\n");
     		hm0360_md_configureStrobe(0);
     	}
     	else {
-    		// Configure STROBE pulses - NOTE: normal mode is 0x0b = 'dynamic 2'
+    		// Configure STROBE pulses
     		xprintf("   LED flashes (Strobe mode 0x%02x)\n", HM0360_SENSOR_STROBE_MODE);
     		hm0360_md_configureStrobe(HM0360_SENSOR_STROBE_MODE);
-    		//hm0360_md_configureStrobe(fatfs_getOperationalParameter(OP_PARAMETER_STROBE_MODE));
     	}
     	XP_WHITE;
     }
@@ -2688,7 +2711,6 @@ void image_sleepNow(void) {
 //            // Configure STROBE pulses - NOTE: normal mode is 0x0b = 'dynamic 2'
 //            xprintf("Preparing HM0360 for MD - with LED flashes 0x%02x\n", fatfs_getOperationalParameter(OP_PARAMETER_STROBE_MODE));
 //            hm0360_md_configureStrobe(HM0360_SENSOR_STROBE_MODE);
-//            //hm0360_md_configureStrobe(fatfs_getOperationalParameter(OP_PARAMETER_STROBE_MODE));
 //    	}
 //    }
 //    else {
@@ -2711,3 +2733,4 @@ void image_sleepNow(void) {
         sleep_mode_enter_dpd(SLEEPMODE_WAKE_SOURCE_WAKE_PIN, 0, false); // Does not return
     }
 }
+

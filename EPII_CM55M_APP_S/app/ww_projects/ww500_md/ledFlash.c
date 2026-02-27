@@ -37,10 +37,15 @@
 #define LF_RFU			(1 << 6)
 #define LF_FLENABLE		(1 << 7)
 
+// If uncommented, a timer is used to turn off the flash.
+// Probably not needed as the state machine should also turn it off.
+//#define TIMER_TURNS_OFF_FLASH
 
 /*************************************** Local Function Declarations ******************/
 
+#ifdef TIMER_TURNS_OFF_FLASH
 static void FlashOffTimerCallback(TimerHandle_t xTimer);
+#endif // TIMER_TURNS_OFF_FLASH
 
 /*************************************** External variables *******************************************/
 
@@ -54,11 +59,16 @@ static bool ledFlashInitialised = false;
 // Need to maintain a copy of bits sent to the control/status chip, so we can change individual bits
 static uint8_t controlBits = 0;
 
+#ifdef TIMER_TURNS_OFF_FLASH
 static TimerHandle_t flashOffTimer;
+#endif // TIMER_TURNS_OFF_FLASH
 
 static bool inhibitFlash;
 
 /*************************************** Local Function Definitions *******************/
+
+#ifdef TIMER_TURNS_OFF_FLASH
+
 
 /**
  * Timer has asked us to turn off the flash LED.
@@ -87,6 +97,7 @@ static void FlashOffTimerCallback(TimerHandle_t xTimer) {
         taskYIELD();
     }
 }
+#endif // TIMER_TURNS_OFF_FLASH
 
 /********************************** Public Function Definitions ***********************/
 
@@ -123,11 +134,13 @@ bool ledFlashInit(void) {
 	// The application should call ledFlashSelectLED() to change this.
 	ledFlashSelectLED(0);	// de-select both LEDs
 
+#ifdef TIMER_TURNS_OFF_FLASH
     flashOffTimer = xTimerCreate("FlashOffTimer",
             pdMS_TO_TICKS(10),    // initial dummy period
             pdFALSE,                // one-shot timer
             NULL,                   // timer ID (optional)
 			FlashOffTimerCallback);
+#endif // TIMER_TURNS_OFF_FLASH
 
 	return true;
 }
@@ -252,12 +265,14 @@ void ledFlashEnable(uint16_t duration) {
 	// Now send these bits to the PCA9574
 	pca9574_write(PCA9574_I2C_ADDRESS_0, PCA9574_REG_OUT, controlBits);
 
+#ifdef TIMER_TURNS_OFF_FLASH
 	// Start a timer that delays for the defined interval.
     if (flashOffTimer != NULL) {
         // Change the period and start the timer
     	// The callback is FlashOffTimerCallback() which calls ledFlashDisable
         xTimerChangePeriod(flashOffTimer, pdMS_TO_TICKS(duration), 0);
     }
+#endif // TIMER_TURNS_OFF_FLASH
 }
 
 /**

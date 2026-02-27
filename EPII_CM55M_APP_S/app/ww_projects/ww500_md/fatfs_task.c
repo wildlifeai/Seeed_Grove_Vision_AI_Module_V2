@@ -467,9 +467,7 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 			res = fileWrite(fileOp);
 		}
 
-		xprintf("File write from 0x%08x took %dms\n",
-				fileOp->buffer,
-				(xTaskGetTickCount() - xStartTime) * portTICK_PERIOD_MS);
+		xprintf("File write took %dms\n", app_getElapsedMs(xStartTime));
 
 		fatFs_task_state = APP_FATFS_STATE_IDLE;
 

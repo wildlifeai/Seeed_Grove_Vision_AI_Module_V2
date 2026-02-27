@@ -91,7 +91,7 @@
 #define IMAGE_TASK_QUEUE_LEN 10
 
 // This is experimental. TODO check it is ok
-#define MSGTOMASTERLEN 100
+#define MSGTOMASTERLEN 150
 
 // defaults for PWM output on PB9 for Flash LED brightness
 // default 20kHz
@@ -807,10 +807,20 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
         // This is a test to see if/how these change with illumination
         hm0360_md_getGainRegs(&gain);
 
+        snprintf(msgToMaster, MSGTOMASTERLEN, "Gain regs:\n  Integration time = %d lines\n  Analog gain = %d\n  Digital gain = %d\n  AE Mean = %d\n  AEConverged?: %c",
+        		gain.integration,
+				gain.analogGain,
+				gain.digitalGain,
+				gain.aeMean,
+				(gain.aeConverged == 1)?'Y':'N');
+
         XP_LT_GREY;
-        xprintf("Gain regs: Int = 0x%04x, Analog = 0x%02x, Digital = 0x%04x, AEMean = 0x%02x, AEConverge = 0x%02x\n",
-                gain.integration, gain.analogGain, gain.digitalGain, gain.aeMean, gain.aeConverged);
+        // print to console
+        xprintf("%s\n", msgToMaster);
         XP_WHITE;
+
+        // and send to BLE
+        sendMsgToMaster(msgToMaster);
 #endif
 
 #if 0
@@ -1142,6 +1152,18 @@ static APP_MSG_DEST_T handleEventForWaitForTimer(APP_MSG_T img_recv_msg) {
 
     case APP_MSG_IMAGETASK_RECAPTURE:
         // here when the capture_timer expires
+
+#define INVESTIGATE_FLASH_BRIGHTNESS
+#define FLASH_BRIGHTNESS_INCREMENT 10
+#ifdef INVESTIGATE_FLASH_BRIGHTNESS
+    	static uint8_t changingBrightness = 1;
+    	// increment the brightness
+    	changingBrightness += FLASH_BRIGHTNESS_INCREMENT;
+    	if (changingBrightness >= 50) {
+    		changingBrightness = 1;
+    	}
+    	ledFlashBrightness(changingBrightness);
+#endif // INVESTIGATE_FLASH_BRIGHTNESS
 
         ledFlashEnable(fatfs_getOperationalParameter(OP_PARAMETER_FLASH_DURATION));
 
@@ -2622,6 +2644,7 @@ void image_sleepNow(void) {
 #if defined(USE_HM0360) || defined(USE_HM0360_MD)
     // HM0360 as main camera
     if (hm0360_md_isHM0360Present()) {
+    	XP_LT_GREY;
        	xprintf("Preparing HM0360 for MD\n");
     	hm0360_md_prepare(cameraSystemEnabled, mdInterval); // select CONTEXT_B registers (if enabled)
 
@@ -2637,6 +2660,7 @@ void image_sleepNow(void) {
     		hm0360_md_configureStrobe(HM0360_SENSOR_STROBE_MODE);
     		//hm0360_md_configureStrobe(fatfs_getOperationalParameter(OP_PARAMETER_STROBE_MODE));
     	}
+    	XP_WHITE;
     }
     else {
     	xprintf("HM0360 missing...\n");
@@ -2675,7 +2699,6 @@ void image_sleepNow(void) {
 //
 //#endif // USE_HM0360_MD
 
-    xprintf("\nEnter DPD mode!\n\n");
 
     timelapseDelay = fatfs_getOperationalParameter(OP_PARAMETER_TIMELAPSE_INTERVAL);
 

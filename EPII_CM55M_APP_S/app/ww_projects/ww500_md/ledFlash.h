@@ -31,7 +31,7 @@ typedef enum flashLeds {
 // Enables the chip - returns true if OK
 bool ledFlashInit(void);
 
-// Determine LED brightness
+// Set LED brightness
 void ledFlashBrightness(uint8_t brightness);
 
 // Select which LED(s) to activate

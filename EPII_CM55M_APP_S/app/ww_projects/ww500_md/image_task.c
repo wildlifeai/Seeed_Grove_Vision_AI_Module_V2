@@ -1147,13 +1147,12 @@ static APP_MSG_DEST_T handleEventForWaitForTimer(APP_MSG_T img_recv_msg) {
     event = img_recv_msg.msg_event;
     send_msg.destination = NULL;
 
-    switch (event)
-    {
+    switch (event)  {
 
     case APP_MSG_IMAGETASK_RECAPTURE:
         // here when the capture_timer expires
 
-#define INVESTIGATE_FLASH_BRIGHTNESS
+//#define INVESTIGATE_FLASH_BRIGHTNESS
 #define FLASH_BRIGHTNESS_INCREMENT 10
 #ifdef INVESTIGATE_FLASH_BRIGHTNESS
     	static uint8_t changingBrightness = 1;
@@ -1533,8 +1532,7 @@ static void vImageTask(void *pvParameters) {
         internal_msg.msg_parameter = fatfs_getOperationalParameter(OP_PARAMETER_PICTURE_INTERVAL);
         internal_msg.msg_event = APP_MSG_IMAGETASK_STARTCAPTURE;
 
-        if (xQueueSend(xImageTaskQueue, (void *)&internal_msg, __QueueSendTicksToWait) != pdTRUE)
-        {
+        if (xQueueSend(xImageTaskQueue, (void *)&internal_msg, __QueueSendTicksToWait) != pdTRUE) {
             xprintf("Failed to send 0x%x to imageTask\r\n", internal_msg.msg_event);
         }
     }
@@ -1750,10 +1748,12 @@ static bool configure_image_sensor(CAMERA_CONFIG_E operation) {
 #ifdef USE_HM0360
     		// Apparently it is necessary to have this here (changes mode 2->2). TODO figure out why.
     		hm0360_md_setMode(CONTEXT_A, MODE_SW_NFRAMES_SLEEP, 1, g_timer_period);
-#endif // USE_HM0360
+    		cisdp_sensor_start(); // Starts data path sensor control block
+#else
     		// turn on the LED regardless of the camera
     		ledFlashEnable(fatfs_getOperationalParameter(OP_PARAMETER_FLASH_DURATION));
     		cisdp_sensor_start(); // Starts data path sensor control block
+#endif // USE_HM0360
     	}
     	break;
 
@@ -2516,8 +2516,7 @@ static void processNNOutput(int8_t * outCategories, uint8_t classCount) {
  */
 TaskHandle_t image_createTask(int8_t priority, APP_WAKE_REASON_E wakeReason) {
 
-    if (priority < 0)
-    {
+    if (priority < 0)  {
         priority = 0;
     }
 

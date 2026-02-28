@@ -131,7 +131,7 @@
 #endif 	// USE_HM0360
 
 // If uncommented brightness will increment after each image of an image sequence
-//#define INVESTIGATE_FLASH_BRIGHTNESS
+#define INVESTIGATE_FLASH_BRIGHTNESS
 // percentage increment for each image
 #define FLASH_BRIGHTNESS_INCREMENT 18
 

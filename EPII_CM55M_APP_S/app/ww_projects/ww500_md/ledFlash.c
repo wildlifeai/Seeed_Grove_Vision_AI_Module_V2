@@ -175,7 +175,7 @@ void ledFlashBrightness(uint8_t brightness) {
 	controlBits &= ~0x0f;	// clear the 4 LS bits
 	controlBits |= brBits;	// sets the 4 LS bits
 
-	// Don't send except in ledFlashEnable() andledFlashDisable()
+	// Don't send except in ledFlashEnable() and ledFlashDisable()
 	// Now send these bits to the PCA9574
 	//pca9574_write(PCA9574_I2C_ADDRESS_0, PCA9574_REG_OUT, controlBits);
 

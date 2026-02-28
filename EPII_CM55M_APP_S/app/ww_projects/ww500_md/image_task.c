@@ -130,6 +130,11 @@
 #define STROBE_CONTROLS_FLASH
 #endif 	// USE_HM0360
 
+// If uncommented brightness will increment after each image of an image sequence
+//#define INVESTIGATE_FLASH_BRIGHTNESS
+// percentage increment for each image
+#define FLASH_BRIGHTNESS_INCREMENT 18
+
 // TODO sort out how to allocate priorities
 #define image_task_PRIORITY (configMAX_PRIORITIES - 2)
 
@@ -373,6 +378,26 @@ static uint8_t *tiff_start;
 TickType_t startTime;
 
 /********************************** Local Functions  *************************************/
+
+#ifdef INVESTIGATE_FLASH_BRIGHTNESS
+static uint8_t changingBrightness = 1; // set to 1% at warm boot.
+
+/**
+ * Experimental feature that increments flash brightness for each successive image.
+ *
+ * Change after each APP_MSG_IMAGETASK_FRAME_READY event
+ */
+static void incrementBrightness(void) {
+
+	ledFlashBrightness(changingBrightness);
+
+	// increment the brightness for the next image
+	changingBrightness += FLASH_BRIGHTNESS_INCREMENT;
+	if (changingBrightness >= 100) {
+		changingBrightness = 100;
+	}
+}
+#endif // INVESTIGATE_FLASH_BRIGHTNESS
 
 
 /**
@@ -676,6 +701,10 @@ static APP_MSG_DEST_T handleEventForInit(APP_MSG_T img_recv_msg) {
             xprintf("Interval: %dms\n", g_timer_period);
             XP_WHITE;
 
+#ifdef INVESTIGATE_FLASH_BRIGHTNESS
+            incrementBrightness();
+#endif // INVESTIGATE_FLASH_BRIGHTNESS
+
             // Now start the image sensor.
             configure_image_sensor(CAMERA_CONFIG_RUN);
             // Record image capture start time
@@ -794,6 +823,10 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
 
     case APP_MSG_IMAGETASK_FRAME_READY:
         // Here when the image sub-system has captured an image.
+
+#ifdef INVESTIGATE_FLASH_BRIGHTNESS
+        incrementBrightness();
+#endif // INVESTIGATE_FLASH_BRIGHTNESS
 
     	ledFlashDisable(); // finished with the LED flash. Turn it off.
 
@@ -1067,42 +1100,40 @@ static APP_MSG_DEST_T handleEventForNNProcessing(APP_MSG_T img_recv_msg) {
         // This represents the point at which an image has been captured and processed.
 
         if (g_cur_jpegenc_frame == g_captures_to_take) {
-            captureSequenceComplete();
-            // Stop the image sensor.
-            configure_image_sensor(CAMERA_CONFIG_STOP);
-            image_task_state = APP_IMAGE_TASK_STATE_INIT;
+        	captureSequenceComplete();
+        	// Stop the image sensor.
+        	configure_image_sensor(CAMERA_CONFIG_STOP);
+        	image_task_state = APP_IMAGE_TASK_STATE_INIT;
         }
-
+        else  {
 #ifdef USE_HM0360_CAPTURE_TIMER
-        else  {
-            // The HM0360 uses an internal timer to determine the time for the next image
-            // Re-start the image sensor.
-            configure_image_sensor(CAMERA_CONFIG_CONTINUE);
-            // Expect another frame ready event
-            image_task_state = APP_IMAGE_TASK_STATE_CAPTURING;
-        }
+        	// The HM0360 uses an internal timer to determine the time for the next image
+        	// Re-start the image sensor.
+        	configure_image_sensor(CAMERA_CONFIG_CONTINUE);
+        	// Expect another frame ready event
+        	image_task_state = APP_IMAGE_TASK_STATE_CAPTURING;
+
 #else
-        else  {
-            // Start a timer that delays for the defined interval.
-            // When it expires, switch to CAPTURUNG state and request another image
-            if (captureTimer != NULL)  {
-                // Change the period and start the timer
-                // The callback issues a APP_MSG_IMAGETASK_CAPTURE_TIMER event
-                xTimerChangePeriod(captureTimer, pdMS_TO_TICKS(g_timer_period), 0);
-                // Expect a APP_MSG_IMAGETASK_CAPTURE_TIMER event from the capture_timer
-                image_task_state = APP_IMAGE_TASK_STATE_WAIT_FOR_TIMER;
-            }
-            else  {
-                // error
-                flagUnexpectedEvent(img_recv_msg);
-                image_task_state = APP_IMAGE_TASK_STATE_INIT;
-            }
-        }
+        	// Start a timer that delays for the defined interval.
+        	// When it expires, switch to CAPTURUNG state and request another image
+        	if (captureTimer != NULL)  {
+        		// Change the period and start the timer
+        		// The callback issues a APP_MSG_IMAGETASK_CAPTURE_TIMER event
+        		xTimerChangePeriod(captureTimer, pdMS_TO_TICKS(g_timer_period), 0);
+        		// Expect a APP_MSG_IMAGETASK_CAPTURE_TIMER event from the capture_timer
+        		image_task_state = APP_IMAGE_TASK_STATE_WAIT_FOR_TIMER;
+        	}
+        	else  {
+        		// error
+        		flagUnexpectedEvent(img_recv_msg);
+        		image_task_state = APP_IMAGE_TASK_STATE_INIT;
+        	}
 #endif // USE_HM0360_CAPTURE_TIMER
+        }
         break;
 
     case APP_MSG_IMAGETASK_CHANGE_ENABLE:
-        // We have received an instruction to enable or disable the NN processing system
+    	// We have received an instruction to enable or disable the NN processing system
         setEnabled = (bool)img_recv_msg.msg_data;
         changeEnableState(setEnabled); // 0 means disabled; 1 means enabled
         break;
@@ -1193,18 +1224,6 @@ static APP_MSG_DEST_T handleEventForWaitForTimer(APP_MSG_T img_recv_msg) {
 
     case APP_MSG_IMAGETASK_CAPTURE_TIMER:
         // here when the captureTimer expires
-
-//#define INVESTIGATE_FLASH_BRIGHTNESS
-#define FLASH_BRIGHTNESS_INCREMENT 10
-#ifdef INVESTIGATE_FLASH_BRIGHTNESS
-    	static uint8_t changingBrightness = 1;
-    	// increment the brightness
-    	changingBrightness += FLASH_BRIGHTNESS_INCREMENT;
-    	if (changingBrightness >= 50) {
-    		changingBrightness = 1;
-    	}
-    	ledFlashBrightness(changingBrightness);
-#endif // INVESTIGATE_FLASH_BRIGHTNESS
 
 #ifdef USE_HM0360
     	// We must be using captureTimer for HM0360, so force a HM0360 capture now

@@ -62,4 +62,28 @@ VSYNC is normally not enabled.
 4. The difference in VSYNC pulse width is explained by the fact that the DPD (Context B) settings
 have 0x3561 and 0x3562 set to sub-sample 2. The HSYNC pulses are also shorter by a factor of 2.
 5.	In due course it might be possible to reduce the VSYNC in DPD to reduce the power consumption...
+6. If the system is asked to take several pictures while active then all images are associated with the 
+second pair of pulses. (if the flash is controlled by STROBE and not FLASHEN
 
+## Alternative:
+
+I can control the LED with the FLASHEN signal outsde DPD.
+
+`Timing with FLASHEN in use`
+```
+                | 6.6|  9     |                                        
+                
+                +----+------------------+                       
+STROBE          |    |                  |                                                     
+        +-------+    +                  +-----//+--------------------------------------------
+                
+                                                        +-----------------------------------+      
+FLASHEN                                                 |                                   |     
+        +-------------------------------------//+-------+                                   +----
+
+                              |  10     |               |    15       |     21          | 3 |    
+                                              
+                              +---------+                             +-----------------+     
+VSYNC                         |         |                             |                 |   
+        ----------------------+         +-----//----------------------+                 +-----
+```

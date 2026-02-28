@@ -538,7 +538,7 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
         break;
 
     // recaptures image, not implemented currently
-    case APP_MSG_IMAGETASK_RECAPTURE:
+    case APP_MSG_IMAGETASK_CAPTURE_TIMER:
         image_task_state = APP_IMAGE_TASK_STATE_CAPTURING;
         send_msg.destination = xImageTaskQueue;
         sensordplib_retrigger_capture();

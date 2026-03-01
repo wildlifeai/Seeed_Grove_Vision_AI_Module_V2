@@ -312,7 +312,8 @@ static fileOperation_t fileOp;
 
 // This is a value passed to cisdp_dp_init()
 // where the comment is "JPEG Encoding quantization table Selection (4x or 10x)"
-uint32_t g_img_data;
+// the cisdp_dp_init() code says this can be 4 for JPEG_ENC_QTABLE_4X else JPEG_ENC_QTABLE_10X
+uint32_t g_jpeg_ratio;
 
 static uint16_t g_imageSeqNum; // 0 indicates no SD card
 
@@ -822,7 +823,7 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
     switch (event) {
 
     case APP_MSG_IMAGETASK_FRAME_READY:
-        // Here when the image sub-system has captured an image.
+        // Here when the image sub-system has captured an image - via os_app_dplib_cb() callback.
 
 #ifdef INVESTIGATE_FLASH_BRIGHTNESS
         incrementBrightness();
@@ -836,7 +837,6 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
         hm0360_md_clearInterrupt(0xff); // clear all bits
 #endif
 
-        // frame ready event received from os_app_dplib_cb
         g_cur_jpegenc_frame++; // The number in this sequence
         g_frames_total++;      // The number since the start of time.
 
@@ -1440,7 +1440,13 @@ static void vImageTask(void *pvParameters) {
     g_cur_jpegenc_frame = 0;
     g_captures_to_take = 0;
     g_timer_period = 0;
-    g_img_data = 0;
+#if 4XRATIO
+    // selects JPEG_ENC_QTABLE_4X
+    g_jpeg_ratio = 4;
+#else
+    // selects JPEG_ENC_QTABLE_10X
+    g_jpeg_ratio = 0;
+#endif // 4XRATIO
     g_imageSeqNum = 0; // 0 indicates no SD card
     g_wdt_event = false;
 
@@ -1767,8 +1773,8 @@ static bool configure_image_sensor(CAMERA_CONFIG_E operation) {
         	cis_file_process(CAMERA_EXTRA_FILE);
 
         	// if wdma variable is zero when not init yet, then this step is a must be to retrieve wdma address
-        	//  Datapath events give callbacks to os_app_dplib_cb() in dp_task
-        	if (cisdp_dp_init(true, SENSORDPLIB_PATH_INT_INP_HW5X5_JPEG, os_app_dplib_cb, g_img_data, APP_DP_RES_YUV640x480_INP_SUBSAMPLE_1X) < 0) {
+        	//  Datapath events give callbacks to os_app_dplib_cb()
+        	if (cisdp_dp_init(true, SENSORDPLIB_PATH_INT_INP_HW5X5_JPEG, os_app_dplib_cb, g_jpeg_ratio, APP_DP_RES_YUV640x480_INP_SUBSAMPLE_1X) < 0) {
         		xprintf("\r\nDATAPATH Init fail\r\n");
         		return false;
         	}
@@ -1789,7 +1795,7 @@ static bool configure_image_sensor(CAMERA_CONFIG_E operation) {
         else  {
             // if wdma variable is zero when not init yet, then this step is a must be to retrieve wdma address
             //  Datapath events give callbacks to os_app_dplib_cb() in dp_task
-            if (cisdp_dp_init(true, SENSORDPLIB_PATH_INT_INP_HW5X5_JPEG, os_app_dplib_cb, g_img_data, APP_DP_RES_YUV640x480_INP_SUBSAMPLE_1X) < 0)  {
+            if (cisdp_dp_init(true, SENSORDPLIB_PATH_INT_INP_HW5X5_JPEG, os_app_dplib_cb, g_jpeg_ratio, APP_DP_RES_YUV640x480_INP_SUBSAMPLE_1X) < 0)  {
                 xprintf("\r\nDATAPATH Init fail\r\n");
                 return false;
             }
@@ -1801,7 +1807,7 @@ static bool configure_image_sensor(CAMERA_CONFIG_E operation) {
     	if (!cameraSystemEnabled) {
     		processedOK = false;
     	}
-    	else if (cisdp_dp_init(true, SENSORDPLIB_PATH_INT_INP_HW5X5_JPEG, os_app_dplib_cb, g_img_data, APP_DP_RES_YUV640x480_INP_SUBSAMPLE_1X) < 0) {
+    	else if (cisdp_dp_init(true, SENSORDPLIB_PATH_INT_INP_HW5X5_JPEG, os_app_dplib_cb, g_jpeg_ratio, APP_DP_RES_YUV640x480_INP_SUBSAMPLE_1X) < 0) {
     		xprintf("\r\nDATAPATH Init fail\r\n");
     		processedOK = false;
     	}
@@ -1841,7 +1847,7 @@ static bool configure_image_sensor(CAMERA_CONFIG_E operation) {
     	if (!cameraSystemEnabled) {
     		processedOK = false;
     	}
-    	else if (cisdp_dp_init(true, SENSORDPLIB_PATH_INT_INP_HW5X5_JPEG, os_app_dplib_cb, g_img_data, APP_DP_RES_YUV640x480_INP_SUBSAMPLE_1X) < 0) {
+    	else if (cisdp_dp_init(true, SENSORDPLIB_PATH_INT_INP_HW5X5_JPEG, os_app_dplib_cb, g_jpeg_ratio, APP_DP_RES_YUV640x480_INP_SUBSAMPLE_1X) < 0) {
     		xprintf("\r\nDATAPATH Init fail\r\n");
     		processedOK = false;
     	}

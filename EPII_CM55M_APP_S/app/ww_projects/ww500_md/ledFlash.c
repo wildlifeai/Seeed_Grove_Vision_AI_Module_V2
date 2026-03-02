@@ -191,6 +191,8 @@ void ledFlashSelectLED(FlashLeds_t led) {
 /**
  * Turns on the Flash LED
  *
+ * NOTE: this turns on the FLASHEN bit but does NOT affect the HM0360 whose STROBE pin might also flash the LED.
+ *
  * @param duration - a period after which the flash is turned off
  */
 void ledFlashEnable(uint16_t duration) {
@@ -209,32 +211,22 @@ void ledFlashEnable(uint16_t duration) {
 		return;
 	}
 
-	if ((controlBits & LF_FLENABLE) == 0) {
-		// Change is needed
-		controlBits |= LF_FLENABLE;
+	controlBits |= LF_FLENABLE;
+	// Now send these bits to the PCA9574
+	pca9574_write(PCA9574_I2C_ADDRESS_0, PCA9574_REG_OUT, controlBits);
 
-		// Start a timer that delays for the defined interval.
-	    if (flashOffTimer != NULL) {
-	        // Change the period and start the timer
-	    	// The callback is FlashOffTimerCallback() which calls ledFlashDisable
-	        xTimerChangePeriod(flashOffTimer, pdMS_TO_TICKS(duration), 0);
-	    }
-	    else {
-	    	return;
-	    }
-
-		// Now send these bits to the PCA9574
-		pca9574_write(PCA9574_I2C_ADDRESS_0, PCA9574_REG_OUT, controlBits);
-	}
-	else {
-		xprintf("DEBUG: flash was already on\n");
-	}
+	// Start a timer that delays for the defined interval.
+    if (flashOffTimer != NULL) {
+        // Change the period and start the timer
+    	// The callback is FlashOffTimerCallback() which calls ledFlashDisable
+        xTimerChangePeriod(flashOffTimer, pdMS_TO_TICKS(duration), 0);
+    }
 }
 
 /**
  * Turns off the Flash LED
  *
- *
+ * NOTE: this turns off the FLASHEN bit but does NOT stop the HM0360 from flashing the LED
  */
 void ledFlashDisable(void) {
 
@@ -245,15 +237,9 @@ void ledFlashDisable(void) {
 	XP_LT_RED;
 	xprintf("DEBUG: ledFlashDisable()\n");
 
-	if ((controlBits & LF_FLENABLE) == LF_FLENABLE) {
-		// Change is needed
-		controlBits &= ~LF_FLENABLE;
-		// Now send these bits to the PCA9574
-		pca9574_write(PCA9574_I2C_ADDRESS_0, PCA9574_REG_OUT, controlBits);
-	}
-	else {
-		xprintf("DEBUG: flash was already off\n");
-	}
+	controlBits &= ~LF_FLENABLE;
+	// Now send these bits to the PCA9574
+	pca9574_write(PCA9574_I2C_ADDRESS_0, PCA9574_REG_OUT, controlBits);
 
     XP_WHITE;
 }

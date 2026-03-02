@@ -82,7 +82,6 @@ typedef struct
 // extern char current_dir[256];
 extern directoryManager_t dirManager;
 
-
 /**************************************** Global Function Declarations  *************************************/
 
 FRESULT dir_mgr_init_directories(directoryManager_t *dirManager);

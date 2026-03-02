@@ -154,6 +154,7 @@ The "Reqd?" column indicates whether the command should be implemented by the ap
 |----------------|---------------|-----------------------------------------------|-------|
 | AI (unrecognised) |            | "Unrecognised"                                | -     |
 | AI ver         |               | Returns device name and s/w build date        | Y     |
+| AI camera      |               | Returns main camera type e.g. 'RP3'           | Y     |
 | AI enable      |               | Enables the camera system                     | Y     |
 | AI disable     |               | Disabled the camera system                    | Y     |
 | AI status      |               | Reports whether the camera is enabled         | Y     |
@@ -167,6 +168,10 @@ These can be seen by typing "help" at the console.
 
 __Notes:__
 1. Set and get Operational Parameters. See [Operational_Parameters.md](Operational_Parameters.md)
+   - **Example (Testing OP19):**
+     - Get value: `AI getop 19`
+     - Set value: `AI setop 19 2`
+     - ❌ **Common mistake:** Omitting the `AI` prefix will result in "Unrecognised" error
 2. See separate document [txfile.md](txfile.md) for the details.
 
 __Other AI Processor Commands__

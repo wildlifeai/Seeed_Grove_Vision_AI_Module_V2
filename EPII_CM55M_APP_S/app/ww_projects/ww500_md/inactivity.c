@@ -96,7 +96,7 @@ void inactivity_init(uint32_t timeout_ms, void (*callback)(void)) {
 
     inactivity_setPeriod(timeout_ms);
 
-    inactivity_callback = callback;
+    inactivity_callback = callback;	// likely to call app_onInactivityDetection()
     inactivity_triggered = pdFALSE;
     idle_start_tick = 0;
     inactivity_enabled = pdTRUE;
@@ -168,7 +168,7 @@ void inactivity_IdleHook(void) {
 
     now = xTaskGetTickCount();
 
-    // Only at reset
+    // At reset and when there is a task switch - inactivity_on_task_switched_in()
     if (idle_start_tick == 0) {
         idle_start_tick = now;
     }
@@ -182,8 +182,7 @@ void inactivity_IdleHook(void) {
 
         // Execute some code that will end up entering deep power down (DPD)
         if (inactivity_callback) {
-        	//xprintf("Idle hook. ");
-            inactivity_callback();
+            inactivity_callback(); // likely to call app_onInactivityDetection()
         }
     }
 }

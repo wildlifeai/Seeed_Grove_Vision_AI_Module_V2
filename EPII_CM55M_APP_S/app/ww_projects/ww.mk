@@ -9,14 +9,16 @@ APPL_DEFINES += -DWW500
 
 # Select one of these:
 #APPL_DEFINES += -DWW500_A00
-APPL_DEFINES += -DWW500_B00
-#APPL_DEFINES += -DWW500_C00
+#APPL_DEFINES += -DWW500_B00
+# WW500_C00 means WW500_C02 as well
+APPL_DEFINES += -DWW500_C00
 
 # String available to code using app_get_board_name_string()
 # Select one of these:
 #BOARD_NAME_STRING := '"WW500_A00"'
-BOARD_NAME_STRING := '"WW500_B00"'
-#BOARD_NAME_STRING := '"WW500_C00"'
+#BOARD_NAME_STRING := '"WW500_B00"'
+# The WW500.C02 PCB has identical functionality to WW500.C00
+BOARD_NAME_STRING := '"WW500_C02"'
 
 APPL_DEFINES += -DBOARD_NAME_STRING=${BOARD_NAME_STRING}
  

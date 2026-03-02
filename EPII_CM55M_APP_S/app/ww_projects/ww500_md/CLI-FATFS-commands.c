@@ -45,6 +45,15 @@
 
 /*************************************** Definitions *******************************************/
 
+/**
+ * A tiny state machine for the txfile command
+ */
+typedef enum {
+    TXFILE_START,
+	TXFILE_TRANSMITTING,
+	TXFILE_FINISHED
+} txfile_type_t;
+
 /*************************************** External variables *******************************************/
 
 // For binary responses this is set to a value between 0 and WW130_MAX_PAYLOAD_SIZE
@@ -520,12 +529,16 @@ static BaseType_t prvReadCommand( char *pcWriteBuffer, size_t xWriteBufferLen, c
 	}
 }
 
-
 /**
  * Read file
  *
  * Assumes it is a binary file. It delivers all of the bytes in chunks of 241 bytes,
  * using the CLI facility to call this function multiple times until it returns false (complete).
+ *
+ * A tiny state machine causes different actions depending on these states:
+ * 	TXFILE_START - open the file
+	TXFILE_TRANSMITTING,
+	TXFILE_FINISHED
  *
  * See http://elm-chan.org/fsw/ff/doc/read.html
  *
@@ -534,73 +547,127 @@ static BaseType_t prvTxFileCommand( char *pcWriteBuffer, size_t xWriteBufferLen,
 	FRESULT res;
 	const char *pcParameter;
 	char fileName[FF_MAX_LFN];	// should we use this? I think it is 255
-
 	BaseType_t lParameterStringLength;
 	char line[CLI_OUTPUT_BUF_SIZE]; /* Line buffer */
 
-	static bool transmitting  = false;
+	static txfile_type_t state = TXFILE_START;
+	static uint8_t packetNum = 0;
+	static bool asciiReplacement = false;
+
+	static UINT brTotal = 0; // Accumulate bytes
 	static FIL fil;
 	UINT br;			// Bytes read
 
-	if (!transmitting) {
+	switch (state) {
+
+	case TXFILE_START:
+
 		// This is stuff to do the first time we enter this function.
 		pcParameter = FreeRTOS_CLIGetParameter(pcCommandString, 1, &lParameterStringLength);
+		asciiReplacement = false;
+		packetNum = 0;
 
 		if (pcParameter[0] == '.') {
 			// special case - use the "latest" picture file
 			// For now just hard code this
 			snprintf(fileName, IMAGEFILENAMELEN, "%s", image_getLastImageFile());
 		}
+		else if (pcParameter[0] == '-') {
+			// special case - replace file contents with ASCII
+			snprintf(fileName, FF_MAX_LFN, "%s", &pcParameter[1]);
+			asciiReplacement = true;
+		}
 		else {
 			snprintf(fileName, FF_MAX_LFN, "%s", pcParameter);
 		}
 
+
 		// Must change directory to the dirManager->current_capture_dir
 		res = f_chdir(dirManager.current_capture_dir);
 		if (res != FR_OK) {
-		    snprintf(pcWriteBuffer, xWriteBufferLen, "Failed to change directory: error %d", res);
-		    return pdFALSE;
+			snprintf(pcWriteBuffer, xWriteBufferLen, "Failed to change directory: error %d", res);
+			return pdFALSE;
 		}
 
 		//Maybe some checking here?
 		res = f_open(&fil, fileName, FA_READ);
 		if (res == FR_OK) {
 			pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen, "%d bytes in %s", (int) f_size(&fil), fileName);
-			transmitting = true;
+			state = TXFILE_TRANSMITTING;
 			return pdTRUE;
 		}
 		else {
 			pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen, "Failed to open '%s'. (%u)", fileName, res);
 			return pdFALSE;
 		}
-	}
+		break;
 
-	// Here on the second and subsequent calls, until the file is all read.
+	case TXFILE_TRANSMITTING:
+		// Here on the second and subsequent calls, until the file is all read.
 
-	// Read 244 - 3 bytes (since we will pre-pend 3 bytes)
-	res = f_read(&fil, line, (CLI_OUTPUT_BUF_SIZE - 3), &br);
+		// Read 244 - 3 bytes (since we will pre-pend 3 bytes)
+		res = f_read(&fil, line, (CLI_OUTPUT_BUF_SIZE - 3), &br);
 
-	if (res == FR_OK) {
-		memcpy(pcWriteBuffer, line, br);
-		binaryLength = br;	// Changed here from -1 to the actual data length, to be accessed in processCommand()
-		if (br == (CLI_OUTPUT_BUF_SIZE - 3)) {
-			// We have read 241 bytes and there are probably more to come.
-			return pdTRUE;
+		if (res == FR_OK) {
+			if (asciiReplacement) {
+				// send ASCII binary pattern instead
+				// always in the range 0-9
+				memset(pcWriteBuffer, ((packetNum % 10) + '0'), br);
+			}
+			else {
+				memcpy(pcWriteBuffer, line, br);
+			}
+			packetNum++;
+
+			binaryLength = br;	// Changed here from -1 to the actual data length, to be accessed in processCommand()
+			brTotal += br;
+			if (br == (CLI_OUTPUT_BUF_SIZE - 3)) {
+				// We have read 241 bytes and there are probably more to come.
+				return pdTRUE;
+			}
+			else {
+				// No data left
+				f_close(&fil);
+				state = TXFILE_FINISHED;
+				return pdTRUE;
+			}
 		}
 		else {
-			// No data left
+			// error
+			binaryLength = NOTBINARY;	// Indicate the message is text, not binary
+			pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen, "Error reading file. (%u)", res);
 			f_close(&fil);
-			transmitting = false;
+			state = TXFILE_START;
+			brTotal = 0;
 			return pdFALSE;
 		}
-	}
-	else {
-		// error
-		pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen, "Error reading file. (%u)", res);
-		f_close(&fil);
-		transmitting = false;
+		break;
+
+	case TXFILE_FINISHED:
+		// Here when all the file has been transmitted.
+		// Send a text message to move the BLE processor out of binary mode
+		binaryLength = NOTBINARY;	// Indicate the message is text, not binary
+
+		pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen,
+				"Finished sending %u bytes (%d packets)", brTotal, packetNum);
+		state = TXFILE_START;
+		brTotal = 0;
+
+		packetNum = 0;
+		asciiReplacement = false;
+
 		return pdFALSE;
-	}
+		break;
+
+	default:
+		// should not happen
+		state = TXFILE_START;
+		brTotal = 0;
+		packetNum = 0;
+		asciiReplacement = false;
+		return pdFALSE;
+		break;
+	} // switch
 }
 
 /**

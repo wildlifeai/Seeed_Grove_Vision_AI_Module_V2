@@ -85,9 +85,10 @@ SECTIONS
         *(.noinit*)
     } > CM55M_S_SRAM
 
-    /* Reserve a fixed block for TensorFlow Lite arena */
+    /* Reserve a fixed block for TensorFlow Lite arena. "TensorFlow Lite Micro often expects 16- or 32-byte alignment." */
     .tensor_arena (NOLOAD) :
     {
+	    . = ALIGN(32);
         __tensor_arena_start__ = .;
         . = . + 512K;   /* reserve 512 KB */
         __tensor_arena_end__ = .;

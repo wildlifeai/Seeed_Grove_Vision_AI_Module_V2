@@ -135,7 +135,7 @@ I2CCOMM_CFG_T gI2CCOMM_cfg = {
 extern QueueHandle_t     xCliTaskQueue;
 extern QueueHandle_t     xFatTaskQueue;
 extern Barrier_t startupBarrier;  // Object that calls a function when all tasks are ready
-
+extern Barrier_t shutdownBarrier;  // Object that calls a function when all tasks are ready to shut down
 
 /*************************************** Local variables *******************************************/
 
@@ -145,7 +145,6 @@ static APP_WAKE_REASON_E woken;
 static USE_DW_IIC_SLV_E iic_id;
 
 SemaphoreHandle_t xI2CTxSemaphore;
-SemaphoreHandle_t xIfCanSleepSemaphore;
 
 // This is the handle of the task
 TaskHandle_t 	ifTask_task_id;
@@ -222,6 +221,8 @@ const char *cmdString[] = {
 //const char * lastMessage = "Sleep";
 
 bool lastMessageSent = false;
+
+bool sendWakeMsg = false;
 
 /*********************************** I2C Local Function Definitions ************************************************/
 
@@ -318,13 +319,17 @@ static void i2csErrorEvent(void *param) {
  *
  * Called from within the ifTask loop in response to the interrupt callback in i2cs_cb_tx()
  *
+ * I think this will only happen if the BLE processor (which is the I2C master)
+ * has performed the I2C read and so has accepted the previous packet from us.
+ *
  * This readies us for a new command from the master
  */
 static void i2cTransmissionComplete(void) {
 
 	dbg_evt_iics_cmd("I2C transmission complete.\n");
 
-	// Release the I2C semaphore
+	// Release the I2C semaphore - the CLI task may be waiting on this before processing
+	// further commands (including transfer of multiple chunks of JPEG file data).
 	xSemaphoreGive(xI2CTxSemaphore);
 
     // Prepare for the next incoming message
@@ -357,7 +362,7 @@ static void i2cRxDataReady(void) {
 	dbg_evt_iics_cmd("Received I2C message.\n");
 
 	XP_LT_GREY;
-	// Let's print the message
+	// Let's print the message: 4 bytes header, payload, 2 bytes CRC
 	printf_x_printBuffer(gRead_buf, (I2CCOMM_HEADER_SIZE + length + I2CCOMM_CHECKSUM_SIZE ));
 	XP_WHITE;
 
@@ -438,7 +443,7 @@ static void i2cError(void) {
  *
  * Calls hx_lib_i2ccomm_enable_write() and response arrives in i2cs_cb_rx()
  *
- * @param message = pointer to the buffer containing the message
+ * @param message = pointer to the buffer containing the message (null-terminated if a string)
  * @param messageType =
  * @param length = number of bytes to send
  */
@@ -464,8 +469,20 @@ static void i2ccomm_write_enable(uint8_t * message, aiProcessor_msg_type_t messa
     gWrite_buf[I2CCOMM_HEADER_SIZE + length] = (checksum >> 8) & 0xff;
     gWrite_buf[I2CCOMM_HEADER_SIZE + length + 1] = checksum & 0xff;
 
-    dbg_evt_iics_cmd("Sending %d payload bytes. Checksum generated: 0x%04x Sending %d bytes in total\n",
-    		length, checksum, (I2CCOMM_HEADER_SIZE + length + I2CCOMM_CHECKSUM_SIZE));
+    dbg_evt_iics_cmd("Sending %d bytes: Header %d, payload %d, checksum %d",
+    		(I2CCOMM_HEADER_SIZE + length + I2CCOMM_CHECKSUM_SIZE),
+			I2CCOMM_HEADER_SIZE,
+			length,
+			I2CCOMM_CHECKSUM_SIZE
+    );
+
+    // if it's s atring then print it (it will be null-terminated)
+    if (messageType == AI_PROCESSOR_MSG_RX_STRING) {
+    	dbg_evt_iics_cmd(" '%s'\n", (char *) message);
+    }
+    else {
+    	dbg_evt_iics_cmd("\n");
+    }
 
     // This is a wrapper around SCB_CleanDCache_by_Addr() - ensures that any data in the D-cache is committed to RAM
     hx_CleanDCache_by_Addr((void *) gWrite_buf, I2CCOMM_MAX_RBUF_SIZE);
@@ -566,6 +583,8 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 		break;
 
 	case APP_MSG_IFTASK_AWAKE:
+#ifdef SENDMSGEARLY
+		// else send when APP_MSG_IFTASK_FREERTOS_INIT arrives
 		// We have just woken, so send a message to the BLE processor
 		// Include the AI's time
 		if (woken == APP_WAKE_REASON_MD) {
@@ -577,7 +596,35 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 			snprintf(message, sizeof(message), "Wake ");
 			exif_utc_get_rtc_as_utc_string(&message[5], UTCSTRINGLENGTH );
 		}
-		sendI2CMessage((uint8_t *) message, AI_PROCESSOR_MSG_RX_STRING, 5 + UTCSTRINGLENGTH );
+
+		if_task_state = APP_IF_STATE_I2C_TX;
+#endif // SENDMSGEARLY
+		break;
+
+	case APP_MSG_IFTASK_FREERTOS_INIT:
+		// Here when the last FreeRTOStask has done its one-off initialisation
+		// Time to send selfTest bits to BLE processor.
+#ifdef SENDMSGEARLY
+		// Report any error bits to the BLE processor
+		snprintf(message, sizeof(message), "selfTest %04x", selfTest_getErrorBits());
+#else
+		if (woken == APP_WAKE_REASON_MD) {
+			// Special wake message if the wake was due to motion detection
+			snprintf(message, sizeof(message), "MD ");
+			exif_utc_get_rtc_as_utc_string(&message[3], UTCSTRINGLENGTH );
+		}
+		else if (woken == APP_WAKE_REASON_TIMER) {
+			// Special wake message if the wake was due to timer
+			snprintf(message, sizeof(message), "Timer ");
+			exif_utc_get_rtc_as_utc_string(&message[6], UTCSTRINGLENGTH );
+		}
+		else {
+			snprintf(message, sizeof(message), "Wake ");
+			exif_utc_get_rtc_as_utc_string(&message[5], UTCSTRINGLENGTH );
+		}
+#endif // SENDMSGEARLY
+
+		sendI2CMessage((uint8_t *) message, AI_PROCESSOR_MSG_RX_STRING, strlen(message) );
 		if_task_state = APP_IF_STATE_I2C_TX;
 		break;
 
@@ -600,16 +647,6 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 
 		break;
 
-	case APP_MSG_IFTASK_FREERTOS_INIT:
-		// Here when the last FreeRTOStask has done its one-off initialisation
-		// Time to send selfTest bits to BLE processor.
-
-		// Report any error bits to the AT processor
-		snprintf(message, sizeof(message), "selfTest %04x", selfTest_getErrorBits());
-
-		sendI2CMessage((uint8_t *) message, AI_PROCESSOR_MSG_RX_STRING, strlen(message) );
-
-		break;
 
 #ifdef TEST_INT_PULSE
 	case APP_MSG_IFTASK_I2CCOMM_PA0_INT_OUT:
@@ -728,15 +765,15 @@ static APP_MSG_DEST_T  handleEventForStateI2CTx(APP_MSG_T rxMessage) {
 	//data = rxMessage.msg_data;
 
 	switch (event) {
+
 	case APP_MSG_IFTASK_I2CCOMM_TX_DONE:
 		i2cTransmissionComplete();
 		if_task_state = APP_IF_STATE_IDLE;
 
 		if (lastMessageSent) {
 			// special case just before entering DPD.
-			xprintf("DEBUG: giving semaphore\n");
-			// The semaphore lets the Image Task enter DPD
-			xSemaphoreGive(xIfCanSleepSemaphore);
+			xprintf("IF task ready to sleep.\n");
+			barrier_ready(&shutdownBarrier);
 		}
 		break;
 
@@ -758,6 +795,14 @@ static APP_MSG_DEST_T  handleEventForStateI2CTx(APP_MSG_T rxMessage) {
 	case APP_MSG_IFTASK_I2CCOMM_PA0_INT_IN:
 		// Not used at the moment
 		break;
+
+	case APP_MSG_IFTASK_I2CCOMM_RX_READY:
+		// Message has arrive while we are trying to send one ourselves!
+		// TODO check this is safe to defer this event
+
+	case APP_MSG_IFTASK_MSG_TO_MASTER:
+		// Here when a second request to send a message happens while still sending the first
+		// fall through deliberately
 
 	case APP_MSG_IFTASK_I2CCOMM_CLI_STRING_RESPONSE ... APP_MSG_IFTASK_I2CCOMM_CLI_BINARY_CONTINUES:
 		// This could happen if the ifTask is still sending a previous message
@@ -1524,6 +1569,9 @@ static uint16_t app_i2ccomm_init(void) {
  * Called in preparation for receiving a command from the I2C master
  */
 static void clear_read_buf_header(void) {
+
+	// TODO - why? it trashes anything in the gRead_buf
+	return;
     memset((void *)gRead_buf, 0xff, 4);
 
     // This is a wrapper around SCB_CleanDCache_by_Addr() - ensures that any data in the D-cache is committed to RAM
@@ -1610,14 +1658,6 @@ TaskHandle_t ifTask_createTask(int8_t priority, uint8_t wakeReason) {
 		configASSERT(0);	// TODO add debug messages?
 	}
 
-	// Semaphore to flag that the final message has been sent and we can enter DPD
-	xIfCanSleepSemaphore = xSemaphoreCreateBinary();
-
-	if(xIfCanSleepSemaphore == NULL) {
-		xprintf("Failed to create xIfCanSleepSemaphore\n");
-		configASSERT(0);	// TODO add debug messages?
-	}
-
 	// Now must release the I2C semaphore
 	xSemaphoreGive(xI2CTxSemaphore);
 
@@ -1647,10 +1687,10 @@ const char * ifTask_getStateString(void) {
 	return * &ifTaskStateString[if_task_state];
 }
 
-// Callback for when all tasks have started and done their initialisation
 
 /**
  * Callback for when all tasks have started and done their initialisation
+ *
  * - when the barrier mechanism determines all tasks have reached their for(;;) loop
  */
 void ifTask_allTasksReady(void) {

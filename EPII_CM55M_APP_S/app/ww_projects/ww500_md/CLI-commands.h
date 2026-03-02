@@ -34,7 +34,8 @@
 
 #define CLI_CMD_LINE_BUF_SIZE       80
 #define CLI_OUTPUT_BUF_SIZE         WW130_MAX_PAYLOAD_SIZE
-
+// Used to indicate that a buffer contains a string
+#define NOTBINARY -1
 
 TaskHandle_t cli_createTask(int8_t priority, APP_WAKE_REASON_E wakeReason);
 

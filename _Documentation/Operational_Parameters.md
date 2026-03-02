@@ -152,6 +152,20 @@ Those comments preceding the first index/value pair are preserved when the file 
 |    11 | OP_PARAMETER_MD_INTERVAL              | 1000          | Interval (ms) between frames in motion detect mode (0 inhibits motion detection)|
 |    12 | OP_PARAMETER_FLASH_DURATION           | 100           | Duration (ms) that LED flash is on                  |
 |    13 | OP_PARAMETER_FLASH_LED                | 0             | LED bit mask: visible LED used = 1, infra-red LED used =2, none = 0              |
+|    14 | OP_PARAMETER_MODEL_PROJECT             | 0             |Model project ID used for the NN model|
+|    15 | OP_PARAMETER_MODEL_VERSION             | 0             | Model version number used for the NN model |
+|    16 | OP_PARAMETER_MODEL_THRESHOLD            | 0             | Logit threshold for detection (0-127) |
+|    17 | Reserved                              | 0             | Reserved for future use |
+|    18 | Reserved                              | 0             | Reserved for future use |
+|    19 | Reserved                              | 0             | Reserved for future use |
+|    20 | OP_PARAMETER_DEPLOYMENT_ID_CHUNK_1    | 0             | Deployment ID hex chars 0-3 |
+|    21 | OP_PARAMETER_DEPLOYMENT_ID_CHUNK_2    | 0             | Deployment ID hex chars 4-7 |
+|    22 | OP_PARAMETER_DEPLOYMENT_ID_CHUNK_3    | 0             | Deployment ID hex chars 8-11 |
+|    23 | OP_PARAMETER_DEPLOYMENT_ID_CHUNK_4    | 0             | Deployment ID hex chars 12-15 |
+|    24 | OP_PARAMETER_DEPLOYMENT_ID_CHUNK_5    | 0             | Deployment ID hex chars 16-19 |
+|    25 | OP_PARAMETER_DEPLOYMENT_ID_CHUNK_6    | 0             | Deployment ID hex chars 20-23 |
+|    26 | OP_PARAMETER_DEPLOYMENT_ID_CHUNK_7    | 0             | Deployment ID hex chars 24-27 |
+|    27 | OP_PARAMETER_DEPLOYMENT_ID_CHUNK_8    | 0             | Deployment ID hex chars 28-31 |
 
 
 ## Syncronisation with BLE Processor Code
@@ -221,5 +235,21 @@ to further control the operation of the WW500. These might include:
 	OP_PARAMETER_NN_X_RESOLUTION	// Camera image is scaled to this X resolution to provide to the NN
 	OP_PARAMETER_NN_Y_RESOLUTION	// Camera image is scaled to this Y resolution to provide to the NN
 ```	
+
+## Deployment ID (OP20-OP27)
+
+The deployment ID is a UUID identifying the project deployment. Due to Bluetooth MTU limitations on mobile devices (many Android devices cannot negotiate MTU >27 bytes), the 36-character UUID is split into 8 chunks (4 hex characters each) and transmitted as 16-bit integers via the existing `setop` command.
+
+**Reconstruction Algorithm (per FIRMWARE_DEPLOYMENT_ID_SPEC.md):**
+1. Read OP20-OP27
+2. If all are 0: deployment ID = `00000000-0000-0000-0000-000000000000` (no deployment)
+3. Otherwise: convert each to 4-char hex string (with leading zeros), concatenate, insert hyphens at positions 8, 12, 16, 20
+
+**Example:**
+- OP20=21774 (0x550E), OP21=33792 (0x8400), OP22=58011 (0xE29B), OP23=16852 (0x41D4)
+- OP24=42774 (0xA716), OP25=17510 (0x4466), OP26=21828 (0x5544), OP27=0 (0x0000)
+- **Result:** `550e8400-e29b-41d4-a716-446655440000`
+
+**Storage:** Deployment ID is embedded in EXIF metadata (tag 0xF200) when images are captured. The reconstruction function `fatfs_getDeploymentId()` is called during image capture to build the UUID string from the operational parameters.
 
 

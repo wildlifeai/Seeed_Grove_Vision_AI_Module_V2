@@ -1,7 +1,7 @@
-# Ignore the .metadata directory 
+# Ignore the .metadata directory
 .metadata/
 
-# These are desciptions of the chip
+# These are descriptions of the chip
 *.svd
 
 # Prerequisites
@@ -45,8 +45,24 @@ we2_image_gen_local/Images*.txt
 *.map
 *.img
 
-we2_image_gen_local_dpd/
+# ---------------------------
+# DPD generated files
+# ---------------------------
 
+# Ignore everything inside output_case1_sec_wlcsp
+we2_image_gen_local_dpd/output_case1_sec_wlcsp/**
+
+# But keep the folder itself
+!we2_image_gen_local_dpd/output_case1_sec_wlcsp/
+
+# Keep the golden reference image
+!we2_image_gen_local_dpd/output_case1_sec_wlcsp/output.img
+
+# Track all other subfolders normally (do not ignore their contents)
+# No need to do anything else — they are tracked by default
+
+
+# Editor config
 .vscode/
 
 # Node.js dependencies

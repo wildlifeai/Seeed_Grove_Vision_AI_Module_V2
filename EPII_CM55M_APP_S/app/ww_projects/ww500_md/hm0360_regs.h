@@ -82,6 +82,14 @@
 #define         BINNING_MODE                    0x0382
 // Test pattern control
 #define         TEST_PATTERN_MODE               0x0601
+#define         TEST_DATA_BLUE_H                0x0602
+#define         TEST_DATA_BLUE_L                0x0603
+#define         TEST_DATA_GB_H                  0x0604
+#define         TEST_DATA_GB_L                  0x0605
+#define         TEST_DATA_GR_H                  0x0606
+#define         TEST_DATA_GR_L                  0x0607
+#define         TEST_DATA_RED_H                 0x0608
+#define         TEST_DATA_RED_L                 0x0609
 // Black level control
 #define         BLC_TGT                         0x1004
 #define         BLC2_TGT                        0x1009

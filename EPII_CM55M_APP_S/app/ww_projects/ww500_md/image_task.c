@@ -1775,6 +1775,7 @@ static bool configure_image_sensor(CAMERA_CONFIG_E operation) {
         else if (cisdp_sensor_init(true) != 0)    {
         	// HM0360 reported: Memory allocated: 921600 for raw buffer, 76800 for JPEG, 100 for JPEG header
         	// until I changed RAW_BUFSIZE. Then:
+        	// Memory allocated: 460800 for raw buffer, 76800 for JPEG, 100 for JPEG header
         	// RP3 camera reports: Memory allocated: 460800 for raw buffer, 46256 for JPEG, 100 for JPEG header
         	xprintf("\r\nCIS Init fail\r\n");
         	processedOK = false;

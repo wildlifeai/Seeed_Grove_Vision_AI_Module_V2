@@ -295,7 +295,7 @@ static FRESULT fileWriteImage(fileOperation_t *fileOp, directoryManager_t *dirMa
 	}
 
 	XP_GREEN
-	xprintf("Wrote image to SD: %s ", fileOp->fileName);
+	xprintf("Wrote %d byte image to SD: %s ", fileOp->length, fileOp->fileName);
 	XP_WHITE;
 
 	exif_utc_get_rtc_as_time(&time);

@@ -313,7 +313,8 @@ static fileOperation_t fileOp;
 // This is a value passed to cisdp_dp_init()
 // where the comment is "JPEG Encoding quantization table Selection (4x or 10x)"
 // the cisdp_dp_init() code says this can be 4 for JPEG_ENC_QTABLE_4X else JPEG_ENC_QTABLE_10X
-uint32_t g_jpeg_ratio;
+// Experimentally, x4 gives bigger files and better quality
+uint32_t g_jpg_ratio;
 
 static uint16_t g_imageSeqNum; // 0 indicates no SD card
 
@@ -736,8 +737,6 @@ static APP_MSG_DEST_T handleEventForInit(APP_MSG_T img_recv_msg) {
 
     case APP_MSG_IMAGETASK_INACTIVITY:
         // Inactivity detected. Prepare to enter DPD, saving state if possible.
-    	// run some sensordplib_stop functions then run HM0360_stream_off commands to the HM0360
-        configure_image_sensor(CAMERA_CONFIG_STOP);
 
         if (fatfs_getImageSequenceNumber() > 0)  {
             // TODO - can we call this without the if() and expect fatfs_task to handle it?
@@ -825,11 +824,16 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
     case APP_MSG_IMAGETASK_FRAME_READY:
         // Here when the image sub-system has captured an image - via os_app_dplib_cb() callback.
 
-#ifdef INVESTIGATE_FLASH_BRIGHTNESS
-        incrementBrightness();
-#endif // INVESTIGATE_FLASH_BRIGHTNESS
+        g_cur_jpegenc_frame++; // The number in this sequence
+        g_frames_total++;      // The number since the start of time.
 
-    	ledFlashDisable(); // finished with the LED flash. Turn it off.
+#ifdef USE_HM0360_CAPTURE_TIMER
+        if (g_cur_jpegenc_frame == g_captures_to_take) {
+        	// Turn of the HM0360 ASAP to supress unwanted cycles, esp. of teh LED flash
+        	hm0360_md_setMode(CONTEXT_A, MODE_SLEEP, 0, 0);
+        	//hm0360_md_setMode(CONTEXT_A, MODE_SW_NFRAMES_SLEEP, 1, 0);
+        }
+#endif // USE_HM0360_CAPTURE_TIMER
 
 #if defined(USE_HM0360) || defined(USE_HM0360_MD)
         // By deferring the clearing of the interrupt till here we can measure the latency of interrupt to image captured.
@@ -837,8 +841,11 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
         hm0360_md_clearInterrupt(0xff); // clear all bits
 #endif
 
-        g_cur_jpegenc_frame++; // The number in this sequence
-        g_frames_total++;      // The number since the start of time.
+#ifdef INVESTIGATE_FLASH_BRIGHTNESS
+        incrementBrightness();
+#endif // INVESTIGATE_FLASH_BRIGHTNESS
+
+        ledFlashDisable(); // finished with the LED flash. Turn it off.
 
         // measure time for the frame capture just completed
         xprintf("Image capture %d/%d took %dms\n\n", g_cur_jpegenc_frame, g_captures_to_take, app_getElapsedMs(startTime));
@@ -879,7 +886,7 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
         // This is a test to see if/how these change with illumination
         hm0360_md_getGainRegs(&gain);
 
-        snprintf(msgToMaster, MSGTOMASTERLEN, "Gain regs:\n  Integration time = %d lines\n  Analog gain = %d\n  Digital gain = %d\n  AE Mean = %d\n  AEConverged?: %c",
+        snprintf(msgToMaster, MSGTOMASTERLEN, "HM0360 AE regs:\n  Integration time = %d lines\n  Analog gain = %d\n  Digital gain = %d\n  AE Mean = %d\n  AEConverged?: %c",
         		gain.integration,
 				gain.analogGain,
 				gain.digitalGain,
@@ -1102,7 +1109,7 @@ static APP_MSG_DEST_T handleEventForNNProcessing(APP_MSG_T img_recv_msg) {
         if (g_cur_jpegenc_frame == g_captures_to_take) {
         	captureSequenceComplete();
         	// Stop the image sensor.
-        	configure_image_sensor(CAMERA_CONFIG_STOP);
+        	// move to earlier: configure_image_sensor(CAMERA_CONFIG_STOP);
         	image_task_state = APP_IMAGE_TASK_STATE_INIT;
         }
         else  {
@@ -1440,13 +1447,14 @@ static void vImageTask(void *pvParameters) {
     g_cur_jpegenc_frame = 0;
     g_captures_to_take = 0;
     g_timer_period = 0;
-#if 4XRATIO
-    // selects JPEG_ENC_QTABLE_4X
-    g_jpeg_ratio = 4;
+#define QTABLE_4X
+#ifdef QTABLE_4X
+    // selects JPEG_ENC_QTABLE_4X = better quality
+    g_jpg_ratio = 4;
 #else
     // selects JPEG_ENC_QTABLE_10X
-    g_jpeg_ratio = 0;
-#endif // 4XRATIO
+    g_jpg_ratio = 0;
+#endif // QTABLE_4X
     g_imageSeqNum = 0; // 0 indicates no SD card
     g_wdt_event = false;
 
@@ -1765,6 +1773,9 @@ static bool configure_image_sensor(CAMERA_CONFIG_E operation) {
         	processedOK = false;
         }
         else if (cisdp_sensor_init(true) != 0)    {
+        	// HM0360 reported: Memory allocated: 921600 for raw buffer, 76800 for JPEG, 100 for JPEG header
+        	// until I changed RAW_BUFSIZE. Then:
+        	// RP3 camera reports: Memory allocated: 460800 for raw buffer, 46256 for JPEG, 100 for JPEG header
         	xprintf("\r\nCIS Init fail\r\n");
         	processedOK = false;
         }
@@ -1774,7 +1785,7 @@ static bool configure_image_sensor(CAMERA_CONFIG_E operation) {
 
         	// if wdma variable is zero when not init yet, then this step is a must be to retrieve wdma address
         	//  Datapath events give callbacks to os_app_dplib_cb()
-        	if (cisdp_dp_init(true, SENSORDPLIB_PATH_INT_INP_HW5X5_JPEG, os_app_dplib_cb, g_jpeg_ratio, APP_DP_RES_YUV640x480_INP_SUBSAMPLE_1X) < 0) {
+        	if (cisdp_dp_init(true, SENSORDPLIB_PATH_INT_INP_HW5X5_JPEG, os_app_dplib_cb, g_jpg_ratio, APP_DP_RES_YUV640x480_INP_SUBSAMPLE_1X) < 0) {
         		xprintf("\r\nDATAPATH Init fail\r\n");
         		return false;
         	}
@@ -1795,7 +1806,7 @@ static bool configure_image_sensor(CAMERA_CONFIG_E operation) {
         else  {
             // if wdma variable is zero when not init yet, then this step is a must be to retrieve wdma address
             //  Datapath events give callbacks to os_app_dplib_cb() in dp_task
-            if (cisdp_dp_init(true, SENSORDPLIB_PATH_INT_INP_HW5X5_JPEG, os_app_dplib_cb, g_jpeg_ratio, APP_DP_RES_YUV640x480_INP_SUBSAMPLE_1X) < 0)  {
+            if (cisdp_dp_init(true, SENSORDPLIB_PATH_INT_INP_HW5X5_JPEG, os_app_dplib_cb, g_jpg_ratio, APP_DP_RES_YUV640x480_INP_SUBSAMPLE_1X) < 0)  {
                 xprintf("\r\nDATAPATH Init fail\r\n");
                 return false;
             }
@@ -1807,7 +1818,7 @@ static bool configure_image_sensor(CAMERA_CONFIG_E operation) {
     	if (!cameraSystemEnabled) {
     		processedOK = false;
     	}
-    	else if (cisdp_dp_init(true, SENSORDPLIB_PATH_INT_INP_HW5X5_JPEG, os_app_dplib_cb, g_jpeg_ratio, APP_DP_RES_YUV640x480_INP_SUBSAMPLE_1X) < 0) {
+    	else if (cisdp_dp_init(true, SENSORDPLIB_PATH_INT_INP_HW5X5_JPEG, os_app_dplib_cb, g_jpg_ratio, APP_DP_RES_YUV640x480_INP_SUBSAMPLE_1X) < 0) {
     		xprintf("\r\nDATAPATH Init fail\r\n");
     		processedOK = false;
     	}
@@ -1847,7 +1858,7 @@ static bool configure_image_sensor(CAMERA_CONFIG_E operation) {
     	if (!cameraSystemEnabled) {
     		processedOK = false;
     	}
-    	else if (cisdp_dp_init(true, SENSORDPLIB_PATH_INT_INP_HW5X5_JPEG, os_app_dplib_cb, g_jpeg_ratio, APP_DP_RES_YUV640x480_INP_SUBSAMPLE_1X) < 0) {
+    	else if (cisdp_dp_init(true, SENSORDPLIB_PATH_INT_INP_HW5X5_JPEG, os_app_dplib_cb, g_jpg_ratio, APP_DP_RES_YUV640x480_INP_SUBSAMPLE_1X) < 0) {
     		xprintf("\r\nDATAPATH Init fail\r\n");
     		processedOK = false;
     	}
@@ -2676,6 +2687,7 @@ TaskHandle_t image_createTask(int8_t priority, APP_WAKE_REASON_E wakeReason) {
     // return the task handle
     return image_task_id;
 }
+
 
 /**
  * Returns the internal state as a number

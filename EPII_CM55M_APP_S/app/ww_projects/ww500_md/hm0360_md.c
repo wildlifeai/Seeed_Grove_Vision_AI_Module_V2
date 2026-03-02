@@ -89,6 +89,14 @@ static void restoreMainCameraConfig(void) {
 static uint16_t calculateSleepTime(uint32_t interval) {
 	uint32_t sleepCount;
 
+//	// Make sure this has a minimum else we get multiple pulses of the LED etc
+//	if (interval < 100) {
+//		sleepCount = 100 * 0x8030 / 1000;
+//	}
+//	else {
+//		sleepCount = interval * 0x8030 / 1000;
+//	}
+
 	sleepCount = interval * 0x8030 / 1000;
 
 	// Make sure this does not exceed 16 bits
@@ -272,7 +280,7 @@ HX_CIS_ERROR_E hm0360_md_setMode(uint8_t context, mode_select_t newMode,
 	// Stay in MODE_SW_NFRAMES_SLEEP, set slowest possible frame rate, inhibit MD interrupts
 	if (sleepTime == 0) {
 		sleepCount = 0xffff;	// maximum value = slowest rate
-		xprintf("Inhibiting MD\n");
+		xprintf("   Inhibiting MD\n");
 
 		// Disable MD interrupt
 		hm0360_md_disableInterrupt();
@@ -562,10 +570,15 @@ HX_CIS_ERROR_E hm0360_md_prepare(bool cameraSystemEnabled, uint16_t mdFrameInter
 
 	if (cameraSystemEnabled) {
 		mdInterval = mdFrameInterval;
-		dbg_printf(DBG_LESS_INFO, "   HM0360 Motion Detection on! %dms frame interval\r\n", mdFrameInterval);
 	}
 	else {
 		mdInterval = 0;
+	}
+
+	if (mdInterval > 0) {
+		dbg_printf(DBG_LESS_INFO, "   HM0360 Motion Detection on! %dms frame interval\r\n", mdFrameInterval);
+	}
+	else {
 		dbg_printf(DBG_LESS_INFO, "   HM0360 Motion Detection off.\r\n");
 	}
 

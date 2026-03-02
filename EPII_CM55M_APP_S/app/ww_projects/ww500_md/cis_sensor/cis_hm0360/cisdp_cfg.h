@@ -267,13 +267,15 @@ typedef enum
 #define DP_JPEG_PATH				JPEG_PATH_ENCODER_EN
 #define DP_JPEG_ENC_WIDTH 			DP_HW5X5_OUT_WIDTH
 #define DP_JPEG_ENC_HEIGHT 			DP_HW5X5_OUT_HEIGHT
-// CGP these were the original settings: YV420 (no point with mono camera) and lower JPEG quality:
-//#define DP_JPEG_ENCTYPE 			JPEG_ENC_TYPE_YUV420
-//#define DP_JPEG_ENCQTABLE 			JPEG_ENC_QTABLE_10X
-// Changed to:
-#define DP_JPEG_ENCTYPE 			JPEG_ENC_TYPE_YUV400
-#define DP_JPEG_ENCQTABLE 			JPEG_ENC_QTABLE_4X
 
+// CGP these were the original settings: YV420 (no point with mono camera) and lower JPEG quality:
+#define DP_JPEG_ENCTYPE 			JPEG_ENC_TYPE_YUV420
+//#define DP_JPEG_ENCQTABLE 			JPEG_ENC_QTABLE_10X // lower quality
+
+// Should this be:
+//#define DP_JPEG_ENCTYPE 			JPEG_ENC_TYPE_YUV400
+#define DP_JPEG_ENCQTABLE 			JPEG_ENC_QTABLE_4X	// higher quality
+// NOTE: If I use YUV400 then the test patterns are B&W. If I use YUV420 they are in colour.
 
 
 #endif /* APP_SCENARIO_CISDP_CFG_H_ */

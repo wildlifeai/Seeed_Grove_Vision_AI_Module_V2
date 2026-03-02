@@ -42,4 +42,6 @@ TaskHandle_t cli_createTask(int8_t priority, APP_WAKE_REASON_E wakeReason);
 uint16_t cli_getState(void);
 const char * cli_getStateString(void);
 
+BaseType_t cli_append(char **buf, size_t *len, const char *fmt, ...);
+
 #endif /* CLI_COMMANDS_H_ */

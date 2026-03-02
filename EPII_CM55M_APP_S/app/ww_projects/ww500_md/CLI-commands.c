@@ -268,7 +268,6 @@ static void processSingleCharacter(char rxChar);
 static void processCommand(char *rxString);
 static bool startsWith(char *a, const char *b);
 
-
 /********************************** Structures that define CLI commands  *************************************/
 
 /* Structure that defines the "ps" command line command. */
@@ -538,25 +537,22 @@ static BaseType_t prvTaskStatsCommand(char *pcWriteBuffer, size_t xWriteBufferLe
 // Displays a table showing the internal states of WW tasks
 // This function has hard-coded calls to functions within the tasks themselves,
 // So must be updated to reflect the actual tasks and functions in use.
-static BaseType_t prvTaskStateCmd(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString)
-{
+static BaseType_t prvTaskStateCmd(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) {
 	const char *const pcHeader = "Task  State #    State Name	Priority\r\n*************************************";
 	static bool listing = false;
 	static uint8_t i = 0;
 
-	if (!listing)
-	{ // Do this the first time through
+	if (!listing) { // Do this the first time through
 		listing = true;
 		strcpy(pcWriteBuffer, pcHeader);
 		// Return for the task details one at a time
 		return pdTRUE;
 	}
 
-	if (i < NUMBEROFTASKS)
-	{
+	if (i < NUMBEROFTASKS) {
 		// for some reason this returns 0 always, so no point in printing it:
 		// uxTaskGetTaskNumber(internalStates[i].task_id)
-		pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen, "%s\t%d\t%s\t%d",
+		snprintf(pcWriteBuffer, xWriteBufferLen, "%s\t%d\t%s\t%d",
 								  pcTaskGetTaskName(internalStates[i].task_id),
 								  (int)internalStates[i].getState(),
 								  internalStates[i].stateString(),
@@ -564,15 +560,13 @@ static BaseType_t prvTaskStateCmd(char *pcWriteBuffer, size_t xWriteBufferLen, c
 		i++;
 	}
 
-	if (i == NUMBEROFTASKS)
-	{
+	if (i == NUMBEROFTASKS) {
 		// Done. reset static variables
 		listing = false;
 		i = 0;
 		return pdFALSE;
 	}
-	else
-	{
+	else {
 		// Return for more
 		return pdTRUE;
 	}
@@ -588,15 +582,15 @@ static BaseType_t prvTaskStateCmd(char *pcWriteBuffer, size_t xWriteBufferLen, c
 //	if (pcParameter != NULL) {
 //		if (pcParameter[0] == '0') {
 //			verbose = false;
-//			pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen, "Verbose is off\r\n");
+//			cli_append(&pcWriteBuffer, &xWriteBufferLen, "Verbose is off\r\n");
 //		} else if (pcParameter[0] == '1') {
-//			pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen, "Verbose is on\r\n");
+//			cli_append(&pcWriteBuffer, &xWriteBufferLen, "Verbose is on\r\n");
 //			verbose = true;
 //		} else {
-//			pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen, "Must supply 0 (Disable) or 1 (Enable)\r\n");
+//			cli_append(&pcWriteBuffer, &xWriteBufferLen, "Must supply 0 (Disable) or 1 (Enable)\r\n");
 //		}
 //	} else {
-//		pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen, "Must supply 0 (Disable) or 1 (Enable)\r\n");
+//		cli_append(&pcWriteBuffer, &xWriteBufferLen, "Must supply 0 (Disable) or 1 (Enable)\r\n");
 //	}
 //
 //	return pdFALSE;
@@ -868,7 +862,7 @@ static BaseType_t prvLedFlash(char *pcWriteBuffer, size_t xWriteBufferLen, const
 	paramLong = strtol(pcParameter, &endptr, 10);
 
 	if (endptr == pcParameter || paramLong < 0 || paramLong > 100) {
-		pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen,
+		cli_append(&pcWriteBuffer, &xWriteBufferLen,
 				"Must supply brightness in range 0-100");
 		return pdFALSE;
 	}
@@ -879,7 +873,7 @@ static BaseType_t prvLedFlash(char *pcWriteBuffer, size_t xWriteBufferLen, const
 	paramLong = strtol(pcParameter, &endptr, 10);
 
 	if (endptr == pcParameter || paramLong < 1 || paramLong > 1000) {
-		pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen,
+		cli_append(&pcWriteBuffer, &xWriteBufferLen,
 				"Must supply duration in range 1-1000ms");
 		return pdFALSE;
 	}
@@ -999,21 +993,21 @@ static BaseType_t prvInt(char *pcWriteBuffer, size_t xWriteBufferLen, const char
 
 			if (xQueueSend(xIfTaskQueue, (void *)&send_msg, __QueueSendTicksToWait) != pdTRUE)
 			{
-				pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen, "send 0x%x fail", send_msg.msg_event);
+				cli_append(&pcWriteBuffer, &xWriteBufferLen, "send 0x%x fail", send_msg.msg_event);
 			}
 			else
 			{
-				pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen, "Requesting pulse of %dms", interval);
+				cli_append(&pcWriteBuffer, &xWriteBufferLen, "Requesting pulse of %dms", interval);
 			}
 		}
 		else
 		{
-			pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen, "Must supply a time > 0ms and < 10000ms");
+			cli_append(&pcWriteBuffer, &xWriteBufferLen, "Must supply a time > 0ms and < 10000ms");
 		}
 	}
 	else
 	{
-		pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen, "Must supply a time in ms");
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "Must supply a time in ms");
 	}
 
 	return pdFALSE;
@@ -1033,16 +1027,16 @@ static BaseType_t prvI2C(char *pcWriteBuffer, size_t xWriteBufferLen, const char
 
 		if ((address >= 0) && (address <= 127)) {
 			if (hm0360_md_isSensorPresent(address)) {
-				pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen, "Present");
+				cli_append(&pcWriteBuffer, &xWriteBufferLen, "Present");
 			}
 			else {
-				pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen, "Not present");
+				cli_append(&pcWriteBuffer, &xWriteBufferLen, "Not present");
 			}
 			return pdFALSE;
 		}
 	}
 
-	pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen, "Must supply an address >=0 and <=127");
+	cli_append(&pcWriteBuffer, &xWriteBufferLen, "Must supply an address >=0 and <=127");
 
 	return pdFALSE;
 }
@@ -1106,11 +1100,11 @@ static BaseType_t prvWriteFile(char *pcWriteBuffer, size_t xWriteBufferLen, cons
 		{
 			xprintf("Failed to send 0x%x to FatTask\r\n", send_msg.msg_event);
 		}
-		pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen, "About to write '%s'", fName);
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "About to write '%s'", fName);
 	}
 	else
 	{
-		pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen, "Must supply a <fileName> (%d bytes max)", FNAMELEN);
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "Must supply a <fileName> (%d bytes max)", FNAMELEN);
 	}
 
 	return pdFALSE;
@@ -1155,11 +1149,11 @@ static BaseType_t prvReadFile(char *pcWriteBuffer, size_t xWriteBufferLen, const
 		{
 			xprintf("Failed to send 0x%x to FatTask\r\n", sendMsg.msg_event);
 		}
-		pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen, "About to read '%s'", fName);
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "About to read '%s'", fName);
 	}
 	else
 	{
-		pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen, "Must supply a <fileName> (%d bytes max)", FNAMELEN);
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "Must supply a <fileName> (%d bytes max)", FNAMELEN);
 	}
 
 	return pdFALSE;
@@ -1207,12 +1201,12 @@ static BaseType_t prvSend(char *pcWriteBuffer, size_t xWriteBufferLen, const cha
 		}
 		else
 		{
-			pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen, "Must supply an integer between 1 and %d", WW130_MAX_PAYLOAD_SIZE);
+			cli_append(&pcWriteBuffer, &xWriteBufferLen, "Must supply an integer between 1 and %d", WW130_MAX_PAYLOAD_SIZE);
 		}
 	}
 	else
 	{
-		pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen, "Must supply an integer between 1 and %d", WW130_MAX_PAYLOAD_SIZE);
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "Must supply an integer between 1 and %d", WW130_MAX_PAYLOAD_SIZE);
 	}
 
 	return pdFALSE;
@@ -1279,10 +1273,10 @@ static BaseType_t prvCapture(char *pcWriteBuffer, size_t xWriteBufferLen, const 
 	// Parameters are valid
 
 	if (captures == 1) {
-		pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen, "About to capture 1 image with an interval of '%u' milliseconds", timerInterval);
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "About to capture 1 image with an interval of '%u' milliseconds", timerInterval);
 	}
 	else {
-		pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen, "About to capture %u images with an interval of '%u' milliseconds", captures, timerInterval);
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "About to capture %u images with an interval of '%u' milliseconds", captures, timerInterval);
 	}
 
 	// Pass the parameters in the ImageTask message queue
@@ -1372,28 +1366,30 @@ static BaseType_t prvGetOpParam(char *pcWriteBuffer, size_t xWriteBufferLen, con
 		index = atoi(pcParameter1); // Consider using strtol for safer parsing and error checking.
 	}
 	else {
-		snprintf(pcWriteBuffer, xWriteBufferLen, "Error: Index required.\r\n");
-		return pdFALSE;
+		 cli_append(&pcWriteBuffer, &xWriteBufferLen, "Error: Index required.\r\n");
+		 return pdFALSE;
 	}
 
 	if ((index < -1) || (index >= OP_PARAMETER_NUM_ENTRIES)) {
-		snprintf(pcWriteBuffer, xWriteBufferLen, "Error: index (%d) must be between -1 and %d.\r\n",
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "Error: index (%d) must be between -1 and %d.\r\n",
 				index, OP_PARAMETER_NUM_ENTRIES - 1);
+
 		return pdFALSE;
 	}
 
-	// Parameters are valid
+	// Valid parameters
 	if (index == -1) {
 		// Send them all
-		pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen, "OpParams ");
-		for (uint8_t i=0; i < OP_PARAMETER_NUM_ENTRIES; i++) {
-			pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen, "%d ", fatfs_getOperationalParameter(i));
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "OpParams ");
+		for (uint8_t i = 0; i < OP_PARAMETER_NUM_ENTRIES; i++) {
+			cli_append(&pcWriteBuffer, &xWriteBufferLen, "%d ", fatfs_getOperationalParameter(i));
 		}
 	}
 	else {
 		value = fatfs_getOperationalParameter(index);
-		snprintf(pcWriteBuffer, xWriteBufferLen, "OpParam %d = %d", index, value);
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "OpParam %d = %d", index, value);
 	}
+
 	return pdFALSE;
 }
 
@@ -1406,7 +1402,7 @@ static BaseType_t prvGetSelfTest(char *pcWriteBuffer, size_t xWriteBufferLen, co
 	(void)xWriteBufferLen;
 	configASSERT(pcWriteBuffer);
 
-	pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen, "selfTest %04x", selfTest_getErrorBits());
+	cli_append(&pcWriteBuffer, &xWriteBufferLen, "selfTest %04x", selfTest_getErrorBits());
 
 	/* There is no more data to return after this single string, so return pdFALSE. */
 	return pdFALSE;
@@ -1492,13 +1488,13 @@ static BaseType_t prvGetgps(char *pcWriteBuffer, size_t xWriteBufferLen, const c
 	char str[30];
 
 	exif_gps_get_coordinate_as_string(&exif_gps_deviceLat, str, sizeof(str));
-	pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen, "Device Location: %s ", str);
+	cli_append(&pcWriteBuffer, &xWriteBufferLen, "Device Location: %s ", str);
 
 	exif_gps_get_coordinate_as_string(&exif_gps_deviceLon, str, sizeof(str));
-	pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen, "%s ", str);
+	cli_append(&pcWriteBuffer, &xWriteBufferLen, "%s ", str);
 
 	exif_gps_get_altitude_as_string(&exif_gps_deviceAlt, str, sizeof(str));
-	pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen, "%s\n", str);
+	cli_append(&pcWriteBuffer, &xWriteBufferLen, "%s\n", str);
 
 	/* There is no more data to return after this single string, so return pdFALSE. */
 	return pdFALSE;
@@ -1819,6 +1815,7 @@ static void processCommand(char *rxString) {
 	processingWW130Command = false;
 }
 
+
 /********************************** FreeRTOS Task  *************************************/
 
 /* =| vCmdLineTask |======================================
@@ -2095,3 +2092,52 @@ const char *cli_getStateString(void)
 {
 	return "-";
 }
+
+/**
+ * @brief Safely append formatted text into a FreeRTOS CLI output buffer.
+ *
+ * This helper wraps vsnprintf() and manages both the output pointer and the
+ * remaining buffer length. It ensures that:
+ *   - Text is only appended if it fits entirely within the remaining space.
+ *   - The buffer pointer (*buf) is advanced by the number of characters written.
+ *   - The remaining length (*len) is reduced accordingly.
+ *   - The buffer is always null-terminated.
+ *
+ * This function is intended as a safe replacement for patterns like:
+ * 	pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen, ...);
+ *
+ * @param[in,out] buf   Pointer to the current write pointer within the output buffer.
+ *                      On success, this is advanced past the newly written text.
+ *
+ * @param[in,out] len   Pointer to the remaining buffer length. On success, this is
+ *                      reduced by the number of characters written. Set to zero if
+ *                      truncation occurs.
+ *
+ * @param[in]     fmt   printf-style format string.
+ *
+ * @return pdTRUE  if the formatted text was fully written into the buffer.
+ * @return pdFALSE if the output was truncated or an encoding error occurred.
+ */
+
+BaseType_t cli_append(char **buf, size_t *len, const char *fmt, ...) {
+    if (*len == 0) {
+        return pdFALSE; // no space left
+    }
+
+    va_list args;
+    va_start(args, fmt);
+    int written = vsnprintf(*buf, *len, fmt, args);
+    va_end(args);
+
+    if (written < 0 || written >= *len) {
+        // Truncated or error — stop writing
+        (*buf)[*len - 1] = '\0';  // ensure null termination
+        *len = 0;
+        return pdFALSE;
+    }
+
+    *buf += written;
+    *len -= written;
+    return pdTRUE;
+}
+

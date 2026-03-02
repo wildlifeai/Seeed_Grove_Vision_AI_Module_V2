@@ -184,14 +184,14 @@ static BaseType_t prvInfoCommand( char * pcWriteBuffer,
 	memset( pcWriteBuffer, 0x00, xWriteBufferLen );
 
 	f_getlabel("", label, &vsn);
-	pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen,
+	cli_append(&pcWriteBuffer, &xWriteBufferLen,
 			"Label: %s\nSerial No: 0x%08x\n", (char *) label, (int) vsn);
 
 	// Get some statistics from the SD card
 	res = f_getfree("", &free_clusters, &getFreeFs);
 
 	if (res) {
-    	pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen, "f_getfree() failed (%u)\r\n", res);
+    	cli_append(&pcWriteBuffer, &xWriteBufferLen, "f_getfree() failed (%u)\r\n", res);
 		return pdFALSE;
 	}
 
@@ -199,7 +199,7 @@ static BaseType_t prvInfoCommand( char * pcWriteBuffer,
 	total_sectors = (getFreeFs->n_fatent - 2) * getFreeFs->csize;
 	free_sectors = free_clusters * getFreeFs->csize;
 
-	pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen,
+	cli_append(&pcWriteBuffer, &xWriteBufferLen,
 			"%10lu K total drive space.\r\n%10lu K available.",
 			total_sectors / 2, free_sectors / 2);
 
@@ -234,17 +234,17 @@ static BaseType_t prvDirCommand( char * pcWriteBuffer,
     	res = f_getcwd(cur_dir, len);      /* Get current directory */
 
     	if (res) {
-    		pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen, "f_getcwd res = %d", res);
+    		cli_append(&pcWriteBuffer, &xWriteBufferLen, "f_getcwd res = %d", res);
     		return pdFALSE;
     	}
 //    	else  {
-//    		pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen, "cur_dir = %s\r\n", cur_dir);
+//    		cli_append(&pcWriteBuffer, &xWriteBufferLen, "cur_dir = %s\r\n", cur_dir);
 //    	}
 
     	res = f_opendir(&dir, cur_dir);    /* Open the directory */
 
     	if (res) {
-        	pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen, "Failed to open '%s'. (%u)", cur_dir, res);
+        	cli_append(&pcWriteBuffer, &xWriteBufferLen, "Failed to open '%s'. (%u)", cur_dir, res);
         	listing = false;
         	nfile = 0;
         	ndir = 0;
@@ -261,7 +261,7 @@ static BaseType_t prvDirCommand( char * pcWriteBuffer,
 
     if (res != FR_OK || fno.fname[0] == 0) {
     	// Error or end of dir
-        pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen, "%d dirs, %d files.", ndir, nfile);
+        cli_append(&pcWriteBuffer, &xWriteBufferLen, "%d dirs, %d files.", ndir, nfile);
 
     	f_closedir(&dir);
     	listing = false;
@@ -271,7 +271,7 @@ static BaseType_t prvDirCommand( char * pcWriteBuffer,
     }
 
     // On 24/3/25 I added the seconds to the file time
-    pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen,
+    cli_append(&pcWriteBuffer, &xWriteBufferLen,
     		"%c%c%c%c%c %u-%02u-%02u, %02u:%02u:%02u %10d %s",
     					((fno.fattrib & AM_DIR) ? 'D' : '-'),
     					((fno.fattrib & AM_RDO) ? 'R' : '-'),
@@ -283,12 +283,12 @@ static BaseType_t prvDirCommand( char * pcWriteBuffer,
     					(int) fno.fsize, fno.fname);
     if (fno.fattrib & AM_DIR) {
     	// Directory
-    	//pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen, "   <DIR>   %s", fno.fname);
+    	//cli_append(&pcWriteBuffer, &xWriteBufferLen, "   <DIR>   %s", fno.fname);
     	ndir++;
     }
     else {
     	// File
-    	//pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen, "%10u %s", (int) fno.fsize, fno.fname);
+    	//cli_append(&pcWriteBuffer, &xWriteBufferLen, "%10u %s", (int) fno.fsize, fno.fname);
     	nfile++;
     }
     // Assume there is more to come
@@ -313,10 +313,10 @@ static BaseType_t prvPwdCommand( char * pcWriteBuffer,
     res = f_getcwd(cur_dir, len);      /* Get current directory */
 
 	if (res)  {
-		pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen, "f_getcwd res = %d", res);
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "f_getcwd res = %d", res);
 	}
 	else  {
-		pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen, "%s", cur_dir);
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "%s", cur_dir);
 	}
 	/* There is no more data to return after this single string, so return pdFALSE. */
 	return pdFALSE;
@@ -341,7 +341,7 @@ static BaseType_t prvChdirCommand( char *pcWriteBuffer, size_t xWriteBufferLen, 
 		res = f_chdir(pcParameter);
 	}
 	else {
-		pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen, "Must supply directory name.");
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "Must supply directory name.");
 		return pdFALSE;
 	}
 
@@ -349,14 +349,14 @@ static BaseType_t prvChdirCommand( char *pcWriteBuffer, size_t xWriteBufferLen, 
     	// Print the new directory
     	res = f_getcwd(cur_dir, len);      /* Get current directory */
     	if (res)  {
-    		pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen, "f_getcwd res = %d", res);
+    		cli_append(&pcWriteBuffer, &xWriteBufferLen, "f_getcwd res = %d", res);
     	}
     	else  {
-    		pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen, "Now %s", cur_dir);
+    		cli_append(&pcWriteBuffer, &xWriteBufferLen, "Now %s", cur_dir);
     	}
     }
     else {
-		pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen, "f_chdir %s failed: %d", pcParameter, res);
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "f_chdir %s failed: %d", pcParameter, res);
     }
 
 	return pdFALSE;
@@ -379,15 +379,15 @@ static BaseType_t prvMkdirCommand( char *pcWriteBuffer, size_t xWriteBufferLen, 
 		res = f_mkdir(pcParameter);
 	}
 	else {
-		pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen, "Must supply directory name.");
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "Must supply directory name.");
 		return pdFALSE;
 	}
 
     if (res == FR_OK) {
-		pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen, "Created %s", pcParameter);
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "Created %s", pcParameter);
     }
     else {
-		pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen, "f_mkdir %s failed: %d", pcParameter,res);
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "f_mkdir %s failed: %d", pcParameter,res);
     }
 
 	return pdFALSE;
@@ -425,12 +425,12 @@ static BaseType_t prvTypeCommand( char *pcWriteBuffer, size_t xWriteBufferLen, c
 			res = f_open(&fil, pcParameter, FA_READ);
 		}
 		else {
-			pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen, "Must supply file name.");
+			cli_append(&pcWriteBuffer, &xWriteBufferLen, "Must supply file name.");
 			return pdFALSE;
 		}
 
 		if (res) {
-			pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen, "Failed to open '%s'. (%u)", pcParameter, res);
+			cli_append(&pcWriteBuffer, &xWriteBufferLen, "Failed to open '%s'. (%u)", pcParameter, res);
 			return pdFALSE;
 		}
 	}
@@ -442,7 +442,7 @@ static BaseType_t prvTypeCommand( char *pcWriteBuffer, size_t xWriteBufferLen, c
 		// f_gets() returns when it finds \n or when it has CLI_OUTPUT_BUF_SIZE -1 characters (appends '\0')
 		// strip trailing \n or \r since these will be added when the pcWriteBuffer is printed.
 		strip_newline(line, CLI_OUTPUT_BUF_SIZE);
-		pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen, "%s", line);
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "%s", line);
 
 		if (f_eof(&fil)) {
 			// No data left
@@ -490,12 +490,12 @@ static BaseType_t prvReadCommand( char *pcWriteBuffer, size_t xWriteBufferLen, c
 			res = f_open(&fil, pcParameter, FA_READ);
 		}
 		else {
-			pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen, "Must supply file name.");
+			cli_append(&pcWriteBuffer, &xWriteBufferLen, "Must supply file name.");
 			return pdFALSE;
 		}
 
 		if (res) {
-			pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen, "Failed to open '%s'. (%u)", pcParameter, res);
+			cli_append(&pcWriteBuffer, &xWriteBufferLen, "Failed to open '%s'. (%u)", pcParameter, res);
 			return pdFALSE;
 		}
 	}
@@ -522,7 +522,7 @@ static BaseType_t prvReadCommand( char *pcWriteBuffer, size_t xWriteBufferLen, c
 	}
 	else {
 		// error
-		pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen, "Error reading file. (%u)", res);
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "Error reading file. (%u)", res);
 		f_close(&fil);
 		listing = false;
 		return pdFALSE;
@@ -592,12 +592,12 @@ static BaseType_t prvTxFileCommand( char *pcWriteBuffer, size_t xWriteBufferLen,
 		//Maybe some checking here?
 		res = f_open(&fil, fileName, FA_READ);
 		if (res == FR_OK) {
-			pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen, "%d bytes in %s", (int) f_size(&fil), fileName);
+			cli_append(&pcWriteBuffer, &xWriteBufferLen, "%d bytes in %s", (int) f_size(&fil), fileName);
 			state = TXFILE_TRANSMITTING;
 			return pdTRUE;
 		}
 		else {
-			pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen, "Failed to open '%s'. (%u)", fileName, res);
+			cli_append(&pcWriteBuffer, &xWriteBufferLen, "Failed to open '%s'. (%u)", fileName, res);
 			return pdFALSE;
 		}
 		break;
@@ -635,7 +635,7 @@ static BaseType_t prvTxFileCommand( char *pcWriteBuffer, size_t xWriteBufferLen,
 		else {
 			// error
 			binaryLength = NOTBINARY;	// Indicate the message is text, not binary
-			pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen, "Error reading file. (%u)", res);
+			cli_append(&pcWriteBuffer, &xWriteBufferLen, "Error reading file. (%u)", res);
 			f_close(&fil);
 			state = TXFILE_START;
 			brTotal = 0;
@@ -648,7 +648,7 @@ static BaseType_t prvTxFileCommand( char *pcWriteBuffer, size_t xWriteBufferLen,
 		// Send a text message to move the BLE processor out of binary mode
 		binaryLength = NOTBINARY;	// Indicate the message is text, not binary
 
-		pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen,
+		cli_append(&pcWriteBuffer, &xWriteBufferLen,
 				"Finished sending %u bytes (%d packets)", brTotal, packetNum);
 		state = TXFILE_START;
 		brTotal = 0;
@@ -684,10 +684,10 @@ static BaseType_t prvUnmountCommand( char * pcWriteBuffer,
     res = f_unmount("");
 
 	if (res)  {
-		pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen, "f_unmount failed. res = %d", res);
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "f_unmount failed. res = %d", res);
 	}
 	else  {
-		pcWriteBuffer += snprintf(pcWriteBuffer, xWriteBufferLen, "Unmounted OK.NOW WHAT?");
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "Unmounted OK.NOW WHAT?");
 	}
 	/* There is no more data to return after this single string, so return pdFALSE. */
 	return pdFALSE;

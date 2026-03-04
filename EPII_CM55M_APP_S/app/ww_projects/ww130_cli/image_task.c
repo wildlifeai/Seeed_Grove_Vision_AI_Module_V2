@@ -538,7 +538,7 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
         break;
 
     // recaptures image, not implemented currently
-    case APP_MSG_IMAGETASK_RECAPTURE:
+    case APP_MSG_IMAGETASK_CAPTURE_TIMER:
         image_task_state = APP_IMAGE_TASK_STATE_CAPTURING;
         send_msg.destination = xImageTaskQueue;
         sensordplib_retrigger_capture();
@@ -546,12 +546,12 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
 
     // frame ready event received from os_app_dplib_cb
     case APP_MSG_IMAGETASK_FRAME_READY:
-        send_msg.destination = xImageTaskQueue;
-        image_task_state = APP_IMAGE_TASK_STATE_NN_PROCESSING;
-        send_msg.message.msg_event = APP_MSG_IMAGETASK_DONE;
-        break;
+    	send_msg.destination = xImageTaskQueue;
+    	image_task_state = APP_IMAGE_TASK_STATE_NN_PROCESSING;
+    	send_msg.message.msg_event = APP_MSG_IMAGETASK_DONE;
+    	break;
 
-    // get, set and send info to fatfs task
+    	// get, set and send info to fatfs task
     case APP_MSG_IMAGETASK_DONE:
         g_cur_jpegenc_frame++; // The number in this sequence
         g_frames_total++;      // The number since the start of time.

@@ -206,13 +206,7 @@ uint16_t op_parameter[OP_PARAMETER_NUM_ENTRIES] = {
 	PROJECT_ID,		   // 14 OP_PARAMETER_MODEL_PROJECT
 	PROJECT_VER,	   // 15 OP_PARAMETER_MODEL_VERSION
 	MODEL_THRESHOLD,   // 16 OP_PARAMETER_MODEL_THRESHOLD default
-#if 0
 	0, 0, 0,	   		// 17-19 Reserved for future use
-#else
-	// probably temporary until MD STROBE sett8nsg are sorted
-	0x0b,			// default STROBE mode register setting  = 'dynamic 2'
-	0, 0,	   		// 18-19 Reserved for future use
-#endif
 	0, 0, 0, 0, 0, 0, 0, 0  // 20-27 Deployment ID chunks
 };
 
@@ -473,9 +467,7 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 			res = fileWrite(fileOp);
 		}
 
-		xprintf("File write from 0x%08x took %dms\n",
-				fileOp->buffer,
-				(xTaskGetTickCount() - xStartTime) * portTICK_PERIOD_MS);
+		xprintf("File write took %dms\n", app_getElapsedMs(xStartTime));
 
 		fatFs_task_state = APP_FATFS_STATE_IDLE;
 

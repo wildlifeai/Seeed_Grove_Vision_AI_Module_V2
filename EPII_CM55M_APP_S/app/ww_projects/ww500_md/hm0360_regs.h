@@ -189,7 +189,7 @@
 // Context switch control registers
 #define         PMU_CFG_3                       0x3024
 #define         PMU_CFG_4                       0x3025
-#define         PMU_CFG_5                       0x3026
+#define         PMU_CFG_5                       0x3026		// pre-meter
 #define         PMU_CFG_6                       0x3027
 #define         PMU_CFG_7                       0x3028		// Output frame count
 #define         PMU_CFG_8                       0x3029		// Sleep Count High

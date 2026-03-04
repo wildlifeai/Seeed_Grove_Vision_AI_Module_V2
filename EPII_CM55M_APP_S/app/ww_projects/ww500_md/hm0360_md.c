@@ -452,26 +452,26 @@ HX_CIS_ERROR_E hm0360_md_getGainRegs(HM0360_GAIN_T * val) {
 
     saveMainCameraConfig();
 
-    // Integration registers 0x0202 & 0x0203
+    // Integration registers 0x0202 & 0x0203 "course integration time in lines"
     // See data sheet section 9.3. Relates to "exposure time"
 	ret = hx_drv_cis_get_reg(INTEGRATION_H, &valueH);
 	ret |= hx_drv_cis_get_reg(INTEGRATION_L, &valueL);
 	val->integration = (valueH << 8) + valueL;
 
-	// Analog gain register 0x0205
+	// Analog gain register 0x0205 (bits 4-6 only, hence the shift)
 	ret |= hx_drv_cis_get_reg(ANALOG_GAIN, &valueL);
-	val->analogGain = valueL;
+	val->analogGain = (valueL >> 4) & 0x07; // (bits 4-6 only, hence the shift)
 
-	// Digital gain registers 0x020E & 0x020F
+	// Digital gain registers 0x020E & 0x020F (seems to be [1-0] from 020e and [7-2] from 020f
 	ret |= hx_drv_cis_get_reg(DIGITAL_GAIN_H, &valueH);
 	ret |= hx_drv_cis_get_reg(DIGITAL_GAIN_L, &valueL);
-	val->digitalGain = (valueH << 8) + valueL;
+	val->digitalGain = ((valueH & 0x03) << 6) + ((valueL & 0xfa) >> 6);
 
-	// AE Mean register 0x205d
+	// AE Mean register 0x205d (RO)
 	ret |= hx_drv_cis_get_reg(AE_MEAN, &valueL);
 	val->aeMean = valueL;
 
-	// AE converged register 0x2060
+	// AE converged register 0x2060 (RO) - bit 0 only
 	ret |= hx_drv_cis_get_reg(AE_CONVERGE, &valueL);
 	val->aeConverged = valueL;
 
@@ -516,7 +516,7 @@ void hm0360_md_getMDOutput(uint8_t * regTable, uint8_t length) {
  *
 		{HX_CIS_I2C_Action_W, 0x3080, 0x00},	// STROBE_CFG disable
 		or:
-		{HX_CIS_I2C_Action_W, 0x3080, 0x0B},	// STROBE_CFG enable 1: Static, 3 = Dynamic 1, B = Dynamic 2, Multiple = 13
+		{HX_CIS_I2C_Action_W, 0x3080, 0x03},	// STROBE_CFG Modes: Static=5; Dynamic 1=3; Dynamic 2=B; Multiple = 13
 
  * Bit 0 - 1 enables, 0 disables
  *

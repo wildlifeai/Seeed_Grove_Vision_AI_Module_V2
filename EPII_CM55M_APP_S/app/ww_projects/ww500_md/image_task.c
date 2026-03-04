@@ -6,7 +6,7 @@
  *
  * FreeRTOS task
  *
- * This task handles capturing amages and running the NN processing
+ * This task handles capturing images and running the NN processing
  *
  */
 
@@ -76,6 +76,8 @@
 
 #include "selfTest.h"
 
+/*************************************** Definitions *******************************************/
+
 // Enable/disable writing per-class confidence/label EXIF tags (0xF300+)
 // CGP 24/1/26 - Disable this. All processing of NN output tensor including labels is moved to cvapp.cpp
 // When debugged, remove this code
@@ -83,7 +85,55 @@
 #define ENABLE_EXIF_CONFIDENCE
 #endif // USE_PERCENTAGE
 
-/*************************************** Definitions *******************************************/
+/* Experiment in controlling multiple images captures and LED flash for the HM0360
+ * using 2 compiler switches:
+ *
+ * USE_HM0360_CAPTURE_TIMER
+ * How to set the delay between multiple images? e.g. take 6 images as 1s intervals
+ *   set: 		The internal timer in the HM0360 is used. After the first image is captured,
+ *   IMAGE Task state changes from 'NN Processing' to 'Capturing' and the HM0360 next
+ *   VSYNC results in a 'Image Event Frame Ready' event.
+ *
+ *   not set:	FreeRTOS captureTimer is used. After the first image is captured,
+ *   IMAGE Task state changes from 'NN Processing' to 'Wait for Timer' then explicitly starts an HM0360 capture.
+ *
+ * STROBE_CONTROLS_FLASH
+ * How to turn on the Flash LED?
+ * 	set:	The HM0360 STROBE pin turns on just before taking an image and the LED comes on.
+ * 	The LED is turned off by the HM0360 at the end of VSYNC
+ *
+ * 	not set:  The LED is turned on by ledFlashEnable() and turned off the the state machine
+ * 	when APP_MSG_IMAGETASK_FRAME_READY arrives (as a safeguard also flashOffTimer in ledFlash.c).
+ *
+ * Results:
+ * Option | USE_HM0360_CAPTURE_TIMER | STROBE_CONTROLS_FLASH | Result
+ * -------|--------------------------|-----------------------|-----------------------
+ *    1   | Enabled                  | Enabled		 		| OK
+ *    2   | Enabled                  | Disabled    		   	| LED on too soon - not usable
+ *    3   | Disabled                 | Enabled				| OK
+ *    4   | Disabled                 | Disabled				| OK - LED on 15ms before VSYNC, 3ms after.
+ *
+ * Probably best to use option 1? Less chance that LED is stuck on.
+ *
+ * Known problems: sometimes there is a WDT event as 'Image Event Frame Ready' event is missing.
+ * This can be detected: use g_wdt_event to force a retry
+ */
+
+#ifdef USE_HM0360
+// If uncommented then use the HM0360 internal timer to capture multiple images
+// else use captureTimer
+// Check both options before cleaning code
+#define USE_HM0360_CAPTURE_TIMER
+
+// If defined then use the HM0360 STROBE pin to control the flash
+// else use the timer as is the case with RP3 camera
+#define STROBE_CONTROLS_FLASH
+#endif 	// USE_HM0360
+
+// If uncommented brightness will increment after each image of an image sequence
+//#define INVESTIGATE_FLASH_BRIGHTNESS
+// percentage increment for each image
+#define FLASH_BRIGHTNESS_INCREMENT 18
 
 // TODO sort out how to allocate priorities
 #define image_task_PRIORITY (configMAX_PRIORITIES - 2)
@@ -91,7 +141,7 @@
 #define IMAGE_TASK_QUEUE_LEN 10
 
 // This is experimental. TODO check it is ok
-#define MSGTOMASTERLEN 100
+#define MSGTOMASTERLEN 150
 
 // defaults for PWM output on PB9 for Flash LED brightness
 // default 20kHz
@@ -254,11 +304,9 @@ static uint32_t g_captures_to_take;
 // TODO perhaps it should be reset at the start of each day? It is only used in filenames
 static uint32_t g_frames_total;
 static uint32_t g_timer_period; // Interval between pictures in ms
+static bool g_wdt_event; 		// A watchdog timer event occurred while waiting for FRAME_READY
 
-#ifndef USE_HM0360
-// TODO check out this function: sensordplib_set_rtc_start(SENDPLIB_PERIODIC_TIMER_MS);
 static TimerHandle_t captureTimer;
-#endif // USE_HM0360
 
 static fileOperation_t fileOp;
 
@@ -331,9 +379,29 @@ TickType_t startTime;
 
 /********************************** Local Functions  *************************************/
 
-#ifndef USE_HM0360
+#ifdef INVESTIGATE_FLASH_BRIGHTNESS
+static uint8_t changingBrightness = 1; // set to 1% at warm boot.
+
 /**
- * This is the local callback that executes when the capture_timer expires
+ * Experimental feature that increments flash brightness for each successive image.
+ *
+ * Change after each APP_MSG_IMAGETASK_FRAME_READY event
+ */
+static void incrementBrightness(void) {
+
+	ledFlashBrightness(changingBrightness);
+
+	// increment the brightness for the next image
+	changingBrightness += FLASH_BRIGHTNESS_INCREMENT;
+	if (changingBrightness >= 100) {
+		changingBrightness = 100;
+	}
+}
+#endif // INVESTIGATE_FLASH_BRIGHTNESS
+
+
+/**
+ * This is the local callback that executes when the captureTimer expires
  *
  * It calls this function that was registered in the initialisation process.
  *
@@ -345,15 +413,13 @@ static void capture_timer_callback(TimerHandle_t xTimer) {
     // Send back to our own queue
     send_msg.msg_data = 0;
     send_msg.msg_parameter = 0;
-    send_msg.msg_event = APP_MSG_IMAGETASK_RECAPTURE;
+    send_msg.msg_event = APP_MSG_IMAGETASK_CAPTURE_TIMER;
 
     // Timer callbacks run in the context of a task, so the non ISR version can be used
-    if (xQueueSend(xImageTaskQueue, (void *)&send_msg, __QueueSendTicksToWait) != pdTRUE)
-    {
+    if (xQueueSend(xImageTaskQueue, (void *)&send_msg, __QueueSendTicksToWait) != pdTRUE) {
         xprintf("send_msg=0x%x fail\r\n", send_msg.msg_event);
     }
 }
-#endif // USE_HM0360
 
 /**
  * Fabricate a file name
@@ -635,6 +701,10 @@ static APP_MSG_DEST_T handleEventForInit(APP_MSG_T img_recv_msg) {
             xprintf("Interval: %dms\n", g_timer_period);
             XP_WHITE;
 
+#ifdef INVESTIGATE_FLASH_BRIGHTNESS
+            incrementBrightness();
+#endif // INVESTIGATE_FLASH_BRIGHTNESS
+
             // Now start the image sensor.
             configure_image_sensor(CAMERA_CONFIG_RUN);
             // Record image capture start time
@@ -649,8 +719,7 @@ static APP_MSG_DEST_T handleEventForInit(APP_MSG_T img_recv_msg) {
         // We have received an instruction to enable or disable the NN processing system
         setEnabled = (bool)img_recv_msg.msg_data;
         changeEnableState(setEnabled); // 0 means disabled; 1 means enabled
-        if (setEnabled)
-        {
+        if (setEnabled) {
             xprintf("DEBUG: Time to start capturing images!\n");
             // Pass the parameters in the ImageTask message queue
             internal_msg.msg_data = fatfs_getOperationalParameter(OP_PARAMETER_NUM_PICTURES);
@@ -750,11 +819,14 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
     HM0360_GAIN_T gain;
 #endif
 
-    switch (event)
-    {
+    switch (event) {
 
     case APP_MSG_IMAGETASK_FRAME_READY:
         // Here when the image sub-system has captured an image.
+
+#ifdef INVESTIGATE_FLASH_BRIGHTNESS
+        incrementBrightness();
+#endif // INVESTIGATE_FLASH_BRIGHTNESS
 
     	ledFlashDisable(); // finished with the LED flash. Turn it off.
 
@@ -769,7 +841,7 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
         g_frames_total++;      // The number since the start of time.
 
         // measure time for the frame capture just completed
-        xprintf("Image capture took %dms\n\n", app_getElapsedMs(startTime));
+        xprintf("Image capture %d/%d took %dms\n\n", g_cur_jpegenc_frame, g_captures_to_take, app_getElapsedMs(startTime));
 
         // Now measure NN duration
         startTime = xTaskGetTickCount();
@@ -807,10 +879,20 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
         // This is a test to see if/how these change with illumination
         hm0360_md_getGainRegs(&gain);
 
+        snprintf(msgToMaster, MSGTOMASTERLEN, "Gain regs:\n  Integration time = %d lines\n  Analog gain = %d\n  Digital gain = %d\n  AE Mean = %d\n  AEConverged?: %c",
+        		gain.integration,
+				gain.analogGain,
+				gain.digitalGain,
+				gain.aeMean,
+				(gain.aeConverged == 1)?'Y':'N');
+
         XP_LT_GREY;
-        xprintf("Gain regs: Int = 0x%04x, Analog = 0x%02x, Digital = 0x%04x, AEMean = 0x%02x, AEConverge = 0x%02x\n",
-                gain.integration, gain.analogGain, gain.digitalGain, gain.aeMean, gain.aeConverged);
+        // print to console
+        xprintf("%s\n", msgToMaster);
         XP_WHITE;
+
+        // and send to BLE
+        sendMsgToMaster(msgToMaster);
 #endif
 
 #if 0
@@ -944,13 +1026,15 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
     case APP_MSG_DPEVENT_EDM_WDT2_TIMEOUT:   // 0x011c
     case APP_MSG_DPEVENT_EDM_WDT3_TIMEOUT:   // 0x011b
     case APP_MSG_DPEVENT_SENSORCTRL_WDT_OUT: // 0x011e
-        // Unfortunately I see this. EDM WDT2 Timeout = 0x011c
-        // probably if HM0360 is not receiving I2C commands...
-        XP_RED;
-        dbg_printf(DBG_LESS_INFO, ">>>> Received a timeout event 0x%04x. TODO - re-initialise camera? <<<<\n", event);
+        // Unfortunately I see this sometimes: APP_MSG_DPEVENT_EDM_WDT2_TIMEOUT (0x011c) followed by APP_MSG_DPEVENT_EDM_WDT3_TIMEOUT (0x011b)
+        // APP_MSG_IMAGETASK_FRAME_READY does not arrive. timeout WDT_TIMEOUT_PERIOD seems to be 5s
+    	XP_RED;
+        dbg_printf(DBG_LESS_INFO, ">>>> Received a timeout event 0x%04x after %dms <<<<\n", event, app_getElapsedMs(startTime));
+        dbg_printf(DBG_LESS_INFO, ">>>> TODO - re-initialise camera? <<<<\n", event);
         XP_WHITE;
 
         // Fault detected. Prepare to enter DPD
+    	g_wdt_event = true;
         configure_image_sensor(CAMERA_CONFIG_STOP); // run some sensordplib_stop functions then run HM0360_stream_off commands to the HM0360
 
         if (fatfs_getImageSequenceNumber() > 0)  {
@@ -966,7 +1050,7 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
         	// Wait till the IF Task is also ready, then sleep
         	sleepWhenPossible(); // does not return
             image_task_state = APP_IMAGE_TASK_STATE_UNINIT;
-        };
+        }
         break;
 
     default:
@@ -1016,41 +1100,40 @@ static APP_MSG_DEST_T handleEventForNNProcessing(APP_MSG_T img_recv_msg) {
         // This represents the point at which an image has been captured and processed.
 
         if (g_cur_jpegenc_frame == g_captures_to_take) {
-            captureSequenceComplete();
-            // Stop the image sensor.
-            configure_image_sensor(CAMERA_CONFIG_STOP);
-            image_task_state = APP_IMAGE_TASK_STATE_INIT;
+        	captureSequenceComplete();
+        	// Stop the image sensor.
+        	configure_image_sensor(CAMERA_CONFIG_STOP);
+        	image_task_state = APP_IMAGE_TASK_STATE_INIT;
         }
-#ifdef USE_HM0360
         else  {
-            // The HM0360 uses an internal timer to determine the time for the next image
-            // Re-start the image sensor.
-            configure_image_sensor(CAMERA_CONFIG_CONTINUE);
-            // Expect another frame ready event
-            image_task_state = APP_IMAGE_TASK_STATE_CAPTURING;
-        }
+#ifdef USE_HM0360_CAPTURE_TIMER
+        	// The HM0360 uses an internal timer to determine the time for the next image
+        	// Re-start the image sensor.
+        	configure_image_sensor(CAMERA_CONFIG_CONTINUE);
+        	// Expect another frame ready event
+        	image_task_state = APP_IMAGE_TASK_STATE_CAPTURING;
+
 #else
-        else  {
-            // Start a timer that delays for the defined interval.
-            // When it expires, switch to CAPTURUNG state and request another image
-            if (captureTimer != NULL)  {
-                // Change the period and start the timer
-                // The callback issues a APP_MSG_IMAGETASK_RECAPTURE event
-                xTimerChangePeriod(captureTimer, pdMS_TO_TICKS(g_timer_period), 0);
-                // Expect a APP_MSG_IMAGETASK_RECAPTURE event from the capture_timer
-                image_task_state = APP_IMAGE_TASK_STATE_WAIT_FOR_TIMER;
-            }
-            else  {
-                // error
-                flagUnexpectedEvent(img_recv_msg);
-                image_task_state = APP_IMAGE_TASK_STATE_INIT;
-            }
+        	// Start a timer that delays for the defined interval.
+        	// When it expires, switch to CAPTURUNG state and request another image
+        	if (captureTimer != NULL)  {
+        		// Change the period and start the timer
+        		// The callback issues a APP_MSG_IMAGETASK_CAPTURE_TIMER event
+        		xTimerChangePeriod(captureTimer, pdMS_TO_TICKS(g_timer_period), 0);
+        		// Expect a APP_MSG_IMAGETASK_CAPTURE_TIMER event from the capture_timer
+        		image_task_state = APP_IMAGE_TASK_STATE_WAIT_FOR_TIMER;
+        	}
+        	else  {
+        		// error
+        		flagUnexpectedEvent(img_recv_msg);
+        		image_task_state = APP_IMAGE_TASK_STATE_INIT;
+        	}
+#endif // USE_HM0360_CAPTURE_TIMER
         }
-#endif // USE_HM0360
         break;
 
     case APP_MSG_IMAGETASK_CHANGE_ENABLE:
-        // We have received an instruction to enable or disable the NN processing system
+    	// We have received an instruction to enable or disable the NN processing system
         setEnabled = (bool)img_recv_msg.msg_data;
         changeEnableState(setEnabled); // 0 means disabled; 1 means enabled
         break;
@@ -1123,7 +1206,7 @@ static APP_MSG_DEST_T handleEventForNNUpdate(APP_MSG_T img_recv_msg) {
  * This is the state when we are waiting for the capture_timer to expire
  *
  * Expected events:
- * 		APP_MSG_IMAGETASK_RECAPTURE
+ * 		APP_MSG_IMAGETASK_CAPTURE_TIMER
  *
  * @param APP_MSG_T img_recv_msg
  * @return APP_MSG_DEST_T send_msg
@@ -1137,18 +1220,29 @@ static APP_MSG_DEST_T handleEventForWaitForTimer(APP_MSG_T img_recv_msg) {
     event = img_recv_msg.msg_event;
     send_msg.destination = NULL;
 
-    switch (event)
-    {
+    switch (event)  {
 
-    case APP_MSG_IMAGETASK_RECAPTURE:
-        // here when the capture_timer expires
+    case APP_MSG_IMAGETASK_CAPTURE_TIMER:
+        // here when the captureTimer expires
 
-        ledFlashEnable(fatfs_getOperationalParameter(OP_PARAMETER_FLASH_DURATION));
+#ifdef USE_HM0360
+    	// We must be using captureTimer for HM0360, so force a HM0360 capture now
+    	XP_LT_GREY;
+    	hm0360_md_setMode(CONTEXT_A, MODE_SW_NFRAMES_SLEEP, 1, 0);
+    	XP_WHITE;
+#ifdef STROBE_CONTROLS_FLASH
+		// Do nothing as the STROBE has been set up
+#else
+    	ledFlashEnable(fatfs_getOperationalParameter(OP_PARAMETER_FLASH_DURATION));
+#endif //  STROBE_CONTROLS_FLASH
+#else
+    	ledFlashEnable(fatfs_getOperationalParameter(OP_PARAMETER_FLASH_DURATION));
+#endif // USE_HM0360
 
-        sensordplib_retrigger_capture();
+    	sensordplib_retrigger_capture();
 
-        // Record image capture start time
-        startTime = xTaskGetTickCount();
+    	// Record image capture start time
+    	startTime = xTaskGetTickCount();
 
         image_task_state = APP_IMAGE_TASK_STATE_CAPTURING;
         break;
@@ -1157,9 +1251,7 @@ static APP_MSG_DEST_T handleEventForWaitForTimer(APP_MSG_T img_recv_msg) {
     	// Probably the timer interval is greater than the inactivity interval = bad planning
     	// but we better deal with it properly.
 
-#ifndef USE_HM0360
     	xTimerStop(captureTimer, portMAX_DELAY);
-#endif // USE_HM0360
 
         // Inactivity detected. Prepare to enter DPD, saving state if possible.
     	// run some sensordplib_stop functions then run HM0360_stream_off commands to the HM0360
@@ -1217,8 +1309,7 @@ static APP_MSG_DEST_T handleEventForSaveState(APP_MSG_T img_recv_msg)
     event = img_recv_msg.msg_event;
     send_msg.destination = NULL;
 
-    switch (event)
-    {
+    switch (event)  {
 
     case APP_MSG_IMAGETASK_DISK_WRITE_COMPLETE:
         // Here when the FatFS task has saved state
@@ -1232,6 +1323,14 @@ static APP_MSG_DEST_T handleEventForSaveState(APP_MSG_T img_recv_msg)
         setEnabled = (bool)img_recv_msg.msg_data;
         changeEnableState(setEnabled); // 0 means disabled; 1 means enabled
         break;
+
+    case APP_MSG_DPEVENT_EDM_WDT1_TIMEOUT:   // 0x011d
+    case APP_MSG_DPEVENT_EDM_WDT2_TIMEOUT:   // 0x011c
+    case APP_MSG_DPEVENT_EDM_WDT3_TIMEOUT:   // 0x011b
+    case APP_MSG_DPEVENT_SENSORCTRL_WDT_OUT: // 0x011e
+    	// If APP_MSG_DPEVENT_EDM_WDT2_TIMEOUT occured earlier then we receive APP_MSG_DPEVENT_EDM_WDT3_TIMEOUT
+    	// soon after - i.e. in this state
+    	break;
 
     default:
         flagUnexpectedEvent(img_recv_msg);
@@ -1343,6 +1442,7 @@ static void vImageTask(void *pvParameters) {
     g_timer_period = 0;
     g_img_data = 0;
     g_imageSeqNum = 0; // 0 indicates no SD card
+    g_wdt_event = false;
 
     int  nnStatus = -1;	// -1 means disabled
     uint16_t interval;
@@ -1511,8 +1611,7 @@ static void vImageTask(void *pvParameters) {
         internal_msg.msg_parameter = fatfs_getOperationalParameter(OP_PARAMETER_PICTURE_INTERVAL);
         internal_msg.msg_event = APP_MSG_IMAGETASK_STARTCAPTURE;
 
-        if (xQueueSend(xImageTaskQueue, (void *)&internal_msg, __QueueSendTicksToWait) != pdTRUE)
-        {
+        if (xQueueSend(xImageTaskQueue, (void *)&internal_msg, __QueueSendTicksToWait) != pdTRUE) {
             xprintf("Failed to send 0x%x to imageTask\r\n", internal_msg.msg_event);
         }
     }
@@ -1544,6 +1643,7 @@ static void vImageTask(void *pvParameters) {
     		// Special case (temporary?) to ensure the LED is switched off regardless of the state:
     		if (img_recv_msg.msg_event == APP_MSG_IMAGETASK_FLASH_OFF) {
     			ledFlashDisable();
+				send_msg.destination = NULL;
     		}
     		else {
     			switch (image_task_state)   {
@@ -1582,7 +1682,7 @@ static void vImageTask(void *pvParameters) {
     			default:
     				send_msg = flagUnexpectedEvent(img_recv_msg);
     				break;
-    			} // swicth
+    			} // switch
     		}
 
     		if (old_state != image_task_state)   {
@@ -1707,15 +1807,37 @@ static bool configure_image_sensor(CAMERA_CONFIG_E operation) {
     	}
     	else  {
 #ifdef USE_HM0360
+    		XP_LT_GREY;
+#ifdef USE_HM0360_CAPTURE_TIMER
+    		// Will use HM0360 internal timer to trigger each capture
     		hm0360_md_setMode(CONTEXT_A, MODE_SW_NFRAMES_SLEEP, 1, g_timer_period);
-#endif // USE_HM0360
-    		// turn on the LED regardless of the camera
+#else
+    		// Will use captureTimer to trigger each capture
+    		hm0360_md_setMode(CONTEXT_A, MODE_SW_NFRAMES_SLEEP, 1, 0);
+#endif // USE_HM0360_CAPTURE_TIMER
+    		XP_WHITE;
+#ifdef STROBE_CONTROLS_FLASH
+    		// The HM0360 STROBE pin drives drive the LED
+
+    		if ((fatfs_getOperationalParameter(OP_PARAMETER_LED_BRIGHTNESS_PERCENT) > 0)
+    				&& (fatfs_getOperationalParameter(OP_PARAMETER_FLASH_LED) != 0) )  {
+    			hm0360_md_configureStrobe(HM0360_SENSOR_STROBE_MODE);
+    		}
+    		// else no strobe
+#else
     		ledFlashEnable(fatfs_getOperationalParameter(OP_PARAMETER_FLASH_DURATION));
+#endif //  STROBE_CONTROLS_FLASH
+#else
+    		// turn on the LED for the RP camera
+    		ledFlashEnable(fatfs_getOperationalParameter(OP_PARAMETER_FLASH_DURATION));
+#endif // USE_HM0360
     		cisdp_sensor_start(); // Starts data path sensor control block
     	}
     	break;
 
     case CAMERA_CONFIG_CONTINUE:
+    	// We are ONLY here if the HM0360 is the main camera
+    	// and the HM0360 internal timer will start the next capture
     	if (!cameraSystemEnabled) {
     		processedOK = false;
     	}
@@ -1724,12 +1846,19 @@ static bool configure_image_sensor(CAMERA_CONFIG_E operation) {
     		processedOK = false;
     	}
     	else {
-#ifdef USE_HM0360
-    		// Apparently it is necessary to have this here (changes mode 2->2). TODO figure out why.
-    		hm0360_md_setMode(CONTEXT_A, MODE_SW_NFRAMES_SLEEP, 1, g_timer_period);
-#endif // USE_HM0360
-    		// turn on the LED regardless of the camera
+    		// Wait for the HM0360 internal time to capture the next image.
+    		// Sometimes I get a WDT timeout instead of FRAME_READY - I considered adding this:
+    		// hm0360_md_setMode(CONTEXT_A, MODE_SW_NFRAMES_SLEEP, 1, g_timer_period);
+    		// but that removes the delay (say 1s) between images....
+
+#ifdef STROBE_CONTROLS_FLASH
+    		// Do nothing as the STROBE has been set up
+#else
+    		// We must do manual control, but this is unusable: the LED goes on now
+    		// but the image is not captured for another g_timer_period
     		ledFlashEnable(fatfs_getOperationalParameter(OP_PARAMETER_FLASH_DURATION));
+#endif //  STROBE_CONTROLS_FLASH
+
     		cisdp_sensor_start(); // Starts data path sensor control block
     	}
     	break;
@@ -2493,8 +2622,7 @@ static void processNNOutput(int8_t * outCategories, uint8_t classCount) {
  */
 TaskHandle_t image_createTask(int8_t priority, APP_WAKE_REASON_E wakeReason) {
 
-    if (priority < 0)
-    {
+    if (priority < 0)  {
         priority = 0;
     }
 
@@ -2519,9 +2647,7 @@ TaskHandle_t image_createTask(int8_t priority, APP_WAKE_REASON_E wakeReason) {
     // Initialize semaphore as available (give it once)
     xSemaphoreGive(xJpegBufferSemaphore);
 
-#ifdef USE_HM0360
-    // Using HM0360 so no need for captureTimer
-#else
+    // Could be redundant if the HM0360 internal timer is used for successive captures
     captureTimer = xTimerCreate("CaptureTimer",
                                 pdMS_TO_TICKS(1000), // initial dummy period
                                 pdFALSE,             // one-shot timer
@@ -2532,7 +2658,6 @@ TaskHandle_t image_createTask(int8_t priority, APP_WAKE_REASON_E wakeReason) {
         xprintf("Failed to create captureTimer\n");
         configASSERT(0); // TODO add debug messages?
     }
-#endif // USE_HM0360
 
     if (xTaskCreate(vImageTask, /*(const char *)*/ "IMAGE",
                     3 * configMINIMAL_STACK_SIZE,
@@ -2621,21 +2746,22 @@ void image_sleepNow(void) {
 #if defined(USE_HM0360) || defined(USE_HM0360_MD)
     // HM0360 as main camera
     if (hm0360_md_isHM0360Present()) {
+    	XP_LT_GREY;
        	xprintf("Preparing HM0360 for MD\n");
     	hm0360_md_prepare(cameraSystemEnabled, mdInterval); // select CONTEXT_B registers (if enabled)
 
     	// Consider turning on the LED flashes, controlled by the HM0360 STROBE output
     	if ((brightnessPercent == 0) || (ledInUse == 0) || (mdInterval == 0))  {
-    		// No STROBE pulses because brightnees=0 or neither LED selected or MD is disabled
+    		// No STROBE pulses because brightness=0 or neither LED selected or MD is disabled
     		xprintf("   No LED flashes.\n");
     		hm0360_md_configureStrobe(0);
     	}
     	else {
-    		// Configure STROBE pulses - NOTE: normal mode is 0x0b = 'dynamic 2'
-    		xprintf("   LED flashes (Strobe mode 0x%02x)\n", fatfs_getOperationalParameter(OP_PARAMETER_STROBE_MODE));
-    		//hm0360_md_configureStrobe(0x0B);
-    		hm0360_md_configureStrobe(fatfs_getOperationalParameter(OP_PARAMETER_STROBE_MODE));
+    		// Configure STROBE pulses
+    		xprintf("   LED flashes (Strobe mode 0x%02x)\n", HM0360_SENSOR_STROBE_MODE);
+    		hm0360_md_configureStrobe(HM0360_SENSOR_STROBE_MODE);
     	}
+    	XP_WHITE;
     }
     else {
     	xprintf("HM0360 missing...\n");
@@ -2663,8 +2789,7 @@ void image_sleepNow(void) {
 //    	else   {
 //            // Configure STROBE pulses - NOTE: normal mode is 0x0b = 'dynamic 2'
 //            xprintf("Preparing HM0360 for MD - with LED flashes 0x%02x\n", fatfs_getOperationalParameter(OP_PARAMETER_STROBE_MODE));
-//            //hm0360_md_configureStrobe(0x0B);
-//            hm0360_md_configureStrobe(fatfs_getOperationalParameter(OP_PARAMETER_STROBE_MODE));
+//            hm0360_md_configureStrobe(HM0360_SENSOR_STROBE_MODE);
 //    	}
 //    }
 //    else {
@@ -2674,9 +2799,16 @@ void image_sleepNow(void) {
 //
 //#endif // USE_HM0360_MD
 
-    xprintf("\nEnter DPD mode!\n\n");
-
-    timelapseDelay = fatfs_getOperationalParameter(OP_PARAMETER_TIMELAPSE_INTERVAL);
+    // TODO - We could retry if we had a timeout?
+    if (g_wdt_event) {
+    	XP_YELLOW;
+    	xprintf(">>> RETRY due to WDT event\n\a");
+    	XP_WHITE;
+    	timelapseDelay = 1;	// 1 second delay
+    }
+    else {
+    	timelapseDelay = fatfs_getOperationalParameter(OP_PARAMETER_TIMELAPSE_INTERVAL);
+    }
 
     if (timelapseDelay > 0) {
         // Enable wakeup on WAKE pin and timer
@@ -2688,3 +2820,4 @@ void image_sleepNow(void) {
         sleep_mode_enter_dpd(SLEEPMODE_WAKE_SOURCE_WAKE_PIN, 0, false); // Does not return
     }
 }
+

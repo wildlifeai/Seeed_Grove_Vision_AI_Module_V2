@@ -2,6 +2,7 @@
 // Note this also require changing op param OP_PARAMETER_STROBE_MODE 
 //		Result: 2 pulses at MD sampling time: 2.8ms and 16.6ms
 //		then a 16.6ms pulse inside VSYNC
+// ALSO - enable output in context B to view VSYNC during MD DPD)
 // Strobe Control Registers - 0x3080-0x3089 
 		{HX_CIS_I2C_Action_W, 0x3080, 0x03},	// STROBE_CFG Modes: Static=5; Dynamic 1=3; Dynamic 2=B; Multiple = 13
 		{HX_CIS_I2C_Action_W, 0x3081, 0x00},	// STROBE_SEL		0: align to start of reset field 1: align to end of reset field	
@@ -13,3 +14,5 @@
 		{HX_CIS_I2C_Action_W, 0x3087, 0x20},	// STROBE_LINE_L
 		{HX_CIS_I2C_Action_W, 0x3088, 0x00},	// STROBE_FRAME_H	= number of strobes
 		{HX_CIS_I2C_Action_W, 0x3089, 0x04},	// STROBE_FRAME_L
+		{HX_CIS_I2C_Action_W, 0x356A, 0x01},	// FRAME_OUTPUT_EN_B - Enable output in Context B (so view VSYNC)
+		

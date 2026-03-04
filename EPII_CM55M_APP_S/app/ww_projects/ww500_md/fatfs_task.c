@@ -297,9 +297,6 @@ static FRESULT fileWriteImage(fileOperation_t *fileOp, directoryManager_t *dirMa
 		fileOp->length = 0;
 		fileOp->res = res;
 
-		// Restore base dir
-		// f_chdir(dirManager->base_dir);
-
 		return res;
 	}
 
@@ -313,9 +310,6 @@ static FRESULT fileWriteImage(fileOperation_t *fileOp, directoryManager_t *dirMa
 			time.tm_hour, time.tm_min, time.tm_sec,
 			time.tm_mday, time.tm_mon, time.tm_year);
 
-	// CGP - no need?
-	// Restore base dir
-	// res = f_chdir(dirManager->base_dir);
 	return res;
 }
 
@@ -745,9 +739,6 @@ static FRESULT load_configuration(const char *filename, directoryManager_t *dirM
 		dirManager->configOpen = false;
 	}
 	dirManager->configRes = res;
-	// Restore the original directory
-	// CGP - no need to?
-	//f_chdir(dirManager->base_dir);
 
 	return res;
 }
@@ -840,8 +831,6 @@ FRESULT save_configuration(const char *filename, directoryManager_t *dirManager)
 			dirManager->configOpen = false;
 		}
 		dirManager->configRes = res;
-		// CGP - no need to?
-		//f_chdir(dirManager->base_dir);
 	}
 
 	return dirManager->configRes;

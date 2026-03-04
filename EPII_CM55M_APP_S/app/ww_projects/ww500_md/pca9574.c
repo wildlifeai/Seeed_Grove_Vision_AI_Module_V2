@@ -54,7 +54,6 @@ static void restoreMainCameraConfig(void);
  *  @param - I2C address of the PCA9574 to be selected.
  */
 static void saveMainCameraConfig(uint8_t deviceAddress) {
-
 	hx_drv_cis_get_slaveID(&mainCameraID);
     hx_drv_cis_set_slaveID(deviceAddress);
 }

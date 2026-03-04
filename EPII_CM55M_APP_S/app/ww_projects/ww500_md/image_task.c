@@ -298,6 +298,7 @@ const char *imageTaskEventString[APP_MSG_IMAGETASK_LAST - APP_MSG_IMAGETASK_FIRS
     "Image Event NN Model Updated",
     "Image Event NN Erase Model",
     "Image Event NN Model Erased",
+    "Image Event Flash Off",
     "Image Event Error"
 };
 
@@ -412,8 +413,7 @@ static void setFileOpFromJpeg(uint32_t jpeg_sz, uint32_t jpeg_addr)
  * The common event is SENSORDPLIB_STATUS_XDMA_FRAME_READY which results in a
  * APP_MSG_DPEVENT_XDMA_FRAME_READY message in dp_task queue
  */
-void os_app_dplib_cb(SENSORDPLIB_STATUS_E event)
-{
+void os_app_dplib_cb(SENSORDPLIB_STATUS_E event) {
     APP_MSG_T dp_msg;
     BaseType_t xHigherPriorityTaskWoken;
 
@@ -424,8 +424,7 @@ void os_app_dplib_cb(SENSORDPLIB_STATUS_E event)
 
     // dbg_printf(DBG_LESS_INFO, "os_app_dplib_cb event = %d\n", event);
 
-    switch (event)
-    {
+    switch (event)   {
     case SENSORDPLIB_STATUS_ERR_FS_HVSIZE:
     case SENSORDPLIB_STATUS_ERR_FE_TOGGLE:
     case SENSORDPLIB_STATUS_ERR_FD_TOGGLE:
@@ -579,12 +578,10 @@ void os_app_dplib_cb(SENSORDPLIB_STATUS_E event)
     }
 
     dp_msg.msg_data = 0;
-    //    dbg_printf(DBG_LESS_INFO, "Received event 0x%04x from Sensor Datapath. Sending 0x%04x  to Image Task\r\n",
-    //    		dp_msg.msg_event, dp_msg.msg_data);
+    dp_msg.msg_parameter = 0;
     xQueueSendFromISR(xImageTaskQueue, &dp_msg, &xHigherPriorityTaskWoken);
 
-    if (xHigherPriorityTaskWoken)
-    {
+    if (xHigherPriorityTaskWoken)  {
         taskYIELD();
     }
 }
@@ -758,6 +755,8 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
 
     case APP_MSG_IMAGETASK_FRAME_READY:
         // Here when the image sub-system has captured an image.
+
+    	ledFlashDisable(); // finished with the LED flash. Turn it off.
 
 #if defined(USE_HM0360) || defined(USE_HM0360_MD)
         // By deferring the clearing of the interrupt till here we can measure the latency of interrupt to image captured.
@@ -999,8 +998,7 @@ static APP_MSG_DEST_T handleEventForNNProcessing(APP_MSG_T img_recv_msg) {
     send_msg.destination = NULL;
     diskStatus = img_recv_msg.msg_data;
 
-    switch (event)
-    {
+    switch (event)   {
 
     case APP_MSG_IMAGETASK_DISK_WRITE_COMPLETE:
         // Increment sequence number BEFORE releasing semaphore
@@ -1523,81 +1521,82 @@ static void vImageTask(void *pvParameters) {
 
     // Loop forever, taking events from xImageTaskQueue as they arrive
     for (;;)  {
-        // Wait for a message in the queue
-        if (xQueueReceive(xImageTaskQueue, &(img_recv_msg), __QueueRecvTicksToWait) == pdTRUE) {
-            event = img_recv_msg.msg_event;
-            recv_data = img_recv_msg.msg_data;
+    	// Wait for a message in the queue
+    	if (xQueueReceive(xImageTaskQueue, &(img_recv_msg), __QueueRecvTicksToWait) == pdTRUE) {
+    		event = img_recv_msg.msg_event;
+    		recv_data = img_recv_msg.msg_data;
 
-            // convert event to a string
-            if ((event >= APP_MSG_IMAGETASK_FIRST) && (event < APP_MSG_IMAGETASK_LAST))
-            {
-                event_string = imageTaskEventString[event - APP_MSG_IMAGETASK_FIRST];
-            }
-            else
-            {
-                event_string = "Unrecognised";
-            }
+    		// convert event to a string
+    		if ((event >= APP_MSG_IMAGETASK_FIRST) && (event < APP_MSG_IMAGETASK_LAST))  {
+    			event_string = imageTaskEventString[event - APP_MSG_IMAGETASK_FIRST];
+    		}
+    		else   {
+    			event_string = "Unrecognised";
+    		}
 
-            XP_LT_CYAN
-            xprintf("IMAGE Task ");
-            XP_WHITE;
-            xprintf("received event '%s' (0x%04x). Rx data = 0x%08x\r\n", event_string, event, recv_data);
+    		XP_LT_CYAN
+			xprintf("IMAGE Task ");
+    		XP_WHITE;
+    		xprintf("received event '%s' (0x%04x). Rx data = 0x%08x\r\n", event_string, event, recv_data);
 
-            old_state = image_task_state;
+    		old_state = image_task_state;
 
-            switch (image_task_state)
-            {
-            case APP_IMAGE_TASK_STATE_UNINIT:
-                send_msg = flagUnexpectedEvent(img_recv_msg);
-                break;
+    		// Special case (temporary?) to ensure the LED is switched off regardless of the state:
+    		if (img_recv_msg.msg_event == APP_MSG_IMAGETASK_FLASH_OFF) {
+    			ledFlashDisable();
+    		}
+    		else {
+    			switch (image_task_state)   {
+    			case APP_IMAGE_TASK_STATE_UNINIT:
+    				send_msg = flagUnexpectedEvent(img_recv_msg);
+    				break;
 
-            case APP_IMAGE_TASK_STATE_INIT:
-                send_msg = handleEventForInit(img_recv_msg);
-                break;
+    			case APP_IMAGE_TASK_STATE_INIT:
+    				send_msg = handleEventForInit(img_recv_msg);
+    				break;
 
-            case APP_IMAGE_TASK_STATE_CAPTURING:
-                send_msg = handleEventForCapturing(img_recv_msg);
-                break;
-                //
-                //            case APP_IMAGE_TASK_STATE_BUSY:
-                //                send_msg = handleEventForBusy(img_recv_msg);
-                //                break;
+    			case APP_IMAGE_TASK_STATE_CAPTURING:
+    				send_msg = handleEventForCapturing(img_recv_msg);
+    				break;
+    				//
+					//            case APP_IMAGE_TASK_STATE_BUSY:
+						//                send_msg = handleEventForBusy(img_recv_msg);
+    				//                break;
 
-            case APP_IMAGE_TASK_STATE_NN_PROCESSING:
-                send_msg = handleEventForNNProcessing(img_recv_msg);
-                break;
+    			case APP_IMAGE_TASK_STATE_NN_PROCESSING:
+    				send_msg = handleEventForNNProcessing(img_recv_msg);
+    				break;
 
-            case APP_IMAGE_TASK_STATE_WAIT_FOR_TIMER:
-                send_msg = handleEventForWaitForTimer(img_recv_msg);
-                break;
+    			case APP_IMAGE_TASK_STATE_WAIT_FOR_TIMER:
+    				send_msg = handleEventForWaitForTimer(img_recv_msg);
+    				break;
 
-            case APP_IMAGE_TASK_STATE_SAVE_STATE:
-                send_msg = handleEventForSaveState(img_recv_msg);
-                break;
+    			case APP_IMAGE_TASK_STATE_SAVE_STATE:
+    				send_msg = handleEventForSaveState(img_recv_msg);
+    				break;
 
-            case APP_IMAGE_TASK_STATE_UPDATING_NN:
-                send_msg = handleEventForNNUpdate(img_recv_msg);
-                break;
+    			case APP_IMAGE_TASK_STATE_UPDATING_NN:
+    				send_msg = handleEventForNNUpdate(img_recv_msg);
+    				break;
 
-            default:
-                send_msg = flagUnexpectedEvent(img_recv_msg);
-                break;
-            }
+    			default:
+    				send_msg = flagUnexpectedEvent(img_recv_msg);
+    				break;
+    			} // swicth
+    		}
 
-            if (old_state != image_task_state)
-            {
-                // state has changed
-                XP_LT_CYAN;
-                xprintf("IMAGE Task state changed ");
-                XP_WHITE;
-                xprintf("from '%s' (%d) to '%s' (%d)\r\n",
-                        imageTaskStateString[old_state], old_state,
-                        imageTaskStateString[image_task_state], image_task_state);
-            }
+    		if (old_state != image_task_state)   {
+    			// state has changed
+    			XP_LT_CYAN;
+    			xprintf("IMAGE Task state changed ");
+    			XP_WHITE;
+    			xprintf("from '%s' (%d) to '%s' (%d)\r\n",
+    					imageTaskStateString[old_state], old_state,
+						imageTaskStateString[image_task_state], image_task_state);
+    		}
 
             // Passes message to other tasks if required (commonly fatfs)
-            if (send_msg.destination != NULL)
-            {
+            if (send_msg.destination != NULL)   {
                 target_queue = send_msg.destination;
                 if (xQueueSend(target_queue, (void *)&send_msg, __QueueSendTicksToWait) != pdTRUE)
                 {
@@ -2505,8 +2504,7 @@ TaskHandle_t image_createTask(int8_t priority, APP_WAKE_REASON_E wakeReason) {
     image_task_state = APP_IMAGE_TASK_STATE_UNINIT;
 
     xImageTaskQueue = xQueueCreate(IMAGE_TASK_QUEUE_LEN, sizeof(APP_MSG_T));
-    if (xImageTaskQueue == 0)
-    {
+    if (xImageTaskQueue == 0)  {
         xprintf("Failed to create xImageTaskQueue\n");
         configASSERT(0); // TODO add debug messages?
     }
@@ -2514,8 +2512,7 @@ TaskHandle_t image_createTask(int8_t priority, APP_WAKE_REASON_E wakeReason) {
     // Create binary semaphore to protect JPEG buffer from being reused before write completes
     // semaphore vs mutex: https://chatgpt.com/share/69706528-d250-8005-973b-6ab43c1b4629
     xJpegBufferSemaphore = xSemaphoreCreateBinary();
-    if (xJpegBufferSemaphore == NULL)
-    {
+    if (xJpegBufferSemaphore == NULL)   {
         xprintf("Failed to create xJpegBufferSemaphore\n");
         configASSERT(0);
     }
@@ -2540,8 +2537,7 @@ TaskHandle_t image_createTask(int8_t priority, APP_WAKE_REASON_E wakeReason) {
     if (xTaskCreate(vImageTask, /*(const char *)*/ "IMAGE",
                     3 * configMINIMAL_STACK_SIZE,
                     NULL, priority,
-                    &image_task_id) != pdPASS)
-    {
+                    &image_task_id) != pdPASS) {
         xprintf("Failed to create vImageTask\n");
         configASSERT(0); // TODO add debug messages?
     }

@@ -15,6 +15,7 @@
 #include "FreeRTOS.h"
 #include "timers.h"
 
+#include "app_msg.h"
 #include "xprintf.h"
 #include "printf_x.h"	// Print colours
 
@@ -41,6 +42,11 @@
 
 static void FlashOffTimerCallback(TimerHandle_t xTimer);
 
+/*************************************** External variables *******************************************/
+
+// These are the handles for the input queues of the two tasks. So we can send them messages
+extern QueueHandle_t xImageTaskQueue;
+
 /*************************************** Local variables ******************************/
 
 static bool ledFlashInitialised = false;
@@ -54,8 +60,32 @@ static bool inhibitFlash;
 
 /*************************************** Local Function Definitions *******************/
 
+/**
+ * Timer has asked us to turn off the flash LED.
+ * Since this has come from the timer we must use the 'fromISR' function
+ *
+ * The message is delivered to the image_task queue and the result
+ * is that the LED is turned off.
+ *
+ * TODO - probaby we can mamage the iamge_task state machine so it
+ * turns off the flash LED based on state transitions. But for now....
+ *
+ */
 static void FlashOffTimerCallback(TimerHandle_t xTimer) {
-	ledFlashDisable();
+	//ledFlashDisable();
+
+    APP_MSG_T timerOffMsg;
+    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+
+    timerOffMsg.msg_event = APP_MSG_IMAGETASK_FLASH_OFF;
+    timerOffMsg.msg_data = 0;
+    timerOffMsg.msg_parameter = 0;
+
+    xQueueSendFromISR(xImageTaskQueue, &timerOffMsg, &xHigherPriorityTaskWoken);
+
+    if (xHigherPriorityTaskWoken)  {
+        taskYIELD();
+    }
 }
 
 /********************************** Public Function Definitions ***********************/
@@ -190,7 +220,10 @@ void ledFlashSelectLED(FlashLeds_t led) {
 
 /**
  * Turns on the Flash LED
- * The LED will be turned off later by a timer.
+ * The LED will be turned off when the Frame Ready message arrives.
+ * At present the LED will also be turned off later by a timer,
+ * but this is redundant. Left in at present as a precaution.
+ * Also turned off explicitly before entering DPD, again as a precaution.
  *
  * NOTE: this turns on the FLASHEN bit but does NOT affect the HM0360 whose STROBE pin might also flash the LED.
  *

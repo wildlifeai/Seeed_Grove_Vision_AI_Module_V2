@@ -12,6 +12,14 @@
 #ifndef APP_WW_PROJECTS_WW_TEMPLATE_APP_MSG_H_
 #define APP_WW_PROJECTS_WW_TEMPLATE_APP_MSG_H_
 
+// FreeRTOS kernel includes.
+// Has been necessary sometimes so compiler knows about QueueHandle_t
+#include "FreeRTOS.h"
+#include "task.h"
+#include "queue.h"
+#include "timers.h"
+#include "semphr.h"
+
 /**
  * \enum CDM_ERROR_E
  * \brief CDM Errors Type
@@ -197,7 +205,7 @@ typedef enum {
 	APP_MSG_FATFSTASK_LAST		 				=0x0904,
 
 	// Messages directed to image task
-	// IMPORTANT! Values must have a matching string in imageTaskEventString[] IN image_task.c
+	// IMPORTANT! Values must have a matching string in imageTaskEventString[] in image_task.c
 	APP_MSG_IMAGETASK_FIRST 					=0x0A00,
 	APP_MSG_IMAGETASK_INACTIVITY 				=0x0A00, // Inactivity detected
 	APP_MSG_IMAGETASK_STARTCAPTURE 				=0x0A01, //
@@ -212,8 +220,9 @@ typedef enum {
 	APP_MSG_IMAGETASK_NN_MODEL_UPDATED    		=0x0A0A, //
 	APP_MSG_IMAGETASK_NN_ERASE_MODEL      		=0x0A0B, //
 	APP_MSG_IMAGETASK_NN_MODEL_ERASED      		=0x0A0C, //
-	APP_MSG_IMAGETASK_ERROR 					=0x0A0D, //
-	APP_MSG_IMAGETASK_LAST 						=0x0A0E,
+	APP_MSG_IMAGETASK_FLASH_OFF      			=0x0A0D, // Timer asks to turn off the flash LED
+	APP_MSG_IMAGETASK_ERROR 					=0x0A0E, //
+	APP_MSG_IMAGETASK_LAST 						=0x0A0F,
 
 } APP_MSG_EVENT_E;
 

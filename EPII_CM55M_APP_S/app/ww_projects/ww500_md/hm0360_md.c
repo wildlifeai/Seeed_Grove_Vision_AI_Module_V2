@@ -10,6 +10,7 @@
 /********************************** Includes ******************************************/
 
 #include <stdbool.h>
+
 #include "xprintf.h"
 #include "printf_x.h"	// Print colours
 #include "hm0360_md.h"
@@ -20,6 +21,7 @@
 
 
 /*************************************** Defines **************************************/
+
 
 /*************************************** Local Function Declarations ******************/
 
@@ -52,10 +54,12 @@ static HX_CIS_SensorSetting_t HM0360_md_init_setting[] = {
  * Configure the image sensor I2C address to be the HM0360.
  */
 static void saveMainCameraConfig(void) {
+
 	if (hm0360MainCamera) {
 		// Don't waste time saving and restoring this
 		return;
 	}
+
 	hx_drv_cis_get_slaveID(&mainCameraID);
     hx_drv_cis_set_slaveID(HM0360_SENSOR_I2CID);
 }
@@ -92,7 +96,7 @@ static uint16_t calculateSleepTime(uint32_t interval) {
 		sleepCount = 0xffff;
 	}
 
-	xprintf("Interval of %dms gives sleep count = 0x%04x\n", interval, sleepCount);
+	xprintf("   Interval of %dms gives sleep count = 0x%04x\n", interval, sleepCount);
 
 	return (uint16_t) sleepCount;
 }
@@ -283,7 +287,7 @@ HX_CIS_ERROR_E hm0360_md_setMode(uint8_t context, mode_select_t newMode,
 		hm0360_md_enableInterrupt();
 	}
 
-	xprintf("  Changing mode from %d to %d with nFrames=%d, sleepTime=%d sleepCount = 0x%04x\r\n",
+	xprintf("   Changing mode from %d to %d with nFrames=%d, sleepTime=%d sleepCount = 0x%04x\r\n",
 			currentMode, newMode, numFrames, sleepTime, sleepCount);
 
 	// Disable before making changes by going to MODE_SLEEP

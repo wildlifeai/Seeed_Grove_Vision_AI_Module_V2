@@ -1,5 +1,5 @@
 # HM0360 on WW500 Summary
-#### CGP 9/6/25
+#### CGP 25/2/26
 
 The HM0360 is a an image sensor from Himax. Its importnat feature for WW500 is its motion detection feature.
 Its web page is [here](https://www.himax.com.tw/products/cmos-image-sensor/always-on-vision-sensors/hm0360/).
@@ -132,8 +132,18 @@ At this point you should assume that this is untested (I probably tested it just
 The binary file is created by a Python script `scan_cis_settings.py` which is present in the
 `_Tools` folder. It is well documented. It processes a text file and prodces a binary file.
 
-## More to follow...
- 
+## Other sources of Information
+
+Claude found some examples of people using the HM0360 - worth documenting here:
+
+1. 	[Teensy Camera](https://github.com/mjs513/Teensy_Camera/tree/main/src/Teensy_HM0360) - has regsiter settinga and source code from OpenMV project
+2.	[Zephyr Project](https://github.com/zephyrproject-rtos/zephyr/blob/main/drivers/video/hm0360.c) - HM0360 driver 
+3.	I searched [Himax Github]() for `0x3080` which  is the STROBE control register - 
+I found reference to [sensor_default_strobe_on[] ]( https://github.com/HimaxWiseEyePlus/Himax-WiseEye-Module-G1-SDK/blob/9975107977f561cf139625a44649d4356fe7c604/WE2_CM55M_APP_S/app/scenario_app/app_api/src/hm0360_mono/app_cisdp_cfg.c#L297)
+
+
+
+
 
 
 

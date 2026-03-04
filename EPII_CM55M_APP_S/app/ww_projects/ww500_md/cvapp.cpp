@@ -118,6 +118,7 @@ extern QueueHandle_t xImageTaskQueue;
 
 
 #ifdef TFLM_2412
+//	Later library - defined in the makefile
 #pragma message "Using tflmtag2412_u55tag2411"
 #else
 #pragma message "Using tflmtag2209_u55tag2205"

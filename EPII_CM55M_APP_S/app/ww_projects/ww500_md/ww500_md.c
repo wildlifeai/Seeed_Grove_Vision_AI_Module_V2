@@ -561,6 +561,22 @@ void app_ledBlue(bool on) {
 #endif // PB10ISLEDBLUE
 }
 
+/**
+ * Calculates an elapsed time
+ *
+ * @param startTime - time the activity started
+ * @return elapsed time in ms
+ */
+uint32_t app_getElapsedMs(TickType_t startTime) {
+	TickType_t presentTime;
+	TickType_t elapsedTime;
+
+    presentTime = xTaskGetTickCount();
+    elapsedTime = presentTime - startTime;
+
+    return (elapsedTime * 1000) / configTICK_RATE_HZ;
+}
+
 /*************************************** Main()  *************************************/
 
 /*!

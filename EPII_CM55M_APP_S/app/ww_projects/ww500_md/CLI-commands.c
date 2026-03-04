@@ -637,10 +637,10 @@ static BaseType_t prvDpd(char *pcWriteBuffer, size_t xWriteBufferLen, const char
 	(void)xWriteBufferLen;
 	configASSERT(pcWriteBuffer);
 
-	sprintf(pcWriteBuffer, "Forcing DPD by clearing inactivity period");
+	cli_append(&pcWriteBuffer, &xWriteBufferLen, "Forcing DPD by clearing inactivity period");
 	inactivity_setPeriod(1);	// small number > 0
 
-	/* There is no more data to return after this single string, so return pdFALSE. */
+	// There is no more data to return after this single string, so return pdFALSE.
 	return pdFALSE;
 }
 

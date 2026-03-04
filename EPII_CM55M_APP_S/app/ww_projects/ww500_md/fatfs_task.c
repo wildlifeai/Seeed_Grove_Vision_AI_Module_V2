@@ -746,7 +746,8 @@ static FRESULT load_configuration(const char *filename, directoryManager_t *dirM
 	}
 	dirManager->configRes = res;
 	// Restore the original directory
-	f_chdir(dirManager->base_dir);
+	// CGP - no need to?
+	//f_chdir(dirManager->base_dir);
 
 	return res;
 }
@@ -839,7 +840,8 @@ FRESULT save_configuration(const char *filename, directoryManager_t *dirManager)
 			dirManager->configOpen = false;
 		}
 		dirManager->configRes = res;
-		f_chdir(dirManager->base_dir);
+		// CGP - no need to?
+		//f_chdir(dirManager->base_dir);
 	}
 
 	return dirManager->configRes;

@@ -24,7 +24,6 @@ typedef enum {
 	CAMERA_CONFIG_RUN,
 	CAMERA_CONFIG_CONTINUE,
 	CAMERA_CONFIG_STOP,
-	CAMERA_CONFIG_MD,
 } CAMERA_CONFIG_E;
 
 // Possible states. Values must match imageTaskStateString[] in image_task.c
@@ -71,7 +70,7 @@ typedef enum {
 #define DPDINTERVAL 1000
 
 // Default Duration (ms) that LED Flash is on
-#define FLASHDURATION 100
+#define FLASHDURATION 50
 
 TaskHandle_t image_createTask(int8_t priority, APP_WAKE_REASON_E wakeReason);
 

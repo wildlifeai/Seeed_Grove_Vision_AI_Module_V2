@@ -68,7 +68,7 @@ HX_CIS_ERROR_E hm0360_md_enableInterrupt(void);
 HX_CIS_ERROR_E hm0360_md_disableInterrupt(void);
 
 // Prepare the MD
-HX_CIS_ERROR_E hm0360_md_prepare(bool cameraSystemEnabled);
+HX_CIS_ERROR_E hm0360_md_prepare(bool cameraSystemEnabled, uint16_t mdFrameInterval);
 HX_CIS_ERROR_E hm0360_md_getGainRegs(HM0360_GAIN_T * val);
 
 void hm0360_md_getMDOutput(uint8_t * regTable, uint8_t length);
@@ -76,6 +76,7 @@ void hm0360_md_getMDOutput(uint8_t * regTable, uint8_t length);
 // Configure the HM0360 STROBE pin which can drive the flash cct
 HX_CIS_ERROR_E hm0360_md_configureStrobe(uint8_t val);
 
-HX_CIS_ERROR_E hm0360_md_enableMD(uint16_t mdFrameInterval);
+// Replaced by hm0360_md_prepare()
+//HX_CIS_ERROR_E hm0360_md_enableMD(uint16_t mdFrameInterval);
 
 #endif /* HM0360_MD_H_ */

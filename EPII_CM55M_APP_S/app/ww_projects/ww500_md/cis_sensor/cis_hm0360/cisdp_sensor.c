@@ -50,7 +50,10 @@
 #endif
 
 // CGP This is much larger than for the IMX708 which gives 46256
-#define JPEG_BUFSIZE  76800 //640*480/4
+// I think 46256 is too big also, but I will set the HM0360 to the same size
+// TODO get a better size!
+//#define JPEG_BUFSIZE  76800 //640*480/4
+#define JPEG_BUFSIZE  46256
 __attribute__(( section(".bss.NoInit"))) uint8_t jpegbuf[JPEG_BUFSIZE] __ALIGNED(32);
 
 // CGP why is this 3 bits/pixel?

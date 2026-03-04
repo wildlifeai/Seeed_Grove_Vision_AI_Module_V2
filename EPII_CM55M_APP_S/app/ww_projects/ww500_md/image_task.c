@@ -223,9 +223,12 @@ typedef enum
 } ExifDataType;
 
 // If using the code that has a duplicate buffer then define SECOND_JPEG_BUFSIZE
-// Must by a multiple of 32 bytes.
+// Must be a multiple of 32 bytes.
 // #define JPEG_BUFSIZE  76800 //640*480/4
-#define SECOND_JPEG_BUFSIZE 20000 // jpeg files seem to be about 9k-20k
+// TODO: Surely I must make SECOND_JPEG_BUFSIZE greater than JPEG_BUFSIZE?
+// Better - shift data within the original JPEG buffer!
+//#define SECOND_JPEG_BUFSIZE 20000 // jpeg files seem to be about 9k-20k - but after iincreasing qulaity c. 22k
+#define SECOND_JPEG_BUFSIZE 32000
 
 /*************************************** Local Function Declarations *****************************/
 
@@ -250,9 +253,6 @@ static void setupLEDFlash(void);
 // Send unsolicited message to the master
 static void sendMsgToMaster(char *str);
 
-static void generateImageFileName(uint16_t number);
-static void setFileOpFromJpeg(uint32_t jpeg_sz, uint32_t jpeg_addr);
-
 // When final activity from the FatFS Task and IF Task are complete, enter DPD
 static void sleepWhenPossible(void);
 
@@ -260,6 +260,8 @@ static void captureSequenceComplete(void);
 
 static void changeEnableState(bool setEnabled);
 static void processNNOutput(int8_t * outCategories, uint8_t classCount);
+
+static void prepareImageForDisk(int8_t * outCategories, uint8_t classCount, bool jpeg);
 
 /*************************************** Local EXIF-related Declarations *****************************/
 
@@ -358,7 +360,7 @@ const char *imageTaskEventString[APP_MSG_IMAGETASK_LAST - APP_MSG_IMAGETASK_FIRS
 };
 
 // There is only one file name for images - this can be declared here - does not need malloc
-static char imageFileName[IMAGEFILENAMELEN];
+static char g_imageFileName[IMAGEFILENAMELEN];
 
 // This is the most recently written file name
 static char lastImageFileName[IMAGEFILENAMELEN] = "";
@@ -447,55 +449,6 @@ static void capture_timer_callback(TimerHandle_t xTimer) {
     if (xQueueSend(xImageTaskQueue, (void *)&send_msg, __QueueSendTicksToWait) != pdTRUE) {
         xprintf("send_msg=0x%x fail\r\n", send_msg.msg_event);
     }
-}
-
-/**
- * Fabricate a file name
- *
- * Place the name in imageFileName
- *
- * @param number - this forms part of the file name
- */
-static void generateImageFileName(uint16_t number)
-{
-#if FF_USE_LFN
-    // Create a file name
-    // file name: 'image_1234_2025-02-03.jpg' = 25 characters, plus trailing '\0'
-    rtc_time time;
-    exif_utc_get_rtc_as_time(&time);
-    snprintf(imageFileName, IMAGEFILENAMELEN, "image_%04d_%d-%02d-%02d.jpg",
-             (uint16_t)frame_num, time.tm_year, time.tm_mon, time.tm_mday);
-#else
-    // Must use 8.3 file name: upper case alphanumeric
-    if (woken == APP_WAKE_REASON_MD)
-    {
-        // Motion has woken us
-        snprintf(imageFileName, IMAGEFILENAMELEN, "MD%06d.JPG", (uint16_t)number);
-    }
-    else
-    {
-        // Must be a time lapse event
-        snprintf(imageFileName, IMAGEFILENAMELEN, "TL%06d.JPG", (uint16_t)number);
-    }
-
-#endif // FF_USE_LFN
-}
-
-/**
- * Sets the fileOp pointers for the data retrieved from cisdp_get_jpginfo()
- *
- * This includes setting the pointer to the jpeg buffer and setting a file name
- *
- * Parameters: uint32_t - jpeg_sz, jpeg_addr, frame_num
- */
-static void setFileOpFromJpeg(uint32_t jpeg_sz, uint32_t jpeg_addr)
-{
-
-    fileOp.fileName = imageFileName;
-    fileOp.buffer = (uint8_t *)jpeg_addr;
-    fileOp.length = jpeg_sz;
-    fileOp.senderQueue = xImageTaskQueue;
-    fileOp.closeWhenDone = true;
 }
 
 /*
@@ -833,14 +786,10 @@ static APP_MSG_DEST_T handleEventForInit(APP_MSG_T img_recv_msg) {
 static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
     APP_MSG_DEST_T send_msg;
     APP_MSG_EVENT_E event;
-    uint32_t jpeg_addr;
-    uint32_t jpeg_sz;
 
     TfLiteStatus ret;
     bool setEnabled;
-    uint16_t exif_len;
     bool skip_nn = false;
-
     // Signed integers
     // Can we use a pointer to the output tensor instead?
     uint8_t classCount;
@@ -958,97 +907,19 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
 		XP_WHITE;
 #endif // 0
 
-        // Proceed to write the jpeg file, even if there is no SD card
-        // since the fatfs_task will handle that.
+#ifdef SAVEBMP
+		prepareImageForDisk(outCategories, classCount, false);
+#else
+		prepareImageForDisk(outCategories, classCount, true);
+#endif // SAVEBMP
 
-        // Take semaphore FIRST before modifying jpeg_exif_buf
-        // This prevents jpeg_exif_buf from being overwritten before previous write completes
-        xSemaphoreTake(xJpegBufferSemaphore, portMAX_DELAY);
+		// Proceed to write the jpeg file, even if there is no SD card
+		// since the fatfs_task will handle that.
+		send_msg.destination = xFatTaskQueue;
+		send_msg.message.msg_event = APP_MSG_FATFSTASK_WRITE_FILE;
+		send_msg.message.msg_data = (uint32_t)&fileOp;
 
-        cisdp_get_jpginfo(&jpeg_sz, &jpeg_addr); // Gets JPEG buffer from hardware encoder
-        // Clearing cache between each capture
-        SCB_InvalidateDCache_by_Addr((void *)jpeg_addr, jpeg_sz);
-
-        // JPEF buffer exists but this will insert EXIF data and increase jpeg_sz
-        exif_len = insertExif(jpeg_sz, jpeg_addr, outCategories, classCount);
-
-        // Determine which buffer to use based on whether EXIF insertion succeeded
-        uint32_t buffer_to_write;
-        uint32_t size_to_write;
-
-        if (exif_len > 0)  {
-            // EXIF insertion succeeded - use combined buffer
-            buffer_to_write = (uint32_t)jpeg_exif_buf;
-            size_to_write = jpeg_sz + exif_len;
-
-            SCB_CleanDCache_by_Addr((void *)jpeg_exif_buf, size_to_write);
-        }
-        else {
-            // EXIF insertion failed - use original JPEG buffer
-            xprintf("EXIF insertion failed, using original JPEG buffer\n");
-            buffer_to_write = jpeg_addr;
-            size_to_write = jpeg_sz;
-
-            // Flush the original JPEG buffer cache
-            SCB_CleanDCache_by_Addr((void *)jpeg_addr, size_to_write);
-        }
-
-#if 0
-    	// Check by printing some of the buffer that includes the EXIF
-        //uint16_t bytesToPrint = exif_len + 8;
-        uint16_t bytesToPrint = 16;
-
-        XP_LT_GREY;
-    	xprintf("JPEG&EXIF buffer (%d bytes) begins:\n", size_to_write);
-    	for (int i = 0; i < bytesToPrint; i++) {
-    	    xprintf("%02X ", ((uint8_t*)buffer_to_write)[i]);
-    	    if (i%16 == 15) {
-    	    	xprintf("\n");
-    	    }
-    	}
-    	xprintf("\n");
-        XP_WHITE;
-#endif
-
-        g_imageSeqNum = fatfs_getImageSequenceNumber();
-        generateImageFileName(g_imageSeqNum);
-
-        setFileOpFromJpeg(size_to_write, buffer_to_write);
-
-        dbg_printf(DBG_LESS_INFO, "Writing %d bytes (%d + %d) to '%s' from 0x%08x\n",
-                   size_to_write, jpeg_sz, exif_len, fileOp.fileName, buffer_to_write);
-
-        // Save the file name as the most recent image
-        snprintf(lastImageFileName, IMAGEFILENAMELEN, "%s", fileOp.fileName);
-
-        send_msg.destination = xFatTaskQueue;
-        send_msg.message.msg_event = APP_MSG_FATFSTASK_WRITE_FILE;
-        send_msg.message.msg_data = (uint32_t)&fileOp;
-
-        //		// Also see if it is appropriate to send a "Event" message to the BLE processor
-        //		// TODO this won't work if the preceding 'NN+' message is being sent!
-        //		if ((g_cur_jpegenc_frame == g_captures_to_take) && nnPositive) {
-        //
-        //			// TODO DREADFUL HACK!!!
-        //
-        //			// This should be replaced with semaphores that delay until preceding messages have been sent!
-        //			// Instead as a quick hack I am adding a delay here in the hope that the preceding "NN+" message
-        //			// will get through
-        //
-        //			vTaskDelay(pdMS_TO_TICKS(100));
-        //
-        //			// Inform BLE processor
-        //			// For the moment the message body is identical to the "Sleep " message but we might change this later
-        //			snprintf(msgToMaster, MSGTOMASTERLEN, "Event ");
-        //
-        //			for (uint8_t i=0; i < OP_PARAMETER_NUM_ENTRIES; i++) {
-        //				uint8_t next = strlen(msgToMaster);	// points to the place where we should write the next parameter
-        //				snprintf(&msgToMaster[next], sizeof(msgToMaster), "%d ", fatfs_getOperationalParameter(i));
-        //			}
-        //			sendMsgToMaster(msgToMaster);
-        //		}
-
-        // Wait in this state till the disk write completes - expect APP_MSG_IMAGETASK_DISK_WRITE_COMPLETE
+        // Wait in NN_PROCESSING state till the disk write completes - expect APP_MSG_IMAGETASK_DISK_WRITE_COMPLETE
         image_task_state = APP_IMAGE_TASK_STATE_NN_PROCESSING;
 
         break;
@@ -1814,6 +1685,7 @@ static bool configure_image_sensor(CAMERA_CONFIG_E operation) {
         	// HM0360 reported: Memory allocated: 921600 for raw buffer, 76800 for JPEG, 100 for JPEG header
         	// until I changed RAW_BUFSIZE. Then:
         	// Memory allocated: 460800 for raw buffer, 76800 for JPEG, 100 for JPEG header
+        	// Then I reduced JPEG buffer to that of the RP3 (probably still too big).
         	// RP3 camera reports: Memory allocated: 460800 for raw buffer, 46256 for JPEG, 100 for JPEG header
         	xprintf("\r\nCIS Init fail\r\n");
         	processedOK = false;
@@ -1993,7 +1865,103 @@ static void sleepWhenPossible(void) {
 	barrier_ready(&shutdownBarrier);
 }
 
+/**
+ * Prepares to write the image to the disk.
+ *
+ * This code does not actually perform the write: it sets up buffers and the fileOp object
+ * which is passed to the fatfs_task later.
+ *
+ * @param outCategories - array of NN output values
+ * @param classCount - number of entries in outCategories
+ * @param jpeg - true if we are saving a .JPG file - else .BMP
+ */
+static void prepareImageForDisk(int8_t * outCategories, uint8_t classCount, bool jpeg) {
+	uint16_t exif_len = 0;
+	uint32_t data_addr;
+	uint32_t data_sz;
+	uint32_t buffer_to_write;
+	uint32_t size_to_write;
 
+	if (jpeg) {
+		// Take semaphore FIRST before modifying jpeg_exif_buf
+		// This prevents jpeg_exif_buf from being overwritten before previous write completes
+		xSemaphoreTake(xJpegBufferSemaphore, portMAX_DELAY);
+
+		cisdp_get_jpginfo(&data_sz, &data_addr); // Gets JPEG buffer from hardware encoder
+		// Clearing cache between each capture
+		SCB_InvalidateDCache_by_Addr((void *)data_addr, data_sz);
+
+		// JPEF buffer exists but this will insert EXIF data and increase jpeg_sz
+		exif_len = insertExif(data_sz, data_addr, outCategories, classCount);
+	}
+	else {
+		// prepare a buffer here with the BMP data?
+		data_addr = app_get_raw_addr();
+		data_sz = app_get_raw_sz();
+	}
+
+	// Determine which buffer to use based on whether EXIF insertion succeeded
+	if (exif_len > 0)  {
+		// EXIF insertion succeeded - use combined buffer
+		buffer_to_write = (uint32_t)jpeg_exif_buf;
+		size_to_write = data_sz + exif_len;
+
+		SCB_CleanDCache_by_Addr((void *)jpeg_exif_buf, size_to_write);
+	}
+	else {
+		if (jpeg) {
+			// EXIF insertion failed - use original JPEG buffer
+			xprintf("EXIF insertion failed, using original JPEG buffer\n");
+		}
+
+		buffer_to_write = data_addr;
+		size_to_write = data_sz;
+
+		// Flush the original JPEG buffer cache
+		SCB_CleanDCache_by_Addr((void *)data_addr, size_to_write);
+	}
+
+#if 0
+	// Check by printing some of the buffer that includes the EXIF
+	//uint16_t bytesToPrint = exif_len + 8;
+	uint16_t bytesToPrint = 16;
+
+	XP_LT_GREY;
+	xprintf("JPEG&EXIF buffer (%d bytes) begins:\n", size_to_write);
+	for (int i = 0; i < bytesToPrint; i++) {
+		xprintf("%02X ", ((uint8_t*)buffer_to_write)[i]);
+		if (i%16 == 15) {
+			xprintf("\n");
+		}
+	}
+	xprintf("\n");
+	XP_WHITE;
+#endif
+
+	g_imageSeqNum = fatfs_getImageSequenceNumber();
+
+	// Must use 8.3 file name: upper case alphanumeric
+	if (woken == APP_WAKE_REASON_MD)  {
+		// Motion has woken us
+		snprintf(g_imageFileName, IMAGEFILENAMELEN, "MD%06d.%s", g_imageSeqNum, jpeg?"JPG":"BMP");
+	}
+	else   {
+		// Must be a time lapse event
+		snprintf(g_imageFileName, IMAGEFILENAMELEN, "TL%06d.%s", g_imageSeqNum, jpeg?"JPG":"BMP");
+	}
+
+	fileOp.fileName = g_imageFileName;	// a global
+	fileOp.buffer = (uint8_t *)buffer_to_write;
+	fileOp.length = size_to_write;
+	fileOp.senderQueue = xImageTaskQueue;
+	fileOp.closeWhenDone = true;
+
+	dbg_printf(DBG_LESS_INFO, "Writing %d bytes (%d + %d) to '%s' from 0x%08x\n",
+			size_to_write, data_sz, exif_len, fileOp.fileName, buffer_to_write);
+
+	// Save the file name as the most recent image
+	snprintf(lastImageFileName, IMAGEFILENAMELEN, "%s", fileOp.fileName);
+}
 
 /*************************************** Local EXIF-related Definitions *****************************/
 
@@ -2051,16 +2019,14 @@ static void sleepWhenPossible(void) {
 // Copy of what is in cisdp_sensor
 
 static uint16_t insertExif(uint32_t jpeg_sz, uint32_t jpeg_addr,
-                           int8_t *outCategories, uint8_t categoriesCount)
-{
+                           int8_t *outCategories, uint8_t categoriesCount) {
     uint16_t exif_len = 0;
     uint8_t *jpeg_buf;
 
     jpeg_buf = (uint8_t *)jpeg_addr;
 
     // Sanity check: must start with FFD8 and then FFE0
-    if (jpeg_buf[0] != 0xFF || jpeg_buf[1] != 0xD8 || jpeg_buf[2] != 0xFF || jpeg_buf[3] != 0xE0)
-    {
+    if (jpeg_buf[0] != 0xFF || jpeg_buf[1] != 0xD8 || jpeg_buf[2] != 0xFF || jpeg_buf[3] != 0xE0) {
         // Handle error: unexpected JPEG structure
         return 0;
     }
@@ -2069,9 +2035,9 @@ static uint16_t insertExif(uint32_t jpeg_sz, uint32_t jpeg_addr,
     exif_len = build_exif_segment(outCategories, categoriesCount);
 
     // Check for enough space (depends on your memory layout)
-    if (jpeg_sz + exif_len > SECOND_JPEG_BUFSIZE)
-    {
+    if (jpeg_sz + exif_len > SECOND_JPEG_BUFSIZE)  {
         // TODO Handle error: buffer too small
+    	xprintf("Buffer too small for JPEG\n");
         return 0;
     }
 
@@ -2387,7 +2353,7 @@ static void create_gps_ifd(uint8_t *gps_ifd_start)
 /**
  * Builds a valid EXIF data structure, including APP1 tag
  *
- * This particular example has hard-coded tags to add, including the X&Y resilutions.
+ * This particular example has hard-coded tags to add, including the X&Y resolutions.
  *
  */
 static uint16_t build_exif_segment(int8_t *outCategories, uint8_t categoriesCount) {

@@ -82,6 +82,89 @@ static HX_CIS_SensorSetting_t HM0360_mirror_setting[] = {
 };
 
 
+// Writes to the tone mapping registers - see data sheet Table 4.5
+static HX_CIS_SensorSetting_t HM0360_tone_mapping_default[] = {
+		{HX_CIS_I2C_Action_W, 0x1030, 0x04},	// CMPRS_01
+		{HX_CIS_I2C_Action_W, 0x1031, 0x08},
+		{HX_CIS_I2C_Action_W, 0x1032, 0x10},
+		{HX_CIS_I2C_Action_W, 0x1033, 0x18},
+		{HX_CIS_I2C_Action_W, 0x1034, 0x20},
+		{HX_CIS_I2C_Action_W, 0x1035, 0x28},
+		{HX_CIS_I2C_Action_W, 0x1036, 0x30},
+		{HX_CIS_I2C_Action_W, 0x1037, 0x38},
+		{HX_CIS_I2C_Action_W, 0x1038, 0x40},
+		{HX_CIS_I2C_Action_W, 0x1039, 0x50},
+		{HX_CIS_I2C_Action_W, 0x103a, 0x60},
+		{HX_CIS_I2C_Action_W, 0x103b, 0x70},
+		{HX_CIS_I2C_Action_W, 0x103c, 0x80},
+		{HX_CIS_I2C_Action_W, 0x103d, 0xa0},
+		{HX_CIS_I2C_Action_W, 0x103e, 0xc0},
+		{HX_CIS_I2C_Action_W, 0x103f, 0xe0},	// CMPRS_16
+};
+
+// Writes to the tone mapping registers - see data sheet Table 4.5
+// The 'low' values are in the standard HM0360_md_init_setting[] array.
+static HX_CIS_SensorSetting_t HM0360_tone_mapping_low[] = {
+		{HX_CIS_I2C_Action_W, 0x1030, 0x09},	// CMPRS_01
+		{HX_CIS_I2C_Action_W, 0x1031, 0x12},
+		{HX_CIS_I2C_Action_W, 0x1032, 0x23},
+		{HX_CIS_I2C_Action_W, 0x1033, 0x31},
+		{HX_CIS_I2C_Action_W, 0x1034, 0x3e},
+		{HX_CIS_I2C_Action_W, 0x1035, 0x4b},
+		{HX_CIS_I2C_Action_W, 0x1036, 0x56},
+		{HX_CIS_I2C_Action_W, 0x1037, 0x5e},
+		{HX_CIS_I2C_Action_W, 0x1038, 0x65},
+		{HX_CIS_I2C_Action_W, 0x1039, 0x72},
+		{HX_CIS_I2C_Action_W, 0x103a, 0x7f},
+		{HX_CIS_I2C_Action_W, 0x103b, 0x8c},
+		{HX_CIS_I2C_Action_W, 0x103c, 0x98},
+		{HX_CIS_I2C_Action_W, 0x103d, 0xb2},
+		{HX_CIS_I2C_Action_W, 0x103e, 0xcc},
+		{HX_CIS_I2C_Action_W, 0x103f, 0xe6},	// CMPRS_16
+};
+
+// Writes to the tone mapping registers - see data sheet Table 4.5
+static HX_CIS_SensorSetting_t HM0360_tone_mapping_medium[] = {
+		{HX_CIS_I2C_Action_W, 0x1030, 0x0f},	// CMPRS_01
+		{HX_CIS_I2C_Action_W, 0x1031, 0x1e},
+		{HX_CIS_I2C_Action_W, 0x1032, 0x36},
+		{HX_CIS_I2C_Action_W, 0x1033, 0x4a},
+		{HX_CIS_I2C_Action_W, 0x1034, 0x5b},
+		{HX_CIS_I2C_Action_W, 0x1035, 0x64},
+		{HX_CIS_I2C_Action_W, 0x1036, 0x6c},
+		{HX_CIS_I2C_Action_W, 0x1037, 0x73},
+		{HX_CIS_I2C_Action_W, 0x1038, 0x79},
+		{HX_CIS_I2C_Action_W, 0x1039, 0x84},
+		{HX_CIS_I2C_Action_W, 0x103a, 0x8f},
+		{HX_CIS_I2C_Action_W, 0x103b, 0x99},
+		{HX_CIS_I2C_Action_W, 0x103c, 0xa4},
+		{HX_CIS_I2C_Action_W, 0x103d, 0xba},
+		{HX_CIS_I2C_Action_W, 0x103e, 0xd0},
+		{HX_CIS_I2C_Action_W, 0x103f, 0xe8},	// CMPRS_16
+};
+
+// Writes to the tone mapping registers - see data sheet Table 4.5
+static HX_CIS_SensorSetting_t HM0360_tone_mapping_high[] = {
+		{HX_CIS_I2C_Action_W, 0x1030, 0x1b},	// CMPRS_01
+		{HX_CIS_I2C_Action_W, 0x1031, 0x36},
+		{HX_CIS_I2C_Action_W, 0x1032, 0x58},
+		{HX_CIS_I2C_Action_W, 0x1033, 0x68},
+		{HX_CIS_I2C_Action_W, 0x1034, 0x74},
+		{HX_CIS_I2C_Action_W, 0x1035, 0x7c},
+		{HX_CIS_I2C_Action_W, 0x1036, 0x82},
+		{HX_CIS_I2C_Action_W, 0x1037, 0x88},
+		{HX_CIS_I2C_Action_W, 0x1038, 0x8c},
+		{HX_CIS_I2C_Action_W, 0x1039, 0x94},
+		{HX_CIS_I2C_Action_W, 0x103a, 0x9e},
+		{HX_CIS_I2C_Action_W, 0x103b, 0xa6},
+		{HX_CIS_I2C_Action_W, 0x103c, 0xb0},
+		{HX_CIS_I2C_Action_W, 0x103d, 0xc2},
+		{HX_CIS_I2C_Action_W, 0x103e, 0xd4},
+		{HX_CIS_I2C_Action_W, 0x103f, 0xea},	// CMPRS_16
+};
+
+
+
 static void HM0360_dp_wdma_addr_init(APP_DP_INP_SUBSAMPLE_E subs) {
     sensordplib_set_xDMA_baseaddrbyapp(g_wdma1_baseaddr, g_wdma2_baseaddr, g_wdma3_baseaddr);
     sensordplib_set_jpegfilesize_addrbyapp(g_jpegautofill_addr);
@@ -582,4 +665,40 @@ uint32_t app_get_raw_height() {
 uint32_t app_get_raw_channels() {
 	return SENCTRL_SENSOR_CH;
 }
+
+/**
+ * Programs one of 4 alternative tone mapping register sets
+ * See data sheet Table 4.5
+ *
+ * @param option - one of TONE_CONFIG_E
+ * @return error code
+ */
+HX_CIS_ERROR_E cisdp_sensor_set_tone(TONE_CONFIG_E option) {
+	HX_CIS_ERROR_E ret;
+
+	switch (option) {
+	case TONE_MAPPING_DEFAULT:
+		ret = hx_drv_cis_setRegTable(HM0360_tone_mapping_default, HX_CIS_SIZE_N(HM0360_tone_mapping_default, HX_CIS_SensorSetting_t));
+		break;
+
+	case TONE_MAPPING_LOW:
+		ret = hx_drv_cis_setRegTable(HM0360_tone_mapping_low, HX_CIS_SIZE_N(HM0360_tone_mapping_low, HX_CIS_SensorSetting_t));
+		break;
+
+	case TONE_MAPPING_MEDIUM:
+		ret = hx_drv_cis_setRegTable(HM0360_tone_mapping_medium, HX_CIS_SIZE_N(HM0360_tone_mapping_medium, HX_CIS_SensorSetting_t));
+		break;
+
+	case TONE_MAPPING_HIGH:
+		ret = hx_drv_cis_setRegTable(HM0360_tone_mapping_high, HX_CIS_SIZE_N(HM0360_tone_mapping_high, HX_CIS_SensorSetting_t));
+		break;
+
+	default:
+		// should not happen
+		ret = HX_CIS_ERROR_INVALID_PARAMETERS;
+		break;
+	}
+	return ret;
+}
+
 

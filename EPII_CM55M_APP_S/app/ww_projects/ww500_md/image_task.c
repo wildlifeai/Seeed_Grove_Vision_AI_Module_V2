@@ -131,9 +131,13 @@
 #endif 	// USE_HM0360
 
 // If uncommented brightness will increment after each image of an image sequence
-#define INVESTIGATE_FLASH_BRIGHTNESS
+//#define INVESTIGATE_FLASH_BRIGHTNESS
 // percentage increment for each image
 #define FLASH_BRIGHTNESS_INCREMENT 18
+
+// If uncommented the tone mapping regsiters will change after each image of an image sequence
+// Since there are 4 options, choose to take 4 images
+#define INVESTIGATE_TONE_MAPPING
 
 // TODO sort out how to allocate priorities
 #define image_task_PRIORITY (configMAX_PRIORITIES - 2)
@@ -276,6 +280,7 @@ static size_t get_gps_ifd_size(void);
 extern QueueHandle_t xFatTaskQueue;
 extern QueueHandle_t xIfTaskQueue;
 
+extern SemaphoreHandle_t xI2CTxSemaphore;
 extern Barrier_t shutdownBarrier;
 
 extern SemaphoreHandle_t xSDInitDoneSemaphore;
@@ -382,7 +387,7 @@ TickType_t startTime;
 /********************************** Local Functions  *************************************/
 
 #ifdef INVESTIGATE_FLASH_BRIGHTNESS
-static uint8_t changingBrightness = 1; // set to 1% at warm boot.
+static uint8_t changingBrightness = 0; // set to 0% at warm boot. (percentage is only approximate and 0 will cause flash be on)
 
 /**
  * Experimental feature that increments flash brightness for each successive image.
@@ -401,6 +406,27 @@ static void incrementBrightness(void) {
 }
 #endif // INVESTIGATE_FLASH_BRIGHTNESS
 
+#ifdef INVESTIGATE_TONE_MAPPING
+static TONE_CONFIG_E changingTone = TONE_MAPPING_DEFAULT; // = 0
+/**
+ * Experimental feature that increments tone mapping value for each successive image.
+ * There are 4 types
+ *
+ * Call before taking the first image of the sequence then again after each frame ready event
+ *
+ * Change after each APP_MSG_IMAGETASK_FRAME_READY event
+ */
+static void incrementToneMapping(void) {
+	cisdp_sensor_set_tone(changingTone);
+
+	// increment the tone for next time
+	changingTone++;
+	if (changingTone >= TONE_MAPPING_NUMBER) {
+		// incremented too far - back off
+		changingTone = TONE_MAPPING_NUMBER - 1;
+	}
+}
+#endif // INVESTIGATE_TONE_MAPPING
 
 /**
  * This is the local callback that executes when the captureTimer expires
@@ -699,13 +725,20 @@ static APP_MSG_DEST_T handleEventForInit(APP_MSG_T img_recv_msg) {
             g_captures_to_take = requested_captures;
             g_timer_period = requested_period;
             XP_LT_GREEN
-            xprintf("Images to capture: %d\n", g_captures_to_take);
+			xprintf("Images to capture: %d\n", g_captures_to_take);
             xprintf("Interval: %dms\n", g_timer_period);
-            XP_WHITE;
 
 #ifdef INVESTIGATE_FLASH_BRIGHTNESS
+            xprintf("LED Flash brightness increments after each image.\n");
             incrementBrightness();
 #endif // INVESTIGATE_FLASH_BRIGHTNESS
+
+#ifdef INVESTIGATE_TONE_MAPPING
+            xprintf("Tone mapping values change after each image.\n");
+            incrementToneMapping();
+#endif // INVESTIGATE_TONE_MAPPING
+
+            XP_WHITE;
 
             // Now start the image sensor.
             configure_image_sensor(CAMERA_CONFIG_RUN);
@@ -718,7 +751,7 @@ static APP_MSG_DEST_T handleEventForInit(APP_MSG_T img_recv_msg) {
         break;
 
     case APP_MSG_IMAGETASK_CHANGE_ENABLE:
-        // We have received an instruction to enable or disable the NN processing system
+    	// We have received an instruction to enable or disable the NN processing system
         setEnabled = (bool)img_recv_msg.msg_data;
         changeEnableState(setEnabled); // 0 means disabled; 1 means enabled
         if (setEnabled) {
@@ -845,6 +878,10 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
         incrementBrightness();
 #endif // INVESTIGATE_FLASH_BRIGHTNESS
 
+#ifdef INVESTIGATE_TONE_MAPPING
+        incrementToneMapping();
+#endif // INVESTIGATE_TONE_MAPPING
+
         ledFlashDisable(); // finished with the LED flash. Turn it off.
 
         // measure time for the frame capture just completed
@@ -869,6 +906,7 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
 
         if (!skip_nn)  {
         	if (ret == kTfLiteOk)  {
+        		// This sends 'NN+' or 'NN-'
         		processNNOutput(outCategories, classCount) ;
         		xprintf("NN processing took %dms\n\n", app_getElapsedMs(startTime));
         	}
@@ -1837,8 +1875,7 @@ static bool configure_image_sensor(CAMERA_CONFIG_E operation) {
 #ifdef STROBE_CONTROLS_FLASH
     		// The HM0360 STROBE pin drives drive the LED
 
-    		if ((fatfs_getOperationalParameter(OP_PARAMETER_LED_BRIGHTNESS_PERCENT) > 0)
-    				&& (fatfs_getOperationalParameter(OP_PARAMETER_FLASH_LED) != 0) )  {
+    		if (fatfs_getOperationalParameter(OP_PARAMETER_FLASH_LED) != 0) {
     			hm0360_md_configureStrobe(HM0360_SENSOR_STROBE_MODE);
     		}
     		// else no strobe
@@ -1931,6 +1968,9 @@ static void setupLEDFlash(void) {
  */
 static void sendMsgToMaster(char *str) {
     APP_MSG_T send_msg;
+
+	// Wait till previous I2C comms transmission is done.
+	xSemaphoreTake(xI2CTxSemaphore, portMAX_DELAY);
 
     // Send back to MKL62BA - msg_data is the string
     send_msg.msg_data = (uint32_t)str;
@@ -2751,11 +2791,9 @@ bool image_getEnabled(void) {
  */
 void image_sleepNow(void) {
     uint32_t timelapseDelay;
-    uint8_t brightnessPercent;
     uint16_t mdInterval;
     FlashLeds_t ledInUse;
 
-    brightnessPercent = (uint8_t)fatfs_getOperationalParameter(OP_PARAMETER_LED_BRIGHTNESS_PERCENT);
     ledInUse = fatfs_getOperationalParameter(OP_PARAMETER_FLASH_LED);
     mdInterval = fatfs_getOperationalParameter(OP_PARAMETER_MD_INTERVAL);
 
@@ -2770,8 +2808,8 @@ void image_sleepNow(void) {
     	hm0360_md_prepare(cameraSystemEnabled, mdInterval); // select CONTEXT_B registers (if enabled)
 
     	// Consider turning on the LED flashes, controlled by the HM0360 STROBE output
-    	if ((brightnessPercent == 0) || (ledInUse == 0) || (mdInterval == 0))  {
-    		// No STROBE pulses because brightness=0 or neither LED selected or MD is disabled
+    	if ((ledInUse == 0) || (mdInterval == 0))  {
+    		// No STROBE pulses because neither LED selected or MD is disabled
     		xprintf("   No LED flashes.\n");
     		hm0360_md_configureStrobe(0);
     	}

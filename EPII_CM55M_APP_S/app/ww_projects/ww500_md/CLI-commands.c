@@ -1516,6 +1516,7 @@ static BaseType_t prvExifGpsTests(char *pcWriteBuffer, size_t xWriteBufferLen, c
 
 /**
  * Specify the NN projectID and version to use
+ * Processes the 'loadmodel <ID> <version>' command
  */
 static BaseType_t prvLoadModel(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) {
 	const char *pcParameter;
@@ -1565,6 +1566,7 @@ static BaseType_t prvLoadModel(char *pcWriteBuffer, size_t xWriteBufferLen, cons
 
 /**
  * Erase the NN model
+ * Processes the 'erasemodel' command
  */
 static BaseType_t prvEraseModel(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) {
 	(void)pcCommandString;

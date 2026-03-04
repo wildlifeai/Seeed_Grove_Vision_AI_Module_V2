@@ -19,6 +19,7 @@
 #include "xprintf.h"
 #include "printf_x.h"	// Print colours
 
+#include "fatfs_task.h"
 #include "ledFlash.h"
 #include "pca9574.h"
 
@@ -63,8 +64,6 @@ static uint8_t controlBits = 0;
 static TimerHandle_t flashOffTimer;
 #endif // TIMER_TURNS_OFF_FLASH
 
-static bool inhibitFlash;
-
 /*************************************** Local Function Definitions *******************/
 
 #ifdef TIMER_TURNS_OFF_FLASH
@@ -105,7 +104,7 @@ static void FlashOffTimerCallback(TimerHandle_t xTimer) {
 /**
  * Enables the LED Flash system.
  *
- * Leaves with both LEDs deselected, brightness at minimum and inhibitFlash = true
+ * Leaves with both LEDs deselected, brightness at minimum
  *
  * @return -true on success
  */
@@ -128,8 +127,6 @@ bool ledFlashInit(void) {
 	// pca9574_init() has set all output bits to output, 0
 	controlBits = 0;
 
-	inhibitFlash = true;
-
 	// Note that at this stage both the IR and visible LEDs are enabled.
 	// The application should call ledFlashSelectLED() to change this.
 	ledFlashSelectLED(0);	// de-select both LEDs
@@ -151,7 +148,9 @@ bool ledFlashInit(void) {
  * Takes the brightness percentage and approximates a value to write to the MOSFETs.
  * This is rough! Might need to revise this e.g. with a switch(brightness) statement
  *
- * @param brightness - a  value that determines brightness - percentage. 0 inhibits flash
+ * Use operational_parameter[OP_PARAMETER_FLASH_LED] to inhibit flash
+ *
+ * @param brightness - a  value that determines brightness - percentage.
  */
 void ledFlashBrightness(uint8_t brightness) {
 	uint8_t brBits;
@@ -159,8 +158,6 @@ void ledFlashBrightness(uint8_t brightness) {
 	if (!ledFlashInitialised) {
 		return;
 	}
-
-	inhibitFlash = (brightness == 0);
 
 	// Convert to a value between 0-15 - approximate!
 	brBits = (brightness * 15 / 100);
@@ -189,8 +186,6 @@ void ledFlashBrightness(uint8_t brightness) {
  *
  * In some hardware implementations there is only one LED - this is VISLED
  *
- * Make sure ledFlashBrightness() is called first as this determines inhibitFlash
- *
  * @param led - a bit mask, one for each LED
  */
 void ledFlashSelectLED(FlashLeds_t led) {
@@ -199,36 +194,26 @@ void ledFlashSelectLED(FlashLeds_t led) {
 		return;
 	}
 
-	if (inhibitFlash) {
-		// Disable both LEDs by setting these bits high
-		controlBits |= LF_VISENABLE;
-		controlBits |= LF_IRENABLE;
+	if (led & VIS_LED) {
+		// Active low, so clear this bit to select the LED
+		controlBits &= ~LF_VISENABLE;
 	}
 	else {
-		if (led & VIS_LED) {
-			// Active low, so clear this bit to select the LED
-			controlBits &= ~LF_VISENABLE;
-		}
-		else {
-			controlBits |= LF_VISENABLE;
-		}
+		controlBits |= LF_VISENABLE;
+	}
 
-		if (led & IR_LED) {
-			// Active low, so clear this bit to select the LED
-			controlBits &= ~LF_IRENABLE;
-		}
-		else {
-			controlBits |= LF_IRENABLE;
-		}
+	if (led & IR_LED) {
+		// Active low, so clear this bit to select the LED
+		controlBits &= ~LF_IRENABLE;
+	}
+	else {
+		controlBits |= LF_IRENABLE;
 	}
 
 	// Don't send except in ledFlashEnable() and ledFlashDisable()
-	// Now send these bits to the PCA9574
-	//pca9574_write(PCA9574_I2C_ADDRESS_0, PCA9574_REG_OUT, controlBits);
 	XP_LT_RED;
-    xprintf("DEBUG: ledFlashSelectLED(%d)\n", led);
-    XP_WHITE;
-
+	xprintf("DEBUG: ledFlashSelectLED(%d)\n", led);
+	XP_WHITE;
 }
 
 /**
@@ -249,9 +234,10 @@ void ledFlashEnable(uint16_t duration) {
 
 	XP_LT_RED;
 
-	if ((inhibitFlash ||
+	if ((fatfs_getOperationalParameter(OP_PARAMETER_FLASH_LED) == 0) ||
 			(duration < LEDFLASHDURATIONMIN) ||
-			(duration > LEDFLASHDURATIONMAX)) ) {
+			(duration > LEDFLASHDURATIONMAX))  {
+		// Neither LED is selected, or inappropriate duration
 		xprintf("DEBUG: not turning on flash\n");
 		ledFlashDisable();
 		return;

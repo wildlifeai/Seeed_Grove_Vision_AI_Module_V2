@@ -410,16 +410,14 @@ void os_app_dplib_cb(SENSORDPLIB_STATUS_E event)
  * Parameters: APP_MSG_T img_recv_msg
  * Returns: APP_MSG_DEST_T send_msg
  */
-static APP_MSG_DEST_T handleEventForInit(APP_MSG_T img_recv_msg)
-{
+static APP_MSG_DEST_T handleEventForInit(APP_MSG_T img_recv_msg) {
     APP_MSG_DEST_T send_msg;
     APP_MSG_EVENT_E event;
     event = img_recv_msg.msg_event;
     send_msg.destination = NULL;
 
     // first instance for request
-    if (g_captures_to_take == 0)
-    {
+    if (g_captures_to_take == 0) {
         // separates the input parameter into two parts, numbers of captures and timer period
         g_captures_to_take = (uint16_t)img_recv_msg.msg_data;
         timer_period = (uint16_t)img_recv_msg.msg_parameter;
@@ -453,9 +451,9 @@ static APP_MSG_DEST_T handleEventForInit(APP_MSG_T img_recv_msg)
         switch (event)  {
         case APP_MSG_IMAGETASK_STARTCAPTURE:
             // the CLI task has asked us to start capturing
-
-            send_msg.destination = xImageTaskQueue;
             image_task_state = APP_IMAGE_TASK_STATE_CAPTURING;
+            // This sends a message to ourselves with the same event (APP_MSG_IMAGETASK_STARTCAPTURE) but now in a different state
+            send_msg.destination = xImageTaskQueue;
             send_msg.message.msg_event = APP_MSG_IMAGETASK_STARTCAPTURE;
             break;
 
@@ -490,8 +488,7 @@ static APP_MSG_DEST_T handleEventForInit(APP_MSG_T img_recv_msg)
             flagUnexpectedEvent(img_recv_msg);
         }
     }
-    else
-    {
+    else  {
         // Current captures sequence completed
         XP_GREEN;
         xprintf("Current captures completed: %d\n", g_captures_to_take);
@@ -515,15 +512,13 @@ static APP_MSG_DEST_T handleEventForInit(APP_MSG_T img_recv_msg)
  * Parameters: APP_MSG_T img_recv_msg
  * Returns: APP_MSG_DEST_T send_msg
  */
-static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg)
-{
+static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
     APP_MSG_DEST_T send_msg;
     APP_MSG_EVENT_E event;
     uint32_t jpeg_addr, jpeg_sz;
     event = img_recv_msg.msg_event;
 
-    switch (event)
-    {
+    switch (event) {
     // starts sensor and image capturing
     case APP_MSG_IMAGETASK_STARTCAPTURE:
         app_start_state(APP_STATE_RESTART);

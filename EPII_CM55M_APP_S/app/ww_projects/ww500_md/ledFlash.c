@@ -190,26 +190,30 @@ void ledFlashSelectLED(FlashLeds_t led) {
 
 /**
  * Turns on the Flash LED
+ * The LED will be turned off later by a timer.
  *
  * NOTE: this turns on the FLASHEN bit but does NOT affect the HM0360 whose STROBE pin might also flash the LED.
  *
  * @param duration - a period after which the flash is turned off
  */
 void ledFlashEnable(uint16_t duration) {
-
 	if (!ledFlashInitialised) {
 		return;
 	}
 
 	XP_LT_RED;
-    xprintf("DEBUG: ledFlashEnable(%dms)\n", duration);
-    XP_WHITE;
 
-
-	if (inhibitFlash) {
+	if ((inhibitFlash ||
+			(duration < LEDFLASHDURATIONMIN) ||
+			(duration > LEDFLASHDURATIONMAX)) ) {
+		xprintf("DEBUG: not turning on flash\n");
 		ledFlashDisable();
 		return;
 	}
+	else {
+		xprintf("DEBUG: ledFlashEnable(%dms)\n", duration);
+	}
+	XP_WHITE;
 
 	controlBits |= LF_FLENABLE;
 	// Now send these bits to the PCA9574

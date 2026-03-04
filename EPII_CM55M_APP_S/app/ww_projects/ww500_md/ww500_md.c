@@ -90,6 +90,19 @@
 // Uncomment this to print linker stats
 //#define PRINTLINKERSTATS
 
+// To print git information
+#ifndef GIT_BRANCH
+#define GIT_BRANCH "unknown"
+#endif
+
+#ifndef GIT_COMMIT
+#define GIT_COMMIT "unknown"
+#endif
+
+#ifndef GIT_DIRTY
+#define GIT_DIRTY ""
+#endif
+
 /*************************************** External variables *******************************************/
 
 extern QueueHandle_t     xIfTaskQueue;
@@ -298,6 +311,10 @@ static void checkForCameras(void) {
 }
 
 /**
+ * Initialises a string with time and date of build.
+ *
+ * TODO there must be a simpler way to do this.
+ * It is only used by the CLI command "ver"
  *
  */
 static void initVersionString(void) {
@@ -573,9 +590,7 @@ int app_main(void){
 #endif	// USE_HM0360
 
 	initVersionString();
-
 	pinmux_init();
-
 	selfTest_init();
 
 	app_ledGreen(false);	// On to show camera activity
@@ -585,8 +600,11 @@ int app_main(void){
 	xprintf("\n**** WW500 MD. (%s) Built: %s %s ****\r\n\n", app_get_board_name_string(), __TIME__, __DATE__);
 	XP_WHITE;
 
+	// print git information
+	xprintf("Git branch: '%s' %s%s\n",  GIT_BRANCH, GIT_COMMIT, GIT_DIRTY);
+
 	// Two different ways of printing the compiler version?
-	xprintf("GCC version: %d.%d.%d\n", __GNUC__, __GNUC_MINOR__, __GNUC_PATCHLEVEL__);
+	//xprintf("GCC version: %d.%d.%d\n", __GNUC__, __GNUC_MINOR__, __GNUC_PATCHLEVEL__);
 	xprintf("Compiler Version: ARM GNU, %s\n\n", __VERSION__);
 
 	//	// We seem to have version D. Note that chipid & version both report 8536000d
@@ -702,37 +720,6 @@ int app_main(void){
 			wakeReason = APP_WAKE_REASON_UNKNOWN;
 		}
 		XP_WHITE;
-
-//#elif defined(USE_HM0360_MD)
-//		// HM0360 is used for MD with a RP camera
-//		if (hm0360_md_isHM0360Present()) {
-//			hm0360_md_getInterruptStatus(&hm0360_interrupt_status);
-//			// Wait till image_task before clearing the interrupt as this allows simple measurement of latency
-//	    	hm0360_md_disableInterrupt();	/// stop further MD activity
-//		}
-//
-//		XP_YELLOW;
-//		if (wakeup_event1 == PMU_WAKEUPEVENT1_DPD_PAD_AON_GPIO_0) {
-//			// The WAKE pin has woken us...
-//			if (hm0360_md_isHM0360Present() && ((hm0360_interrupt_status & MD_INT) == MD_INT)) {
-//				xprintf("Motion detected INT_INDIC = 0x%02x\n", hm0360_interrupt_status);
-//				wakeReason = APP_WAKE_REASON_MD;
-//			}
-//			else {
-//				xprintf("BLE wake\n");
-//				wakeReason = APP_WAKE_REASON_BLE;
-//			}
-//		}
-//		else if (wakeup_event == PMU_WAKEUP_DPD_RTC_INT) {
-//			xprintf("Timer wake\n");
-//			wakeReason = APP_WAKE_REASON_TIMER;
-//		}
-//		else {
-//			// else I don't know! Add more reason in the future
-//			wakeReason = APP_WAKE_REASON_UNKNOWN;
-//		}
-//		XP_WHITE;
-
 #else
 		// RP camera alone - no HM0360
 		XP_YELLOW;

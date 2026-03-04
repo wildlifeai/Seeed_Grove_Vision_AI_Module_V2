@@ -22,9 +22,13 @@ typedef enum flashLeds {
     IR_LED = 2,	 	 // 2 (bit 1)
 } FlashLeds_t;
 
+// Add some limits for duration of flash
+#define LEDFLASHDURATIONMIN 10
+#define LEDFLASHDURATIONMAX 2000
+
 /*************************************** Public Function Declarations **************************/
 
-// Enables the chip - retrns true if OK
+// Enables the chip - returns true if OK
 bool ledFlashInit(void);
 
 // Determine LED brightness

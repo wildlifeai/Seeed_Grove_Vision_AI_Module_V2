@@ -72,6 +72,8 @@ typedef enum {
 	OP_PARAMETER_MODEL_PROJECT,		// 14 Model project ID used for the NN model
 	OP_PARAMETER_MODEL_VERSION,		// 15 Model version number used for the NN model
 	OP_PARAMETER_MODEL_THRESHOLD,	// 16 Logit threshold for detection (0-127)
+	OP_PARAMETER_STROBE_MODE,		// 17 value for HM0360 STROBE_CFG reg: Static=5; Dynamic 1=3; Dynamic 2=B; Multiple = 19 (0x13)
+									// Note the above is likely to be temporary, until I figure out the best way to control the flash
 	OP_PARAMETER_DEPLOYMENT_ID_CHUNK_1 = 20, // 20 Deployment ID Chunk 1 (Hex chars 0-3) - OP15-19 reserved for future use
 	OP_PARAMETER_DEPLOYMENT_ID_CHUNK_2,	  // 21 Deployment ID Chunk 2 (Hex chars 4-7)
 	OP_PARAMETER_DEPLOYMENT_ID_CHUNK_3,	  // 22 Deployment ID Chunk 3 (Hex chars 8-11)

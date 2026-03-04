@@ -1002,12 +1002,10 @@ static APP_MSG_DEST_T handleEventForNNProcessing(APP_MSG_T img_recv_msg) {
     case APP_MSG_IMAGETASK_DISK_WRITE_COMPLETE:
         // Increment sequence number BEFORE releasing semaphore
         // This prevents race condition where next capture reads old sequence number
-        if (diskStatus == 0)
-        {
+        if (diskStatus == 0)  {
             fatfs_incrementOperationalParameter(OP_PARAMETER_SEQUENCE_NUMBER);
         }
-        else
-        {
+        else  {
             dbg_printf(DBG_LESS_INFO, "Image not written. Error: %d\n", diskStatus);
         }
 
@@ -1016,14 +1014,14 @@ static APP_MSG_DEST_T handleEventForNNProcessing(APP_MSG_T img_recv_msg) {
 
         // This represents the point at which an image has been captured and processed.
 
-        if (g_cur_jpegenc_frame == g_captures_to_take)
-        {
+        if (g_cur_jpegenc_frame == g_captures_to_take) {
             captureSequenceComplete();
+            // Stop the image sensor.
+            configure_image_sensor(CAMERA_CONFIG_STOP);
             image_task_state = APP_IMAGE_TASK_STATE_INIT;
         }
 #ifdef USE_HM0360
-        else
-        {
+        else  {
             // The HM0360 uses an internal timer to determine the time for the next image
             // Re-start the image sensor.
             configure_image_sensor(CAMERA_CONFIG_CONTINUE);
@@ -1279,8 +1277,7 @@ static APP_MSG_DEST_T flagUnexpectedEvent(APP_MSG_T img_recv_msg)
  *
  * Placed here as a separate routine as it is called from 2 places.
  */
-static void captureSequenceComplete(void)
-{
+static void captureSequenceComplete(void) {
     // Current captures sequence completed
     XP_GREEN;
     xprintf("Current captures completed: %d\n", g_captures_to_take);
@@ -1345,6 +1342,9 @@ static void vImageTask(void *pvParameters) {
     g_timer_period = 0;
     g_img_data = 0;
     g_imageSeqNum = 0; // 0 indicates no SD card
+
+    int  nnStatus = -1;	// -1 means disabled
+    uint16_t interval;
 
     // Don't proceed until the SD initialisation is done.
     xSemaphoreTake(xSDInitDoneSemaphore, portMAX_DELAY);
@@ -1432,12 +1432,12 @@ static void vImageTask(void *pvParameters) {
 
 	// Initialise NN but only of the camera system is enabled
 	if (cameraSystemEnabled) {
-		int cv_init_result = cv_init(true, true,
+		nnStatus = cv_init(true, true,
 				fatfs_getOperationalParameter(OP_PARAMETER_MODEL_PROJECT),
 				fatfs_getOperationalParameter(OP_PARAMETER_MODEL_VERSION),
 				woken);
 
-		if (cv_init_result < 0) {
+		if (nnStatus < 0) {
 			xprintf("No model found.\n");
 			// TODO - do we do this?
 			//selfTest_setErrorBits(1 << SELF_TEST_AI_NN_ERROR);
@@ -1455,9 +1455,20 @@ static void vImageTask(void *pvParameters) {
 
     // Report now:
     XP_LT_BLUE;
-    xprintf("Image sensor and data path initialised:\n");
+    xprintf("Image sensor and data path initialised for camera ");
+#ifdef USE_HM0360
+	xprintf("HM0360\n");
+#elif defined (USE_RP2)
+	xprintf("RP v2\n");
+#elif defined (USE_RP3)
+	xprintf("RP v3\n");
+#else
+	xprintf("Unknown\n");
+#endif	// USE_HM0360
+
     xprintf("  Camera system %s.\n", (cameraSystemEnabled > 0) ? "enabled": "disabled");
-    xprintf("  LED(s) in use: %d\n", fatfs_getOperationalParameter(OP_PARAMETER_FLASH_LED));
+    xprintf("  Neural network %s.\n", (nnStatus < 0) ? "disabled" : "enabled");
+    xprintf("  Flash LED(s) in use: %d\n", fatfs_getOperationalParameter(OP_PARAMETER_FLASH_LED));
     xprintf("  Flash brightness: %d%%\n", (uint8_t) fatfs_getOperationalParameter(OP_PARAMETER_LED_BRIGHTNESS_PERCENT));
 
 #ifdef USE_HM0360
@@ -1466,13 +1477,20 @@ static void vImageTask(void *pvParameters) {
     xprintf("  Flash duration %dms\r\n", fatfs_getOperationalParameter(OP_PARAMETER_FLASH_DURATION));
 #endif // USE_HM0360
 
-    uint16_t mdInterval = fatfs_getOperationalParameter(OP_PARAMETER_MD_INTERVAL);
+    interval = fatfs_getOperationalParameter(OP_PARAMETER_MD_INTERVAL);
 
-    if (mdInterval > 0) {
-    	xprintf("  MD sampling: %dms\n", mdInterval);
+    if (interval > 0) {
+    	xprintf("  MD sampling: %dms.\n", interval);
     }
     else {
-    	xprintf("  MD disabled\n");
+    	xprintf("  MD disabled.\n");
+    }
+    interval = fatfs_getOperationalParameter(OP_PARAMETER_TIMELAPSE_INTERVAL);
+    if (interval > 0) {
+    	xprintf("  Timelapse interval: %ds.\n", interval);
+    }
+    else {
+    	xprintf("  Timelapse disabled.\n");
     }
 
     XP_WHITE;
@@ -1618,7 +1636,7 @@ static bool configure_image_sensor(CAMERA_CONFIG_E operation) {
     // Check i2c address
     uint8_t cameraID;
     hx_drv_cis_get_slaveID(&cameraID);
-    xprintf("Camera ID 0x%02x\n", cameraID);
+    //xprintf("Camera ID 0x%02x\n", cameraID);
 
     switch (operation)  {
 
@@ -1682,21 +1700,11 @@ static bool configure_image_sensor(CAMERA_CONFIG_E operation) {
     		processedOK = false;
     	}
     	else  {
-    		// xprintf("DEBUG: starting sensor\n");
-
-#if defined(USE_HM0360) || defined(USE_HM0360_MD)
-    		// Overide HM0360 STROBE setting
-    		//    	if (brightnessPercent == 0) {
-    		//    		hm0360_md_configureStrobe(0);
-    		//    	}
-#endif
-
 #ifdef USE_HM0360
     		hm0360_md_setMode(CONTEXT_A, MODE_SW_NFRAMES_SLEEP, 1, g_timer_period);
-#else
-    		ledFlashEnable(fatfs_getOperationalParameter(OP_PARAMETER_FLASH_DURATION));
 #endif // USE_HM0360
-
+    		// turn on the LED regardless of the camera
+    		ledFlashEnable(fatfs_getOperationalParameter(OP_PARAMETER_FLASH_DURATION));
     		cisdp_sensor_start(); // Starts data path sensor control block
     	}
     	break;
@@ -1710,12 +1718,12 @@ static bool configure_image_sensor(CAMERA_CONFIG_E operation) {
     		processedOK = false;
     	}
     	else {
-
 #ifdef USE_HM0360
     		// Apparently it is necessary to have this here (changes mode 2->2). TODO figure out why.
     		hm0360_md_setMode(CONTEXT_A, MODE_SW_NFRAMES_SLEEP, 1, g_timer_period);
 #endif // USE_HM0360
-
+    		// turn on the LED regardless of the camera
+    		ledFlashEnable(fatfs_getOperationalParameter(OP_PARAMETER_FLASH_DURATION));
     		cisdp_sensor_start(); // Starts data path sensor control block
     	}
     	break;
@@ -2568,22 +2576,6 @@ const char *image_getLastImageFile(void)
     return lastImageFileName;
 }
 
-// Called by CLI only.
-// Temporary until I can make this work through the state machine
-// Call back when inactivity is sensed and we want to enter DPD
-// TODO this should really be done using the state machine events!
-void image_hackInactive(void)
-{
-
-    XP_LT_GREEN;
-    xprintf("Inactive - in image_hackInactive() Remove this!\n");
-    XP_WHITE;
-
-    configure_image_sensor(CAMERA_CONFIG_STOP); // run some sensordplib_stop functions then run HM0360_stream_off commands to the HM0360
-
-    image_sleepNow();
-}
-
 // Not used...
 // bool image_nnDetected(void) {
 //	return nnPositive;
@@ -2622,11 +2614,13 @@ bool image_getEnabled(void) {
 void image_sleepNow(void) {
     uint32_t timelapseDelay;
     uint8_t brightnessPercent;
+    uint8_t mdInterval;
 
     FlashLeds_t ledInUse;
 
     brightnessPercent = (uint8_t)fatfs_getOperationalParameter(OP_PARAMETER_LED_BRIGHTNESS_PERCENT);
     ledInUse = fatfs_getOperationalParameter(OP_PARAMETER_FLASH_LED);
+    mdInterval = fatfs_getOperationalParameter(OP_PARAMETER_MD_INTERVAL);
 
 #ifdef USE_HM0360
     // HM0360 as main camera
@@ -2635,15 +2629,16 @@ void image_sleepNow(void) {
         configure_image_sensor(CAMERA_CONFIG_MD);
 
         // Consider turning on the LED flashes, controlled by the HM0360 STROBE output
-        if ((brightnessPercent == 0) || (ledInUse == 0))  {
-            // No STROBE pulses
+        if ((brightnessPercent == 0) || (ledInUse == 0) || (mdInterval == 0))  {
+            // No STROBE pulses because brightnees=0 or neither LED selected or MD is disabled
             xprintf("Preparing HM0360 for MD - no LED flashes.\n");
             hm0360_md_configureStrobe(0);
         }
         else {
-            // Create STROBE pulses
-            xprintf("Preparing HM0360 for MD - with LED flashes.\n");
-            hm0360_md_configureStrobe(0x0B);
+            // Configure STROBE pulses - NOTE: normal mode is 0x0b = 'dynamic 2'
+            xprintf("Preparing HM0360 for MD - with LED flashes 0x%02x\n", fatfs_getOperationalParameter(OP_PARAMETER_STROBE_MODE));
+            //hm0360_md_configureStrobe(0x0B);
+            hm0360_md_configureStrobe(fatfs_getOperationalParameter(OP_PARAMETER_STROBE_MODE));
         }
     }
     else {
@@ -2673,9 +2668,10 @@ void image_sleepNow(void) {
     		hm0360_md_configureStrobe(0);
     	}
     	else   {
-    		// Create STROBE pulses
-    		xprintf("Preparing HM0360 for MD - with LED flashes\n");
-    		hm0360_md_configureStrobe(0x0B);
+            // Configure STROBE pulses - NOTE: normal mode is 0x0b = 'dynamic 2'
+            xprintf("Preparing HM0360 for MD - with LED flashes 0x%02x\n", fatfs_getOperationalParameter(OP_PARAMETER_STROBE_MODE));
+            //hm0360_md_configureStrobe(0x0B);
+            hm0360_md_configureStrobe(fatfs_getOperationalParameter(OP_PARAMETER_STROBE_MODE));
     	}
     }
     else {

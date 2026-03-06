@@ -255,13 +255,16 @@ static FRESULT fileWrite(fileOperation_t *fileOp) {
 	if (bw != (fileOp->length)) {
 		xprintf("Error. Wrote %d bytes rather than %d\n", bw, fileOp->length);
 		res = FR_DISK_ERR; // TODO find a better error code? Disk full?
-	} else {
+	}
+	else {
 		xprintf("Wrote %d bytes\n", bw);
 		res = FR_OK;
 	}
+
 	XP_GREEN
 	xprintf("Wrote file to SD %s\n", fileOp->fileName);
 	XP_WHITE;
+
 	fileOp->res = res;
 	return res;
 }

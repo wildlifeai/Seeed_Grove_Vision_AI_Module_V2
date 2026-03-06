@@ -2127,7 +2127,7 @@ static void write32_be(uint8_t *ptr, uint32_t val) {
 // Add an IFD entry
 static void addIFD(ExifTagID tagID, uint8_t *entry_ptr, void *tagData) {
 
-	xprintf("   DEBUG: adding EXIF tag 0x%04x\n", tagID);
+	//xprintf("   DEBUG: adding EXIF tag 0x%04x\n", tagID);
     switch (tagID)
     {
     case TAG_X_RESOLUTION:

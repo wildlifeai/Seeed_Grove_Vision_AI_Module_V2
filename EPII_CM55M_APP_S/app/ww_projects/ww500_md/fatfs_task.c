@@ -1456,7 +1456,7 @@ int fatfs_unzip_manifest(void) {
  * @param buffer_size Size of output buffer
  */
 void fatfs_getDeploymentId(char *deployment_id_buffer, size_t buffer_size) {
-	if (buffer_size < 37) {
+	if (buffer_size < UUIDLENGTH) {
 		// Buffer too small for UUID format
 		deployment_id_buffer[0] = '\0';
 		return;

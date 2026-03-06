@@ -189,24 +189,24 @@
 // Tag IDs enum
 typedef enum
 {
-    TAG_X_RESOLUTION = 0x011A,
-    TAG_Y_RESOLUTION = 0x011B,
-    TAG_RESOLUTION_UNIT = 0x0128,
-    TAG_DATETIME_ORIGINAL = 0x9003,
-    TAG_CREATE_DATE = 0x9004,
-    TAG_MAKE = 0x010F,
-    TAG_MODEL = 0x0110,
-    TAG_GPS_IFD_POINTER = 0x8825,
-    TAG_GPS_LATITUDE_REF = 0x0001,
-    TAG_GPS_LATITUDE = 0x0002,
-    TAG_GPS_LONGITUDE_REF = 0x0003,
-    TAG_GPS_LONGITUDE = 0x0004,
-    TAG_GPS_ALTITUDE_REF = 0x0005,
-    TAG_GPS_ALTITUDE = 0x0006,
-    TAG_NN_DATA = 0xC000,               // Neural network output array - arbitrary custom tag ID
-    TAG_USER_COMMENT = 0x9286,      // Standard EXIF UserComment tag for summary text
-    TAG_DEPLOYMENT_ID = 0xF200,		   // Deployment ID (matches ww130_cli convention)
-    TAG_WW_CONFIDENCE_BASE = 0xF300	   // Base for confidence tags (0xF300, 0xF301, ...)
+    TAG_X_RESOLUTION 		= 0x011A,
+    TAG_Y_RESOLUTION 		= 0x011B,
+    TAG_RESOLUTION_UNIT 	= 0x0128,
+    TAG_DATETIME_ORIGINAL 	= 0x9003,
+    TAG_CREATE_DATE 		= 0x9004,
+    TAG_MAKE 				= 0x010F,
+    TAG_MODEL 				= 0x0110,
+    TAG_GPS_IFD_POINTER 	= 0x8825,
+    TAG_GPS_LATITUDE_REF 	= 0x0001,
+    TAG_GPS_LATITUDE 		= 0x0002,
+    TAG_GPS_LONGITUDE_REF 	= 0x0003,
+    TAG_GPS_LONGITUDE 		= 0x0004,
+    TAG_GPS_ALTITUDE_REF 	= 0x0005,
+    TAG_GPS_ALTITUDE 		= 0x0006,
+    TAG_NN_DATA 			= 0xC000,               // Neural network output array - arbitrary custom tag ID
+    TAG_USER_COMMENT 		= 0x9286,      // Standard EXIF UserComment tag for summary text
+    TAG_DEPLOYMENT_ID 		= 0xF200,		   // Deployment ID (matches ww130_cli convention)
+    TAG_WW_CONFIDENCE_BASE 	= 0xF300	   // Base for confidence tags (0xF300, 0xF301, ...)
 } ExifTagID;
 
 // EXIF data types
@@ -797,6 +797,7 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
 
     event = img_recv_msg.msg_event;
     send_msg.destination = NULL;
+
 #if defined(USE_HM0360) || defined(USE_HM0360_MD)
     HM0360_GAIN_T gain;
 #endif
@@ -908,7 +909,7 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
 #endif // 0
 
 #ifdef SAVEBMP
-		prepareImageForDisk(outCategories, classCount, false);
+		prepareImageForDisk(NULL, 0, false);
 #else
 		prepareImageForDisk(outCategories, classCount, true);
 #endif // SAVEBMP
@@ -2124,8 +2125,9 @@ static void write32_be(uint8_t *ptr, uint32_t val) {
 */
 
 // Add an IFD entry
-static void addIFD(ExifTagID tagID, uint8_t *entry_ptr, void *tagData)
-{
+static void addIFD(ExifTagID tagID, uint8_t *entry_ptr, void *tagData) {
+
+	xprintf("   DEBUG: adding EXIF tag 0x%04x\n", tagID);
     switch (tagID)
     {
     case TAG_X_RESOLUTION:
@@ -2308,8 +2310,7 @@ static void addIFD(ExifTagID tagID, uint8_t *entry_ptr, void *tagData)
  *
  * If the altitude is present it is 78 bytes
  */
-static size_t get_gps_ifd_size(void)
-{
+static size_t get_gps_ifd_size(void) {
     return GPS_IFD_SIZE;
 }
 
@@ -2322,8 +2323,7 @@ static size_t get_gps_ifd_size(void)
  *
  * @param gps_ifd_start - pointer to where the buffer should be
  */
-static void create_gps_ifd(uint8_t *gps_ifd_start)
-{
+static void create_gps_ifd(uint8_t *gps_ifd_start) {
     uint8_t *p = gps_ifd_start;
 
     write16_le(p, GPS_IFD_ENTRY_COUNT);
@@ -2361,7 +2361,8 @@ static uint16_t build_exif_segment(int8_t *outCategories, uint8_t categoriesCoun
     uint16_t exif_len;
     uint8_t nnData[MAX_CLASSES + 2];
 
-    // IFD count: base entries (9) + UserComment (1 if has confidence data) + DeploymentID (1 if has deployment ID)
+    // IFD count: base entries (9) = 8 starting with TAG_MAKE plus TAG_GPS_IFD_POINTER later.
+    // dynamic_ifd_count might be incremented if we add UserComment and DeploymentID
     uint16_t dynamic_ifd_count = IFD0_ENTRY_COUNT;	// 9
 
     // Insert the NN data (raw scores for backwards compatibility)
@@ -2438,9 +2439,14 @@ static uint16_t build_exif_segment(int8_t *outCategories, uint8_t categoriesCoun
 	// Only include in EXIF if not all zeros (i.e., a deployment is active)
 	bool has_deployment_id = (strcmp(deployment_id, DEPLOYMENT_ID_ZERO_UUID) != 0);
 
-
+	// dynamic_ifd_count must be incremented before it is written to the EXIF buffer,
+	// so here we look ahead to see how many extra tags might be added.
 	if (has_deployment_id) {
-		dynamic_ifd_count += 1; // Add one entry for DeploymentID
+		dynamic_ifd_count++; // Add one entry for DeploymentID
+	}
+
+	if (cv_modelLoaded()) {
+        dynamic_ifd_count++; // Add one entry for UserComment
 	}
 
     // Prepare the timestamp
@@ -2474,7 +2480,8 @@ static uint16_t build_exif_segment(int8_t *outCategories, uint8_t categoriesCoun
     write32_le(p, 0x00000008);
     p += 4;
 
-    // The number of IFD0 entries goes here (dynamic based on class count)
+    // The number of IFD0 entries goes here
+    // IMPORTANT: we can't change dynamic_ifd_count again.
     write16_le(p, dynamic_ifd_count);
     p += 2;
 
@@ -2505,7 +2512,7 @@ static uint16_t build_exif_segment(int8_t *outCategories, uint8_t categoriesCoun
     }
     next_data_ptr += gps_size; // reserve
 
-    // Add IFD entries - base entries (9) + dynamic class entries
+    // Add IFD entries - 8 here plus TAG_GPS_IFD_POINTER later
     uint8_t entry = 0;
     addIFD(TAG_MAKE, ifd_start + (entry++ * 12), "Wildlife.ai");
     addIFD(TAG_MODEL, ifd_start + (entry++ * 12), "WW500");
@@ -2530,11 +2537,12 @@ static uint16_t build_exif_segment(int8_t *outCategories, uint8_t categoriesCoun
     char user_comment[EXIF_COMMENT_LENGTH];
 	user_comment[0] = '\0';
 	size_t offset = 0;
+	int written = 0;
 
     if (cv_modelLoaded())  {
-
+    	// We add the NN results as a TAG_USER_COMMENT
     	for (uint8_t i = 0; i < categoriesCount; i++) {
-    	    int written = snprintf(
+    	    written = snprintf(
     	        user_comment + offset,
     	        EXIF_COMMENT_LENGTH - offset,
     	        "%s: %d; ",
@@ -2554,12 +2562,11 @@ static uint16_t build_exif_segment(int8_t *outCategories, uint8_t categoriesCoun
     	    }
 
     	    offset += written;
-    	}
+    	} // for(;;)
 
-        xprintf("EXIF: Adding UserComment (%d classes): '%s'\n", categoriesCount, user_comment);
+        xprintf("EXIF: Adding UserComment (%d classes, %d bytes): '%s'\n",
+        		categoriesCount, written, user_comment);
         addIFD(TAG_USER_COMMENT, ifd_start + (entry++ * 12), user_comment);
-
-        dynamic_ifd_count++; // Add one entry for UserComment
     }
 
 #endif // ENABLE_EXIF_CONFIDENCE
@@ -2570,11 +2577,12 @@ static uint16_t build_exif_segment(int8_t *outCategories, uint8_t categoriesCoun
 		addIFD(TAG_DEPLOYMENT_ID, ifd_start + (entry++ * 12), deployment_id);
 	}
 
-    // GPS:
+    // GPS: this is always added
     addIFD(TAG_GPS_IFD_POINTER, ifd_start + (entry++ * 12), &gps_ifd_offset);
 
     // Now write the GPS IFD structure if we reserved space
     if (gps_size > 0) {
+    	// This calls addIFD() 6 times
         create_gps_ifd(gps_ifd_start);
     }
 
@@ -2583,10 +2591,13 @@ static uint16_t build_exif_segment(int8_t *outCategories, uint8_t categoriesCoun
     if ((size_t)(next_data_ptr - exif_buffer) > EXIF_MAX_LEN) {
         next_data_ptr = exif_buffer + EXIF_MAX_LEN;
     }
+
     uint16_t len = (next_data_ptr - exif_buffer) - 2; // exclude 0xFFE1 marker
     write16_be(len_ptr, len);
 
     exif_len = next_data_ptr - exif_buffer;
+
+    xprintf("Added %d EXIF tags\n", entry);
 
     return exif_len;
 }

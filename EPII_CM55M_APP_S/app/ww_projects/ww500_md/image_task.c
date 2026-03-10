@@ -428,6 +428,7 @@ static void incrementToneMapping(void) {
 		changingTone = TONE_MAPPING_NUMBER - 1;
 	}
 }
+
 #endif // INVESTIGATE_TONE_MAPPING
 
 /**
@@ -689,6 +690,10 @@ static APP_MSG_DEST_T handleEventForInit(APP_MSG_T img_recv_msg) {
 #ifdef INVESTIGATE_TONE_MAPPING
             xprintf("Tone mapping values change after each image.\n");
             incrementToneMapping();
+#else
+	// This is the default which seems to give good results.
+    // TODO when finished testing this could be moved to an HM0360 init() call
+	cisdp_sensor_set_tone(TONE_MAPPING_LOW);
 #endif // INVESTIGATE_TONE_MAPPING
 
             XP_WHITE;

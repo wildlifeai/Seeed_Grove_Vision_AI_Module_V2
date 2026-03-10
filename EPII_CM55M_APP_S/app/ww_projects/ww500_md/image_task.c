@@ -137,7 +137,7 @@
 
 // If uncommented the tone mapping regsiters will change after each image of an image sequence
 // Since there are 4 options, choose to take 4 images
-#define INVESTIGATE_TONE_MAPPING
+//#define INVESTIGATE_TONE_MAPPING
 
 // TODO sort out how to allocate priorities
 #define image_task_PRIORITY (configMAX_PRIORITIES - 2)
@@ -228,7 +228,7 @@ typedef enum
 // TODO: Surely I must make SECOND_JPEG_BUFSIZE greater than JPEG_BUFSIZE?
 // Better - shift data within the original JPEG buffer!
 //#define SECOND_JPEG_BUFSIZE 20000 // jpeg files seem to be about 9k-20k - but after iincreasing qulaity c. 22k
-#define SECOND_JPEG_BUFSIZE 32000
+//#define SECOND_JPEG_BUFSIZE 32000
 
 /*************************************** Local Function Declarations *****************************/
 
@@ -261,12 +261,12 @@ static void captureSequenceComplete(void);
 static void changeEnableState(bool setEnabled);
 static void processNNOutput(int8_t * outCategories, uint8_t classCount);
 
-static void prepareImageForDisk(int8_t * outCategories, uint8_t classCount, bool jpeg);
+static void prepareImageForDisk(int8_t * outCategories, uint8_t classCount, bool jpeg, fileBufferInfo_t * extraBlock);
 
 /*************************************** Local EXIF-related Declarations *****************************/
 
 // Insert the EXIF metadata into the jpeg buffer
-static uint16_t insertExif(uint32_t jpeg_sz, uint32_t jpeg_addr, int8_t *outCategories, uint8_t categoriesCount);
+//static uint16_t insertExif(uint32_t jpeg_sz, uint32_t jpeg_addr, int8_t *outCategories, uint8_t categoriesCount);
 
 static void write16_le(uint8_t *ptr, uint16_t val);
 static void write32_le(uint8_t *ptr, uint32_t val);
@@ -787,6 +787,8 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
     APP_MSG_DEST_T send_msg;
     APP_MSG_EVENT_E event;
 
+    static fileBufferInfo_t extraBlock;	// for writing multiple blocks to the same file
+
     TfLiteStatus ret;
     bool setEnabled;
     bool skip_nn = false;
@@ -911,14 +913,18 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
 #ifdef SAVEBMP
 		prepareImageForDisk(NULL, 0, false);
 #else
-		prepareImageForDisk(outCategories, classCount, true);
+		prepareImageForDisk(outCategories, classCount, true, &extraBlock);
 #endif // SAVEBMP
+
 
 		// Proceed to write the jpeg file, even if there is no SD card
 		// since the fatfs_task will handle that.
 		send_msg.destination = xFatTaskQueue;
-		send_msg.message.msg_event = APP_MSG_FATFSTASK_WRITE_FILE;
+		send_msg.message.msg_event = APP_MSG_FATFSTASK_WRITE_IMAGE;
 		send_msg.message.msg_data = (uint32_t)&fileOp;
+
+		// extraBlock.length & extarBlock.buffer has been initialised by prepareImageForDisk()
+		send_msg.message.msg_parameter = (uint32_t)&extraBlock;
 
         // Wait in NN_PROCESSING state till the disk write completes - expect APP_MSG_IMAGETASK_DISK_WRITE_COMPLETE
         image_task_state = APP_IMAGE_TASK_STATE_NN_PROCESSING;
@@ -1872,16 +1878,20 @@ static void sleepWhenPossible(void) {
  * This code does not actually perform the write: it sets up buffers and the fileOp object
  * which is passed to the fatfs_task later.
  *
+ * New image write scheme: prepare two buffers:
+ *  - EXIF data (plus the JPEG file's initial 0xFFd8) is provided in fileOp.buffer and fileOp.length
+ *  - actual JPEG data (excluding the initial 0xFFd8) is provided in extraBuffer.buffer and extraBuffer.length
+ * Then the fatfs ? function writes the 2 buffers one after the other.
+ *
+ *
  * @param outCategories - array of NN output values
  * @param classCount - number of entries in outCategories
  * @param jpeg - true if we are saving a .JPG file - else .BMP
  */
-static void prepareImageForDisk(int8_t * outCategories, uint8_t classCount, bool jpeg) {
+static void prepareImageForDisk(int8_t * outCategories, uint8_t classCount, bool jpeg, fileBufferInfo_t * extraBlock) {
 	uint16_t exif_len = 0;
 	uint32_t data_addr;
 	uint32_t data_sz;
-	uint32_t buffer_to_write;
-	uint32_t size_to_write;
 
 	if (jpeg) {
 		// Take semaphore FIRST before modifying jpeg_exif_buf
@@ -1892,50 +1902,57 @@ static void prepareImageForDisk(int8_t * outCategories, uint8_t classCount, bool
 		// Clearing cache between each capture
 		SCB_InvalidateDCache_by_Addr((void *)data_addr, data_sz);
 
-		// JPEF buffer exists but this will insert EXIF data and increase jpeg_sz
-		exif_len = insertExif(data_sz, data_addr, outCategories, classCount);
+		extraBlock->buffer = ((uint8_t *)data_addr) + 2;
+		extraBlock->length = data_sz - 2;
+
+	    // Build EXIF segment - placed in exif_buffer[] and size in exif_len
+	    exif_len = build_exif_segment(outCategories, classCount);
+
+		fileOp.buffer = (uint8_t *)exif_buffer;
+		fileOp.length = exif_len;
+
+		if (exif_len > 0)  {
+			//SCB_CleanDCache_by_Addr((void *)exif_buffer, exif_len);
+		}
+		else {
+			xprintf("EXIF insertion failed, using original JPEG buffer\n");
+			// TODO handle this!!
+		}
 	}
 	else {
 		// prepare a buffer here with the BMP data?
-		data_addr = app_get_raw_addr();
-		data_sz = app_get_raw_sz();
 	}
 
-	// Determine which buffer to use based on whether EXIF insertion succeeded
-	if (exif_len > 0)  {
-		// EXIF insertion succeeded - use combined buffer
-		buffer_to_write = (uint32_t)jpeg_exif_buf;
-		size_to_write = data_sz + exif_len;
+//	// Determine which buffer to use based on whether EXIF insertion succeeded
+//	if (exif_len > 0)  {
+//		// EXIF insertion succeeded - use combined buffer
+//		buffer_to_write = (uint32_t)jpeg_exif_buf;
+//		size_to_write = data_sz + exif_len;
+//
+//		SCB_CleanDCache_by_Addr((void *)jpeg_exif_buf, size_to_write);
+//	}
+//	else {
+//		if (jpeg) {
+//			// EXIF insertion failed - use original JPEG buffer
+//			xprintf("EXIF insertion failed, using original JPEG buffer\n");
+//		}
+//
+//		buffer_to_write = data_addr;
+//		size_to_write = data_sz;
+//
+//		// Flush the original JPEG buffer cache
+//		SCB_CleanDCache_by_Addr((void *)data_addr, data_sz);
+//	}
 
-		SCB_CleanDCache_by_Addr((void *)jpeg_exif_buf, size_to_write);
-	}
-	else {
-		if (jpeg) {
-			// EXIF insertion failed - use original JPEG buffer
-			xprintf("EXIF insertion failed, using original JPEG buffer\n");
-		}
-
-		buffer_to_write = data_addr;
-		size_to_write = data_sz;
-
-		// Flush the original JPEG buffer cache
-		SCB_CleanDCache_by_Addr((void *)data_addr, size_to_write);
-	}
-
-#if 0
+#if 1
 	// Check by printing some of the buffer that includes the EXIF
-	//uint16_t bytesToPrint = exif_len + 8;
-	uint16_t bytesToPrint = 16;
+	uint16_t bytesToPrint = exif_len + 8;
+	//uint16_t bytesToPrint = 16;
 
 	XP_LT_GREY;
-	xprintf("JPEG&EXIF buffer (%d bytes) begins:\n", size_to_write);
-	for (int i = 0; i < bytesToPrint; i++) {
-		xprintf("%02X ", ((uint8_t*)buffer_to_write)[i]);
-		if (i%16 == 15) {
-			xprintf("\n");
-		}
-	}
-	xprintf("\n");
+	xprintf("JPEG&EXIF buffer (%d bytes) begins:\n", exif_len + data_sz);
+	printf_x_printBuffer((uint8_t *) exif_buffer, bytesToPrint);
+
 	XP_WHITE;
 #endif
 
@@ -1952,13 +1969,11 @@ static void prepareImageForDisk(int8_t * outCategories, uint8_t classCount, bool
 	}
 
 	fileOp.fileName = g_imageFileName;	// a global
-	fileOp.buffer = (uint8_t *)buffer_to_write;
-	fileOp.length = size_to_write;
 	fileOp.senderQueue = xImageTaskQueue;
 	fileOp.closeWhenDone = true;
 
 	dbg_printf(DBG_LESS_INFO, "Writing %d bytes (%d + %d) to '%s' from 0x%08x\n",
-			size_to_write, data_sz, exif_len, fileOp.fileName, buffer_to_write);
+			(data_sz + exif_len), data_sz, exif_len, fileOp.fileName, data_addr);
 
 	// Save the file name as the most recent image
 	snprintf(lastImageFileName, IMAGEFILENAMELEN, "%s", fileOp.fileName);
@@ -2018,80 +2033,80 @@ static void prepareImageForDisk(int8_t * outCategories, uint8_t classCount, bool
  * @param categoriesCount - size of that array
  */
 // Copy of what is in cisdp_sensor
-
-static uint16_t insertExif(uint32_t jpeg_sz, uint32_t jpeg_addr,
-                           int8_t *outCategories, uint8_t categoriesCount) {
-    uint16_t exif_len = 0;
-    uint8_t *jpeg_buf;
-
-    jpeg_buf = (uint8_t *)jpeg_addr;
-
-    // Sanity check: must start with FFD8 and then FFE0
-    if (jpeg_buf[0] != 0xFF || jpeg_buf[1] != 0xD8 || jpeg_buf[2] != 0xFF || jpeg_buf[3] != 0xE0) {
-        // Handle error: unexpected JPEG structure
-        return 0;
-    }
-
-    // Build EXIF segment - placed in exif_buffer[] and size in exif_len
-    exif_len = build_exif_segment(outCategories, categoriesCount);
-
-    // Check for enough space (depends on your memory layout)
-    if (jpeg_sz + exif_len > SECOND_JPEG_BUFSIZE)  {
-        // TODO Handle error: buffer too small
-    	xprintf("Buffer too small for JPEG\n");
-        return 0;
-    }
-
-#if 0
-	// Check by printing EXIF buffer
-	xprintf("Added %d bytes of EXIF to %d bytes of jpeg\n", exif_len, jpeg_sz);
-
-	// Print the buffer - useful for debugging
-	for (int i = 0; i < exif_len; i++) {
-	    xprintf("%02X ", exif_buffer[i]);
-	    if (i%16 == 15) {
-	    	xprintf("\n");
-	    }
-	}
-	xprintf("\n");
-#endif
-
-#ifdef SECOND_JPEG_BUFSIZE
-    jpeg_exif_buf[0] = 0xff; // Add the JPEG marker 0xffd8
-    jpeg_exif_buf[1] = 0xd8;
-
-    // Now copy in the EXIF
-    memcpy(&jpeg_exif_buf[2], exif_buffer, exif_len);
-
-    // Finally copy in the original JPEG data (excluding 0xffd8
-    memcpy(&jpeg_exif_buf[exif_len + 2], &jpeg_buf[2], jpeg_sz - 2);
-
-#if 0
-	// Check by printing some of jpeg_exif_buf buffer
-	xprintf("Modified jpeg buffer:\n");
-	for (int i = 0; i < exif_len + 8; i++) {
-	    xprintf("%02X ", jpeg_exif_buf[i]);
-	    if (i%16 == 15) {
-	    	xprintf("\n");
-	    }
-	}
-	xprintf("\n");
-#endif
-
-#else
-    // earlier code - try this again
-    // Shift data (move APP0 and onward forward to make room for EXIF)
-    memmove(&jpeg_buf[2] + exif_len, &jpeg_buf[2], jpeg_sz - 2);
-    // memmove((uint8_t *) jpeg_addr + 2 + exif_len, (uint8_t *) jpeg_addr + 2, jpeg_sz - 2);
-
-    // Insert EXIF after SOI (at jpeg_buf[2])
-    // memcpy((uint8_t *) jpeg_addr + 2, exif_buffer, exif_len);
-    memcpy(&jpeg_buf[2], exif_buffer, exif_len);
-
-#endif // SECOND_JPEG_BUFSIZE
-
-    return exif_len;
-}
+//
+//static uint16_t insertExif(uint32_t jpeg_sz, uint32_t jpeg_addr,
+//                           int8_t *outCategories, uint8_t categoriesCount) {
+//    uint16_t exif_len = 0;
+//    uint8_t *jpeg_buf;
+//
+//    jpeg_buf = (uint8_t *)jpeg_addr;
+//
+//    // Sanity check: must start with FFD8 and then FFE0
+//    if (jpeg_buf[0] != 0xFF || jpeg_buf[1] != 0xD8 || jpeg_buf[2] != 0xFF || jpeg_buf[3] != 0xE0) {
+//        // Handle error: unexpected JPEG structure
+//        return 0;
+//    }
+//
+//    // Build EXIF segment - placed in exif_buffer[] and size in exif_len
+//    exif_len = build_exif_segment(outCategories, categoriesCount);
+//
+//    // Check for enough space (depends on your memory layout)
+//    if (jpeg_sz + exif_len > SECOND_JPEG_BUFSIZE)  {
+//        // TODO Handle error: buffer too small
+//    	xprintf("Buffer too small for JPEG\n");
+//        return 0;
+//    }
+//
+//#if 0
+//	// Check by printing EXIF buffer
+//	xprintf("Added %d bytes of EXIF to %d bytes of jpeg\n", exif_len, jpeg_sz);
+//
+//	// Print the buffer - useful for debugging
+//	for (int i = 0; i < exif_len; i++) {
+//	    xprintf("%02X ", exif_buffer[i]);
+//	    if (i%16 == 15) {
+//	    	xprintf("\n");
+//	    }
+//	}
+//	xprintf("\n");
+//#endif
+//
+//#ifdef SECOND_JPEG_BUFSIZE
+//    jpeg_exif_buf[0] = 0xff; // Add the JPEG marker 0xffd8
+//    jpeg_exif_buf[1] = 0xd8;
+//
+//    // Now copy in the EXIF
+//    memcpy(&jpeg_exif_buf[2], exif_buffer, exif_len);
+//
+//    // Finally copy in the original JPEG data (excluding 0xffd8
+//    memcpy(&jpeg_exif_buf[exif_len + 2], &jpeg_buf[2], jpeg_sz - 2);
+//
+//#if 0
+//	// Check by printing some of jpeg_exif_buf buffer
+//	xprintf("Modified jpeg buffer:\n");
+//	for (int i = 0; i < exif_len + 8; i++) {
+//	    xprintf("%02X ", jpeg_exif_buf[i]);
+//	    if (i%16 == 15) {
+//	    	xprintf("\n");
+//	    }
+//	}
+//	xprintf("\n");
+//#endif
+//
+//#else
+//    // earlier code - try this again
+//    // Shift data (move APP0 and onward forward to make room for EXIF)
+//    memmove(&jpeg_buf[2] + exif_len, &jpeg_buf[2], jpeg_sz - 2);
+//    // memmove((uint8_t *) jpeg_addr + 2 + exif_len, (uint8_t *) jpeg_addr + 2, jpeg_sz - 2);
+//
+//    // Insert EXIF after SOI (at jpeg_buf[2])
+//    // memcpy((uint8_t *) jpeg_addr + 2, exif_buffer, exif_len);
+//    memcpy(&jpeg_buf[2], exif_buffer, exif_len);
+//
+//#endif // SECOND_JPEG_BUFSIZE
+//
+//    return exif_len;
+//}
 
 // Helper to write 2- and 4-byte little endian values
 static void write16_le(uint8_t *ptr, uint16_t val)
@@ -2353,7 +2368,7 @@ static void create_gps_ifd(uint8_t *gps_ifd_start) {
 /**
  * Builds a valid EXIF data structure, including APP1 tag
  *
- * This particular example has hard-coded tags to add, including the X&Y resolutions.
+ * This particular example has soem hard-coded tags to add, including the X&Y resolutions.
  *
  */
 static uint16_t build_exif_segment(int8_t *outCategories, uint8_t categoriesCount) {
@@ -2459,7 +2474,11 @@ static uint16_t build_exif_segment(int8_t *outCategories, uint8_t categoriesCoun
 
     uint8_t *p = exif_buffer;
 
-    // Add APP1 marker
+    // Add SOE marker 0xffd8
+    *p++ = 0xFF;
+    *p++ = 0xD8;
+
+    // Add APP1 marker 0xffe1
     *p++ = 0xFF;
     *p++ = 0xE1;
 

@@ -15,11 +15,7 @@
 
 #define DRV         ""
 
-/*
- * Bug with cache management? See here:
- * https://chatgpt.com/share/687583ae-c920-8005-ba60-0c2e75fe797b
-*/
-#define CACHEFIX
+
 
 /*************************************** Local Function Declarations *****************************/
 
@@ -239,6 +235,12 @@ void SSPI_CS_GPIO_Dir(bool setDirOut) {
 
 
 /**
+ * Writes a buffer to a file.
+ *
+ * Bug with cache management? See here:
+ * https://chatgpt.com/share/687583ae-c920-8005-ba60-0c2e75fe797b
+ *
+ * See also cache_bug.md
  *
  * @param
  *
@@ -249,21 +251,25 @@ int fastfs_write_image(uint32_t SRAM_addr, uint32_t img_size, uint8_t *filename,
     FRESULT res;        /* API result code */
     UINT bw;            /* Bytes written */
 
+    // (1) Change to the image capture directory
 	res = f_chdir(dirManager->current_capture_dir);
 	if (res != FR_OK) {
 		return res;
 	}
 
+	// (2) Open the file
     // tp added this to write over existing files with the same name for development phase
 	res = f_open(&dirManager->imagesFile, (TCHAR*) filename,  FA_WRITE | FA_CREATE_ALWAYS);
     // res = f_open(&fil_w, (TCHAR*) filename, FA_CREATE_NEW | FA_WRITE);
 	dirManager->imagesRes = res;
 
-    if (res == FR_OK)  {
+    if (res != FR_OK)  {
+    	xprintf("f_open of '%s' res = %d\r\n", filename, res);
+    }
         dirManager->imagesOpen = true;
 
-#ifdef CACHEFIX
         // This ensures that any data in the D-cache is committed to RAM
+
         SCB_CleanDCache_by_Addr ((void *)SRAM_addr, img_size);
 #if 0
     	// Check by printing some of jpeg buffer
@@ -281,33 +287,15 @@ int fastfs_write_image(uint32_t SRAM_addr, uint32_t img_size, uint8_t *filename,
     	xprintf("\n");
         XP_WHITE;
 #endif // 1 (print buffer)
-#else
-    	// This discards any data in the data cache for the specified memory range
-        SCB_InvalidateDCache_by_Addr ((void *)SRAM_addr, img_size);
-#if 1
-    	// Check by printing some of jpeg buffer
-        uint16_t bytesToPrint = 16;
-        uint8_t * buffer = (uint8_t * ) SRAM_addr;
-        XP_LT_GREY;
 
-    	xprintf("Used 'SCB_InvalidateDCache' - writing %d bytes beginning:\n", img_size);
-    	for (int i = 0; i < bytesToPrint; i++) {
-    	    xprintf("%02X ", buffer[i]);
-    	    if (i%16 == 15) {
-    	    	xprintf("\n");
-    	    }
-    	}
-    	xprintf("\n");
-        XP_WHITE;
-#endif // 1 (print buffer)
-#endif // CACHEFIX
-
+        // (3) Write data to the file
         res = f_write(&dirManager->imagesFile, (void *)SRAM_addr, img_size, &bw);
 
         if (res) {
         	xprintf("f_write res = %d\r\n", res);
         }
 
+        // (4) Close the file
         dirManager->imagesRes = f_close(&dirManager->imagesFile);
 
         if (dirManager->imagesRes != FR_OK) {
@@ -317,9 +305,6 @@ int fastfs_write_image(uint32_t SRAM_addr, uint32_t img_size, uint8_t *filename,
             dirManager->imagesOpen = false;
         }
         dirManager->imagesOpen = false;
-    }
-    else {
-        xprintf("f_open of '%s' res = %d\r\n", filename, res);
-    }
+
     return 0;
 }

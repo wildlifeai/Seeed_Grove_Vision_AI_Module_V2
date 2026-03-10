@@ -55,6 +55,9 @@
 #include "printf_x.h"
 #include "xprintf.h"
 
+#include "hx_drv_gpio.h"
+#include "hx_drv_scu.h"
+
 // FreeRTOS kernel includes.
 #include "FreeRTOS.h"
 #include "task.h"
@@ -70,8 +73,6 @@
 #include "CLI-FATFS-commands.h"
 #include "time_handling.h"
 
-// TODO I am not using the public functions in this. Can we move the important bits of this to here?
-#include "spi_fatfs.h"
 #include "hx_drv_rtc.h"
 #include "exif_utc.h"
 #include "ww500_md.h"
@@ -118,7 +119,7 @@ static FRESULT fileRead(fileOperation_t *fileOp);
 static FRESULT fileWrite(fileOperation_t *fileOp);
 
 // Warning: list_dir() is in spi_fatfs.c - how to declare it and reuse it?
-FRESULT list_dir(const char *path);
+//FRESULT list_dir(const char *path);
 
 static FRESULT load_configuration(const char *filename, directoryManager_t *dirManager);
 FRESULT save_configuration(const char *filename, directoryManager_t *dirManager);
@@ -210,6 +211,7 @@ uint16_t op_parameter[OP_PARAMETER_NUM_ENTRIES] = {
 	0, 0, 0,	   		// 17-19 Reserved for future use
 	0, 0, 0, 0, 0, 0, 0, 0  // 20-27 Deployment ID chunks
 };
+
 
 /********************************** Private Function definitions  *************************************/
 
@@ -1377,6 +1379,41 @@ static void vFatFsTask(void *pvParameters) {
 			}
 		}
 	} // for(;;)
+}
+
+/********************************** Public Function definitions - fatfs port  ***************************/
+
+/**
+ * Control of SD card chip select...
+ *
+ * Himax notes:
+ * app implement GPIO_Output_Level/GPIO_Pinmux/GPIO_Dir for fatfs\port\mmc_spi\mmc_we2_spi.c ARM_SPI_SS_MASTER_SW
+ *
+ * CGP - could it be that the SSPI_CS_GPIO_Pinmux() sets PB5 to be either a GPIO pin (and "GPIO16" for that matter)
+ * then the other two functions set the pin high or low, and input or output.
+ *
+ * This is used by mmc_we2_spi.c in the fatfs code.
+ */
+void SSPI_CS_GPIO_Pinmux(bool setGpioFn) {
+    if (setGpioFn) {
+        hx_drv_scu_set_PB5_pinmux(SCU_PB5_PINMUX_GPIO16, 0);
+    }
+    else {
+        hx_drv_scu_set_PB5_pinmux(SCU_PB5_PINMUX_SPI_M_CS_1, 0);
+    }
+}
+
+void SSPI_CS_GPIO_Output_Level(bool setLevelHigh) {
+    hx_drv_gpio_set_out_value(GPIO16, (GPIO_OUT_LEVEL_E) setLevelHigh);
+}
+
+void SSPI_CS_GPIO_Dir(bool setDirOut) {
+    if (setDirOut) {
+        hx_drv_gpio_set_output(GPIO16, GPIO_OUT_HIGH);
+    }
+    else {
+        hx_drv_gpio_set_input(GPIO16);
+    }
 }
 
 /********************************** Public Functions  *************************************/

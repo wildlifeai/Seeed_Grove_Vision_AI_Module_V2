@@ -38,6 +38,8 @@ extern "C" {
 // required length for a 128-bit UUID (including trailing '\0')
 #define	UUIDLENGTH	37
 
+#define DEPLOYMENT_ID_ZERO_UUID "00000000-0000-0000-0000-000000000000"
+
 // Uncomment this to include the unzipping code
 // See error report 12/01/26 in MANIFEST_info.md
 //#define UNZIPMANIFEST
@@ -106,6 +108,12 @@ typedef enum {
 	APP_FATFS_STATE_NUMSTATES					=0x0003
 } APP_FATFS_STATE_E;
 
+// Supplementary structure when there are multiple buffers to write to a file
+typedef struct {
+	uint8_t *	buffer;		// Pointer to the buffer containing file contents
+	uint32_t 	length;		// Number of bytes to write or read
+} fileBufferInfo_t;
+
 // Structure to use for file operations:
 // Initially for reading and writing a file
 typedef struct {
@@ -141,8 +149,6 @@ void fatfs_incrementOperationalParameter(OP_PARAMETERS_E parameter);
 
 // Reconstruct deployment ID UUID from OP20-OP27 chunks
 void fatfs_getDeploymentId(char *deployment_id_buffer, size_t buffer_size);
-
-#define DEPLOYMENT_ID_ZERO_UUID "00000000-0000-0000-0000-000000000000"
 
 // Load labels from SD card text file
 int8_t fatfs_load_labels(const char *path, char labels[][MAX_LABEL_LEN], uint8_t *label_count, uint8_t max_labels, uint8_t max_label_len);

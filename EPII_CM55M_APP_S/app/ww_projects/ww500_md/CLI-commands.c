@@ -1140,7 +1140,6 @@ static BaseType_t prvReadFile(char *pcWriteBuffer, size_t xWriteBufferLen, const
 		fileOp.senderQueue = xCliTaskQueue; // This is the queue for this task. It provides the destination for the result message
 		fileOp.length = CLIFILELEN;
 
-
 		sendMsg.msg_event = APP_MSG_FATFSTASK_READ_FILE;
 		sendMsg.msg_data = (uint32_t)&fileOp;
 

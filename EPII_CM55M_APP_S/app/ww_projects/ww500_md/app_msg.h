@@ -199,10 +199,11 @@ typedef enum {
 	// Messages directed to fatfs Task
 	APP_MSG_FATFSTASK_FIRST						=0x0900,
 	APP_MSG_FATFSTASK_WRITE_FILE				=0x0900,
-	APP_MSG_FATFSTASK_READ_FILE	 				=0x0901,
-	APP_MSG_FATFSTASK_DONE		 				=0x0902,
-	APP_MSG_FATFSTASK_SAVE_STATE		 		=0x0903,
-	APP_MSG_FATFSTASK_LAST		 				=0x0904,
+	APP_MSG_FATFSTASK_WRITE_IMAGE				=0x0901,
+	APP_MSG_FATFSTASK_READ_FILE	 				=0x0902,
+	APP_MSG_FATFSTASK_DONE		 				=0x0903,
+	APP_MSG_FATFSTASK_SAVE_STATE		 		=0x0904,
+	APP_MSG_FATFSTASK_LAST		 				=0x0905,
 
 	// Messages directed to image task
 	// IMPORTANT! Values must have a matching string in imageTaskEventString[] in image_task.c

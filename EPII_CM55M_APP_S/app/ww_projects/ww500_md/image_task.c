@@ -222,14 +222,6 @@ typedef enum
     SRATIONAL = 10
 } ExifDataType;
 
-// If using the code that has a duplicate buffer then define SECOND_JPEG_BUFSIZE
-// Must be a multiple of 32 bytes.
-// #define JPEG_BUFSIZE  76800 //640*480/4
-// TODO: Surely I must make SECOND_JPEG_BUFSIZE greater than JPEG_BUFSIZE?
-// Better - shift data within the original JPEG buffer!
-//#define SECOND_JPEG_BUFSIZE 20000 // jpeg files seem to be about 9k-20k - but after iincreasing qulaity c. 22k
-//#define SECOND_JPEG_BUFSIZE 32000
-
 /*************************************** Local Function Declarations *****************************/
 
 // This is the FreeRTOS task
@@ -290,10 +282,6 @@ extern SemaphoreHandle_t xSDInitDoneSemaphore;
 extern Barrier_t startupBarrier; // Object that calls a function when all tasks are ready
 
 /*************************************** Local variables *******************************************/
-
-#ifdef SECOND_JPEG_BUFSIZE
-__attribute__((section(".bss.NoInit"))) uint8_t jpeg_exif_buf[SECOND_JPEG_BUFSIZE] __ALIGNED(32);
-#endif // SECOND_JPEG_BUFSIZE
 
 static APP_WAKE_REASON_E woken;
 
@@ -1986,142 +1974,13 @@ static void prepareImageForDisk(int8_t * outCategories, uint8_t classCount, bool
 
 /*************************************** Local EXIF-related Definitions *****************************/
 
-// TODO here are some notes that need to be placed in the right place
-
-/**
- * Insert EXIF metadata into the buffer that contains the rest of the JPEG data
- *
- * The objective is to find the appropriate place in the jpeg file to insert the EXIF,
- * then insert the EXIF there, having shifted the second part of the buffer to make space
- *
- * EXIF data is probably:
- * 	- UTC time, obtained with exif_utc_get_rtc_as_exif_string()
- * 	- GPS location, obtained with exif_gps_generate_byte_array()
- * 	- Neural network output, passed as parameters to this function
- * 	- Other EXIF fields we have decided on
- *
- * NOTE: the jpeg_enc_addr pointer is to an array of 32-bit words.
- * NOTE: It is not clear to me whether the JPEG buffer is big enough to allow insertion of the data.
- * There is a definition in cispd_densor:
- * 		#define JPEG_BUFSIZE  76800 //640*480/4
- * It is not clear from a qucik look at the code whether there is more than one jpeg image using this buffer.
- * In any event, it is important not to overrun that buffer.
- *
- * It would be safer to make a new buffer e.g. with malloc (or the FreeRTOS version) and copy the jpeg
- * data into that. But maybe that is not necessary. Perhaps easiest initially to try to insert the EXIF
- * in place, and only use a different approach if that fails.
- *
- * There is another approach entirely, which is not to insert the EXIT data, but to write the JPEG file
- * in 3 chunks:
- * 		1 The JPEG data up to the insertion point
- * 		2 The EXIF data
- * 		3 The JPEG data after the insertion point
- *
- * A different approach again would be write the JPEG file to SD card without inserting the EXIF,
- * then write the EXIF data to a separate file (same file name but with the extension .exif)
- * then post-process the two files off-line.
- *
- * Regardless of the approach, a number of functions will be required, something like this:
- *
- * unit32_t * exifInsertionPoint((uint32_t *jpeg_enc_filesize, uint32_t *jpeg_enc_addr);
- * void createExit(uint32_t exifBuffer, uint16_t exitBufferSize,  uint8_t * outCategories, uint16_t categoriesCount);
- *
- * IMPORTANT to figure out whether we are manipulating 8, 16 or 32 bit arrays.
- * Uncertainty here could be causing the trouble Tobyn has reported.
- *
- * See here for an investigation into exiftool:
- * 	https://chatgpt.com/share/68040174-01fc-8005-a30f-23fc363b98ec
- *
- * @param jpeg_enc_filesize - size of the jpeg buffer. Return the size of the expanded buffer, including the EXIF
- * @param jpeg_enc_addr - pointer to the buffer containing the jpeg data
- * @param outCategories - an array of integers, one for each of the neural network output categories
- * @param categoriesCount - size of that array
- */
-// Copy of what is in cisdp_sensor
-//
-//static uint16_t insertExif(uint32_t jpeg_sz, uint32_t jpeg_addr,
-//                           int8_t *outCategories, uint8_t categoriesCount) {
-//    uint16_t exif_len = 0;
-//    uint8_t *jpeg_buf;
-//
-//    jpeg_buf = (uint8_t *)jpeg_addr;
-//
-//    // Sanity check: must start with FFD8 and then FFE0
-//    if (jpeg_buf[0] != 0xFF || jpeg_buf[1] != 0xD8 || jpeg_buf[2] != 0xFF || jpeg_buf[3] != 0xE0) {
-//        // Handle error: unexpected JPEG structure
-//        return 0;
-//    }
-//
-//    // Build EXIF segment - placed in exif_buffer[] and size in exif_len
-//    exif_len = build_exif_segment(outCategories, categoriesCount);
-//
-//    // Check for enough space (depends on your memory layout)
-//    if (jpeg_sz + exif_len > SECOND_JPEG_BUFSIZE)  {
-//        // TODO Handle error: buffer too small
-//    	xprintf("Buffer too small for JPEG\n");
-//        return 0;
-//    }
-//
-//#if 0
-//	// Check by printing EXIF buffer
-//	xprintf("Added %d bytes of EXIF to %d bytes of jpeg\n", exif_len, jpeg_sz);
-//
-//	// Print the buffer - useful for debugging
-//	for (int i = 0; i < exif_len; i++) {
-//	    xprintf("%02X ", exif_buffer[i]);
-//	    if (i%16 == 15) {
-//	    	xprintf("\n");
-//	    }
-//	}
-//	xprintf("\n");
-//#endif
-//
-//#ifdef SECOND_JPEG_BUFSIZE
-//    jpeg_exif_buf[0] = 0xff; // Add the JPEG marker 0xffd8
-//    jpeg_exif_buf[1] = 0xd8;
-//
-//    // Now copy in the EXIF
-//    memcpy(&jpeg_exif_buf[2], exif_buffer, exif_len);
-//
-//    // Finally copy in the original JPEG data (excluding 0xffd8
-//    memcpy(&jpeg_exif_buf[exif_len + 2], &jpeg_buf[2], jpeg_sz - 2);
-//
-//#if 0
-//	// Check by printing some of jpeg_exif_buf buffer
-//	xprintf("Modified jpeg buffer:\n");
-//	for (int i = 0; i < exif_len + 8; i++) {
-//	    xprintf("%02X ", jpeg_exif_buf[i]);
-//	    if (i%16 == 15) {
-//	    	xprintf("\n");
-//	    }
-//	}
-//	xprintf("\n");
-//#endif
-//
-//#else
-//    // earlier code - try this again
-//    // Shift data (move APP0 and onward forward to make room for EXIF)
-//    memmove(&jpeg_buf[2] + exif_len, &jpeg_buf[2], jpeg_sz - 2);
-//    // memmove((uint8_t *) jpeg_addr + 2 + exif_len, (uint8_t *) jpeg_addr + 2, jpeg_sz - 2);
-//
-//    // Insert EXIF after SOI (at jpeg_buf[2])
-//    // memcpy((uint8_t *) jpeg_addr + 2, exif_buffer, exif_len);
-//    memcpy(&jpeg_buf[2], exif_buffer, exif_len);
-//
-//#endif // SECOND_JPEG_BUFSIZE
-//
-//    return exif_len;
-//}
-
 // Helper to write 2- and 4-byte little endian values
-static void write16_le(uint8_t *ptr, uint16_t val)
-{
+static void write16_le(uint8_t *ptr, uint16_t val) {
     ptr[0] = val & 0xFF;
     ptr[1] = val >> 8;
 }
 
-static void write32_le(uint8_t *ptr, uint32_t val)
-{
+static void write32_le(uint8_t *ptr, uint32_t val) {
     ptr[0] = val & 0xFF;
     ptr[1] = (val >> 8) & 0xFF;
     ptr[2] = (val >> 16) & 0xFF;
@@ -2129,8 +1988,7 @@ static void write32_le(uint8_t *ptr, uint32_t val)
 }
 
 // Helper to write 2- and 4-byte big endian values
-static void write16_be(uint8_t *ptr, uint16_t val)
-{
+static void write16_be(uint8_t *ptr, uint16_t val) {
     ptr[1] = val & 0xFF;
     ptr[0] = val >> 8;
 }
@@ -2146,10 +2004,9 @@ static void write32_be(uint8_t *ptr, uint32_t val) {
 
 // Add an IFD entry
 static void addIFD(ExifTagID tagID, uint8_t *entry_ptr, void *tagData) {
-
 	//xprintf("   DEBUG: adding EXIF tag 0x%04x\n", tagID);
-    switch (tagID)
-    {
+
+	switch (tagID) {
     case TAG_X_RESOLUTION:
     case TAG_Y_RESOLUTION:
     {

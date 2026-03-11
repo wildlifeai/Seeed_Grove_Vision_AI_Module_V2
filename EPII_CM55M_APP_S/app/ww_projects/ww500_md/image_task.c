@@ -130,6 +130,9 @@
 #define STROBE_CONTROLS_FLASH
 #endif 	// USE_HM0360
 
+// If uncommented, the image file is save as .bmp instead of .jpeg
+#define SAVEBMP
+
 // If uncommented brightness will increment after each image of an image sequence
 //#define INVESTIGATE_FLASH_BRIGHTNESS
 // percentage increment for each image
@@ -137,7 +140,7 @@
 
 // If uncommented the tone mapping regsiters will change after each image of an image sequence
 // Since there are 4 options, choose to take 4 images
-//#define INVESTIGATE_TONE_MAPPING
+#define INVESTIGATE_TONE_MAPPING
 
 // TODO sort out how to allocate priorities
 #define image_task_PRIORITY (configMAX_PRIORITIES - 2)
@@ -253,7 +256,13 @@ static void captureSequenceComplete(void);
 static void changeEnableState(bool setEnabled);
 static void processNNOutput(int8_t * outCategories, uint8_t classCount);
 
-static void prepareImageForDisk(int8_t * outCategories, uint8_t classCount, bool jpeg, fileBufferInfo_t * extraBlock);
+static void prepareJpegFile(int8_t * outCategories, uint8_t classCount, fileBufferInfo_t * extraBlock);
+
+#ifdef SAVEBMP
+#define BMP_GRAY8_HEADER_SIZE 1078
+static void prepareBmpFile(fileBufferInfo_t * extraBlock);
+static uint32_t bmp_create_gray8_header(uint8_t *buf,  uint32_t width, uint32_t height);
+#endif // SAVEBMP
 
 /*************************************** Local EXIF-related Declarations *****************************/
 
@@ -823,10 +832,6 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
         incrementBrightness();
 #endif // INVESTIGATE_FLASH_BRIGHTNESS
 
-#ifdef INVESTIGATE_TONE_MAPPING
-        incrementToneMapping();
-#endif // INVESTIGATE_TONE_MAPPING
-
         ledFlashDisable(); // finished with the LED flash. Turn it off.
 
         // measure time for the frame capture just completed
@@ -904,11 +909,22 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
 #endif // 0
 
 #ifdef SAVEBMP
-		prepareImageForDisk(NULL, 0, false);
+		// alternate between JPG and BMP files, to tell the difference
+		if ((g_cur_jpegenc_frame % 2) == 0) {
+#ifdef INVESTIGATE_TONE_MAPPING
+			incrementToneMapping();
+#endif // INVESTIGATE_TONE_MAPPING
+			prepareBmpFile(&extraBlock);
+		}
+		else {
+			prepareJpegFile(outCategories, classCount, &extraBlock);
+		}
 #else
-		prepareImageForDisk(outCategories, classCount, true, &extraBlock);
+#ifdef INVESTIGATE_TONE_MAPPING
+        incrementToneMapping();
+#endif // INVESTIGATE_TONE_MAPPING
+		prepareJpegFile(outCategories, classCount, &extraBlock);
 #endif // SAVEBMP
-
 
 		// Proceed to write the jpeg file, even if there is no SD card
 		// since the fatfs_task will handle that.
@@ -916,7 +932,7 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
 		send_msg.message.msg_event = APP_MSG_FATFSTASK_WRITE_IMAGE;
 		send_msg.message.msg_data = (uint32_t)&fileOp;
 
-		// extraBlock.length & extarBlock.buffer has been initialised by prepareImageForDisk()
+		// extraBlock.length & extraBlock.buffer has been initialised by prepareImageForDisk()
 		send_msg.message.msg_parameter = (uint32_t)&extraBlock;
 
         // Wait in NN_PROCESSING state till the disk write completes - expect APP_MSG_IMAGETASK_DISK_WRITE_COMPLETE
@@ -1866,84 +1882,58 @@ static void sleepWhenPossible(void) {
 }
 
 /**
- * Prepares to write the image to the disk.
+ * Prepares to write a JPEG file to the disk.
  *
  * This code does not actually perform the write: it sets up buffers and the fileOp object
  * which is passed to the fatfs_task later.
  *
  * New image write scheme: prepare two buffers:
- *  - EXIF data (plus the JPEG file's initial 0xFFd8) is provided in fileOp.buffer and fileOp.length
+ *  - EXIF data (plus the JPEG file's initial SOE 0xFFd8) is provided in fileOp.buffer and fileOp.length
  *  - actual JPEG data (excluding the initial 0xFFd8) is provided in extraBuffer.buffer and extraBuffer.length
  * Then the fatfs ? function writes the 2 buffers one after the other.
  *
- *
  * @param outCategories - array of NN output values
  * @param classCount - number of entries in outCategories
- * @param jpeg - true if we are saving a .JPG file - else .BMP
+ * @param extraBlock - structure for the second buffer
  */
-static void prepareImageForDisk(int8_t * outCategories, uint8_t classCount, bool jpeg, fileBufferInfo_t * extraBlock) {
-	uint16_t exif_len = 0;
-	uint32_t data_addr;
-	uint32_t data_sz;
+static void prepareJpegFile(int8_t * outCategories, uint8_t classCount, fileBufferInfo_t * extraBlock) {
+	uint32_t exifLength = 0;
+	uint32_t jpegBuffer;
+	uint32_t jpegLength;
 
-	if (jpeg) {
-		// Take semaphore FIRST before modifying jpeg_exif_buf
-		// This prevents jpeg_exif_buf from being overwritten before previous write completes
-		xSemaphoreTake(xJpegBufferSemaphore, portMAX_DELAY);
+	// Take semaphore FIRST before modifying jpeg_exif_buf
+	// This prevents jpeg_exif_buf from being overwritten before previous write completes
+	xSemaphoreTake(xJpegBufferSemaphore, portMAX_DELAY);
 
-		cisdp_get_jpginfo(&data_sz, &data_addr); // Gets JPEG buffer from hardware encoder
-		// Clearing cache between each capture
-		SCB_InvalidateDCache_by_Addr((void *)data_addr, data_sz);
+	cisdp_get_jpginfo(&jpegLength, &jpegBuffer);
 
-		extraBlock->buffer = ((uint8_t *)data_addr) + 2;
-		extraBlock->length = data_sz - 2;
+	// Gets JPEG buffer from hardware encoder
+	// Clearing cache between each capture
+	SCB_InvalidateDCache_by_Addr((void *)jpegBuffer, jpegLength);
 
-	    // Build EXIF segment - placed in exif_buffer[] and size in exif_len
-	    exif_len = build_exif_segment(outCategories, classCount);
+	// ignore the first 2 bytes (JPEG SOE 0xffd8) as these will be added by build_exif_segment()
+	extraBlock->buffer = ((uint8_t *)jpegBuffer) + 2;
+	extraBlock->length = jpegLength - 2;
 
-		fileOp.buffer = (uint8_t *)exif_buffer;
-		fileOp.length = exif_len;
+	// Build EXIF segment - placed in exif_buffer[] and size in exif_len
+	exifLength = build_exif_segment(outCategories, classCount);
 
-		if (exif_len > 0)  {
-			//SCB_CleanDCache_by_Addr((void *)exif_buffer, exif_len);
-		}
-		else {
-			xprintf("EXIF insertion failed, using original JPEG buffer\n");
-			// TODO handle this!!
-		}
+	fileOp.buffer = (uint8_t *)exif_buffer;
+	fileOp.length = exifLength;
+
+	if (exifLength > 0)  {
+		//SCB_CleanDCache_by_Addr((void *)exif_buffer, exif_len);
 	}
 	else {
-		// prepare a buffer here with the BMP data?
+		xprintf("EXIF insertion failed, using original JPEG buffer\n");
+		// TODO handle this!!
 	}
-
-//	// Determine which buffer to use based on whether EXIF insertion succeeded
-//	if (exif_len > 0)  {
-//		// EXIF insertion succeeded - use combined buffer
-//		buffer_to_write = (uint32_t)jpeg_exif_buf;
-//		size_to_write = data_sz + exif_len;
-//
-//		SCB_CleanDCache_by_Addr((void *)jpeg_exif_buf, size_to_write);
-//	}
-//	else {
-//		if (jpeg) {
-//			// EXIF insertion failed - use original JPEG buffer
-//			xprintf("EXIF insertion failed, using original JPEG buffer\n");
-//		}
-//
-//		buffer_to_write = data_addr;
-//		size_to_write = data_sz;
-//
-//		// Flush the original JPEG buffer cache
-//		SCB_CleanDCache_by_Addr((void *)data_addr, data_sz);
-//	}
-
 #if 1
 	// Check by printing some of the buffer that includes the EXIF
-	uint16_t bytesToPrint = exif_len + 8;
-	//uint16_t bytesToPrint = 16;
+	uint16_t bytesToPrint = exifLength + 8;
 
 	XP_LT_GREY;
-	xprintf("JPEG&EXIF buffer (%d bytes) begins:\n", exif_len + data_sz);
+	xprintf("JPEG & EXIF buffer (%d bytes) begins:\n", exifLength + jpegLength);
 	printf_x_printBuffer((uint8_t *) exif_buffer, bytesToPrint);
 
 	XP_WHITE;
@@ -1954,11 +1944,11 @@ static void prepareImageForDisk(int8_t * outCategories, uint8_t classCount, bool
 	// Must use 8.3 file name: upper case alphanumeric
 	if (woken == APP_WAKE_REASON_MD)  {
 		// Motion has woken us
-		snprintf(g_imageFileName, IMAGEFILENAMELEN, "MD%06d.%s", g_imageSeqNum, jpeg?"JPG":"BMP");
+		snprintf(g_imageFileName, IMAGEFILENAMELEN, "MD%06d.JPG", g_imageSeqNum);
 	}
 	else   {
 		// Must be a time lapse event
-		snprintf(g_imageFileName, IMAGEFILENAMELEN, "TL%06d.%s", g_imageSeqNum, jpeg?"JPG":"BMP");
+		snprintf(g_imageFileName, IMAGEFILENAMELEN, "TL%06d.JPG", g_imageSeqNum);
 	}
 
 	fileOp.fileName = g_imageFileName;	// a global
@@ -1966,11 +1956,147 @@ static void prepareImageForDisk(int8_t * outCategories, uint8_t classCount, bool
 	fileOp.closeWhenDone = true;
 
 	dbg_printf(DBG_LESS_INFO, "Writing %d bytes (%d + %d) to '%s' from 0x%08x\n",
-			(data_sz + exif_len), data_sz, exif_len, fileOp.fileName, data_addr);
+			(jpegLength + exifLength), jpegLength, exifLength, fileOp.fileName, jpegBuffer);
 
 	// Save the file name as the most recent image
 	snprintf(lastImageFileName, IMAGEFILENAMELEN, "%s", fileOp.fileName);
 }
+
+#ifdef SAVEBMP
+
+/**
+ * Prepares to write a BMP file to the disk.
+ *
+ * This code does not actually perform the write: it sets up buffers and the fileOp object
+ * which is passed to the fatfs_task later.
+ *
+ * New image write scheme: prepare two buffers:
+ *  - BMP header is provided in fileOp.buffer and fileOp.length
+ *  - actual bitmap is provided in extraBuffer.buffer and extraBuffer.length
+ * Then the fatfs ? function writes the 2 buffers one after the other.
+ *
+ * @param extraBlock - structure for the second buffer
+ */
+static void prepareBmpFile(fileBufferInfo_t * extraBlock) {
+	uint32_t bitMapLength = 0;
+	uint32_t jpegBuffer;
+	uint32_t headerLength;
+
+	// Take semaphore FIRST before modifying jpeg_exif_buf
+	// This prevents jpeg_exif_buf from being overwritten before previous write completes
+	xSemaphoreTake(xJpegBufferSemaphore, portMAX_DELAY);
+
+	// Only to find the address of the JPEG buffer which we will reuse for the BMP header
+	cisdp_get_jpginfo(&headerLength, &jpegBuffer);
+
+	// Gets JPEG buffer from hardware encoder
+	// Clearing cache between each capture - almost certainly not required?
+	//SCB_InvalidateDCache_by_Addr((void *)jpegBuffer, jpegLength);
+
+	// prepare a buffer here with the BMP data.
+	// We will re-use the JPEG buffer to be the bmp header buffer
+	uint8_t *bmp_header = (uint8_t *)jpegBuffer;
+
+	// headerLength is set to BMP_GRAY8_HEADER_SIZE = 1078
+	headerLength = bmp_create_gray8_header(bmp_header, app_get_raw_width(), app_get_raw_height());
+	// This is the first buffer to write: the .bmp header
+	fileOp.buffer = bmp_header;
+	fileOp.length = headerLength;
+
+	// This is the second buffer to write - the raw data
+	uint8_t *imageBuffer = (uint8_t *)app_get_raw_addr();
+	extraBlock->buffer = imageBuffer;
+	bitMapLength = app_get_raw_height() * app_get_raw_width();
+	extraBlock->length = bitMapLength;
+#if 1
+	// Check by printing some of the buffer that includes the BMP header
+	uint16_t bytesToPrint = 100;
+
+	XP_LT_GREY;
+	xprintf("BMP header buffer (%d bytes) begins:\n", headerLength);
+	printf_x_printBuffer((uint8_t *) jpegBuffer, bytesToPrint);
+
+	XP_WHITE;
+#endif
+
+	g_imageSeqNum = fatfs_getImageSequenceNumber();
+
+	// Must use 8.3 file name: upper case alphanumeric
+	if (woken == APP_WAKE_REASON_MD)  {
+		// Motion has woken us
+		snprintf(g_imageFileName, IMAGEFILENAMELEN, "MD%06d.BMP", g_imageSeqNum);
+	}
+	else   {
+		// Must be a time lapse event
+		snprintf(g_imageFileName, IMAGEFILENAMELEN, "TL%06d.BMP", g_imageSeqNum);
+	}
+
+	fileOp.fileName = g_imageFileName;	// a global
+	fileOp.senderQueue = xImageTaskQueue;
+	fileOp.closeWhenDone = true;
+
+	dbg_printf(DBG_LESS_INFO, "Writing %d bytes (%d + %d) to '%s' from 0x%08x\n",
+			(headerLength + bitMapLength), headerLength, bitMapLength, fileOp.fileName, jpegBuffer);
+
+	// Save the file name as the most recent image
+	snprintf(lastImageFileName, IMAGEFILENAMELEN, "%s", fileOp.fileName);
+}
+
+
+/**
+ * create a bmp header
+ *
+ * @return BMP_GRAY8_HEADER_SIZE
+ */
+uint32_t bmp_create_gray8_header(uint8_t *buf,  uint32_t width, uint32_t height) {
+    uint32_t rowSize;
+    uint32_t imageSize;
+    uint32_t fileSize;
+    uint8_t *p;
+    uint32_t i;
+
+    /* rows must be 4-byte aligned */
+    rowSize = (width + 3) & ~3;
+
+    imageSize = rowSize * height;
+    fileSize  = BMP_GRAY8_HEADER_SIZE + imageSize;
+
+    /* --- BITMAPFILEHEADER --- */
+
+    write16_le(buf + 0, 0x4D42);                 /* "BM" */
+    write32_le(buf + 2, fileSize);
+    write16_le(buf + 6, 0);
+    write16_le(buf + 8, 0);
+    write32_le(buf +10, BMP_GRAY8_HEADER_SIZE);  /* pixel data offset */
+
+    /* --- BITMAPINFOHEADER --- */
+
+    write32_le(buf +14, 40);                     /* header size */
+    write32_le(buf +18, width);
+    write32_le(buf +22, (uint32_t)(-(int32_t)height));  /* top-down bitmap */
+    write16_le(buf +26, 1);                      /* planes */
+    write16_le(buf +28, 8);                      /* 8-bit pixels */
+    write32_le(buf +30, 0);                      /* BI_RGB (no compression) */
+    write32_le(buf +34, imageSize);
+    write32_le(buf +38, 2835);                   /* 72 DPI */
+    write32_le(buf +42, 2835);
+    write32_le(buf +46, 256);                    /* palette entries */
+    write32_le(buf +50, 256);
+
+    /* --- grayscale palette (256 × 4 bytes) --- */
+
+    p = buf + 54;
+
+    for (i = 0; i < 256; i++)  {
+        p[i*4 + 0] = (uint8_t)i;   /* blue  */
+        p[i*4 + 1] = (uint8_t)i;   /* green */
+        p[i*4 + 2] = (uint8_t)i;   /* red   */
+        p[i*4 + 3] = 0;
+    }
+
+    return BMP_GRAY8_HEADER_SIZE;
+}
+#endif // SAVEBMP
 
 /*************************************** Local EXIF-related Definitions *****************************/
 

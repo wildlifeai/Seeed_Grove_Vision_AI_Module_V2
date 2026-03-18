@@ -201,14 +201,15 @@ uint16_t op_parameter[OP_PARAMETER_NUM_ENTRIES] = {
 	TIMELAPSEINTERVAL, // 7 Interval (s) (0 inhibits)
 	INACTIVITYTIMEOUT, // 8 Delay before DPD (ms)
 	FLASHLEDDUTY,	   // 9 in percent (0 inhibits)
-	1,				   // 10 0 = disabled, 1 = enabled
+	1,				   // 10 0 = camera disabled, 1 = enabled
 	DPDINTERVAL,	   // 11 Interval (ms) between frames in MD mode (0 inhibits)
 	FLASHDURATION,	   // 12 Duration (ms) that LED Flash is on
 	0,				   // 13 LED bit mask: vis=1, IR=2, none=0
 	PROJECT_ID,		   // 14 OP_PARAMETER_MODEL_PROJECT
 	PROJECT_VER,	   // 15 OP_PARAMETER_MODEL_VERSION
 	MODEL_THRESHOLD,   // 16 OP_PARAMETER_MODEL_THRESHOLD default
-	0, 0, 0,	   		// 17-19 Reserved for future use
+	1,      	   		// 17 Motion Detection Sensitivity: 0=off, 1=low, 2=medium, 3=high
+	0, 0,    	   		// 18-19 Reserved for future use
 	0, 0, 0, 0, 0, 0, 0, 0  // 20-27 Deployment ID chunks
 };
 
@@ -1263,14 +1264,17 @@ static void vFatFsTask(void *pvParameters) {
 						fatfs_getImageSequenceNumber(),
 						(enabled == 1) ? "" : "not ",
 						op_parameter[OP_PARAMETER_LED_BRIGHTNESS_PERCENT]);
-			} else {
+			}
+			else {
 				fatfs_setOperationalParameter(OP_PARAMETER_SEQUENCE_NUMBER, 1);
 				xprintf("'%s' NOT found. (Next image #1)\r\n", STATE_FILE);
 			}
-		} else {
+		}
+		else {
 			// TODO what? Is this an error we must deal with?
 		}
-	} else {
+	}
+	else {
 		// Failure.
 		xprintf("SD card initialisation failed (reason %d)\r\n", res);
 		selfTest_setErrorBits(1 << SELF_TEST_AI_NO_SD_CARD);
@@ -1533,7 +1537,8 @@ void fatfs_setOperationalParameter(OP_PARAMETERS_E parameter, int16_t value) {
 
 	if ((parameter >= 0) && (parameter < OP_PARAMETER_NUM_ENTRIES)) {
 		op_parameter[parameter] = value;
-	} else {
+	}
+	else {
 		// error
 	}
 }
@@ -1545,7 +1550,8 @@ void fatfs_incrementOperationalParameter(OP_PARAMETERS_E parameter) {
 	if ((parameter >= 0) && (parameter < OP_PARAMETER_NUM_ENTRIES)) {
 		// TODO - do we need to prevent roll-over?
 		op_parameter[parameter]++;
-	} else {
+	}
+	else {
 		// error
 	}
 }

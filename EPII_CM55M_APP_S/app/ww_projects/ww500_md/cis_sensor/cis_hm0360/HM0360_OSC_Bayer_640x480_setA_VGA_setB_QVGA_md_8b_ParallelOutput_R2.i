@@ -75,12 +75,13 @@
 		{HX_CIS_I2C_Action_W, 0x2061, 0x00},	// INT level mode
 		{HX_CIS_I2C_Action_W, 0x2062, 0x02},
 		{HX_CIS_I2C_Action_W, 0x2063, 0xc8},
+												// Motion Detection Context a (defaults to low sensitivity)
 		{HX_CIS_I2C_Action_W, 0x2080, 0x31},	// MD_CTRL [5:4]: MD latency select, [0]: Motion detect enable		
-		{HX_CIS_I2C_Action_W, 0x2081, 0xa4},	// ROI_V
-		{HX_CIS_I2C_Action_W, 0x2082, 0xb5},	// ROI_H
+		{HX_CIS_I2C_Action_W, 0x2081, 0xa4},	// Context A ROI_V [7:4] ROI_END_V, [3:0] ROI_START_V - so 14:0
+		{HX_CIS_I2C_Action_W, 0x2082, 0xb5},	// Context A ROI_H [7:4] ROI_END_H, [3:0] ROI_START_H - So 15:0 
 		{HX_CIS_I2C_Action_W, 0x2083, 0x01},
-		{HX_CIS_I2C_Action_W, 0x2084, 0x30},	// MD_TH_STR_L [0x30/0x20/0x10]
-		{HX_CIS_I2C_Action_W, 0x2085, 0x30},	// MD_TH_STR_H [0x30/0x20/0x10]
+		{HX_CIS_I2C_Action_W, 0x2084, 0x30},	// Context A MD_TH_STR_L [0x30/0x20/0x10]
+		{HX_CIS_I2C_Action_W, 0x2085, 0x30},	// Context A MD_TH_STR_H [0x30/0x20/0x10]
 		{HX_CIS_I2C_Action_W, 0x2086, 0x01},
 		{HX_CIS_I2C_Action_W, 0x2087, 0x06},
 		{HX_CIS_I2C_Action_W, 0x2088, 0x0c},
@@ -100,8 +101,9 @@
 		{HX_CIS_I2C_Action_W, 0x2096, 0x14},
 		{HX_CIS_I2C_Action_W, 0x2097, 0x18},
 		{HX_CIS_I2C_Action_W, 0x2098, 0x20},
+												// Generic MD registers (??? Over-ridden by contex A&B equivalents?)
 		{HX_CIS_I2C_Action_W, 0x2099, 0x20},	// MD_LIGHT_COEF [0x20/0x18/0x10]
-		{HX_CIS_I2C_Action_W, 0x209a, 0x00},	// MD_IIR_PARAMETER [0x00/0x80/0xf0]
+		{HX_CIS_I2C_Action_W, 0x209a, 0x00},	// MD_IIR_PARAMETER (for context A&B) {0x00, 0x80, 0xf0}
 		{HX_CIS_I2C_Action_W, 0x209b, 0x04},	// MD MD_BLOCK_NUM_TH
 		{HX_CIS_I2C_Action_W, 0x209c, 0x01},
 		{HX_CIS_I2C_Action_W, 0x209d, 0x33},	// MD_LATENCY_TH [7:4]: s, [3:0]: m		
@@ -352,11 +354,12 @@
 		{HX_CIS_I2C_Action_W, 0x352c, 0x00},
 		{HX_CIS_I2C_Action_W, 0x352d, 0xe1},
 		{HX_CIS_I2C_Action_W, 0x3549, 0x04},
-		{HX_CIS_I2C_Action_W, 0x354a, 0x35},
+		{HX_CIS_I2C_Action_W, 0x354a, 0x35},		
+												// Motion Detection Context A (defaults to low sensitivity)
 		{HX_CIS_I2C_Action_W, 0x354b, 0x41},	// Context A MD_LIGHT_COEF [0x41/0x31/0x21]
 		{HX_CIS_I2C_Action_W, 0x354c, 0x04},	// Context A MD_BLOCK_NUM_TH
-		{HX_CIS_I2C_Action_W, 0x354d, 0xe0},	// Context A ROI_V
-		{HX_CIS_I2C_Action_W, 0x354e, 0xf0},	// Context A ROI_H
+		{HX_CIS_I2C_Action_W, 0x354d, 0xe0},	// Context A ROI_V [7:4] ROI_END_V, [3:0] ROI_START_V - so 14:0
+		{HX_CIS_I2C_Action_W, 0x354e, 0xf0},	// Context A ROI_H [7:4] ROI_END_H, [3:0] ROI_START_H - So 15:0 
 		{HX_CIS_I2C_Action_W, 0x354f, 0x30},	// Context A MD_TH_STR_H [0x30/0x20/0x10]
 		{HX_CIS_I2C_Action_W, 0x3550, 0x30},	// Context A MD_TH_STR_L [0x30/0x20/0x10]
 		{HX_CIS_I2C_Action_W, 0x3551, 0x10},
@@ -419,6 +422,7 @@
 		{HX_CIS_I2C_Action_W, 0x358d, 0x36},
 		{HX_CIS_I2C_Action_W, 0x35a3, 0x04},
 		{HX_CIS_I2C_Action_W, 0x35a4, 0x35},
+												// Motion Detection Context B (defaults to low sensitivity)
 		{HX_CIS_I2C_Action_W, 0x35a5, 0x41},	// Context B MD_LIGHT_COEF [0x41/0x31/0x21]
 		{HX_CIS_I2C_Action_W, 0x35a6, 0x04},	// Context B MD_BLOCK_NUM_TH
 		{HX_CIS_I2C_Action_W, 0x35a7, 0xe0},	// Context B ROI_V

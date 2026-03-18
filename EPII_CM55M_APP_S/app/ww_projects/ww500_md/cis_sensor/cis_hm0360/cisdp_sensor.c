@@ -167,6 +167,68 @@ static HX_CIS_SensorSetting_t HM0360_tone_mapping_high[] = {
 };
 
 
+// Writes to the Motion detection registers - see data sheet section 4.1
+// There are 3 groups, for low, medium and high sensitivity.
+// This does both contexts A & B
+static HX_CIS_SensorSetting_t HM0360_md_sensitivity_low[] = {
+		{HX_CIS_I2C_Action_W, 0x3550, 0x30},	// Context A MD_TH_STR_L [0x30/0x20/0x10]
+		{HX_CIS_I2C_Action_W, 0x354f, 0x30},	// Context A MD_TH_STR_H [0x30/0x20/0x10]
+		{HX_CIS_I2C_Action_W, 0x354b, 0x41},	// Context A MD_LIGHT_COEF [0x41/0x31/0x21]
+		//{HX_CIS_I2C_Action_W, 0x354c, 0x04},	// Context A MD_BLOCK_NUM_TH
+		//{HX_CIS_I2C_Action_W, 0x354d, 0xe0},	// Context A ROI_V [7:4] ROI_END_V, [3:0] ROI_START_V - so 14:0
+		//{HX_CIS_I2C_Action_W, 0x354e, 0xf0},	// Context A ROI_H [7:4] ROI_END_H, [3:0] ROI_START_H - So 15:0
+
+		{HX_CIS_I2C_Action_W, 0x209a, 0x00},	// MD_IIR_PARAMETER (for context A&B) {0x00, 0x80, 0xf0}
+
+		{HX_CIS_I2C_Action_W, 0x35aa, 0x30},	// Context B MD_TH_STR_L [0x30/0x20/0x10]
+		{HX_CIS_I2C_Action_W, 0x35a9, 0x30},	// Context B MD_TH_STR_H [0x30/0x20/0x10]
+		{HX_CIS_I2C_Action_W, 0x35a5, 0x41},	// Context B MD_LIGHT_COEF [0x41/0x31/0x21]
+		//{HX_CIS_I2C_Action_W, 0x35a6, 0x04},	// Context B MD_BLOCK_NUM_TH
+		//{HX_CIS_I2C_Action_W, 0x35a7, 0xe0},	// Context B ROI_V [7:4] ROI_END_V, [3:0] ROI_START_V - so 14:0
+		//{HX_CIS_I2C_Action_W, 0x35a8, 0xf0},	// Context B ROI_H [7:4] ROI_END_H, [3:0] ROI_START_H - So 15:0
+};
+
+static HX_CIS_SensorSetting_t HM0360_md_sensitivity_medium[] = {
+		{HX_CIS_I2C_Action_W, 0x3550, 0x20},	// Context A MD_TH_STR_L [0x30/0x20/0x10]
+		{HX_CIS_I2C_Action_W, 0x354f, 0x20},	// Context A MD_TH_STR_H [0x30/0x20/0x10]
+		{HX_CIS_I2C_Action_W, 0x354b, 0x31},	// Context A MD_LIGHT_COEF [0x41/0x31/0x21]
+		//{HX_CIS_I2C_Action_W, 0x354c, 0x04},	// Context A MD_BLOCK_NUM_TH
+		//{HX_CIS_I2C_Action_W, 0x354d, 0xe0},	// Context A ROI_V [7:4] ROI_END_V, [3:0] ROI_START_V - so 14:0
+		//{HX_CIS_I2C_Action_W, 0x354e, 0xf0},	// Context A ROI_H [7:4] ROI_END_H, [3:0] ROI_START_H - So 15:0
+
+		{HX_CIS_I2C_Action_W, 0x209a, 0x80},	// MD_IIR_PARAMETER (for context A&B) {0x00, 0x80, 0xf0}
+
+		{HX_CIS_I2C_Action_W, 0x35aa, 0x20},	// Context B MD_TH_STR_L [0x30/0x20/0x10]
+		{HX_CIS_I2C_Action_W, 0x35a9, 0x20},	// Context B MD_TH_STR_H [0x30/0x20/0x10]
+		{HX_CIS_I2C_Action_W, 0x35a5, 0x31},	// Context B MD_LIGHT_COEF [0x41/0x31/0x21]
+		//{HX_CIS_I2C_Action_W, 0x35a6, 0x04},	// Context B MD_BLOCK_NUM_TH
+		//{HX_CIS_I2C_Action_W, 0x35a7, 0xe0},	// Context B ROI_V [7:4] ROI_END_V, [3:0] ROI_START_V - so 14:0
+		//{HX_CIS_I2C_Action_W, 0x35a8, 0xf0},	// Context B ROI_H [7:4] ROI_END_H, [3:0] ROI_START_H - So 15:0
+};
+
+static HX_CIS_SensorSetting_t HM0360_md_sensitivity_high[] = {
+		{HX_CIS_I2C_Action_W, 0x3550, 0x10},	// Context A MD_TH_STR_L [0x30/0x20/0x10]
+		{HX_CIS_I2C_Action_W, 0x354f, 0x10},	// Context A MD_TH_STR_H [0x30/0x20/0x10]
+		{HX_CIS_I2C_Action_W, 0x354b, 0x21},	// Context A MD_LIGHT_COEF [0x41/0x31/0x21]
+		//{HX_CIS_I2C_Action_W, 0x354c, 0x04},	// Context A MD_BLOCK_NUM_TH
+		//{HX_CIS_I2C_Action_W, 0x354d, 0xe0},	// Context A ROI_V [7:4] ROI_END_V, [3:0] ROI_START_V - so 14:0
+		//{HX_CIS_I2C_Action_W, 0x354e, 0xf0},	// Context A ROI_H [7:4] ROI_END_H, [3:0] ROI_START_H - So 15:0
+
+		{HX_CIS_I2C_Action_W, 0x209a, 0xf0},	// MD_IIR_PARAMETER (for context A&B) {0x00, 0x80, 0xf0}
+
+		{HX_CIS_I2C_Action_W, 0x35aa, 0x10},	// Context B MD_TH_STR_L [0x30/0x20/0x10]
+		{HX_CIS_I2C_Action_W, 0x35a9, 0x10},	// Context B MD_TH_STR_H [0x30/0x20/0x10]
+		{HX_CIS_I2C_Action_W, 0x35a5, 0x21},	// Context B MD_LIGHT_COEF [0x41/0x31/0x21]
+		//{HX_CIS_I2C_Action_W, 0x35a6, 0x04},	// Context B MD_BLOCK_NUM_TH
+		//{HX_CIS_I2C_Action_W, 0x35a7, 0xe0},	// Context B ROI_V [7:4] ROI_END_V, [3:0] ROI_START_V - so 14:0
+		//{HX_CIS_I2C_Action_W, 0x35a8, 0xf0},	// Context B ROI_H [7:4] ROI_END_H, [3:0] ROI_START_H - So 15:0
+};
+
+static HX_CIS_SensorSetting_t HM0360_md_sensitivity_off[] = {
+		{HX_CIS_I2C_Action_W, 0x354b, 0x00},	// Context A MD_LIGHT_COEF [0x41/0x31/0x21]
+		{HX_CIS_I2C_Action_W, 0x35a5, 0x00},	// Context B MD_LIGHT_COEF [0x41/0x31/0x21]
+};
+
 
 static void HM0360_dp_wdma_addr_init(APP_DP_INP_SUBSAMPLE_E subs) {
     sensordplib_set_xDMA_baseaddrbyapp(g_wdma1_baseaddr, g_wdma2_baseaddr, g_wdma3_baseaddr);
@@ -704,4 +766,43 @@ HX_CIS_ERROR_E cisdp_sensor_set_tone(TONE_CONFIG_E option) {
 	return ret;
 }
 
+/**
+ * Programs one of 4 alternative tone mapping register sets
+ * See data sheet Table 4.5
+ *
+ * @param option - one of TONE_CONFIG_E
+ * @return error code
+ */
+HX_CIS_ERROR_E cisdp_sensor_set_md_sensitivity(MD_SENSITIVITY_CONFIG_E option) {
+	HX_CIS_ERROR_E ret;
+
+	if (option < MD_SENSITIVITY_NUMBER) {
+		xprintf("HM0360 MD sensitivity %d\n", option);
+	}
+
+	switch (option) {
+
+	case MD_SENSITIVITY_OFF:
+		ret = hx_drv_cis_setRegTable(HM0360_md_sensitivity_off, HX_CIS_SIZE_N(HM0360_md_sensitivity_off, HX_CIS_SensorSetting_t));
+		break;
+
+	case MD_SENSITIVITY_LOW:
+		ret = hx_drv_cis_setRegTable(HM0360_md_sensitivity_low, HX_CIS_SIZE_N(HM0360_md_sensitivity_low, HX_CIS_SensorSetting_t));
+		break;
+
+	case MD_SENSITIVITY_MEDIUM:
+		ret = hx_drv_cis_setRegTable(HM0360_md_sensitivity_medium, HX_CIS_SIZE_N(HM0360_md_sensitivity_medium, HX_CIS_SensorSetting_t));
+		break;
+
+	case MD_SENSITIVITY_HIGH:
+		ret = hx_drv_cis_setRegTable(HM0360_md_sensitivity_high, HX_CIS_SIZE_N(HM0360_md_sensitivity_high, HX_CIS_SensorSetting_t));
+		break;
+
+	default:
+		// should not happen
+		ret = HX_CIS_ERROR_INVALID_PARAMETERS;
+		break;
+	}
+	return ret;
+}
 

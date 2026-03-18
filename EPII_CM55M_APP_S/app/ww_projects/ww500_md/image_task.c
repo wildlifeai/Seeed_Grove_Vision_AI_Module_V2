@@ -131,7 +131,7 @@
 #endif 	// USE_HM0360
 
 // If uncommented, the image file is save as .bmp instead of .jpeg
-#define SAVEBMP
+//#define SAVEBMP
 
 // If uncommented brightness will increment after each image of an image sequence
 //#define INVESTIGATE_FLASH_BRIGHTNESS
@@ -140,7 +140,7 @@
 
 // If uncommented the tone mapping regsiters will change after each image of an image sequence
 // Since there are 4 options, choose to take 4 images
-#define INVESTIGATE_TONE_MAPPING
+//#define INVESTIGATE_TONE_MAPPING
 
 // TODO sort out how to allocate priorities
 #define image_task_PRIORITY (configMAX_PRIORITIES - 2)
@@ -254,6 +254,7 @@ static void sleepWhenPossible(void);
 static void captureSequenceComplete(void);
 
 static void changeEnableState(bool setEnabled);
+
 static void processNNOutput(int8_t * outCategories, uint8_t classCount);
 
 static void prepareJpegFile(int8_t * outCategories, uint8_t classCount, fileBufferInfo_t * extraBlock);
@@ -888,25 +889,61 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
 
         // and send to BLE
         sendMsgToMaster(msgToMaster);
-#endif
 
-#if 0
-		// This is a test of reading and printing the MD registers
+#if 1
+		// This is a test of reading and printing the 32 MD registers
 
 		uint8_t roiOut[ROIOUTENTRIES];
-		hm0360_md_getMDOutput(roiOut, ROIOUTENTRIES);
+		uint8_t mdBlocks;
+		uint16_t offset = 0;
 
-		XP_LT_GREY;
-		xprintf("Motion detected???:\n");
-        for (uint8_t i=0; i < ROIOUTENTRIES; i++) {
-        	xprintf("%02x ", roiOut[i]);
-        	if ((i % 8) == 7) {
-        		// space after 8 bytes
-        		xprintf("\n");
-        	}
-        }
-		XP_WHITE;
+		mdBlocks = hm0360_md_getMDOutput(roiOut, ROIOUTENTRIES);
+
+		offset += snprintf(msgToMaster + offset,
+		                   MSGTOMASTERLEN - offset,
+		                   "HM0360 motion in %d blocks:\n",
+		                   mdBlocks);
+
+		for (uint8_t i = 0; i < ROIOUTENTRIES; i++) {
+		    offset += snprintf(msgToMaster + offset,
+		                       MSGTOMASTERLEN - offset,
+		                       "%02x ",
+		                       roiOut[i]);
+
+		    if (offset >= MSGTOMASTERLEN)
+		        break;
+		}
+
+        XP_LT_GREY;
+        // print to console
+        xprintf("%s\n", msgToMaster);
+
+        // and send to BLE
+        sendMsgToMaster(msgToMaster);
+
+        // Now re-use msgToMaster to print (locally) a 16x16 grid
+        // We will do this in two chunks as MSGTOMASTERLEN is too small for all characters
+        hm0360_md_printGrid(roiOut, 128, msgToMaster, MSGTOMASTERLEN);
+        xprintf("%s", msgToMaster);
+        hm0360_md_printGrid(&roiOut[15], 128, msgToMaster, MSGTOMASTERLEN);
+        xprintf("%s\n", msgToMaster);
+
+        XP_WHITE;
+
+//		XP_LT_GREY;
+//		xprintf("HM0360 motion in %d: \n", mdBlocks);
+//        for (uint8_t i=0; i < ROIOUTENTRIES; i++) {
+//        	xprintf("%02x ", roiOut[i]);
+//        	if ((i % 8) == 7) {
+//        		// newline after 8 bytes
+//        		xprintf("\n");
+//        	}
+//        	//
+//        }
+//		XP_WHITE;
+//
 #endif // 0
+#endif // #if defined(USE_HM0360) || defined(USE_HM0360_MD)
 
 #ifdef SAVEBMP
 		// alternate between JPG and BMP files, to tell the difference
@@ -1345,7 +1382,6 @@ static void changeEnableState(bool setEnabled) {
     }
 }
 
-
 /********************************** FreeRTOS Task  *************************************/
 
 /**
@@ -1446,29 +1482,6 @@ static void vImageTask(void *pvParameters) {
 
 #endif // USE_HM0360_MD
 #endif // USE_HM0360
-
-#if 0
-	// This is a test of reading and printing the MD registers
-#if defined(USE_HM0360) || defined(USE_HM0360_MD)
-
-	uint8_t roiOut[ROIOUTENTRIES];
-
-	// This is a test to see if we can read MD regs
-	hm0360_md_getMDOutput(roiOut, ROIOUTENTRIES);
-
-	XP_LT_GREY;
-	xprintf("Motion detected at init?:\n");
-    for (uint8_t i=0; i < ROIOUTENTRIES; i++) {
-    	xprintf("%02x ", roiOut[i]);
-    	if ((i % 8) == 7) {
-    		// space after 8 bytes
-    		xprintf("\n");
-    	}
-    }
-	XP_WHITE;
-
-#endif // USE_HM0360_MD
-#endif // 0
 
 	// Initialise NN but only of the camera system is enabled
 	startTime = xTaskGetTickCount();
@@ -1707,6 +1720,7 @@ static bool configure_image_sensor(CAMERA_CONFIG_E operation) {
         	processedOK = false;
         }
         else  {
+        	cisdp_sensor_set_md_sensitivity(fatfs_getOperationalParameter(OP_PARAMETER_MD_SENSITIVITY));
         	// Initialise extra registers from file
         	cis_file_process(CAMERA_EXTRA_FILE);
 
@@ -1731,6 +1745,7 @@ static bool configure_image_sensor(CAMERA_CONFIG_E operation) {
             processedOK = false;
         }
         else  {
+        	cisdp_sensor_set_md_sensitivity(fatfs_getOperationalParameter(OP_PARAMETER_MD_SENSITIVITY));
             // if wdma variable is zero when not init yet, then this step is a must be to retrieve wdma address
             //  Datapath events give callbacks to os_app_dplib_cb() in dp_task
             if (cisdp_dp_init(true, SENSORDPLIB_PATH_INT_INP_HW5X5_JPEG, os_app_dplib_cb, g_jpg_ratio, APP_DP_RES_YUV640x480_INP_SUBSAMPLE_1X) < 0)  {
@@ -1928,7 +1943,7 @@ static void prepareJpegFile(int8_t * outCategories, uint8_t classCount, fileBuff
 		xprintf("EXIF insertion failed, using original JPEG buffer\n");
 		// TODO handle this!!
 	}
-#if 1
+#if 0
 	// Check by printing some of the buffer that includes the EXIF
 	uint16_t bytesToPrint = exifLength + 8;
 
@@ -2571,8 +2586,8 @@ static uint16_t build_exif_segment(int8_t *outCategories, uint8_t categoriesCoun
     	    offset += written;
     	} // for(;;)
 
-        xprintf("EXIF: Adding UserComment (%d classes, %d bytes): '%s'\n",
-        		categoriesCount, written, user_comment);
+//        xprintf("EXIF: Adding UserComment (%d classes, %d bytes): '%s'\n",
+//        		categoriesCount, written, user_comment);
         addIFD(TAG_USER_COMMENT, ifd_start + (entry++ * 12), user_comment);
     }
 
@@ -2580,7 +2595,7 @@ static uint16_t build_exif_segment(int8_t *outCategories, uint8_t categoriesCoun
 
 	// Add deployment ID if present (not all zeros)
 	if (has_deployment_id) {
-		xprintf("EXIF: Adding DeploymentID: %s\n", deployment_id);
+//		xprintf("EXIF: Adding DeploymentID: %s\n", deployment_id);
 		addIFD(TAG_DEPLOYMENT_ID, ifd_start + (entry++ * 12), deployment_id);
 	}
 

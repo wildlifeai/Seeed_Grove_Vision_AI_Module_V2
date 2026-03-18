@@ -41,7 +41,7 @@ static bool hm0360MainCamera = false;
 static bool hm0360_present = false;
 
 static HX_CIS_SensorSetting_t HM0360_md_init_setting[] = {
-#include "../../../ww500_md/cis_sensor/cis_hm0360/HM0360_OSC_Bayer_640x480_setA_VGA_setB_QVGA_md_8b_ParallelOutput_R2.i"
+#include "HM0360_OSC_Bayer_640x480_setA_VGA_setB_QVGA_md_8b_ParallelOutput_R2.i"
 };
 
 /*************************************** Local Function Definitions *******************/
@@ -490,18 +490,23 @@ HX_CIS_ERROR_E hm0360_md_getGainRegs(HM0360_GAIN_T * val) {
 /**
  * Reads the Motion Detection ROI registers
  *
- * There are 32 ROI_OUT registers 20A1-20C0
+ * There are 32 ROI_OUT registers 20A1-20C0 - see HM0360 data sheet section 4.1
+ *
+ * @param regTable - address of teh bufferto hold the data
+ * @param length - number of bytes to read (must be 32)
+ * @return number of blocks with motion detected
  */
-void hm0360_md_getMDOutput(uint8_t * regTable, uint8_t length) {
+uint16_t hm0360_md_getMDOutput(uint8_t * regTable, uint8_t length) {
 	uint8_t val;
+	uint16_t motionCount = 0;
 
 	// Don't proceed if the HM0360 is missing or faulty
 	if (!hm0360_present) {
-		return;
+		return 0;
 	}
 
 	if (length != ROIOUTENTRIES) {
-		return;
+		return 0;
 	}
 
 	saveMainCameraConfig();
@@ -509,11 +514,49 @@ void hm0360_md_getMDOutput(uint8_t * regTable, uint8_t length) {
 	for (uint8_t i=0; i < ROIOUTENTRIES; i++) {
 		hx_drv_cis_get_reg(MD_ROI_OUT_0 + i, &val);
 		regTable[i] = val;
+
+        // Count bits set in this register
+        while (val) {
+            motionCount += (val & 1);
+            val >>= 1;
+        }
 	}
 
 	restoreMainCameraConfig();
+
+	return motionCount;
 }
 
+/**
+ * Format a string that can print a 16x16 array showing where motion bits are detected
+ *
+ * @param regTable - address of the buffer that holds the ROI register data
+ * @param msg - address of the character array (string)
+ * @param length - length of that array
+ */
+void hm0360_md_printGrid(uint8_t *roiOut, uint16_t numBlocks, char *msg, uint16_t msgLen) {
+	uint16_t offset = 0;
+
+	for (uint16_t block = 0; block < numBlocks; block++) {
+
+		uint8_t reg = block >> 3;      // block / 8
+		uint8_t bit = block & 7;       // block % 8
+
+		char c = (roiOut[reg] & (1 << bit)) ? '#' : '.';
+
+		if (offset < (msgLen - 2)) {
+			msg[offset++] = c;
+		}
+
+		if ((block & 0x0F) == 15) {    // every 16 cells
+			if (offset < (msgLen - 2)) {
+				msg[offset++] = '\n';
+			}
+		}
+	}
+
+	msg[offset] = '\0';
+}
 /**
  * Sets the HM0360 STROBE_CFG register
  *

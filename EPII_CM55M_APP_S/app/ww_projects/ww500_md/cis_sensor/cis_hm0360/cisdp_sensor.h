@@ -41,6 +41,15 @@ typedef enum {
 	TONE_MAPPING_NUMBER		// This is not one of the options - it serves to define the number of options (=4)
 } TONE_CONFIG_E;
 
+// List of MD sesnitivity options
+typedef enum {
+	MD_SENSITIVITY_OFF,
+	MD_SENSITIVITY_LOW,
+	MD_SENSITIVITY_MEDIUM,
+	MD_SENSITIVITY_HIGH,
+	MD_SENSITIVITY_NUMBER		// This is not one of the options - it serves to define the number of options (=4)
+} MD_SENSITIVITY_CONFIG_E;
+
 int cisdp_sensor_init(bool sensor_init);
 int cisdp_dp_init(bool inp_init, SENSORDPLIB_PATH_E dp_type, sensordplib_CBEvent_t cb_event, uint32_t jpg_ratio, APP_DP_INP_SUBSAMPLE_E subs);
 void cisdp_sensor_start();
@@ -58,6 +67,8 @@ uint32_t app_get_raw_channels();
 // CGP added these:
 // New function to select tone mapping registers
 HX_CIS_ERROR_E cisdp_sensor_set_tone(TONE_CONFIG_E option);
+
+HX_CIS_ERROR_E cisdp_sensor_set_md_sensitivity(MD_SENSITIVITY_CONFIG_E option);
 
 //HX_CIS_ERROR_E cisdp_sensor_set_mode(uint8_t context, mode_select_t mode, uint8_t numFrames, uint16_t sleepTime);
 //HX_CIS_ERROR_E cisdp_sensor_get_int_status(uint8_t * val);

@@ -126,6 +126,7 @@
 #include "hm0360_md.h"
 
 #include "barrier.h"
+#include "cisdp_sensor.h"
 
 #include "inactivity.h"
 #ifdef WW500_C00
@@ -256,6 +257,8 @@ static BaseType_t prvGetSelfTest(char *pcWriteBuffer, size_t xWriteBufferLen, co
 
 static BaseType_t prvSetOpParam(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 static BaseType_t prvGetOpParam(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
+
+static BaseType_t prvMd(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) ;
 
 // A few commands to make the AI processor consistent with the MKL62BA
 static BaseType_t prvVer(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
@@ -507,6 +510,15 @@ static const CLI_Command_Definition_t xGetSelfTest = {
 	"selftest:\r\n Get Self Test bits\r\n",
 	prvGetSelfTest, /* The function to run. */
 	0			/* No parameters expected */
+};
+
+
+/* Structure that defines the "md" command line command. */
+static const CLI_Command_Definition_t xMd = {
+	"md", /* The command string to type. */
+	"md <sensitivity>:\r\n Set sensitivity (values 1, 2, 3 = low, med, high; 0 = 0ff)\r\n",
+	prvMd, /* The function to run. */
+	1		 /* One parameter expected */
 };
 
 /********************************** Private Functions - for CLI commands *************************************/
@@ -1588,6 +1600,42 @@ static BaseType_t prvEraseModel(char *pcWriteBuffer, size_t xWriteBufferLen, con
 	return pdFALSE;
 }
 
+
+/**
+ * Sets motion detection sensitivity:
+ *
+ * 0 = off
+ * 1 = low
+ * 2 = medium
+ * 3 = high
+ */
+static BaseType_t prvMd(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) {
+	const char *pcParameter;
+	BaseType_t lParameterStringLength;
+	uint16_t sensitivity;
+
+	/* Get parameter */
+	pcParameter = FreeRTOS_CLIGetParameter(pcCommandString, 1, &lParameterStringLength);
+	if (pcParameter != NULL) {
+		sensitivity = atoi(pcParameter); // Consider using strtol for safer parsing and error checking.
+		if ((sensitivity >= 0) && (sensitivity <= 3)) {
+			//cli_append(&pcWriteBuffer, &xWriteBufferLen, "MD sensitivity %d", sensitivity);
+			// set registers
+			cisdp_sensor_set_md_sensitivity(sensitivity);
+			// save for the future
+			fatfs_setOperationalParameter(OP_PARAMETER_MD_SENSITIVITY, sensitivity);
+		}
+		else {
+			cli_append(&pcWriteBuffer, &xWriteBufferLen, "Must supply an integer between 0 and 3");
+		}
+	}
+	else {
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "Must supply an integer between 0 and 3");
+	}
+
+	return pdFALSE;
+}
+
 /********************************** Private Functions - Other *************************************/
 
 /**
@@ -2033,6 +2081,8 @@ static void vRegisterCLICommands(void)
 	FreeRTOS_CLIRegisterCommand(&xSetOpParam);	// Sets an Operational Parameter
 	FreeRTOS_CLIRegisterCommand(&xGetOpParam);	// Gets an Operational Parameter
 	FreeRTOS_CLIRegisterCommand(&xGetSelfTest);	// Gets self test bits
+
+	FreeRTOS_CLIRegisterCommand(&xMd);	// Sets motion detection sensitivity
 
 #ifdef WW500_C00
 	FreeRTOS_CLIRegisterCommand(&xLedFlash);	// Test the ledFlash code

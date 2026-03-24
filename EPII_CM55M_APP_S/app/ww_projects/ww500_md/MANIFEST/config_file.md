@@ -51,7 +51,7 @@ Operational Parameters which are not present in CONFIG.TXT are given their defau
 |    15 | OP_PARAMETER_MODEL_VERSION            | 0             | Model version number used for the NN model |
 |    16 | OP_PARAMETER_MODEL_THRESHOLD          | 0             | Logit threshold for detection (0-127) |
 |    17 | OP_PARAMETER_MD_SENSITIVITY           | 1             | Motion Detection Sensitivity: 0=off, 1=low, 2=medium, 3=high |
-|    18 | Reserved                              | 0             | Reserved for future use |
+|    18 | OP_PARAMETER_TEST_MODE_BITS           | 0             | To manage test configurations: bit or bits indicate a test function |
 |    19 | Reserved                              | 0             | Reserved for future use |
 |    20 | OP_PARAMETER_DEPLOYMENT_ID_CHUNK_1    | 0             | Deployment ID hex chars 0-3 |
 |    21 | OP_PARAMETER_DEPLOYMENT_ID_CHUNK_2    | 0             | Deployment ID hex chars 4-7 |

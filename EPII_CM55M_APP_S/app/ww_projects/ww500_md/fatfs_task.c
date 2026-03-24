@@ -209,7 +209,8 @@ uint16_t op_parameter[OP_PARAMETER_NUM_ENTRIES] = {
 	PROJECT_VER,	   // 15 OP_PARAMETER_MODEL_VERSION
 	MODEL_THRESHOLD,   // 16 OP_PARAMETER_MODEL_THRESHOLD default
 	1,      	   		// 17 Motion Detection Sensitivity: 0=off, 1=low, 2=medium, 3=high
-	0, 0,    	   		// 18-19 Reserved for future use
+	0,	    	   		// 18 Test Mode Bits - one bit to enable each test function
+	0,	    	   		// 19 Reserved for future use
 	0, 0, 0, 0, 0, 0, 0, 0  // 20-27 Deployment ID chunks
 };
 

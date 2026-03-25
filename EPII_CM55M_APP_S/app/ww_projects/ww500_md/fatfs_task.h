@@ -87,13 +87,20 @@ typedef enum {
 	OP_PARAMETER_NUM_ENTRIES		// Not an Operational Parameters - serves to define the size of the op_parameter[] array
 } OP_PARAMETERS_E;
 
-/** Defines bits which might be used in tests
+/**
+ * Defines bits which might be used in tests
  *
+ * Set one or more bits to invoke the test.
+ *
+ * This allows tests to be turned on and off via the app, without needing re-compilation
+ * on order to run the test. To get a sensible test, other operational parameters might need to be changed as well.
  */
 typedef enum {
 	TEST_BIT_TONE_MAPPING = (1 << 0),	// Select a new tone after each image. Set OP_PARAMETER_NUM_PICTURES to 4
 	TEST_BIT_SAVE_BMP = (1 << 1),			// Alternate between JPG and BMP files. Set OP_PARAMETER_NUM_PICTURES to an even number
 	TEST_BIT_FLASH_BRIGHTNESS = (1 << 2),	// increment LED flash with every picture. Set OP_PARAMETER_NUM_PICTURES to 7 and select OP_PARAMETER_FLASH_LED to 1 or 2
+	TEST_BIT_SKIP_FILE_CREATION = (1 << 3),	// don't save images to disk. Still streams MD and AE data to app.
+											// Consider making OP_PARAMETER_NUM_PICTURES = a large number and OP_PARAMETER_PICTURE_INTERVAL = 1
 } TEST_MODE_BITS_E;
 
 /**

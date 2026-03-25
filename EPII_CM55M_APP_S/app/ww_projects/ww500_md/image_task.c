@@ -322,6 +322,7 @@ uint32_t g_jpg_ratio;
 static uint16_t g_imageSeqNum; // 0 indicates no SD card
 
 // Semaphore to ensure JPEG buffer is not reused until disk write completes
+// TODO - I suspect this actually has no effect...
 static SemaphoreHandle_t xJpegBufferSemaphore = NULL;
 
 // Strings for each of these states. Values must match APP_IMAGE_TASK_STATE_E in image_task.h
@@ -963,48 +964,61 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
 #endif // 0
 #endif // #if defined(USE_HM0360) || defined(USE_HM0360_MD)
 
-
-#ifdef INVESTIGATE_BMP
-        if (fatfs_getOperationalParameter(OP_PARAMETER_TEST_MODE_BITS) & TEST_BIT_SAVE_BMP) {
-        	// alternate between JPG and BMP files, to tell the difference
-        	if ((g_cur_jpegenc_frame % 2) == 0) {
-#if defined(INVESTIGATE_TONE_MAPPING) && (defined(USE_HM0360) || defined(USE_HM0360_MD))
-                if (fatfs_getOperationalParameter(OP_PARAMETER_TEST_MODE_BITS) & TEST_BIT_TONE_MAPPING) {
-                	incrementToneMapping();
-                }
-#endif // INVESTIGATE_TONE_MAPPING
-        		prepareBmpFile(&extraBlock);
-        	}
-        	else {
-        		prepareJpegFile(outCategories, classCount, &extraBlock);
-        	}
+        if (fatfs_getOperationalParameter(OP_PARAMETER_TEST_MODE_BITS) & TEST_BIT_SKIP_FILE_CREATION) {
+        	// Don't save to a file. This allows faster streaming of MD and AE data to the app
+        	fileOp.fileName = NULL; // skip file write!
+        	fileOp.senderQueue = xImageTaskQueue; // necessary so the response comes to this task.
+        	xprintf("Skipping file save.\n");
         }
         else {
+        	// Normal processing: create the jpg or bmp file
+
+#ifdef INVESTIGATE_BMP
+        	if (fatfs_getOperationalParameter(OP_PARAMETER_TEST_MODE_BITS) & TEST_BIT_SAVE_BMP) {
+        		// alternate between JPG and BMP files, to tell the difference
+        		if ((g_cur_jpegenc_frame % 2) == 0) {
 #if defined(INVESTIGATE_TONE_MAPPING) && (defined(USE_HM0360) || defined(USE_HM0360_MD))
-            if (fatfs_getOperationalParameter(OP_PARAMETER_TEST_MODE_BITS) & TEST_BIT_TONE_MAPPING) {
-            	incrementToneMapping();
-            }
+        			if (fatfs_getOperationalParameter(OP_PARAMETER_TEST_MODE_BITS) & TEST_BIT_TONE_MAPPING) {
+        				incrementToneMapping();
+        			}
+#endif // INVESTIGATE_TONE_MAPPING
+        			prepareBmpFile(&extraBlock);
+        		}
+        		else {
+        			prepareJpegFile(outCategories, classCount, &extraBlock);
+        		}
+        	}
+        	else {
+#if defined(INVESTIGATE_TONE_MAPPING) && (defined(USE_HM0360) || defined(USE_HM0360_MD))
+        		if (fatfs_getOperationalParameter(OP_PARAMETER_TEST_MODE_BITS) & TEST_BIT_TONE_MAPPING) {
+        			incrementToneMapping();
+        		}
 #endif // INVESTIGATE_TONE_MAPPING
 
-        	prepareJpegFile(outCategories, classCount, &extraBlock);
-        }
+        		prepareJpegFile(outCategories, classCount, &extraBlock);
+        	}
 
 #else
 #if defined(INVESTIGATE_TONE_MAPPING) && (defined(USE_HM0360) || defined(USE_HM0360_MD))
-        incrementToneMapping();
+        	if (fatfs_getOperationalParameter(OP_PARAMETER_TEST_MODE_BITS) & TEST_BIT_TONE_MAPPING) {
+        		incrementToneMapping();
+        	}
 #endif // INVESTIGATE_TONE_MAPPING
 
-        prepareJpegFile(outCategories, classCount, &extraBlock);
+        	prepareJpegFile(outCategories, classCount, &extraBlock);
 #endif // INVESTIGATE_BMP
 
-		// Proceed to write the jpeg file, even if there is no SD card
-		// since the fatfs_task will handle that.
-		send_msg.destination = xFatTaskQueue;
-		send_msg.message.msg_event = APP_MSG_FATFSTASK_WRITE_IMAGE;
-		send_msg.message.msg_data = (uint32_t)&fileOp;
+        }
 
-		// extraBlock.length & extraBlock.buffer has been initialised by prepareImageForDisk()
-		send_msg.message.msg_parameter = (uint32_t)&extraBlock;
+        // Proceed to write the jpeg file, even if there is no SD card
+        // since the fatfs_task will handle that.
+
+    	send_msg.message.msg_data = (uint32_t)&fileOp;
+        send_msg.destination = xFatTaskQueue;
+        send_msg.message.msg_event = APP_MSG_FATFSTASK_WRITE_IMAGE;
+
+        // extraBlock.length & extraBlock.buffer has been initialised by prepareImageForDisk()
+        send_msg.message.msg_parameter = (uint32_t)&extraBlock;
 
         // Wait in NN_PROCESSING state till the disk write completes - expect APP_MSG_IMAGETASK_DISK_WRITE_COMPLETE
         image_task_state = APP_IMAGE_TASK_STATE_NN_PROCESSING;
@@ -1012,10 +1026,10 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
         break;
 
     case APP_MSG_IMAGETASK_CHANGE_ENABLE:
-        // We have received an instruction to enable or disable the NN processing system
-        setEnabled = (bool)img_recv_msg.msg_data;
-        changeEnableState(setEnabled); // 0 means disabled; 1 means enabled
-        break;
+    	// We have received an instruction to enable or disable the NN processing system
+    	setEnabled = (bool)img_recv_msg.msg_data;
+    	changeEnableState(setEnabled); // 0 means disabled; 1 means enabled
+    	break;
 
     case APP_MSG_IMAGETASK_INACTIVITY:
         // I have seen this, followed soon after by the WDT messages.

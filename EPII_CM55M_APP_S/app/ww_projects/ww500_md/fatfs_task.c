@@ -529,11 +529,18 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 	case APP_MSG_FATFSTASK_WRITE_IMAGE:
 		// someone wants a file written. Structure including file name a buffer is passed in data
 
-		xStartTime = xTaskGetTickCount();
+		if (fileOp->fileName == NULL) {
+			// Skip the actual file write operation, but send an OK response.
+			// This allows the calling code to say "don't really save a file" but all the other code can stay unchnaged
+			res = FR_OK;
+		}
+		else {
+			xStartTime = xTaskGetTickCount();
 
-		res = fileWriteImage(fileOp, extraBlock, &dirManager);
+			res = fileWriteImage(fileOp, extraBlock, &dirManager);
 
-		xprintf("File write took %dms\n", app_getElapsedMs(xStartTime));\
+			xprintf("File write took %dms\n", app_getElapsedMs(xStartTime));\
+		}
 
 		// Inform the if task that the disk operation is complete
 		sendMsg.message.msg_data = (uint32_t)res;
@@ -546,9 +553,11 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 
 		if (sendMsg.destination == xIfTaskQueue) {
 			sendMsg.message.msg_event = APP_MSG_IFTASK_DISK_WRITE_COMPLETE;
-		} else if (sendMsg.destination == xImageTaskQueue) {
+		}
+		else if (sendMsg.destination == xImageTaskQueue) {
 			sendMsg.message.msg_event = APP_MSG_IMAGETASK_DISK_WRITE_COMPLETE;
-		} else {
+		}
+		else {
 			// assumed to be CLI task.
 			sendMsg.message.msg_event = APP_MSG_CLITASK_DISK_WRITE_COMPLETE;
 		}

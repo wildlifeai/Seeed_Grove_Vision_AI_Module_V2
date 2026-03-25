@@ -66,7 +66,7 @@ typedef enum {
 	OP_PARAMETER_PICTURE_INTERVAL,	// 6 The interval (in ms) between each of the above images. Limited to about 2000 for HM0360
 	OP_PARAMETER_TIMELAPSE_INTERVAL,// 7 The interval (in s) between entering DPD and waking again to take the next timelapse image (0 inhibits)
 	OP_PARAMETER_INTERVAL_BEFORE_DPD, // 8 The interval (in ms) between when all FreeRTOS task activity ceases and the AI processor entering DPD.
-	OP_PARAMETER_LED_BRIGHTNESS_PERCENT,	// 9 Flash LED duty cycle (brightness) in percent (approximately)
+	OP_PARAMETER_LED_BRIGHTNESS_PERCENT,	// 9 Flash LED duty cycle (brightness) in percent (approximately, 0 means 'dim', not 'off')
 	OP_PARAMETER_CAMERA_ENABLED,	// 10 0 = Camera and NN system disabled, 1 = Camera and NN system enabled
 	OP_PARAMETER_MD_INTERVAL,		// 11 Interval (ms) between frames in motion detect mode (0 inhibits motion detection)
 	OP_PARAMETER_FLASH_DURATION,	// 12 Duration (ms) that LED flash is on
@@ -91,11 +91,10 @@ typedef enum {
  *
  */
 typedef enum {
-	TEST_BIT_TONE_MAPPING = (1 << 0),	// If set,
-	TEST_BIT_1 = (1 << 1),
-	TEST_BIT_2 = (1 << 2),
-
-} TES_MODE_BITS_E;
+	TEST_BIT_TONE_MAPPING = (1 << 0),	// Select a new tone after each image. Set OP_PARAMETER_NUM_PICTURES to 4
+	TEST_BIT_SAVE_BMP = (1 << 1),			// Alternate between JPG and BMP files. Set OP_PARAMETER_NUM_PICTURES to an even number
+	TEST_BIT_FLASH_BRIGHTNESS = (1 << 2),	// increment LED flash with every picture. Set OP_PARAMETER_NUM_PICTURES to 7 and select OP_PARAMETER_FLASH_LED to 1 or 2
+} TEST_MODE_BITS_E;
 
 /**
  *

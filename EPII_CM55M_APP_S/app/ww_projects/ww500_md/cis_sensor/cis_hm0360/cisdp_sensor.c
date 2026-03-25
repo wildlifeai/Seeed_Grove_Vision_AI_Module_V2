@@ -742,7 +742,7 @@ HX_CIS_ERROR_E cisdp_sensor_set_tone(TONE_CONFIG_E option) {
 	HX_CIS_ERROR_E ret;
 
 	switch (option) {
-	case TONE_MAPPING_DEFAULT:
+	case TONE_MAPPING_FLAT:
 		ret = hx_drv_cis_setRegTable(HM0360_tone_mapping_default, HX_CIS_SIZE_N(HM0360_tone_mapping_default, HX_CIS_SensorSetting_t));
 		break;
 

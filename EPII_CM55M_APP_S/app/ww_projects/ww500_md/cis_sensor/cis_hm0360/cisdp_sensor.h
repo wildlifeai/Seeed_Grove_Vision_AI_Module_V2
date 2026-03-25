@@ -34,8 +34,8 @@ extern "C" {
 
 // List of tone mapping options - see data sheet Table 4.5
 typedef enum {
-	TONE_MAPPING_DEFAULT,
-	TONE_MAPPING_LOW,
+	TONE_MAPPING_FLAT,
+	TONE_MAPPING_LOW,		// This is the default
 	TONE_MAPPING_MEDIUM,
 	TONE_MAPPING_HIGH,
 	TONE_MAPPING_NUMBER		// This is not one of the options - it serves to define the number of options (=4)

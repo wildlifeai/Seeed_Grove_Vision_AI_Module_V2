@@ -538,7 +538,6 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 			xStartTime = xTaskGetTickCount();
 
 			res = fileWriteImage(fileOp, extraBlock, &dirManager);
-
 			xprintf("File write took %dms\n", app_getElapsedMs(xStartTime));
 		}
 

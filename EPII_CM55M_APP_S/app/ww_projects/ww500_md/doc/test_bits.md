@@ -7,6 +7,7 @@ without having to recompile the source code.
 ## Operational Parameter `OP_PARAMETER_TEST_MODE_BITS`
 
 This is one of the values that can be set in the CONFIG.TXT file, and also can be set by the app
+
 using the `AI setop 18 <n>` command. OP_PARAMETER_TEST_MODE_BITS is index 18. 
 
 Each bit in the operational parameter can enable one test. At present the tests are as described below.

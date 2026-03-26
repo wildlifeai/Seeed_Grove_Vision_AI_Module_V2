@@ -767,10 +767,17 @@ HX_CIS_ERROR_E cisdp_sensor_set_tone(TONE_CONFIG_E option) {
 }
 
 /**
+<<<<<<< HEAD
  * Programs one of 4 alternative tone motion detection sensitivity settings
  * See Himax app note "HM0360 Motion Detection Setting"
  *
  * @param option - one of MD_SENSITIVITY_CONFIG_E
+=======
+ * Programs one of 4 alternative tone mapping register sets
+ * See data sheet Table 4.5
+ *
+ * @param option - one of TONE_CONFIG_E
+>>>>>>> 062483680e6e3e5c8fd314418901a368877c8265
  * @return error code
  */
 HX_CIS_ERROR_E cisdp_sensor_set_md_sensitivity(MD_SENSITIVITY_CONFIG_E option) {

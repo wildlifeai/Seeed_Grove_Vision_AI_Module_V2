@@ -82,6 +82,7 @@
 #include "barrier.h"
 #include "selfTest.h"
 #include "cvapp.h"
+#include "exif_gps.h"
 
 // TODO this is for the default project id and version - move elsewhere?
 #include "common_config.h"
@@ -138,6 +139,11 @@ extern FRESULT init_directories(directoryManager_t *dirManager);
 extern FRESULT add_capture_folder(directoryManager_t *dirManager);
 
 /*************************************** External variables *******************************************/
+
+// GPS location of device can be set from the app, then accessed when needed
+extern GPS_Coordinate exif_gps_deviceLat;
+extern GPS_Coordinate exif_gps_deviceLon;
+extern GPS_Altitude exif_gps_deviceAlt;
 
 extern directoryManager_t dirManager;
 extern QueueHandle_t xIfTaskQueue;
@@ -753,11 +759,55 @@ static FRESULT fatFsInit(void) {
 }
 
 /**
+ * Process any GPS string in the CONFIG.TXT file
+ *
+ * Parses the string and sets exif_gps_deviceLat, exif_gps_deviceLon, exif_gps_deviceAlt
+ *
+ * The location can be entered manually in CONFIG.TXT but is normally written there
+ * before the processor enters DPD.
+ *
+ * The code was created by Claude which suggested the following test strings
+ * for test other formats:
+ *
+Seems to be working. I can manually edit the file to test the system reads and write the GPS string - example:
+G 1°2'3" N 4°5'6" E 7 Above
+
+Can you suggest a few more strings that can be used to test other string formats, including decimal values.11:57Here are some test strings covering the important variations:
+G 36°49'55" S 174°47'51" E 31 Above
+G 36°49'55.5" S 174°47'51.8" E 31.2 Above
+G 36°49'55.68" S 174°47'51.83" E 31.234 Above
+G 51°30'26.123" N 0°7'39.456" W 11.5 Above
+G 90°0'0" S 180°0'0" W 0 Above
+G 0°0'0" N 0°0'0" E 8848.86 Above
+G 27°59'17.28" N 86°55'30.12" E 8848.86 Above
+G 35°41'22.2" N 139°41'30.5" E 40 Below
+The reasoning behind each:
+
+Line 1–3: Auckland roughly, progressively adding decimal places to seconds — good for checking the fractional parsing at different precisions
+Line 4: London — tests a near-zero longitude (single digit degrees, W direction)
+Line 5: Extreme corner case — maximum lat/lon values, all zeros for seconds
+Line 6: Null Island (0,0) with a non-zero altitude — isolates altitude parsing from coordinate parsing
+Line 7: Mount Everest summit — realistic high altitude with decimal seconds in both coordinates
+Line 8: Tests Below sea level, e.g. Dead Sea area — the only case that exercises the alt->ref == 1 path
+
+@param line = string read from the file (after the "G " characters)
+*/
+static void processGPS(char * gps_line) {
+	exif_gps_parse_full_string(&exif_gps_deviceLat, &exif_gps_deviceLon,
+	                           &exif_gps_deviceAlt, gps_line);
+
+	// test that worked:
+	xprintf("Read GPS location from file: '%s'\n", gps_line);
+}
+
+/**
  * Loads configuration information from a file.
  *
  * The file comprises several lines each with two integers.
  * The first integer is an index into the configuration[] array.
  * The second integer is the value to place into the array.
+ *
+ * There is a special case for the GPS location:
  *
  * Default values for configuration[] are set in the task initialisation.
  *
@@ -807,30 +857,37 @@ static FRESULT load_configuration(const char *filename, directoryManager_t *dirM
 				continue;
 			}
 
-			// The first call to strtok() should have a pointer to the string which
-			// should be split, while any following calls should use NULL as an
-			// argument. Each time the function is called a pointer to a different
-			// token is returned until there are no more tokens.
-			// At that point each function call returns NULL.
-			token = strtok(line, " ");
-			if (token == NULL) {
-				continue;
+			// Special case if the first 2 characters are 'G ' for GPS
+			if ((line[0] == 'G') && (line[1] == ' ')) {
+				processGPS(&line[2]); // TODO
 			}
+			else {
 
-			index = (uint8_t)atoi(token);
+				// The first call to strtok() should have a pointer to the string which
+				// should be split, while any following calls should use NULL as an
+				// argument. Each time the function is called a pointer to a different
+				// token is returned until there are no more tokens.
+				// At that point each function call returns NULL.
+				token = strtok(line, " ");
+				if (token == NULL) {
+					continue;
+				}
 
-			token = strtok(NULL, " ");
-			if (token == NULL) {
-				continue;
-			}
+				index = (uint8_t)atoi(token);
 
-			value = (uint16_t)atoi(token);
+				token = strtok(NULL, " ");
+				if (token == NULL) {
+					continue;
+				}
 
-			// Set array value if index is in range
-			if (index >= 0 && index < OP_PARAMETER_NUM_ENTRIES) {
-				op_parameter[index] = value;
-				// debug only:
-				// xprintf("   op_parameter[%d] = %d\n", index, value);
+				value = (uint16_t)atoi(token);
+
+				// Set array value if index is in range
+				if (index >= 0 && index < OP_PARAMETER_NUM_ENTRIES) {
+					op_parameter[index] = value;
+					// debug only:
+					// xprintf("   op_parameter[%d] = %d\n", index, value);
+				}
 			}
 		}
 	}
@@ -927,6 +984,17 @@ FRESULT save_configuration(const char *filename, directoryManager_t *dirManager)
 			f_write(&dirManager->configFile, line, strlen(line), &bytesWritten);
 		}
 
+		// Write the GPS location
+		line[0] = 'G';
+		line[1] = ' ';	// initialise with "G "
+		// Write the GPS string as the next characters
+		exif_gps_create_full_string(&exif_gps_deviceLat, &exif_gps_deviceLon,
+		                            &exif_gps_deviceAlt, &line[2], sizeof(line));
+
+		xprintf("Wrote GPS location to file: '%s'\n", line);
+
+		f_write(&dirManager->configFile, line, strlen(line), &bytesWritten);
+
 		// Close file and restore original directory
 		res = f_close(&dirManager->configFile);
 		if (res != FR_OK) {
@@ -936,6 +1004,8 @@ FRESULT save_configuration(const char *filename, directoryManager_t *dirManager)
 		}
 		dirManager->configRes = res;
 	}
+
+
 
 	return dirManager->configRes;
 }
@@ -1248,6 +1318,9 @@ static void vFatFsTask(void *pvParameters) {
 
 	// One-off initialisation here...
 	startTime = xTaskGetTickCount();
+
+	// Initialise GPS coordinates before traying to process them
+	exif_gps_init_defaults();
 
 	// TODO - experiment - do I need settling time for 3V3_WE?
 	vTaskDelay(pdMS_TO_TICKS(10));

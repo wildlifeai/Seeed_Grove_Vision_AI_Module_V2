@@ -1,5 +1,5 @@
 # Description of the CONFIG.TXT File
-#### CGP - 26 January 2026
+#### CGP - 27 March 2026
 
 The CONFIG.TXT file contains "Operational Parameters" for the WW500.
 
@@ -20,6 +20,8 @@ For example two lines might be:
 In this example:
 * '5' is the index and '2' is the value
 * '6' is the index and '500' is the value
+
+ALSO - a different format for GPS location string - see below.
 
 From the table below, 5 is the index for `OP_PARAMETER_NUM_PICTURES` and the value 2 means the WW500 takes 2 
 pictures when triggered. 
@@ -66,3 +68,29 @@ Operational Parameters which are not present in CONFIG.TXT are given their defau
 
 For more details of how the Operational Parameters are used, see [Operational_Parameters.md](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/blob/ledflash2/_Documentation/Operational_Parameters.md)
 NOTE - correct the URL when the file is in the 'main' branch.
+
+## GPS location
+
+This can be set by the app and needs to be saved while the AI processor is in deep sleep.
+This is done with a line starting "G " followed by a string. Examples follow.
+
+```
+G 36°49'55" S 174°47'51" E 31 Above
+G 36°49'55.5" S 174°47'51.8" E 31.2 Above
+G 36°49'55.68" S 174°47'51.83" E 31.234 Above
+G 51°30'26.123" N 0°7'39.456" W 11.5 Above
+G 90°0'0" S 180°0'0" W 0 Above
+G 0°0'0" N 0°0'0" E 8848.86 Above
+G 27°59'17.28" N 86°55'30.12" E 8848.86 Above
+G 35°41'22.2" N 139°41'30.5" E 40 Below
+
+The reasoning behind each:
+
+Line 1–3: Auckland roughly, progressively adding decimal places to seconds — good for checking the fractional parsing at different precisions
+Line 4: London — tests a near-zero longitude (single digit degrees, W direction)
+Line 5: Extreme corner case — maximum lat/lon values, all zeros for seconds
+Line 6: Null Island (0,0) with a non-zero altitude — isolates altitude parsing from coordinate parsing
+Line 7: Mount Everest summit — realistic high altitude with decimal seconds in both coordinates
+Line 8: Tests Below sea level, e.g. Dead Sea area — the only case that exercises the alt->ref == 1 path
+
+```

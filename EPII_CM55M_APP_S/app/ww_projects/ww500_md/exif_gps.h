@@ -82,6 +82,9 @@ typedef struct {
 
 /********************************** Public Function Definitions **************************************/
 
+// Initialise coordinates
+void exif_gps_init_defaults(void);
+
 // Function to set a GPS coordinate
 void exif_gps_set_coordinate(GPS_Coordinate *coord, uint32_t deg_num, uint32_t deg_den, uint32_t min_num, uint32_t min_den, uint32_t sec_num, uint32_t sec_den, char ref);
 
@@ -102,6 +105,12 @@ void exif_gps_get_altitude_as_string(GPS_Altitude *alt, char *str, uint16_t bufL
 // Function to parse a full GPS string containing latitude, longitude, and altitude
 void exif_gps_parse_full_string(GPS_Coordinate *lat, GPS_Coordinate *lon, GPS_Altitude *alt, const char *str);
 
+// Creates a GPS string from internal data
+void exif_gps_create_full_string(const GPS_Coordinate *lat,
+                                 const GPS_Coordinate *lon,
+                                 const GPS_Altitude   *alt,
+                                 char *buf, size_t buf_size);
+
 // Function to print the GPS coordinate in a readable format
 void exif_gps_print_coordinate(const GPS_Coordinate *coord);
 
@@ -113,6 +122,10 @@ void exif_gps_generate_byte_array(const GPS_Coordinate *coord, uint8_t *buffer);
 
 // Function to generate the EXIF byte array for GPS altitude
 void exif_gps_generate_altitude_byte_array(const GPS_Altitude *alt, uint8_t *buffer);
+
+void exif_gps_extract_alt_rationals(const uint8_t *byte_array, uint32_t *rationals);
+
+void exif_gps_extract_rationals(const uint8_t *byte_array, uint32_t *rationals);
 
 // Test functions
 void exif_gps_test_example_1(char * latString, char latRef, char * longString, char longRef, char * altString);

@@ -20,6 +20,7 @@
 /*************************************** Local routine declarations  *************************************/
 
 static void setNumDenFromString(uint32_t * num, uint32_t * dem, char * decimalNumber);
+static void format_rational_as_decimal(uint32_t num, uint32_t den, char *buf, size_t buf_size);
 
 /************************************** Local Variables **************************************/
 
@@ -73,7 +74,51 @@ static void setNumDenFromString(uint32_t * num, uint32_t * dem, char * decimalNu
     *dem = denominator;
 }
 
+/**
+ * Formats a GPS rational seconds value as a decimal string.
+ *
+ * e.g. num=3050, den=100  ->  "30.50"
+ *      num=30,   den=1    ->  "30"
+ *
+ * @param num       - numerator
+ * @param den       - denominator
+ * @param buf       - output buffer
+ * @param buf_size  - size of output buffer
+ */
+static void format_rational_as_decimal(uint32_t num, uint32_t den,
+                                       char *buf, size_t buf_size) {
+    if (den == 1 || den == 0) {
+        snprintf(buf, buf_size, "%u", (unsigned)num);
+        return;
+    }
+
+    uint32_t whole = num / den;
+    uint32_t frac  = num % den;
+
+    /* Count digits in denominator to know how many fractional digits to emit.
+     * e.g. den=100 -> 2 digits, den=1000 -> 3 digits */
+    uint32_t d = den;
+    int digits = 0;
+    while (d > 1) { d /= 10; digits++; }
+
+    /* Build a format string like "%u.%02u" dynamically */
+    char fmt[16];
+    snprintf(fmt, sizeof(fmt), "%%u.%%0%du", digits);
+    snprintf(buf, buf_size, fmt, (unsigned)whole, (unsigned)frac);
+}
+
 /*************************************** Global function definitions  *************************************/
+
+/**
+ * Initialises the device GPS globals to a safe default state.
+ * Call once at startup, before any state file is read or GPS data saved.
+ * Represents 0°0'0" N, 0°0'0" E, 0m Above sea level.
+ */
+void exif_gps_init_defaults(void) {
+    exif_gps_set_coordinate(&exif_gps_deviceLat, 0, 1, 0, 1, 0, 1, 'N');
+    exif_gps_set_coordinate(&exif_gps_deviceLon, 0, 1, 0, 1, 0, 1, 'E');
+    exif_gps_set_altitude(&exif_gps_deviceAlt, 0, 1, 0);
+}
 
 /**
  * Initialises a latitude or longitude structure from component parts
@@ -268,6 +313,58 @@ void exif_gps_parse_full_string(GPS_Coordinate *lat, GPS_Coordinate *lon, GPS_Al
     exif_gps_set_altitude_from_string(alt, altitude);
 }
 
+
+/**
+ * Serialises exif_gps_deviceLat, exif_gps_deviceLon, exif_gps_deviceAlt
+ * into a string that exif_gps_parse_full_string() can consume directly.
+ *
+ * Output format (same as prvSetgps parsedGpsString):
+ *   37°48'30.50" N 122°25'10.22" W 500.75 Above
+ *
+ * @param lat      - pointer to GPS_Coordinate for latitude
+ * @param lon      - pointer to GPS_Coordinate for longitude
+ * @param alt      - pointer to GPS_Altitude
+ * @param buf      - output buffer
+ * @param buf_size - size of output buffer
+ */
+void exif_gps_create_full_string(const GPS_Coordinate *lat,
+                                 const GPS_Coordinate *lon,
+                                 const GPS_Altitude   *alt,
+                                 char *buf, size_t buf_size) {
+    char lat_sec[20], lon_sec[20], alt_dec[20];
+
+    if (!lat || !lon || !alt || !buf) return;
+
+    /* Validate ref characters — if uninitialised, use safe defaults */
+    char lat_ref = (lat->ref == 'N' || lat->ref == 'S') ? lat->ref : 'N';
+    char lon_ref = (lon->ref == 'E' || lon->ref == 'W') ? lon->ref : 'E';
+
+    /* Guard against zero denominator */
+    uint32_t lat_sec_den = (lat->seconds_den == 0) ? 1 : lat->seconds_den;
+    uint32_t lon_sec_den = (lon->seconds_den == 0) ? 1 : lon->seconds_den;
+    uint32_t alt_den     = (alt->altitude_den == 0) ? 1 : alt->altitude_den;
+
+    format_rational_as_decimal(lat->seconds_num, lat_sec_den,
+                               lat_sec, sizeof(lat_sec));
+    format_rational_as_decimal(lon->seconds_num, lon_sec_den,
+                               lon_sec, sizeof(lon_sec));
+    format_rational_as_decimal(alt->altitude_num, alt_den,
+                               alt_dec, sizeof(alt_dec));
+
+    snprintf(buf, buf_size,
+             "%u\xc2\xb0%u'%s\" %c %u\xc2\xb0%u'%s\" %c %s %s",
+             (unsigned)lat->degrees_num,
+             (unsigned)lat->minutes_num,
+             lat_sec,
+             lat_ref,                   /* use validated ref */
+             (unsigned)lon->degrees_num,
+             (unsigned)lon->minutes_num,
+             lon_sec,
+             lon_ref,                   /* use validated ref */
+             alt_dec,
+             alt->ref == 0 ? "Above" : "Below");
+}
+
 // Function to format the GPS coordinate as a string
 void exif_gps_format_coordinate(const GPS_Coordinate *coord, char *buffer, size_t buffer_size) {
     if (!coord || !buffer) {
@@ -320,6 +417,45 @@ void exif_gps_generate_altitude_byte_array(const GPS_Altitude *alt, uint8_t *buf
     uint32_t *buf32 = (uint32_t *)(buffer + 1);
     buf32[0] = __builtin_bswap32(alt->altitude_num);
     buf32[1] = __builtin_bswap32(alt->altitude_den);
+}
+
+/**
+ * Extracts native-endian uint32_t rational values from the byte array
+ * produced by exif_gps_generate_byte_array().
+ *
+ * The byte array layout is:
+ *   [0]    = ref char ('N','S','E','W')
+ *   [1]    = 0x00 (null terminator)
+ *   [2..25]= 6 x uint32_t in big-endian order
+ *
+ * This function reverses the bswap so addIFD() receives native little-endian values.
+ *
+ * @param byte_array  - the 26-byte buffer from exif_gps_generate_byte_array()
+ * @param rationals   - output array of 6 uint32_t values (native endian)
+ */
+void exif_gps_extract_rationals(const uint8_t *byte_array, uint32_t *rationals) {
+    const uint32_t *be = (const uint32_t *)(byte_array + 2);
+    for (int i = 0; i < 6; i++) {
+        rationals[i] = __builtin_bswap32(be[i]);
+    }
+}
+
+/**
+ * Extracts native-endian uint32_t rational values from the byte array
+ * produced by exif_gps_generate_altitude_byte_array().
+ *
+ * The byte array layout is:
+ *   [0]   = ref byte (0 = above, 1 = below)
+ *   [1..8]= 2 x uint32_t in big-endian order
+ *
+ * @param byte_array  - the 9-byte buffer from exif_gps_generate_altitude_byte_array()
+ * @param rationals   - output array of 2 uint32_t values (native endian)
+ */
+void exif_gps_extract_alt_rationals(const uint8_t *byte_array, uint32_t *rationals) {
+    const uint32_t *be = (const uint32_t *)(byte_array + 1);
+    for (int i = 0; i < 2; i++) {
+        rationals[i] = __builtin_bswap32(be[i]);
+    }
 }
 
 /**

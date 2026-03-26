@@ -6,7 +6,7 @@ without having to recompile the source code.
 
 ## Operational Parameter `OP_PARAMETER_TEST_MODE_BITS`
 
-This is one of the vkaues that can be set in the CONFIG.TXT file, and also can be set by the app
+This is one of the values that can be set in the CONFIG.TXT file, and also can be set by the app
 using the `AI setop 18 <n>` command. OP_PARAMETER_TEST_MODE_BITS is index 18. 
 
 Each bit in the operational parameter can enable one test. At present the tests are as described below.
@@ -77,7 +77,7 @@ the appropriate flash setting for different scenes - near and far.
 When set, successive images are taken with different levels of flash brightness, from minimum to maximum.
 
 Set OP_PARAMETER_NUM_PICTURES to 7 to see all options,
-and set OP_PARAMETER_FLASH_LED to 1 or 2 (visible ot IR flash).
+and set OP_PARAMETER_FLASH_LED to 1 or 2 (visible or IR flash).
 
 #### Skip image file creation  
 

@@ -518,7 +518,7 @@ static const CLI_Command_Definition_t xGetSelfTest = {
 /* Structure that defines the "md" command line command. */
 static const CLI_Command_Definition_t xMd = {
 	"md", /* The command string to type. */
-	"md <sensitivity>:\r\n Set sensitivity (values 1, 2, 3 = low, med, high; 0 = 0ff)\r\n",
+	"md <sensitivity>:\r\n Set sensitivity (values 1, 2, 3 = low, med, high; 0 = off)\r\n",
 	prvMd, /* The function to run. */
 	1		 /* One parameter expected */
 };
@@ -1620,20 +1620,21 @@ static BaseType_t prvMd(char *pcWriteBuffer, size_t xWriteBufferLen, const char 
 	/* Get parameter */
 	pcParameter = FreeRTOS_CLIGetParameter(pcCommandString, 1, &lParameterStringLength);
 	if (pcParameter != NULL) {
-		sensitivity = atoi(pcParameter); // Consider using strtol for safer parsing and error checking.
-		if ((sensitivity >= 0) && (sensitivity <= 3)) {
-			//cli_append(&pcWriteBuffer, &xWriteBufferLen, "MD sensitivity %d", sensitivity);
-			// set registers (might need to change thsi to something in hm0360_md.c
-			cisdp_sensor_set_md_sensitivity(sensitivity);
-			// save for the future
-			fatfs_setOperationalParameter(OP_PARAMETER_MD_SENSITIVITY, sensitivity);
+		char *endptr;
+		long sensitivity_long = strtol(pcParameter, &endptr, 10);
+
+		if (endptr == pcParameter || *endptr != '\0' || sensitivity_long < 0 || sensitivity_long > 3) {
+			cli_append(&pcWriteBuffer, &xWriteBufferLen, "Error: Sensitivity must be an integer between 0 and 3.");
 		}
 		else {
-			cli_append(&pcWriteBuffer, &xWriteBufferLen, "Must supply an integer between 0 and 3");
+			sensitivity = (uint16_t)sensitivity_long;
+			cisdp_sensor_set_md_sensitivity(sensitivity);
+			fatfs_setOperationalParameter(OP_PARAMETER_MD_SENSITIVITY, sensitivity);
+			cli_append(&pcWriteBuffer, &xWriteBufferLen, "MD sensitivity set to %u", sensitivity);
 		}
 	}
 	else {
-		cli_append(&pcWriteBuffer, &xWriteBufferLen, "Must supply an integer between 0 and 3");
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "Error: Missing sensitivity parameter.");
 	}
 
 	return pdFALSE;

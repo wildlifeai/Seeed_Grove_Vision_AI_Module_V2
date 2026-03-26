@@ -426,7 +426,7 @@ static void incrementBrightness(void) {
  * Change after each APP_MSG_IMAGETASK_FRAME_READY event
  */
 static void incrementToneMapping(void) {
-	static TONE_CONFIG_E changingTone = TONE_MAPPING_DEFAULT; // = 0
+	static TONE_CONFIG_E changingTone = TONE_MAPPING_FLAT; // = 0
 
 	xprintf("DEBUG: Tone is now %d\n", changingTone);
 	cisdp_sensor_set_tone(changingTone);

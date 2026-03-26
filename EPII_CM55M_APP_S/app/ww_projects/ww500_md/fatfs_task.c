@@ -539,7 +539,7 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 
 			res = fileWriteImage(fileOp, extraBlock, &dirManager);
 
-			xprintf("File write took %dms\n", app_getElapsedMs(xStartTime));\
+			xprintf("File write took %dms\n", app_getElapsedMs(xStartTime));
 		}
 
 		// Inform the if task that the disk operation is complete
@@ -578,7 +578,7 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 			res = fileWrite(fileOp);
 		}
 
-		xprintf("File write took %dms\n", app_getElapsedMs(xStartTime));\
+		xprintf("File write took %dms\n", app_getElapsedMs(xStartTime));
 
 		// Inform the if task that the disk operation is complete
 		sendMsg.message.msg_data = (uint32_t)res;

@@ -24,14 +24,8 @@
 
 // Warning: if using 8.3 file names then this applies to directories also.
 // Names are upper case.
-// TBP - TODO: We need to review naming conventions for directories.
-#if FF_USE_LFN
-#define CAPTURE_DIR "Deployment"
-#define STATE_FILE "configuration.txt"
-#else
 #define CAPTURE_DIR "/IMAGES"
 #define STATE_FILE "CONFIG.TXT"
-#endif // FF_USE_LFN
 
 //#define CONFIG_DIR "/CONFIG"
 #define CONFIG_DIR "/MANIFEST"
@@ -85,7 +79,13 @@ extern directoryManager_t dirManager;
 /**************************************** Global Function Declarations  *************************************/
 
 FRESULT dir_mgr_init_directories(directoryManager_t *dirManager);
-FRESULT dir_mgr_add_capture_folder(directoryManager_t *dirManager);
-FRESULT dir_mgr_delete_capture_folder(const char *folder_name, directoryManager_t *dirManager);
+//FRESULT dir_mgr_add_capture_folder(directoryManager_t *dirManager);
+//FRESULT dir_mgr_delete_capture_folder(const char *folder_name, directoryManager_t *dirManager);
+
+void dir_mgr_generateImageFilename(char * imageFileName, uint8_t filenameLen, char * type);
+void dir_mgr_generateImageDirName(char * imageDirName, uint8_t dirNameLen);
+
+void dir_mgr_createImageDir(char * path_buf);
+
 
 #endif /* APP_WW_PROJECTS_WW500_MD_DIRECTORY_MANAGER_H_ */

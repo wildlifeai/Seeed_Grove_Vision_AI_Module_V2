@@ -35,7 +35,7 @@ Operational Parameters which are not present in CONFIG.TXT are given their defau
 
 | Index | Name                                  | Default Value | Notes                                                |
 | ----- | ------------------------------------- | ------------- | ---------------------------------------------------- |
-|     0 | OP_PARAMETER_SEQUENCE_NUMBER          | 0             | Image file number. Used as part of the image file name. Increments when the file is written.  |
+|     0 | OP_PARAMETER_SEQUENCE_NUMBER          | 0             | Image file number. Increments when the file is written.  |
 |     1 | OP_PARAMETER_NUM_NN_ANALYSES          | 0             | The number of times the neural network model has run. |
 |     2 | OP_PARAMETER_NUM_POSITIVE_NN_ANALYSES | 0             | The number of times the neural network model detects the target. |
 |     3 | OP_PARAMETER_NUM_COLD_BOOTS           | 0             | The number of AI processor cold boots.  |
@@ -63,6 +63,8 @@ Operational Parameters which are not present in CONFIG.TXT are given their defau
 |    25 | OP_PARAMETER_DEPLOYMENT_ID_CHUNK_6    | 0             | Deployment ID hex chars 20-23 |
 |    26 | OP_PARAMETER_DEPLOYMENT_ID_CHUNK_7    | 0             | Deployment ID hex chars 24-27 |
 |    27 | OP_PARAMETER_DEPLOYMENT_ID_CHUNK_8    | 0             | Deployment ID hex chars 28-31 |
+|    28 | OP_PARAMETER_IMAGES_COUNT     		| 0             | Count of images in the current image folder. Use this to decide to create a new image folder. |
+|    29 | OP_PARAMETER_IMAGES_FILE_INDEX 		| 0             | Count of image folders |
 
 ## More Details
 

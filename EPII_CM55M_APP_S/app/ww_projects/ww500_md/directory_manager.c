@@ -21,9 +21,16 @@
 #include "ffconf.h"
 #include "fatfs_task.h"
 
+#include "exif_utc.h"
+#include "printf_x.h"
+
 /*************************************** Definitions *******************************************/
 
 #define MAXIMAGEDIRECTORIES 999
+
+// low number just for testing
+#define MAXIMAGESPERDIRECTORY 4
+//#define MAXIMAGESPERDIRECTORY 100
 
 // Note: CONFIG_DIR comes from directory_manager.h and is currently "/MANIFEST"
 // TODO no need for both...
@@ -284,12 +291,12 @@ FRESULT dir_mgr_init_directories(directoryManager_t *dirManager) {
 #endif //UNZIPMANIFEST
 
 	// === IMAGES DIRECTORY ===
-#if FF_USE_LFN
-	snprintf(path_buf, sizeof(path_buf), "%s_%04d", CAPTURE_DIR, dirManager->imagesDirIdx);
-#else
+
+	// CGP 31/3/26
+	// This needs to be re-factored.
+#if 0
 	// Use 8.3 file name format
 	snprintf(path_buf, sizeof(path_buf), "%s.%03d", CAPTURE_DIR, dirManager->imagesDirIdx);
-#endif // FF_USE_LFN
 
 	res = f_stat(path_buf, &fno);
 	if (res == FR_OK) {
@@ -304,9 +311,18 @@ FRESULT dir_mgr_init_directories(directoryManager_t *dirManager) {
 			return dirManager->imagesRes;
 		}
 		// TODO - what to do here?
+		strcpy(dirManager->current_capture_dir, path_buf); // Set initial result for image operations
+
 		dirManager->imagesDirIdx = 1;
 	}
-	strcpy(dirManager->current_capture_dir, path_buf); // Set initial result for image operations
+#else
+	// TODO - temporary only as the file may change after we load the CONFIG.TXT values
+	dir_mgr_generateImageDirName(path_buf, sizeof(path_buf));
+	dir_mgr_createImageDir(path_buf);	// Having created the name, create the folder if necessary
+
+	dirManager->imagesDirIdx = 1;
+#endif
+
 	dirManager->configOpen = false;
 	dirManager->imagesOpen = false;
 
@@ -324,74 +340,179 @@ FRESULT dir_mgr_init_directories(directoryManager_t *dirManager) {
 //     }
 //     return FR_OK;
 // }
+//
+///**
+// * Creates a new folder for image captures when threshold met.
+// *
+// * Realistic use case will be to check the number of captures within a folder,
+// * when it reaches the threshold (fatfs_getImageSequenceNumber),
+// * this function gets called to create a new folder
+// * and points to this directory for new captures to be stored.
+// *
+// * @param dirManager Pointer to the directory manager structure to initialize.
+// * @return FRESULT indicating the success or failure of the operation.
+// */
+//FRESULT dir_mgr_add_capture_folder(directoryManager_t *dirManager) {
+//	char path_buf[IMAGEFILENAMELEN];
+//
+//	// 999 is an arbitrary number
+//	// TODO, what we set the limits to and when to shift to a new capture folder
+//	if (dirManager->imagesDirIdx < MAXIMAGEDIRECTORIES) {
+//		dirManager->imagesDirIdx++;
+//
+//#if 0
+//		// TODO Compiler says 'warning: 'snprintf' output may be truncated before the last format character'
+//		snprintf(path_buf, sizeof(path_buf), "%s.%03d", CAPTURE_DIR, dirManager->imagesDirIdx);
+//#else
+//		dir_mgr_generateImageDirName(path_buf, sizeof(path_buf));
+//#endif
+//		// Creates the new folder
+//		FRESULT res = f_mkdir(path_buf);
+//		if (res != FR_OK)
+//		{
+//			xprintf("Failed to create folder: %s, error: %d\n", path_buf, res);
+//			return res;
+//		}
+//		dirManager->imagesRes = FR_OK;
+//	}
+//	else {
+//		xprintf("Folder index too high: %d (max %d)\n", dirManager->imagesDirIdx, MAXIMAGEDIRECTORIES);
+//		dirManager->imagesRes = FR_INVALID_NAME; // Set error in directory manager
+//		return dirManager->imagesRes;
+//	}
+//	strcpy(dirManager->current_capture_dir, path_buf); // Update current directory
+//	return dirManager->imagesRes;
+//}
+//
+///**
+// * Deletes a folder for image captures.
+// * @param path_buf Name of the folder to be deleted.
+// * @param dirManager Pointer to the directory manager structure.
+// * @return FRESULT indicating the success or failure of the operation.
+// */
+//FRESULT dir_mgr_delete_capture_folder(const char *path_buf, directoryManager_t *dirManager) {
+//	FRESULT res = f_rmdir(path_buf);
+//	if (res != FR_OK)
+//	{
+//		xprintf("Failed to delete folder: %s, error: %d\n", path_buf, res);
+//		dirManager->imagesRes = res; // Update directory manager with error
+//	}
+//	else
+//	{
+//		xprintf("Successfully deleted folder: %s\n", path_buf);
+//		dirManager->imagesRes = FR_OK; // Update directory manager on success
+//		dirManager->imagesDirIdx--;	   // Decrease folder count
+//	}
+//	return res;
+//}
+//
 
 /**
- * Creates a new folder for image captures when threshold met.
+ * Generate a filename for the image (jpeg) file.
  *
- * Realistic use case will be to check the number of captures within a folder,
- * when it reaches the threshold (fatfs_getImageSequenceNumber),
- * this function gets called to create a new folder
- * and points to this directory for new captures to be stored.
+ * Must use 8.3 file name: upper case alphanumeric
  *
- * @param dirManager Pointer to the directory manager structure to initialize.
- * @return FRESULT indicating the success or failure of the operation.
+ * The name is 8 hex characters (which can be generated by a 32-bit integer).
+ * The names is generated as follows:
+ * - find the Unix epoch timestamp (seconds since 1/1/1970)
+ * - shitft is left 4 bits (i.e.lose the first nibble)
+ * - make the LS nibble '0', but use successive values (up to 'F')
+ * 		if there are more than 1 file generated within this same second.
+ *
+ * 	This gives file names with these characteristics:
+	1    When sorted in alphanumeric order that is also chronological order.
+	2    Up to 16 files per second
+	3    The file name can be converted to Unix time (1s resolution) by shifting 4 bits right and pre-pending '6' (or whatever).
+ *
+ * @param imageFileName character array to contain the name
+ * @param filenameLen - length of that array
+ * @param type character array to contain the extension (JPG or BMP)
  */
-FRESULT dir_mgr_add_capture_folder(directoryManager_t *dirManager)
-{
-	char path_buf[IMAGEFILENAMELEN];
+void dir_mgr_generateImageFilename(char *imageFileName, uint8_t filenameLen, char * type) {
 
-	// 999 is an arbitrary number
-	// TODO, what we set the limits to and when to shift to a new capture folder
-	if (dirManager->imagesDirIdx < MAXIMAGEDIRECTORIES)
-	{
-		dirManager->imagesDirIdx++;
-		uint16_t idx = dirManager->imagesDirIdx;
+	uint32_t seconds;
+	static uint32_t old = 1;
+	static uint8_t subSecond = 0;	// increment by 1 if this is called several times in teh same second
 
-#if FF_USE_LFN
-		snprintf(path_buf, sizeof(path_buf), "%s_%04d", CAPTURE_DIR, idx);
-#else
-		// TODO Compiler says 'warning: 'snprintf' output may be truncated before the last format character'
-		snprintf(path_buf, sizeof(path_buf), "%s.%03d", CAPTURE_DIR, idx);
-#endif
+	exif_utc_get_rtc_as_seconds(&seconds);
+	// check this is linux epoch
+	//xprintf("Linux epoch 0x%08x ", seconds);
 
-		// Creates the new folder
-		FRESULT res = f_mkdir(path_buf);
-		if (res != FR_OK)
-		{
-			xprintf("Failed to create folder: %s, error: %d\n", path_buf, res);
-			return res;
+	if (seconds == old) {
+		// we have called this function more than once this second, so increment LS digit
+		if (subSecond < 15) {
+			subSecond++;
 		}
-		dirManager->imagesRes = FR_OK;
+		else {
+			// Unlikely - here if we get >= 16 images in teh same second.
+			// tough: we have to overwrite the previous file
+		}
 	}
-	else
-	{
-		xprintf("Folder index too high: %d (max %d)\n", dirManager->imagesDirIdx, MAXIMAGEDIRECTORIES);
-		dirManager->imagesRes = FR_INVALID_NAME; // Set error in directory manager
-		return dirManager->imagesRes;
+	else {
+		subSecond = 0;
 	}
-	strcpy(dirManager->current_capture_dir, path_buf); // Update current directory
-	return dirManager->imagesRes;
+
+	old = seconds;
+
+	// Now create a value which is seconds * 16 + subSeconds
+	seconds = (seconds << 4) + subSecond;
+	snprintf(imageFileName, filenameLen, "%08X.%s", (int) seconds, type);
+}
+
+
+/**
+ * Generate a directory name for images
+ *
+ * Must use 8.3 file name: upper case alphanumeric
+ *
+ * @param imageDirName character array to contain the name
+ * @param dirNameLen - length of that array
+ */
+void dir_mgr_generateImageDirName(char * imageDirName, uint8_t dirNameLen) {
+	uint16_t imagesCount;
+	uint16_t imagesIndex;
+
+	imagesCount = fatfs_getOperationalParameter(OP_PARAMETER_IMAGES_COUNT);
+	imagesIndex = fatfs_getOperationalParameter(OP_PARAMETER_IMAGES_FILE_INDEX);
+
+	XP_GREEN;
+	// At every warm boot, check if the current images folder is full. If so, make a new one.
+	if ((imagesCount > MAXIMAGESPERDIRECTORY) && (imagesIndex < MAXIMAGEDIRECTORIES)) {
+		xprintf("DEBUG: created a new images directory (%d > %d)\n", imagesCount, MAXIMAGESPERDIRECTORY);
+
+		imagesIndex++;
+		fatfs_setOperationalParameter(OP_PARAMETER_IMAGES_FILE_INDEX, imagesIndex);
+		fatfs_setOperationalParameter(OP_PARAMETER_IMAGES_COUNT, 0);
+	}
+	else {
+		xprintf("DEBUG: retained old images directory (%d <= %d)\n", imagesCount, MAXIMAGESPERDIRECTORY);
+	}
+	XP_WHITE;
+
+	snprintf(imageDirName, dirNameLen, "%s.%03d", CAPTURE_DIR, imagesIndex);
 }
 
 /**
- * Deletes a folder for image captures.
- * @param path_buf Name of the folder to be deleted.
- * @param dirManager Pointer to the directory manager structure.
- * @return FRESULT indicating the success or failure of the operation.
+ * Create a directory to accept the images
  */
-FRESULT dir_mgr_delete_capture_folder(const char *path_buf, directoryManager_t *dirManager)
-{
-	FRESULT res = f_rmdir(path_buf);
-	if (res != FR_OK)
-	{
-		xprintf("Failed to delete folder: %s, error: %d\n", path_buf, res);
-		dirManager->imagesRes = res; // Update directory manager with error
+void dir_mgr_createImageDir(char * path_buf) {
+	FRESULT res;
+	FILINFO fno;
+
+	res = f_stat(path_buf, &fno);
+
+	if (res == FR_OK) {
+		xprintf("Directory '%s' exists\r\n", path_buf);
 	}
-	else
-	{
-		xprintf("Successfully deleted folder: %s\n", path_buf);
-		dirManager->imagesRes = FR_OK; // Update directory manager on success
-		dirManager->imagesDirIdx--;	   // Decrease folder count
+	else {
+		xprintf("Creating directory '%s'\r\n", path_buf);
+		res = f_mkdir(path_buf);
+		if (res != FR_OK) {
+			xprintf("f_mkdir(images) failed (%d)\r\n", res);
+			dirManager.imagesRes = res;
+			//return dirManager->imagesRes;
+		}
 	}
-	return res;
+
+	strcpy(dirManager.current_capture_dir, path_buf); // Set initial result for image operations
 }

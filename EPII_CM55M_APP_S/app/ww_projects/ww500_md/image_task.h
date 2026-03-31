@@ -44,13 +44,8 @@ typedef enum {
 // 15 minutes -
 #define MAX_IMAGE_INTERVAL 15 * 60 * 1000
 
-#if FF_USE_LFN
-// file name: 'image_2025-02-03_1234.jpg' = 25 characters, plus trailing '\0'
-#define IMAGEFILENAMELEN	26
-#else
 // file name: '12345678.jpg' = 12 characters, plus trailing '\0'
 #define IMAGEFILENAMELEN		13
-#endif // FF_USE_LFN
 
 // default 5%
 #define FLASHLEDDUTY 5

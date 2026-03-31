@@ -197,7 +197,7 @@ uint32_t pictureInterval = PICTUREINTERVAL;
 
 // Values to read from the CONFIG.TXT file
 uint16_t op_parameter[OP_PARAMETER_NUM_ENTRIES] = {
-	1,				   // 0 Image file number (0 indicates no SD card)
+	0,				   // 0 Image file number (0 indicates no SD card)
 	0,				   // 1 # times the NN model has run
 	0,				   // 2 # times the NN model says "yes"
 	0,				   // 3 # of AI processor cold boots
@@ -216,8 +216,10 @@ uint16_t op_parameter[OP_PARAMETER_NUM_ENTRIES] = {
 	MODEL_THRESHOLD,   // 16 OP_PARAMETER_MODEL_THRESHOLD default
 	1,      	   		// 17 Motion Detection Sensitivity: 0=off, 1=low, 2=medium, 3=high
 	0,	    	   		// 18 Test Mode Bits - one bit to enable each test function
-	0,	    	   		// 19 Reserved for future use
-	0, 0, 0, 0, 0, 0, 0, 0  // 20-27 Deployment ID chunks
+	0,	    	   		// 19 RFU
+	0, 0, 0, 0, 0, 0, 0, 0,  // 20-27 Deployment ID chunks
+	0,	    	   		// 28 OP_PARAMETER_IMAGES_COUNT
+	0,	    	   		// 29 OP_PARAMETER_IMAGES_COUNT - increment as files are added. Start a new folder when this exceeds a threhsold
 };
 
 
@@ -544,6 +546,7 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 			xStartTime = xTaskGetTickCount();
 
 			res = fileWriteImage(fileOp, extraBlock, &dirManager);
+			fatfs_incrementOperationalParameter(OP_PARAMETER_IMAGES_COUNT);
 			xprintf("File write took %dms\n", app_getElapsedMs(xStartTime));
 		}
 
@@ -635,13 +638,14 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 	case APP_MSG_FATFSTASK_SAVE_STATE:
 		// Save the state of the imageSequenceNumber
 		// This is the last thing we will do before sleeping.
-		if (fatfs_getOperationalParameter(OP_PARAMETER_SEQUENCE_NUMBER) > 0) {
+		if (fatfs_getImageSequenceNumber() > 0) {
 			res = save_configuration(STATE_FILE, &dirManager);
 			f_unmount(DRV);
 
 			if (res) {
 				xprintf("Error %d saving state\n", res);
-			} else {
+			}
+			else {
 				xprintf("Saved state to SD card. Image sequence number = %d\n",
 						fatfs_getImageSequenceNumber());
 			}
@@ -797,7 +801,7 @@ static void processGPS(char * gps_line) {
 	                           &exif_gps_deviceAlt, gps_line);
 
 	// test that worked:
-	xprintf("Read GPS location from file: '%s'\n", gps_line);
+	// xprintf("Read GPS location from file: '%s'\n", gps_line);
 }
 
 /**
@@ -991,7 +995,7 @@ FRESULT save_configuration(const char *filename, directoryManager_t *dirManager)
 		exif_gps_create_full_string(&exif_gps_deviceLat, &exif_gps_deviceLon,
 		                            &exif_gps_deviceAlt, &line[2], sizeof(line));
 
-		xprintf("Wrote GPS location to file: '%s'\n", line);
+		//xprintf("Wrote GPS location to file: '%s'\n", line);
 
 		f_write(&dirManager->configFile, line, strlen(line), &bytesWritten);
 
@@ -1346,11 +1350,23 @@ static void vFatFsTask(void *pvParameters) {
 						fatfs_getImageSequenceNumber(),
 						(enabled == 1) ? "" : "not ",
 						op_parameter[OP_PARAMETER_LED_BRIGHTNESS_PERCENT]);
+
+				if (fatfs_getImageSequenceNumber() == 0)  {
+					// Change this, since 0 means "no SD card"
+					fatfs_setOperationalParameter(OP_PARAMETER_SEQUENCE_NUMBER, 1);
+				}
+
+				// TODO clean this up! We have to call dir_mgr_generateImageDirName()
+				// a second time now that the operational parameters have been read
+
+				char path_buf[IMAGEFILENAMELEN];
+				dir_mgr_generateImageDirName(path_buf, IMAGEFILENAMELEN);
+				dir_mgr_createImageDir(path_buf);
 			}
 			else {
-				fatfs_setOperationalParameter(OP_PARAMETER_SEQUENCE_NUMBER, 1);
-				xprintf("'%s' NOT found. (Next image #1)\r\n", STATE_FILE);
+				xprintf("'%s' NOT found.\r\n", STATE_FILE);
 			}
+
 		}
 		else {
 			// TODO what? Is this an error we must deal with?
@@ -1587,7 +1603,8 @@ uint16_t fatfs_getOperationalParameter(OP_PARAMETERS_E parameter) {
 
 	if ((parameter >= 0) && (parameter < OP_PARAMETER_NUM_ENTRIES)) {
 		return op_parameter[parameter];
-	} else {
+	}
+	else {
 		return 0;
 	}
 }
@@ -1596,6 +1613,9 @@ uint16_t fatfs_getOperationalParameter(OP_PARAMETERS_E parameter) {
  * Get the image sequence number
  *
  * Short-hand version of fatfs_getOperationalParameter(OP_PARAMETER_SEQUENCE_NUMBER)
+ *
+ * If tis returns 0 then that means there is no SD card, so it is a way of skipping
+ * file write attempts.
  */
 uint16_t fatfs_getImageSequenceNumber(void) {
 	return op_parameter[OP_PARAMETER_SEQUENCE_NUMBER];

@@ -49,8 +49,7 @@ directoryManager_t dirManager;
  * @param dirManager Pointer to the directory manager structure.
  * @return FRESULT indicating success or failure.
  */
-FRESULT dir_mgr_init_config(directoryManager_t *dirManager)
-{
+FRESULT dir_mgr_init_config(directoryManager_t *dirManager) {
 	FRESULT res;
 	char path_buf[DIRNAMELEN];
 	FILINFO fno;
@@ -89,8 +88,7 @@ FRESULT dir_mgr_init_config(directoryManager_t *dirManager)
  * @param dirManager Pointer to the directory manager structure.
  * @return FRESULT indicating success or failure.
  */
-FRESULT dir_mgr_init_image_dir(directoryManager_t *dirManager)
-{
+FRESULT dir_mgr_init_image_dir(directoryManager_t *dirManager) {
 	char path_buf[DIRNAMELEN];
 
 	dir_mgr_generateImageDirName(path_buf, sizeof(path_buf));
@@ -120,8 +118,7 @@ FRESULT dir_mgr_init_image_dir(directoryManager_t *dirManager)
  * @param filenameLen   length of that array
  * @param type          character array to contain the extension (JPG or BMP)
  */
-void dir_mgr_generateImageFilename(char *imageFileName, uint8_t filenameLen, char *type)
-{
+void dir_mgr_generateImageFilename(char *imageFileName, uint8_t filenameLen, char *type) {
 	uint32_t seconds;
 	static uint32_t old = 1;
 	static uint8_t subSecond = 0;	// increment by 1 if called several times in the same second
@@ -158,8 +155,7 @@ void dir_mgr_generateImageFilename(char *imageFileName, uint8_t filenameLen, cha
  * @param imageDirName  character array to contain the name
  * @param dirNameLen    length of that array
  */
-void dir_mgr_generateImageDirName(char *imageDirName, uint8_t dirNameLen)
-{
+void dir_mgr_generateImageDirName(char *imageDirName, uint8_t dirNameLen) {
 	uint16_t imagesCount;
 	uint16_t imagesIndex;
 
@@ -168,17 +164,20 @@ void dir_mgr_generateImageDirName(char *imageDirName, uint8_t dirNameLen)
 
 	XP_GREEN;
 	if ((imagesCount > MAXIMAGESPERDIRECTORY) && (imagesIndex < MAXIMAGEDIRECTORIES)) {
-		xprintf("DEBUG: created a new images directory (%d > %d)\n", imagesCount, MAXIMAGESPERDIRECTORY);
+		xprintf("Created a new images directory (%d > %d) ", imagesCount, MAXIMAGESPERDIRECTORY);
 		imagesIndex++;
 		fatfs_setOperationalParameter(OP_PARAMETER_IMAGES_FILE_INDEX, imagesIndex);
 		fatfs_setOperationalParameter(OP_PARAMETER_IMAGES_COUNT, 0);
 	}
 	else {
-		xprintf("DEBUG: retained old images directory (%d <= %d)\n", imagesCount, MAXIMAGESPERDIRECTORY);
+		xprintf("Retained existing images directory (%d <= %d) ", imagesCount, MAXIMAGESPERDIRECTORY);
 	}
-	XP_WHITE;
 
 	snprintf(imageDirName, dirNameLen, "%s.%03d", CAPTURE_DIR, imagesIndex);
+
+	// print the directory name
+	xprintf("'%s'\n", imageDirName);
+	XP_WHITE;
 }
 
 /**

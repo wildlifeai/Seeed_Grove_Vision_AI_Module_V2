@@ -17,6 +17,15 @@ EPII_CM55M_APP_S/app/ww_projects/ww.mk
 EPII_CM55M_APP_S/app/ww_projects/ww500_md/ww500_md.mk
 ```
 
+## Memory
+
+Save to persistent memory at these points without being asked:
+- When a task is completed or reaches a significant milestone
+- When a new coding convention or pattern is established
+- When something non-obvious is learned about the project structure or toolchain
+
+Memory files live at `~/.claude/projects/.../memory/`. Check `MEMORY.md` there for what is already recorded before adding duplicates.
+
 ## Task-specific instructions
 
 Current task instructions are imported from the ww500_md project directory.

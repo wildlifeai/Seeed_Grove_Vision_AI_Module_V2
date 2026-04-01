@@ -169,8 +169,11 @@ uint16_t fatfs_getImageSequenceNumber(void);
 // Increment one of the Operational Parameters
 void fatfs_incrementOperationalParameter(OP_PARAMETERS_E parameter);
 
-// Reconstruct deployment ID UUID from OP20-OP27 chunks
+// Get deployment ID UUID string (prefers 'I ' line form; falls back to OP20-OP27 chunks)
 void fatfs_getDeploymentId(char *deployment_id_buffer, size_t buffer_size);
+
+// Set deployment ID UUID string (persisted to CONFIG.TXT on next save_configuration())
+void fatfs_setDeploymentId(const char *uuid_string);
 
 // Load labels from SD card text file
 int8_t fatfs_load_labels(const char *path, char labels[][MAX_LABEL_LEN], uint8_t *label_count, uint8_t max_labels, uint8_t max_label_len);

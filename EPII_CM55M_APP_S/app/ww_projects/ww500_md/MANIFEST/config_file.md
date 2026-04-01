@@ -96,3 +96,15 @@ Line 7: Mount Everest summit — realistic high altitude with decimal seconds in
 Line 8: Tests Below sea level, e.g. Dead Sea area — the only case that exercises the alt->ref == 1 path
 
 ```
+
+## Deployment ID
+
+Originally the 128-bit deployment ID was saved in eight 16-bit operational parameter values. 
+Since 1 April 2026 there is an ability to save and restre this as a single line string beginning 
+with "I " with the string following. Example:
+
+```
+I 12345678-0000-0000-0000-000000abc666
+```
+When the app has implemented this and it has been tested, the OP_PARAMETER_DEPLOYMENT_ID_CHUNK_1 - OP_PARAMETER_DEPLOYMENT_ID_CHUNK_8
+block will be removed.

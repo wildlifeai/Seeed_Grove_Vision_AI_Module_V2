@@ -2694,7 +2694,7 @@ static uint16_t build_exif_segment(int8_t *outCategories, uint8_t categoriesCoun
 
 	// Add deployment ID if present (not all zeros)
 	if (has_deployment_id) {
-//		xprintf("EXIF: Adding DeploymentID: %s\n", deployment_id);
+		xprintf("EXIF: Adding DeploymentID: %s\n", deployment_id);
 		addIFD(TAG_DEPLOYMENT_ID, ifd_start + (entry++ * 12), deployment_id);
 	}
 

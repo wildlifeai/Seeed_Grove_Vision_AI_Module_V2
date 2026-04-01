@@ -250,6 +250,8 @@ static BaseType_t prvSend(char *pcWriteBuffer, size_t xWriteBufferLen, const cha
 static BaseType_t prvCapture(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 static BaseType_t prvSetgps(char *pcWriteBuffer, size_t writeBufferLen, const char *pcCommandString);
 static BaseType_t prvGetgps(char *writeBuffer, size_t writeBufferLen, const char *commandString);
+static BaseType_t prvSetdid(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
+static BaseType_t prvGetdid(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 static BaseType_t prvExifGpsTests(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 static BaseType_t prvLoadModel(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 static BaseType_t prvEraseModel(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
@@ -415,6 +417,22 @@ static const CLI_Command_Definition_t xGetGps = {
     "getgps: Get device GPS location\r\n",
     prvGetgps,
     0 // Number of expected parameters
+};
+
+/* structure that defines the "setdid" command line command */
+static const CLI_Command_Definition_t xSetDid = {
+    "setdid",
+    "setdid <uuid>:\r\n Set deployment ID UUID string (xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)\r\n",
+    prvSetdid,
+    1 // One parameter expected
+};
+
+/* structure that defines the "getdid" command line command */
+static const CLI_Command_Definition_t xGetDid = {
+    "getdid",
+    "getdid:\r\n Get current deployment ID UUID string\r\n",
+    prvGetdid,
+    0 // No parameters expected
 };
 
 /* Structure that defines the "gpstests" command line command. */
@@ -1514,6 +1532,47 @@ static BaseType_t prvGetgps(char *pcWriteBuffer, size_t xWriteBufferLen, const c
 }
 
 /**
+ * Set the deployment ID UUID string.
+ * Processes the 'setdid <uuid>' command.
+ */
+static BaseType_t prvSetdid(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) {
+    const char *param;
+    BaseType_t paramLen;
+
+    param = FreeRTOS_CLIGetParameter(pcCommandString, 1, &paramLen);
+    if (!param || paramLen == 0) {
+        snprintf(pcWriteBuffer, xWriteBufferLen, "Error: No UUID string provided.\r\n");
+        return pdFALSE;
+    }
+    if (paramLen != UUIDLENGTH - 1) {
+        snprintf(pcWriteBuffer, xWriteBufferLen,
+                 "Error: UUID must be %d characters (got %d).\r\n",
+                 UUIDLENGTH - 1, (int)paramLen);
+        return pdFALSE;
+    }
+
+    char uuid[UUIDLENGTH];
+    strncpy(uuid, param, UUIDLENGTH - 1);
+    uuid[UUIDLENGTH - 1] = '\0';
+
+    fatfs_setDeploymentId(uuid);
+    cli_append(&pcWriteBuffer, &xWriteBufferLen, "Deployment ID set to %s", uuid);
+    return pdFALSE;
+}
+
+/**
+ * Return the current deployment ID UUID string.
+ * Processes the 'getdid' command.
+ */
+static BaseType_t prvGetdid(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) {
+    (void)pcCommandString;
+    char uuid[UUIDLENGTH];
+    fatfs_getDeploymentId(uuid, sizeof(uuid));
+    cli_append(&pcWriteBuffer, &xWriteBufferLen, "Deployment ID: %s\n", uuid);
+    return pdFALSE;
+}
+
+/**
  * Runs exif_gps tests from within the CLI
  *
  */
@@ -2075,6 +2134,8 @@ static void vRegisterCLICommands(void)
 	FreeRTOS_CLIRegisterCommand(&xSetGps);
 	FreeRTOS_CLIRegisterCommand(&xGetGps);
 	FreeRTOS_CLIRegisterCommand(&xGpsTests); // Runs several UTC tests
+	FreeRTOS_CLIRegisterCommand(&xSetDid);	// Sets deployment ID UUID string
+	FreeRTOS_CLIRegisterCommand(&xGetDid);	// Gets deployment ID UUID string
 	FreeRTOS_CLIRegisterCommand(&xLoadModel); // Load NN model by project and version number
 	FreeRTOS_CLIRegisterCommand(&xEraseModel); // Erase NN model
 	FreeRTOS_CLIRegisterCommand(&xSetUtc);		// Sets time from a UTC string

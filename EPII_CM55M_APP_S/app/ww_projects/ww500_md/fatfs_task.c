@@ -46,6 +46,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#include <ctype.h>
 
 #include "WE2_device.h"
 #include "WE2_debug.h"
@@ -216,6 +217,9 @@ uint16_t op_parameter[OP_PARAMETER_NUM_ENTRIES] = {
 	0,	    	   		// 28 OP_PARAMETER_IMAGES_COUNT
 	0,	    	   		// 29 OP_PARAMETER_IMAGES_COUNT - increment as files are added. Start a new folder when this exceeds a threhsold
 };
+
+// Deployment ID UUID string — loaded from 'I ' line in CONFIG.TXT or set via setdid CLI command
+static char deployment_id_string[UUIDLENGTH] = DEPLOYMENT_ID_ZERO_UUID;
 
 
 /********************************** Private Function definitions  *************************************/
@@ -858,7 +862,15 @@ static FRESULT load_configuration(const char *filename, directoryManager_t *dirM
 
 			// Special case if the first 2 characters are 'G ' for GPS
 			if ((line[0] == 'G') && (line[1] == ' ')) {
-				processGPS(&line[2]); // TODO
+				processGPS(&line[2]);
+			}
+			// Special case if the first 2 characters are 'I ' for deployment ID
+			else if ((line[0] == 'I') && (line[1] == ' ')) {
+				strncpy(deployment_id_string, &line[2], UUIDLENGTH - 1);
+				deployment_id_string[UUIDLENGTH - 1] = '\0';
+				char *nl = strchr(deployment_id_string, '\n');
+				if (nl) *nl = '\0';
+				for (char *p = deployment_id_string; *p; p++) *p = tolower((unsigned char)*p);
 			}
 			else {
 
@@ -988,10 +1000,20 @@ FRESULT save_configuration(const char *filename, directoryManager_t *dirManager)
 		line[1] = ' ';	// initialise with "G "
 		// Write the GPS string as the next characters
 		exif_gps_create_full_string(&exif_gps_deviceLat, &exif_gps_deviceLon,
-		                            &exif_gps_deviceAlt, &line[2], sizeof(line));
+		                            &exif_gps_deviceAlt, &line[2], sizeof(line) - 2);
+		// Append newline (exif_gps_create_full_string does not add one)
+		size_t gps_len = strlen(line);
+		if (gps_len < sizeof(line) - 1) {
+			line[gps_len]     = '\n';
+			line[gps_len + 1] = '\0';
+		}
 
 		//xprintf("Wrote GPS location to file: '%s'\n", line);
 
+		f_write(&dirManager->configFile, line, strlen(line), &bytesWritten);
+
+		// Write the deployment ID
+		snprintf(line, sizeof(line), "I %s\n", deployment_id_string);
 		f_write(&dirManager->configFile, line, strlen(line), &bytesWritten);
 
 		// Close file and restore original directory
@@ -1675,51 +1697,59 @@ int fatfs_unzip_manifest(void) {
 #endif //UNZIPMANIFEST
 
 /**
- * Reconstruct deployment ID UUID from operational parameters OP20-OP27
- * 
- * Algorithm per FIRMWARE_DEPLOYMENT_ID_SPEC.md:
- * 1. Read OP20-OP27 (8 uint16_t values)
- * 2. If all are 0, return "00000000-0000-0000-0000-000000000000"
- * 3. Convert each to 4-char hex string (with leading zeros)
- * 4. Insert hyphens at positions 8, 12, 16, 20 (UUID format)
- * 
- * @param deployment_id_buffer Output buffer (min 37 bytes for UUID + null)
+ * Get the deployment ID UUID string.
+ *
+ * Prefers the string form loaded from the 'I ' line in CONFIG.TXT or set via
+ * fatfs_setDeploymentId(). Falls back to reconstructing from OP20-OP27 chunks
+ * for backward compatibility with CONFIG.TXT files that predate the 'I ' line.
+ *
+ * @param deployment_id_buffer Output buffer (min UUIDLENGTH bytes)
  * @param buffer_size Size of output buffer
  */
 void fatfs_getDeploymentId(char *deployment_id_buffer, size_t buffer_size) {
 	if (buffer_size < UUIDLENGTH) {
-		// Buffer too small for UUID format
 		deployment_id_buffer[0] = '\0';
 		return;
 	}
-	
-	// Read 8 chunks from OP20-OP27
+
+	// Prefer the string form if it has been set
+	if (strcmp(deployment_id_string, DEPLOYMENT_ID_ZERO_UUID) != 0) {
+		snprintf(deployment_id_buffer, buffer_size, "%s", deployment_id_string);
+		return;
+	}
+
+	// Fall back to reconstructing from chunks (backward compatibility)
 	uint16_t chunks[8];
 	bool all_zero = true;
-	
 	for (int i = 0; i < 8; i++) {
 		chunks[i] = fatfs_getOperationalParameter(OP_PARAMETER_DEPLOYMENT_ID_CHUNK_1 + i);
-		if (chunks[i] != 0) {
-			all_zero = false;
-		}
+		if (chunks[i] != 0) all_zero = false;
 	}
-	
-	// All zeros = no deployment
 	if (all_zero) {
 		snprintf(deployment_id_buffer, buffer_size, "%s", DEPLOYMENT_ID_ZERO_UUID);
 		return;
 	}
-	
-	// Reconstruct UUID: XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX
-	// Chunks map to: 01-2-3-4-567 (each chunk = 4 hex chars)
 	snprintf(deployment_id_buffer, buffer_size,
 			 "%04x%04x-%04x-%04x-%04x-%04x%04x%04x",
-			 chunks[0], chunks[1],  // 8 chars
-			 chunks[2],              // 4 chars
-			 chunks[3],              // 4 chars
-			 chunks[4],              // 4 chars
-			 chunks[5], chunks[6], chunks[7]  // 12 chars
-	);
+			 chunks[0], chunks[1],
+			 chunks[2],
+			 chunks[3],
+			 chunks[4],
+			 chunks[5], chunks[6], chunks[7]);
+}
+
+/**
+ * Set the deployment ID UUID string.
+ *
+ * The value is stored in RAM and written to the 'I ' line in CONFIG.TXT the
+ * next time save_configuration() is called.
+ *
+ * @param uuid_string UUID string in standard format (xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)
+ */
+void fatfs_setDeploymentId(const char *uuid_string) {
+	strncpy(deployment_id_string, uuid_string, UUIDLENGTH - 1);
+	deployment_id_string[UUIDLENGTH - 1] = '\0';
+	for (char *p = deployment_id_string; *p; p++) *p = tolower((unsigned char)*p);
 }
 
 /**

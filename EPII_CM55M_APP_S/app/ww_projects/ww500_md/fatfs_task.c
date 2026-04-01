@@ -133,11 +133,6 @@ static int fatfs_unzip_manifest_zip(void);
 int fatfs_unzip_manifest(void);
 #endif //  UNZIPMANIFEST
 
-/*************************************** External Function Declaraions *******************************************/
-
-extern FRESULT init_directories(directoryManager_t *dirManager);
-extern FRESULT add_capture_folder(directoryManager_t *dirManager);
-
 /*************************************** External variables *******************************************/
 
 // GPS location of device can be set from the app, then accessed when needed
@@ -1335,7 +1330,8 @@ static void vFatFsTask(void *pvParameters) {
 		// Only if the file system is working should we add CLI commands for FATFS
 		cli_fatfs_init();
 
-		res = dir_mgr_init_directories(&dirManager);
+		// Phase 1: ensure /MANIFEST exists and initialise dirManager state.
+		res = dir_mgr_init_config(&dirManager);
 		if (res == FR_OK) {
 			xprintf("SD card initialised. ");
 			fatfs_printCwd();	// for debug purposes
@@ -1356,20 +1352,13 @@ static void vFatFsTask(void *pvParameters) {
 					fatfs_setOperationalParameter(OP_PARAMETER_SEQUENCE_NUMBER, 1);
 				}
 
-				// TODO clean this up! We have to call dir_mgr_generateImageDirName()
-				// a second time now that the operational parameters have been read
-
-				char path_buf[IMAGEFILENAMELEN];
-				dir_mgr_generateImageDirName(path_buf, IMAGEFILENAMELEN);
-				dir_mgr_createImageDir(path_buf);
+				// Phase 2: now that op_parameter[] is valid, determine and create the
+				// correct image directory.
+				dir_mgr_init_image_dir(&dirManager);
 			}
 			else {
 				xprintf("'%s' NOT found.\r\n", STATE_FILE);
 			}
-
-		}
-		else {
-			// TODO what? Is this an error we must deal with?
 		}
 	}
 	else {

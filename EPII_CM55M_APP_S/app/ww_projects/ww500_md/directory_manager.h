@@ -30,6 +30,10 @@
 //#define CONFIG_DIR "/CONFIG"
 #define CONFIG_DIR "/MANIFEST"
 
+// Buffer length for directory path strings. Kept separate from IMAGEFILENAMELEN
+// (which is sized for 8.3 filenames only).
+#define DIRNAMELEN 32
+
 // #define MAX_TRACKED_DIRS 5
 // #define MAX_DIR_NAME_LEN 64
 
@@ -59,16 +63,14 @@
 
 typedef struct
 {
-    FIL configFile;                             // File object for the config directory
-    FIL imagesFile;                             // File object for the images directory
-    FRESULT configRes;                          // Result code for config operations
-    FRESULT imagesRes;                          // Result code for image operations
-    bool configOpen;                            // Flag to indicate if config file is open
-    bool imagesOpen;                            // Flag to indicate if images file is open
-    int imagesDirIdx;                           // Index of the current images directory
-    char current_config_dir[IMAGEFILENAMELEN];  // Current config directory path
-    char current_capture_dir[IMAGEFILENAMELEN]; // Current capture directory path
-    char base_dir[IMAGEFILENAMELEN];            // Current working directory path
+    FIL configFile;                         // File object for the config directory
+    FIL imagesFile;                         // File object for the images directory
+    FRESULT configRes;                      // Result code for config operations
+    FRESULT imagesRes;                      // Result code for image operations
+    bool configOpen;                        // Flag to indicate if config file is open
+    bool imagesOpen;                        // Flag to indicate if images file is open
+    char current_config_dir[DIRNAMELEN];    // Current config directory path
+    char current_capture_dir[DIRNAMELEN];   // Current capture directory path
 } directoryManager_t;
 
 /**************************************** Global Defines  *************************************/
@@ -78,14 +80,17 @@ extern directoryManager_t dirManager;
 
 /**************************************** Global Function Declarations  *************************************/
 
-FRESULT dir_mgr_init_directories(directoryManager_t *dirManager);
-//FRESULT dir_mgr_add_capture_folder(directoryManager_t *dirManager);
-//FRESULT dir_mgr_delete_capture_folder(const char *folder_name, directoryManager_t *dirManager);
+// Phase 1 init: called early (before CONFIG.TXT is loaded). Sets up /MANIFEST and
+// initialises the dirManager state.
+FRESULT dir_mgr_init_config(directoryManager_t *dirManager);
 
-void dir_mgr_generateImageFilename(char * imageFileName, uint8_t filenameLen, char * type);
-void dir_mgr_generateImageDirName(char * imageDirName, uint8_t dirNameLen);
+// Phase 2 init: called after load_configuration(), once op_parameter[] is valid.
+// Determines and creates the correct image directory.
+FRESULT dir_mgr_init_image_dir(directoryManager_t *dirManager);
 
-void dir_mgr_createImageDir(char * path_buf);
+void dir_mgr_generateImageFilename(char *imageFileName, uint8_t filenameLen, char *type);
+void dir_mgr_generateImageDirName(char *imageDirName, uint8_t dirNameLen);
+void dir_mgr_createImageDir(char *path_buf, directoryManager_t *dirManager);
 
 
 #endif /* APP_WW_PROJECTS_WW500_MD_DIRECTORY_MANAGER_H_ */

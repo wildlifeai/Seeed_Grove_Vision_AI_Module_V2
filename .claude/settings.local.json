@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls /mnt/d/Development/wildlife.ai/Seeed_Grove_Vision_AI_Module_V2/EPII_CM55M_APP_S/*.mk)"
+    ]
+  }
+}

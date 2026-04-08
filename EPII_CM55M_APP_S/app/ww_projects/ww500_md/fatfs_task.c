@@ -212,10 +212,8 @@ uint16_t op_parameter[OP_PARAMETER_NUM_ENTRIES] = {
 	MODEL_THRESHOLD,   // 16 OP_PARAMETER_MODEL_THRESHOLD default
 	1,      	   		// 17 Motion Detection Sensitivity: 0=off, 1=low, 2=medium, 3=high
 	0,	    	   		// 18 Test Mode Bits - one bit to enable each test function
-	0,	    	   		// 19 RFU
-	0, 0, 0, 0, 0, 0, 0, 0,  // 20-27 Deployment ID chunks
-	0,	    	   		// 28 OP_PARAMETER_IMAGES_COUNT
-	0,	    	   		// 29 OP_PARAMETER_IMAGES_COUNT - increment as files are added. Start a new folder when this exceeds a threhsold
+	0,	    	   		// 19 OP_PARAMETER_IMAGES_COUNT
+	0,	    	   		// 20 OP_PARAMETER_IMAGES_COUNT - increment as files are added. Start a new folder when this exceeds a threhsold
 };
 
 // Deployment ID UUID string — loaded from 'I ' line in CONFIG.TXT or set via setdid CLI command
@@ -869,8 +867,12 @@ static FRESULT load_configuration(const char *filename, directoryManager_t *dirM
 				strncpy(deployment_id_string, &line[2], UUIDLENGTH - 1);
 				deployment_id_string[UUIDLENGTH - 1] = '\0';
 				char *nl = strchr(deployment_id_string, '\n');
-				if (nl) *nl = '\0';
-				for (char *p = deployment_id_string; *p; p++) *p = tolower((unsigned char)*p);
+				if (nl) {
+					*nl = '\0';
+				}
+				for (char *p = deployment_id_string; *p; p++) {
+					*p = tolower((unsigned char)*p);
+				}
 			}
 			else {
 
@@ -1699,43 +1701,24 @@ int fatfs_unzip_manifest(void) {
 /**
  * Get the deployment ID UUID string.
  *
- * Prefers the string form loaded from the 'I ' line in CONFIG.TXT or set via
- * fatfs_setDeploymentId(). Falls back to reconstructing from OP20-OP27 chunks
- * for backward compatibility with CONFIG.TXT files that predate the 'I ' line.
+ * Expects string form loaded from the 'I ' line in CONFIG.TXT or set via
+ * fatfs_setDeploymentId().
  *
  * @param deployment_id_buffer Output buffer (min UUIDLENGTH bytes)
  * @param buffer_size Size of output buffer
  */
 void fatfs_getDeploymentId(char *deployment_id_buffer, size_t buffer_size) {
+
+	deployment_id_buffer[0] = '\0';
+
 	if (buffer_size < UUIDLENGTH) {
-		deployment_id_buffer[0] = '\0';
 		return;
 	}
 
 	// Prefer the string form if it has been set
 	if (strcmp(deployment_id_string, DEPLOYMENT_ID_ZERO_UUID) != 0) {
 		snprintf(deployment_id_buffer, buffer_size, "%s", deployment_id_string);
-		return;
 	}
-
-	// Fall back to reconstructing from chunks (backward compatibility)
-	uint16_t chunks[8];
-	bool all_zero = true;
-	for (int i = 0; i < 8; i++) {
-		chunks[i] = fatfs_getOperationalParameter(OP_PARAMETER_DEPLOYMENT_ID_CHUNK_1 + i);
-		if (chunks[i] != 0) all_zero = false;
-	}
-	if (all_zero) {
-		snprintf(deployment_id_buffer, buffer_size, "%s", DEPLOYMENT_ID_ZERO_UUID);
-		return;
-	}
-	snprintf(deployment_id_buffer, buffer_size,
-			 "%04x%04x-%04x-%04x-%04x-%04x%04x%04x",
-			 chunks[0], chunks[1],
-			 chunks[2],
-			 chunks[3],
-			 chunks[4],
-			 chunks[5], chunks[6], chunks[7]);
 }
 
 /**
@@ -1749,8 +1732,13 @@ void fatfs_getDeploymentId(char *deployment_id_buffer, size_t buffer_size) {
 void fatfs_setDeploymentId(const char *uuid_string) {
 	strncpy(deployment_id_string, uuid_string, UUIDLENGTH - 1);
 	deployment_id_string[UUIDLENGTH - 1] = '\0';
-	for (char *p = deployment_id_string; *p; p++) *p = tolower((unsigned char)*p);
+
+	// Make lower-case
+	for (char *p = deployment_id_string; *p; p++) {
+		*p = tolower((unsigned char)*p);
+	}
 }
+
 
 /**
  * Prints the CWD

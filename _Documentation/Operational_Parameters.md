@@ -152,20 +152,13 @@ Those comments preceding the first index/value pair are preserved when the file 
 |    11 | OP_PARAMETER_MD_INTERVAL              | 1000          | Interval (ms) between frames in motion detect mode (0 inhibits motion detection)|
 |    12 | OP_PARAMETER_FLASH_DURATION           | 100           | Duration (ms) that LED flash is on                  |
 |    13 | OP_PARAMETER_FLASH_LED                | 0             | LED bit mask: visible LED used = 1, infra-red LED used =2, none = 0              |
-|    14 | OP_PARAMETER_MODEL_PROJECT             | 0             |Model project ID used for the NN model|
-|    15 | OP_PARAMETER_MODEL_VERSION             | 0             | Model version number used for the NN model |
-|    16 | OP_PARAMETER_MODEL_THRESHOLD            | 0             | Logit threshold for detection (0-127) |
-|    17 | Reserved                              | 0             | Reserved for future use |
-|    18 | Reserved                              | 0             | Reserved for future use |
-|    19 | Reserved                              | 0             | Reserved for future use |
-|    20 | OP_PARAMETER_DEPLOYMENT_ID_CHUNK_1    | 0             | Deployment ID hex chars 0-3 |
-|    21 | OP_PARAMETER_DEPLOYMENT_ID_CHUNK_2    | 0             | Deployment ID hex chars 4-7 |
-|    22 | OP_PARAMETER_DEPLOYMENT_ID_CHUNK_3    | 0             | Deployment ID hex chars 8-11 |
-|    23 | OP_PARAMETER_DEPLOYMENT_ID_CHUNK_4    | 0             | Deployment ID hex chars 12-15 |
-|    24 | OP_PARAMETER_DEPLOYMENT_ID_CHUNK_5    | 0             | Deployment ID hex chars 16-19 |
-|    25 | OP_PARAMETER_DEPLOYMENT_ID_CHUNK_6    | 0             | Deployment ID hex chars 20-23 |
-|    26 | OP_PARAMETER_DEPLOYMENT_ID_CHUNK_7    | 0             | Deployment ID hex chars 24-27 |
-|    27 | OP_PARAMETER_DEPLOYMENT_ID_CHUNK_8    | 0             | Deployment ID hex chars 28-31 |
+|    14 | OP_PARAMETER_MODEL_PROJECT            | 0             |Model project ID used for the NN model|
+|    15 | OP_PARAMETER_MODEL_VERSION            | 0             | Model version number used for the NN model |
+|    16 | OP_PARAMETER_MODEL_THRESHOLD          | 0             | Logit threshold for detection (0-127) |
+|    17 | OP_PARAMETER_MD_SENSITIVITY           | 1             | Motion Detection Sensitivity: 0=off, 1=low, 2=medium, 3=high |
+|    18 | OP_PARAMETER_TEST_MODE_BITS           | 0             | To manage test configurations: bit or bits indicate a test function |
+|    19 | OP_PARAMETER_IMAGES_COUNT     		| 0             | Count of images in the current image folder. Use this to decide to create a new image folder. |
+|    20 | OP_PARAMETER_IMAGES_FILE_INDEX 		| 0             | Count of image folders |
 
 
 ## Syncronisation with BLE Processor Code

@@ -1550,6 +1550,7 @@ static BaseType_t prvSetdid(char *pcWriteBuffer, size_t xWriteBufferLen, const c
                  UUIDLENGTH - 1, (int)paramLen);
         return pdFALSE;
     }
+    // TODO - possibly add further checks on the format of the UUID string.
 
     char uuid[UUIDLENGTH];
     strncpy(uuid, param, UUIDLENGTH - 1);

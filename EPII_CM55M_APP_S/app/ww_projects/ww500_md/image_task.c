@@ -2563,7 +2563,7 @@ static uint16_t build_exif_segment(int8_t *outCategories, uint8_t categoriesCoun
 	}
 
 	if (cv_modelLoaded()) {
-        dynamic_ifd_count++; // Add one entry for UserComment
+        dynamic_ifd_count++; // Add one entry for TAG_USER_COMMENT
 	}
 
     // Prepare the timestamp

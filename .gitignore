@@ -72,3 +72,8 @@ we2_image_gen_local_dpd/secureboot_tool/**/*.log
 
 # Node.js dependencies
 node_modules/
+
+# Agent and Editor settings
+.agents/
+.cursorrules
+.windsurfrules

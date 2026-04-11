@@ -76,5 +76,4 @@ node_modules/
 # Agent and Editor settings
 .agents/
 .cursorrules
-.husky/
 .windsurfrules

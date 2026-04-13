@@ -325,8 +325,6 @@ static fileOperation_t fileOp;
 // Experimentally, x4 gives bigger files and better quality
 uint32_t g_jpg_ratio;
 
-static uint16_t g_imageSeqNum; // 0 indicates no SD card
-
 // Semaphore to ensure JPEG buffer is not reused until disk write completes
 // TODO - I suspect this actually has no effect...
 static SemaphoreHandle_t xJpegBufferSemaphore = NULL;
@@ -1470,7 +1468,7 @@ static void vImageTask(void *pvParameters) {
     // selects JPEG_ENC_QTABLE_10X
     g_jpg_ratio = 0;
 #endif // QTABLE_4X
-    g_imageSeqNum = 0; // 0 indicates no SD card
+
     g_wdt_event = false;
 
     int  nnStatus = -1;	// -1 means disabled
@@ -1557,9 +1555,6 @@ static void vImageTask(void *pvParameters) {
 	}
 
     xprintf("NN Initialisation took %dms TODO - consider doing this after taking the picture!\n\n", app_getElapsedMs(startTime));
-
-    // A value of 0 means no SD card so we can skip all SD card activities
-    g_imageSeqNum = fatfs_getImageSequenceNumber();
 
     // Initial state of the image task (initialized)
     image_task_state = APP_IMAGE_TASK_STATE_INIT;
@@ -2008,17 +2003,20 @@ static void prepareJpegFile(int8_t * outCategories, uint8_t classCount, fileBuff
 	XP_WHITE;
 #endif
 
-	g_imageSeqNum = fatfs_getImageSequenceNumber();
 
-	// Must use 8.3 file name: upper case alphanumeric
-	if (woken == APP_WAKE_REASON_MD)  {
+#if 0
+	// file names before 30/3/26
+	if (wokeReason == APP_WAKE_REASON_MD)  {
 		// Motion has woken us
-		snprintf(g_imageFileName, IMAGEFILENAMELEN, "MD%06d.JPG", g_imageSeqNum);
+		snprintf(g_imageFileName, IMAGEFILENAMELEN, "MD%06d.JPG", fatfs_getImageSequenceNumber());
 	}
 	else   {
 		// Must be a time lapse event
-		snprintf(g_imageFileName, IMAGEFILENAMELEN, "TL%06d.JPG", g_imageSeqNum);
+		snprintf(g_imageFileName, IMAGEFILENAMELEN, "TL%06d.JPG", fatfs_getImageSequenceNumber());
 	}
+#else
+	dir_mgr_generateImageFilename(g_imageFileName, IMAGEFILENAMELEN, "JPG");
+#endif
 
 	fileOp.fileName = g_imageFileName;	// a global
 	fileOp.senderQueue = xImageTaskQueue;
@@ -2088,17 +2086,19 @@ static void prepareBmpFile(fileBufferInfo_t * extraBlock) {
 	XP_WHITE;
 #endif
 
-	g_imageSeqNum = fatfs_getImageSequenceNumber();
-
-	// Must use 8.3 file name: upper case alphanumeric
-	if (woken == APP_WAKE_REASON_MD)  {
+#if 0
+	// file names before 30/3/26
+	if (wokeReason == APP_WAKE_REASON_MD)  {
 		// Motion has woken us
-		snprintf(g_imageFileName, IMAGEFILENAMELEN, "MD%06d.BMP", g_imageSeqNum);
+		snprintf(g_imageFileName, IMAGEFILENAMELEN, "MD%06d.BMP", fatfs_getImageSequenceNumber());
 	}
 	else   {
 		// Must be a time lapse event
-		snprintf(g_imageFileName, IMAGEFILENAMELEN, "TL%06d.BMP", g_imageSeqNum);
+		snprintf(g_imageFileName, IMAGEFILENAMELEN, "TL%06d.BMP", fatfs_getImageSequenceNumber());
 	}
+#else
+	dir_mgr_generateImageFilename(g_imageFileName, IMAGEFILENAMELEN, "BMP");
+#endif
 
 	fileOp.fileName = g_imageFileName;	// a global
 	fileOp.senderQueue = xImageTaskQueue;
@@ -2462,8 +2462,9 @@ static void create_gps_ifd(uint8_t *gps_ifd_start) {
     char gps_dbg[80];
         exif_gps_create_full_string(&exif_gps_deviceLat, &exif_gps_deviceLon,
                                     &exif_gps_deviceAlt, gps_dbg, sizeof(gps_dbg));
-        xprintf("EXIF GPS: %s\n", gps_dbg);
 
+        // Write this while testing:
+        //xprintf("EXIF GPS: %s\n", gps_dbg);
 }
 
 /**
@@ -2562,7 +2563,7 @@ static uint16_t build_exif_segment(int8_t *outCategories, uint8_t categoriesCoun
 	}
 
 	if (cv_modelLoaded()) {
-        dynamic_ifd_count++; // Add one entry for UserComment
+        dynamic_ifd_count++; // Add one entry for TAG_USER_COMMENT
 	}
 
     // Prepare the timestamp
@@ -2693,7 +2694,7 @@ static uint16_t build_exif_segment(int8_t *outCategories, uint8_t categoriesCoun
 
 	// Add deployment ID if present (not all zeros)
 	if (has_deployment_id) {
-//		xprintf("EXIF: Adding DeploymentID: %s\n", deployment_id);
+		xprintf("EXIF: Adding DeploymentID: %s\n", deployment_id);
 		addIFD(TAG_DEPLOYMENT_ID, ifd_start + (entry++ * 12), deployment_id);
 	}
 

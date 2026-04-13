@@ -76,14 +76,9 @@ typedef enum {
 	OP_PARAMETER_MODEL_THRESHOLD,	// 16 Logit threshold for detection (0-127)
 	OP_PARAMETER_MD_SENSITIVITY,	// 17 Motion Detection Sensitivity: 0=off, 1=low, 2=medium, 3=high
 	OP_PARAMETER_TEST_MODE_BITS,	// 18 To manage test configurations: bit or bits indicate a test function
-	OP_PARAMETER_DEPLOYMENT_ID_CHUNK_1 = 20, // 20 Deployment ID Chunk 1 (Hex chars 0-3) - OP15-19 reserved for future use
-	OP_PARAMETER_DEPLOYMENT_ID_CHUNK_2,	  // 21 Deployment ID Chunk 2 (Hex chars 4-7)
-	OP_PARAMETER_DEPLOYMENT_ID_CHUNK_3,	  // 22 Deployment ID Chunk 3 (Hex chars 8-11)
-	OP_PARAMETER_DEPLOYMENT_ID_CHUNK_4,	  // 23 Deployment ID Chunk 4 (Hex chars 12-15)
-	OP_PARAMETER_DEPLOYMENT_ID_CHUNK_5,	  // 24 Deployment ID Chunk 5 (Hex chars 16-19)
-	OP_PARAMETER_DEPLOYMENT_ID_CHUNK_6,	  // 25 Deployment ID Chunk 6 (Hex chars 20-23)
-	OP_PARAMETER_DEPLOYMENT_ID_CHUNK_7,	  // 26 Deployment ID Chunk 7 (Hex chars 24-27)
-	OP_PARAMETER_DEPLOYMENT_ID_CHUNK_8,	  // 27 Deployment ID Chunk 8 (Hex chars 28-31)
+	OP_PARAMETER_IMAGES_COUNT,		// 19 Count of images in the current image folder. Use this to decide to create a new image folder.
+	OP_PARAMETER_IMAGES_FILE_INDEX,	// 20 Count of image folders
+
 	OP_PARAMETER_NUM_ENTRIES		// Not an Operational Parameters - serves to define the size of the op_parameter[] array
 } OP_PARAMETERS_E;
 
@@ -165,8 +160,11 @@ uint16_t fatfs_getImageSequenceNumber(void);
 // Increment one of the Operational Parameters
 void fatfs_incrementOperationalParameter(OP_PARAMETERS_E parameter);
 
-// Reconstruct deployment ID UUID from OP20-OP27 chunks
+// Get deployment ID UUID string (prefers 'I ' line form; falls back to OP20-OP27 chunks)
 void fatfs_getDeploymentId(char *deployment_id_buffer, size_t buffer_size);
+
+// Set deployment ID UUID string (persisted to CONFIG.TXT on next save_configuration())
+void fatfs_setDeploymentId(const char *uuid_string);
 
 // Load labels from SD card text file
 int8_t fatfs_load_labels(const char *path, char labels[][MAX_LABEL_LEN], uint8_t *label_count, uint8_t max_labels, uint8_t max_label_len);

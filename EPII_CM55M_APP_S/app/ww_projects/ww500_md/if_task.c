@@ -775,6 +775,28 @@ static APP_MSG_DEST_T  handleEventForStateI2CTx(APP_MSG_T rxMessage) {
 		if (lastMessageSent) {
 			// special case just before entering DPD.
 			xprintf("IF task ready to sleep.\n");
+
+			// This might be a good place to add some tests, as results will be at the bottom of teh screen while in DPD
+//#define TESTFILENAMES
+#ifdef TESTFILENAMES
+
+			// Let's test dir_mgr_generateImageFilename() here
+			uint8_t loops = 0;
+			char imageFileName[13];
+
+			XP_LT_CYAN;
+			while (loops < 45) {
+				dir_mgr_generateImageFilename(imageFileName, IMAGEFILENAMELEN, "BMP");
+				xprintf(" %d - %s\n", loops++, imageFileName);
+
+				// delay 50ms - then we should generate 50 in a 1s interval
+				vTaskDelay(pdMS_TO_TICKS(50));
+			}
+
+			XP_WHITE;
+
+#endif // TESTFILENAMES
+
 			barrier_ready(&shutdownBarrier);
 		}
 		break;

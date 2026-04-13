@@ -23,8 +23,8 @@
 		{HX_CIS_I2C_Action_W, 0x101f, 0x00},
 		{HX_CIS_I2C_Action_W, 0x1020, 0x01},
 		{HX_CIS_I2C_Action_W, 0x1021, 0x5d},
-		{HX_CIS_I2C_Action_W, 0x102f, 0x08},
-		{HX_CIS_I2C_Action_W, 0x1030, 0x09},
+		{HX_CIS_I2C_Action_W, 0x102f, 0x08},	// CMPRS_CTRL	
+		{HX_CIS_I2C_Action_W, 0x1030, 0x09},	// CMPRS_01 (this table has the 'low' values - see data sheet Table 4.5)
 		{HX_CIS_I2C_Action_W, 0x1031, 0x12},
 		{HX_CIS_I2C_Action_W, 0x1032, 0x23},
 		{HX_CIS_I2C_Action_W, 0x1033, 0x31},
@@ -39,7 +39,7 @@
 		{HX_CIS_I2C_Action_W, 0x103c, 0x98},
 		{HX_CIS_I2C_Action_W, 0x103d, 0xb2},
 		{HX_CIS_I2C_Action_W, 0x103e, 0xcc},
-		{HX_CIS_I2C_Action_W, 0x103f, 0xe6},
+		{HX_CIS_I2C_Action_W, 0x103f, 0xe6},	// CMPRS_16
 		{HX_CIS_I2C_Action_W, 0x1041, 0x00},
 		{HX_CIS_I2C_Action_W, 0x2000, 0x3f},	// AE_CTRL
 		{HX_CIS_I2C_Action_W, 0x202b, 0x04},	// AE MAX_AGAIN

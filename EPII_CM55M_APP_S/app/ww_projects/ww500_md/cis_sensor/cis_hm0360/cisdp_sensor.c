@@ -49,10 +49,18 @@
 #endif
 #endif
 
-#define JPEG_BUFSIZE  76800 //640*480/4
+// CGP This is much larger than for the IMX708 which gives 46256
+// I think 46256 is too big also, but I will set the HM0360 to the same size
+// TODO get a better size!
+//#define JPEG_BUFSIZE  76800 //640*480/4
+#define JPEG_BUFSIZE  46256
 __attribute__(( section(".bss.NoInit"))) uint8_t jpegbuf[JPEG_BUFSIZE] __ALIGNED(32);
 
-#define RAW_BUFSIZE  921600 //640*480*3
+// CGP why is this 3 bits/pixel?
+// We are using APP_DP_RES_YUV640x480_INP_SUBSAMPLE_1X
+// and app_get_raw_sz() returns 640 * 480 * 1.5
+// #define RAW_BUFSIZE  921600 //640*480*3
+#define RAW_BUFSIZE  460800 	//640*480*1.5;
 __attribute__(( section(".bss.NoInit"))) uint8_t demosbuf[RAW_BUFSIZE] __ALIGNED(32);
 
 #define JPEG_HEADER_BUFSIZE 100
@@ -70,45 +78,95 @@ static HX_CIS_SensorSetting_t HM0360_md_init_setting[] = {
 #include "HM0360_OSC_Bayer_640x480_setA_VGA_setB_QVGA_md_8b_ParallelOutput_R2.i"
 };
 
-// image interval in DPD (ms)
-#define DPDINTERVAL 1000
-
-// Replaced by hm0360_md_setMode()
-//// sleep - sets MODE_SELECT to 0 = sleep
-//static HX_CIS_SensorSetting_t HM0360_stream_off[] = {
-//        {HX_CIS_I2C_Action_W, MODE_SELECT, MODE_SLEEP},
-//};
 
 // Writes to IMAGE_ORIENTATION register: vertical flip & mirror
 static HX_CIS_SensorSetting_t HM0360_mirror_setting[] = {
 	{HX_CIS_I2C_Action_W, 0x0101, CIS_MIRROR_SETTING},
 };
 
-//
-///**
-// * Calculate values for the HM0360 sleep time registers.
-// * This is the value used in Streaming 2 mode.
-// *
-// * Do this once per boot.
-// * 0x0830 gives about 1s
-// *
-// * @param interval - in ms
-// * @param value for HM0360 registers
-// */
-//static uint16_t calculateSleepTime(uint32_t interval) {
-//	uint32_t sleepCount;
-//
-//	sleepCount = interval * 0x8030 / 1000;
-//
-//	// Make sure this does not exceed 16 bits
-//	if (sleepCount > 0xffff) {
-//		sleepCount = 0xffff;
-//	}
-//
-//	xprintf("Interval of %dms gives sleep count = 0x%04x\n", interval, sleepCount);
-//
-//	return (uint16_t) sleepCount;
-//}
+
+// Writes to the tone mapping registers - see data sheet Table 4.5
+static HX_CIS_SensorSetting_t HM0360_tone_mapping_default[] = {
+		{HX_CIS_I2C_Action_W, 0x1030, 0x04},	// CMPRS_01
+		{HX_CIS_I2C_Action_W, 0x1031, 0x08},
+		{HX_CIS_I2C_Action_W, 0x1032, 0x10},
+		{HX_CIS_I2C_Action_W, 0x1033, 0x18},
+		{HX_CIS_I2C_Action_W, 0x1034, 0x20},
+		{HX_CIS_I2C_Action_W, 0x1035, 0x28},
+		{HX_CIS_I2C_Action_W, 0x1036, 0x30},
+		{HX_CIS_I2C_Action_W, 0x1037, 0x38},
+		{HX_CIS_I2C_Action_W, 0x1038, 0x40},
+		{HX_CIS_I2C_Action_W, 0x1039, 0x50},
+		{HX_CIS_I2C_Action_W, 0x103a, 0x60},
+		{HX_CIS_I2C_Action_W, 0x103b, 0x70},
+		{HX_CIS_I2C_Action_W, 0x103c, 0x80},
+		{HX_CIS_I2C_Action_W, 0x103d, 0xa0},
+		{HX_CIS_I2C_Action_W, 0x103e, 0xc0},
+		{HX_CIS_I2C_Action_W, 0x103f, 0xe0},	// CMPRS_16
+};
+
+// Writes to the tone mapping registers - see data sheet Table 4.5
+// The 'low' values are in the standard HM0360_md_init_setting[] array.
+static HX_CIS_SensorSetting_t HM0360_tone_mapping_low[] = {
+		{HX_CIS_I2C_Action_W, 0x1030, 0x09},	// CMPRS_01
+		{HX_CIS_I2C_Action_W, 0x1031, 0x12},
+		{HX_CIS_I2C_Action_W, 0x1032, 0x23},
+		{HX_CIS_I2C_Action_W, 0x1033, 0x31},
+		{HX_CIS_I2C_Action_W, 0x1034, 0x3e},
+		{HX_CIS_I2C_Action_W, 0x1035, 0x4b},
+		{HX_CIS_I2C_Action_W, 0x1036, 0x56},
+		{HX_CIS_I2C_Action_W, 0x1037, 0x5e},
+		{HX_CIS_I2C_Action_W, 0x1038, 0x65},
+		{HX_CIS_I2C_Action_W, 0x1039, 0x72},
+		{HX_CIS_I2C_Action_W, 0x103a, 0x7f},
+		{HX_CIS_I2C_Action_W, 0x103b, 0x8c},
+		{HX_CIS_I2C_Action_W, 0x103c, 0x98},
+		{HX_CIS_I2C_Action_W, 0x103d, 0xb2},
+		{HX_CIS_I2C_Action_W, 0x103e, 0xcc},
+		{HX_CIS_I2C_Action_W, 0x103f, 0xe6},	// CMPRS_16
+};
+
+// Writes to the tone mapping registers - see data sheet Table 4.5
+static HX_CIS_SensorSetting_t HM0360_tone_mapping_medium[] = {
+		{HX_CIS_I2C_Action_W, 0x1030, 0x0f},	// CMPRS_01
+		{HX_CIS_I2C_Action_W, 0x1031, 0x1e},
+		{HX_CIS_I2C_Action_W, 0x1032, 0x36},
+		{HX_CIS_I2C_Action_W, 0x1033, 0x4a},
+		{HX_CIS_I2C_Action_W, 0x1034, 0x5b},
+		{HX_CIS_I2C_Action_W, 0x1035, 0x64},
+		{HX_CIS_I2C_Action_W, 0x1036, 0x6c},
+		{HX_CIS_I2C_Action_W, 0x1037, 0x73},
+		{HX_CIS_I2C_Action_W, 0x1038, 0x79},
+		{HX_CIS_I2C_Action_W, 0x1039, 0x84},
+		{HX_CIS_I2C_Action_W, 0x103a, 0x8f},
+		{HX_CIS_I2C_Action_W, 0x103b, 0x99},
+		{HX_CIS_I2C_Action_W, 0x103c, 0xa4},
+		{HX_CIS_I2C_Action_W, 0x103d, 0xba},
+		{HX_CIS_I2C_Action_W, 0x103e, 0xd0},
+		{HX_CIS_I2C_Action_W, 0x103f, 0xe8},	// CMPRS_16
+};
+
+// Writes to the tone mapping registers - see data sheet Table 4.5
+static HX_CIS_SensorSetting_t HM0360_tone_mapping_high[] = {
+		{HX_CIS_I2C_Action_W, 0x1030, 0x1b},	// CMPRS_01
+		{HX_CIS_I2C_Action_W, 0x1031, 0x36},
+		{HX_CIS_I2C_Action_W, 0x1032, 0x58},
+		{HX_CIS_I2C_Action_W, 0x1033, 0x68},
+		{HX_CIS_I2C_Action_W, 0x1034, 0x74},
+		{HX_CIS_I2C_Action_W, 0x1035, 0x7c},
+		{HX_CIS_I2C_Action_W, 0x1036, 0x82},
+		{HX_CIS_I2C_Action_W, 0x1037, 0x88},
+		{HX_CIS_I2C_Action_W, 0x1038, 0x8c},
+		{HX_CIS_I2C_Action_W, 0x1039, 0x94},
+		{HX_CIS_I2C_Action_W, 0x103a, 0x9e},
+		{HX_CIS_I2C_Action_W, 0x103b, 0xa6},
+		{HX_CIS_I2C_Action_W, 0x103c, 0xb0},
+		{HX_CIS_I2C_Action_W, 0x103d, 0xc2},
+		{HX_CIS_I2C_Action_W, 0x103e, 0xd4},
+		{HX_CIS_I2C_Action_W, 0x103f, 0xea},	// CMPRS_16
+};
+
+
 
 static void HM0360_dp_wdma_addr_init(APP_DP_INP_SUBSAMPLE_E subs) {
     sensordplib_set_xDMA_baseaddrbyapp(g_wdma1_baseaddr, g_wdma2_baseaddr, g_wdma3_baseaddr);
@@ -150,6 +208,8 @@ int cisdp_sensor_init(bool sensor_init) {
 	HX_CIS_ERROR_E ret;
 
     dbg_printf(DBG_LESS_INFO, "Initialising HM0360 at 0x%02x (p.u. delay %dms)\r\n", CIS_I2C_ID, CIS_POWERUP_DELAY);
+    dbg_printf(DBG_LESS_INFO, "Memory allocated: %ld for raw buffer, %d for JPEG, %d for JPEG header\n",
+            			sizeof(demosbuf), sizeof(jpegbuf), sizeof(jpegfilesizebuf));
 
     hx_drv_cis_set_slaveID(CIS_I2C_ID);
 
@@ -266,7 +326,7 @@ int cisdp_dp_init(bool inp_init, SENSORDPLIB_PATH_E dp_type, sensordplib_CBEvent
     HW5x5_CFG_T 	hw5x5_cfg;
     JPEG_CFG_T 		jpeg_cfg;
 
-    g_subs = subs;	//sub-sample choice: x1, x2, x3, RGB or YUV
+    g_subs = subs;	//sub-sample choice: (x1, x2 or x4), and  (RGB or YUV)
 
     // HW2x2 Cfg
     // Looks like this is used in some of the 'dp_type' options
@@ -342,7 +402,7 @@ int cisdp_dp_init(bool inp_init, SENSORDPLIB_PATH_E dp_type, sensordplib_CBEvent
     		480:(subs==APP_DP_RES_RGB640x480_INP_SUBSAMPLE_2X||subs==APP_DP_RES_YUV640x480_INP_SUBSAMPLE_2X)?
     		240:(subs==APP_DP_RES_RGB640x480_INP_SUBSAMPLE_4X||subs==APP_DP_RES_YUV640x480_INP_SUBSAMPLE_4X)?
 			120:480;//DP_JPEG_ENC_HEIGHT;
-    jpeg_cfg.jpeg_enctype = DP_JPEG_ENCTYPE;
+    jpeg_cfg.jpeg_enctype = DP_JPEG_ENCTYPE; // YUV400 or YUV422
 
     if(jpg_ratio == 4) {
     	jpeg_cfg.jpeg_encqtable = JPEG_ENC_QTABLE_4X;
@@ -489,13 +549,6 @@ int cisdp_dp_init(bool inp_init, SENSORDPLIB_PATH_E dp_type, sensordplib_CBEvent
  * and starts data path sensor control block
  */
 void cisdp_sensor_start(void) {
-
-	// Now done by hm0360_md_setMode()
-//    if(hx_drv_cis_setRegTable(HM0360_stream_on, HX_CIS_SIZE_N(HM0360_stream_on, HX_CIS_SensorSetting_t))!= HX_CIS_NO_ERROR) {
-//    	dbg_printf(DBG_LESS_INFO, "HM0360 on fail\r\n");
-//        return;
-//    }
-
     // starts data path sensor control block,
    	sensordplib_set_sensorctrl_start();
 }
@@ -511,13 +564,6 @@ void cisdp_sensor_stop(void) {
 	// Set HM0360 operation: sleep
 	hm0360_md_setMode(CONTEXT_A, MODE_SLEEP, 0, 0);
 
-//    // Writes to MODE_SELECT to select sleep
-//    if(hx_drv_cis_setRegTable(HM0360_stream_off, HX_CIS_SIZE_N(HM0360_stream_off, HX_CIS_SensorSetting_t))!= HX_CIS_NO_ERROR)  {
-//    	dbg_printf(DBG_LESS_INFO, "HM0360 off fail\r\n");
-//    }
-//    else  {
-//    	dbg_printf(DBG_LESS_INFO, "HM0360 off \n");
-//    }
 #else
     //disable hxauotoi2c
     sensordplib_autoi2c_disable();
@@ -529,210 +575,17 @@ void cisdp_sensor_stop(void) {
 #endif
 }
 
-///**
-// * Sets HM0360 for motion detection, prior to entering deep sleep.
-// *
-// * This is a heavily redacted version of the original Himax code.
-// * See ww500_md_test_1 to see what I cut out.
-// */
-//int cisdp_sensor_md_init(void) {
-//	HX_CIS_ERROR_E ret;
-//
-//	// Set HM0360 operation: sleep
-//
-////  Now use hm0360_md_setMode(), which sets sleep mode first
-////    //
-////    if(hx_drv_cis_setRegTable(HM0360_stream_off, HX_CIS_SIZE_N(HM0360_stream_off, HX_CIS_SensorSetting_t))!= HX_CIS_NO_ERROR) {
-////    	dbg_printf(DBG_LESS_INFO, "HM0360 off fail\r\n");
-////        return -1;
-////    }
-//
-//	// Clear interrupts
-//    hx_drv_cis_set_reg(INT_CLEAR, 0xff, 0x01);
-//
-//    // Set HM0360 mode to SLEEP before initialisation
-//    ret = hm0360_md_setMode(CONTEXT_B, MODE_SW_NFRAMES_SLEEP, 1, DPDINTERVAL);
-//
-//    if (ret != HX_CIS_NO_ERROR) {
-//    	dbg_printf(DBG_LESS_INFO, "HM0360 md on fail\r\n");
-//        return -1;
-//    }
-////
-////    // Switch to Context B motion detection mode
-////	if (hx_drv_cis_setRegTable(HM0360_md_stream_on, HX_CIS_SIZE_N(HM0360_md_stream_on, HX_CIS_SensorSetting_t))!= HX_CIS_NO_ERROR) {
-////    	dbg_printf(DBG_LESS_INFO, "HM0360 md on fail\r\n");
-////        return -1;
-////    }
-//
-//    // This version has no delay
-//    dbg_printf(DBG_LESS_INFO, "HM0360 Motion Detection on!\r\n");
-//
-//	return 0;
-//}
-
-
-/*
- * Change HM0360 operating mode
- *
- * @param context - bits to write to the context control register (PMU_CFG_3, 0x3024)
- * @param mode - one of 8 modes of MODE_SELECT register
- * @param numFrames - the number of frames to capture before sleeping
- * @param sleepTime - the time (in ms) to sleep before waking again
- * @return error code
- */
-// Replaced by hm0360_md_setMode()
-//HX_CIS_ERROR_E cisdp_sensor_set_mode(uint8_t context, mode_select_t newMode, uint8_t numFrames, uint16_t sleepTime) {
-//	mode_select_t currentMode;
-//	HX_CIS_ERROR_E ret;
-//	uint16_t sleepCount;
-//
-//	ret = hx_drv_cis_get_reg(MODE_SELECT , &currentMode);
-//	if (ret != HX_CIS_NO_ERROR) {
-//		return ret;
-//	}
-//
-//	xprintf("  Changing mode from %d to %d with nFrames=%d and sleepTime=%d\r\n",
-//			currentMode, newMode, numFrames, sleepTime);
-//
-//	// Disable before making changes
-//	ret = hx_drv_cis_set_reg(MODE_SELECT, MODE_SLEEP, 0);
-//	if (ret != HX_CIS_NO_ERROR) {
-//		return ret;
-//	}
-//
-//	// Context control
-//	ret = hx_drv_cis_set_reg(PMU_CFG_3, context, 0);
-//	if (ret != HX_CIS_NO_ERROR) {
-//		return ret;
-//	}
-//
-//	if (numFrames != 0) {
-//		// Applies to MODE_SW_NFRAMES_SLEEP, MODE_SW_NFRAMES_STANDBY and MODE_HW_NFRAMES_SLEEP
-//		// This is the number of frames to take continguously, after the sleep finishes
-//		// It is NOT the total number of frames
-//		ret = hx_drv_cis_set_reg(PMU_CFG_7, numFrames, 0);
-//		if (ret != HX_CIS_NO_ERROR) {
-//			return ret;
-//		}
-//	}
-//
-//	if (sleepTime != 0) {
-//		// Applies to MODE_SW_NFRAMES_SLEEP and MODE_HW_NFRAMES_SLEEP
-//		// This is the period of time between groups of frames.
-//		// Convert this to regsiter values for PMU_CFG_8 and PMU_CFG_9
-//		sleepCount = calculateSleepTime(sleepTime);
-//		ret = hx_drv_cis_set_reg(PMU_CFG_8, (uint8_t) (sleepCount >> 8), 0);	// msb
-//		if (ret != HX_CIS_NO_ERROR) {
-//			return ret;
-//		}
-//		ret = hx_drv_cis_set_reg(PMU_CFG_9, (uint8_t) (sleepCount & 0xff), 0);	// lsb
-//		if (ret != HX_CIS_NO_ERROR) {
-//			return ret;
-//		}
-//	}
-//
-//	if (currentMode == MODE_SW_CONTINUOUS) {
-//		// consider delaying to finish current image before changing mode
-//	}
-//
-//	ret = hx_drv_cis_set_reg(MODE_SELECT, newMode, 0);
-//
-//	return ret;
-//}
-
-// Moved to hm0360_md.c
-///**
-// * Read the HM0360 interrupt status register
-// *
-// * @param - pointer to byte to receive the status
-// * @return error code
-// */
-//HX_CIS_ERROR_E cisdp_sensor_get_int_status(uint8_t * val) {
-//	uint8_t currentStatus;
-//	HX_CIS_ERROR_E ret;
-//
-//	ret = hx_drv_cis_get_reg(INT_INDIC , &currentStatus);
-//	if (ret != HX_CIS_NO_ERROR) {
-//		return ret;
-//	}
-//	else {
-//		*val = currentStatus;
-//	}
-//	return HX_CIS_NO_ERROR;
-//}
-//
-//
-///**
-// * Clear the HM0360 interrupt bits
-// *
-// * @param - mask for the bits to clear
-// * @return error code
-// */
-//HX_CIS_ERROR_E cisdp_sensor_clear_interrupt(uint8_t val) {
-//	HX_CIS_ERROR_E ret;
-//
-//	ret = hx_drv_cis_set_reg(INT_CLEAR, val, 0);
-//
-//	return ret;
-//}
-//
-///**
-// * Grab some status registers
-// *
-// * EXPERMENTAL: which registers return interesting information?
-//
-//	INTEGRATION_H                   0x0202
-//	INTEGRATION_L                   0x0203
-//	ANALOG_GAIN                     0x0205
-//	DIGITAL_GAIN_H                  0x020E
-//	DIGITAL_GAIN_L
-//
-// * @param val - pointer to an array that accepts the results
-// * @param maxLen - max length of the array
-// * @return error code
-// */
-//HX_CIS_ERROR_E cisdp_sensor_get_gain_regs(uint8_t * val, uint8_t maxLen) {
-//	HX_CIS_ERROR_E ret;
-//
-//	HX_CIS_SensorSetting_t HM0360_gainRegisters[] = {
-//	        {HX_CIS_I2C_Action_R, INTEGRATION_H, 0x00},
-//	        {HX_CIS_I2C_Action_R, INTEGRATION_L, 0x00},
-//	        {HX_CIS_I2C_Action_R, ANALOG_GAIN, 0x00},
-//	        {HX_CIS_I2C_Action_R, DIGITAL_GAIN_H, 0x00},
-//	        {HX_CIS_I2C_Action_R, DIGITAL_GAIN_L, 0x00},
-//	};
-//
-//	if (maxLen > HM0360NUMGAINREGS) {
-//		return HX_CIS_ERROR_INVALID_PARAMETERS;
-//	}
-//
-//	ret = hx_drv_cis_getRegTable(HM0360_gainRegisters, HM0360NUMGAINREGS);
-//
-//    if(ret == HX_CIS_NO_ERROR) {
-//    	for (uint8_t i=0; i < HM0360NUMGAINREGS; i++) {
-//    		val[i] = HM0360_gainRegisters[i].Value;
-//    	}
-//    }
-//    else {
-//    	printf("hx_drv_cis_getRegTable() fail. err %d\r\n", ret);
-//    }
-//
-//	return ret;
-//}
-
-
-void cisdp_get_jpginfo(uint32_t *jpeg_enc_filesize, uint32_t *jpeg_enc_addr)
-{
+void cisdp_get_jpginfo(uint32_t *jpeg_enc_filesize, uint32_t *jpeg_enc_addr) {
     uint8_t frame_no;
     uint8_t buffer_no = 0;
     uint32_t jpeg_enc_filesize_real;
 
     hx_drv_xdma_get_WDMA2_bufferNo(&buffer_no);
     hx_drv_xdma_get_WDMA2NextFrameIdx(&frame_no);
-    if(frame_no == 0)
-    {
+    if (frame_no == 0) {
         frame_no = buffer_no - 1;
-    }else{
+    }
+    else {
         frame_no = frame_no - 1;
     }
     hx_drv_jpeg_get_EncOutRealMEMSize(&jpeg_enc_filesize_real);
@@ -742,8 +595,7 @@ void cisdp_get_jpginfo(uint32_t *jpeg_enc_filesize, uint32_t *jpeg_enc_addr)
     hx_drv_jpeg_get_FillFileSizeToMem(frame_no, g_jpegautofill_addr, jpeg_enc_filesize);
     hx_drv_jpeg_get_MemAddrByFrameNo(frame_no, g_wdma2_baseaddr, jpeg_enc_addr);
 
-    if( jpeg_enc_filesize_real != *jpeg_enc_filesize)
-    {
+    if( jpeg_enc_filesize_real != *jpeg_enc_filesize)  {
         dbg_printf(DBG_LESS_INFO, "*jpeg_enc_filesize_real(0x%08X) != *jpeg_enc_filesize(0x%08X)\n"
         		, jpeg_enc_filesize_real, *jpeg_enc_filesize);
 
@@ -755,14 +607,12 @@ void cisdp_get_jpginfo(uint32_t *jpeg_enc_filesize, uint32_t *jpeg_enc_addr)
     //dbg_printf(DBG_LESS_INFO, "current frame_no=%d, jpeg_size=0x%x,addr=0x%x\n",frame_no,*jpeg_enc_filesize,*jpeg_enc_addr);
 }
 
-uint32_t app_get_jpeg_addr()
-{
+uint32_t app_get_jpeg_addr() {
     //EPII_InvalidateDCache_by_Addr(g_wdma2_baseaddr, 4);
 	return g_wdma2_baseaddr;
 }
 
-uint32_t app_get_jpeg_sz()
-{
+uint32_t app_get_jpeg_sz() {
 	// This is a wrapper around SCB_InvalidateDCache_by_Addr()
 	// which discards any data in the data cache for the specified memory range
 	// Not sure why this is used here...
@@ -770,14 +620,12 @@ uint32_t app_get_jpeg_sz()
 	return *((uint32_t*)g_jpegautofill_addr);
 }
 
-uint32_t app_get_raw_addr()
-{
+uint32_t app_get_raw_addr() {
 	//raw data area BBBBBB/GGGGGG/RRRRRR
 	return g_wdma3_baseaddr;	//return B for use
 }
 
-uint32_t app_get_raw_sz()
-{
+uint32_t app_get_raw_sz() {
 	if(g_subs == APP_DP_RES_YUV640x480_INP_SUBSAMPLE_1X)
 		return 460800;//640*480*1.5;
 	else if(g_subs == APP_DP_RES_YUV640x480_INP_SUBSAMPLE_2X)
@@ -820,4 +668,40 @@ uint32_t app_get_raw_height() {
 uint32_t app_get_raw_channels() {
 	return SENCTRL_SENSOR_CH;
 }
+
+/**
+ * Programs one of 4 alternative tone mapping register sets
+ * See data sheet Table 4.5
+ *
+ * @param option - one of TONE_CONFIG_E
+ * @return error code
+ */
+HX_CIS_ERROR_E cisdp_sensor_set_tone(TONE_CONFIG_E option) {
+	HX_CIS_ERROR_E ret;
+
+	switch (option) {
+	case TONE_MAPPING_DEFAULT:
+		ret = hx_drv_cis_setRegTable(HM0360_tone_mapping_default, HX_CIS_SIZE_N(HM0360_tone_mapping_default, HX_CIS_SensorSetting_t));
+		break;
+
+	case TONE_MAPPING_LOW:
+		ret = hx_drv_cis_setRegTable(HM0360_tone_mapping_low, HX_CIS_SIZE_N(HM0360_tone_mapping_low, HX_CIS_SensorSetting_t));
+		break;
+
+	case TONE_MAPPING_MEDIUM:
+		ret = hx_drv_cis_setRegTable(HM0360_tone_mapping_medium, HX_CIS_SIZE_N(HM0360_tone_mapping_medium, HX_CIS_SensorSetting_t));
+		break;
+
+	case TONE_MAPPING_HIGH:
+		ret = hx_drv_cis_setRegTable(HM0360_tone_mapping_high, HX_CIS_SIZE_N(HM0360_tone_mapping_high, HX_CIS_SensorSetting_t));
+		break;
+
+	default:
+		// should not happen
+		ret = HX_CIS_ERROR_INVALID_PARAMETERS;
+		break;
+	}
+	return ret;
+}
+
 

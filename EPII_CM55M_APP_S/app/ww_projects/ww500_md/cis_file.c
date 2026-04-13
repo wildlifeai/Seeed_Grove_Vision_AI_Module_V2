@@ -59,6 +59,13 @@ HX_CIS_ERROR_E cis_file_process(const char *filename) {
     // Get file size
     file_size = f_size(&file);
 
+    if (file_size == 0) {
+    	//This can happen if teh python script fails to process the .txt file
+        xprintf("Error: File has no contents\n");
+        f_close(&file);
+        return HX_CIS_ERROR_INVALID_PARAMETERS;
+    }
+
     if (file_size % sizeof(HX_CIS_SensorSetting_t) != 0) {
         xprintf("Error: Invalid file size\n");
         f_close(&file);
@@ -71,7 +78,7 @@ HX_CIS_ERROR_E cis_file_process(const char *filename) {
     HX_CIS_SensorSetting_t *sensor_settings = pvPortMalloc(file_size);
 
     if (!sensor_settings) {
-        xprintf("Memory allocation failed\n");
+        xprintf("Memory allocation of %d bytes failed\n", file_size);
         f_close(&file);
         return HX_CIS_UNKNOWN_ERROR;
     }

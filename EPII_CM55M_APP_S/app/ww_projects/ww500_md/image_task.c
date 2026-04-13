@@ -131,9 +131,13 @@
 #endif 	// USE_HM0360
 
 // If uncommented brightness will increment after each image of an image sequence
-#define INVESTIGATE_FLASH_BRIGHTNESS
+//#define INVESTIGATE_FLASH_BRIGHTNESS
 // percentage increment for each image
 #define FLASH_BRIGHTNESS_INCREMENT 18
+
+// If uncommented the tone mapping regsiters will change after each image of an image sequence
+// Since there are 4 options, choose to take 4 images
+#define INVESTIGATE_TONE_MAPPING
 
 // TODO sort out how to allocate priorities
 #define image_task_PRIORITY (configMAX_PRIORITIES - 2)
@@ -185,24 +189,24 @@
 // Tag IDs enum
 typedef enum
 {
-    TAG_X_RESOLUTION = 0x011A,
-    TAG_Y_RESOLUTION = 0x011B,
-    TAG_RESOLUTION_UNIT = 0x0128,
-    TAG_DATETIME_ORIGINAL = 0x9003,
-    TAG_CREATE_DATE = 0x9004,
-    TAG_MAKE = 0x010F,
-    TAG_MODEL = 0x0110,
-    TAG_GPS_IFD_POINTER = 0x8825,
-    TAG_GPS_LATITUDE_REF = 0x0001,
-    TAG_GPS_LATITUDE = 0x0002,
-    TAG_GPS_LONGITUDE_REF = 0x0003,
-    TAG_GPS_LONGITUDE = 0x0004,
-    TAG_GPS_ALTITUDE_REF = 0x0005,
-    TAG_GPS_ALTITUDE = 0x0006,
-    TAG_NN_DATA = 0xC000,               // Neural network output array - arbitrary custom tag ID
-    TAG_USER_COMMENT = 0x9286,      // Standard EXIF UserComment tag for summary text
-    TAG_DEPLOYMENT_ID = 0xF200,		   // Deployment ID (matches ww130_cli convention)
-    TAG_WW_CONFIDENCE_BASE = 0xF300	   // Base for confidence tags (0xF300, 0xF301, ...)
+    TAG_X_RESOLUTION 		= 0x011A,
+    TAG_Y_RESOLUTION 		= 0x011B,
+    TAG_RESOLUTION_UNIT 	= 0x0128,
+    TAG_DATETIME_ORIGINAL 	= 0x9003,
+    TAG_CREATE_DATE 		= 0x9004,
+    TAG_MAKE 				= 0x010F,
+    TAG_MODEL 				= 0x0110,
+    TAG_GPS_IFD_POINTER 	= 0x8825,
+    TAG_GPS_LATITUDE_REF 	= 0x0001,
+    TAG_GPS_LATITUDE 		= 0x0002,
+    TAG_GPS_LONGITUDE_REF 	= 0x0003,
+    TAG_GPS_LONGITUDE 		= 0x0004,
+    TAG_GPS_ALTITUDE_REF 	= 0x0005,
+    TAG_GPS_ALTITUDE 		= 0x0006,
+    TAG_NN_DATA 			= 0xC000,               // Neural network output array - arbitrary custom tag ID
+    TAG_USER_COMMENT 		= 0x9286,      // Standard EXIF UserComment tag for summary text
+    TAG_DEPLOYMENT_ID 		= 0xF200,		   // Deployment ID (matches ww130_cli convention)
+    TAG_WW_CONFIDENCE_BASE 	= 0xF300	   // Base for confidence tags (0xF300, 0xF301, ...)
 } ExifTagID;
 
 // EXIF data types
@@ -219,9 +223,12 @@ typedef enum
 } ExifDataType;
 
 // If using the code that has a duplicate buffer then define SECOND_JPEG_BUFSIZE
-// Must by a multiple of 32 bytes.
+// Must be a multiple of 32 bytes.
 // #define JPEG_BUFSIZE  76800 //640*480/4
-#define SECOND_JPEG_BUFSIZE 20000 // jpeg files seem to be about 9k-20k
+// TODO: Surely I must make SECOND_JPEG_BUFSIZE greater than JPEG_BUFSIZE?
+// Better - shift data within the original JPEG buffer!
+//#define SECOND_JPEG_BUFSIZE 20000 // jpeg files seem to be about 9k-20k - but after iincreasing qulaity c. 22k
+#define SECOND_JPEG_BUFSIZE 32000
 
 /*************************************** Local Function Declarations *****************************/
 
@@ -246,9 +253,6 @@ static void setupLEDFlash(void);
 // Send unsolicited message to the master
 static void sendMsgToMaster(char *str);
 
-static void generateImageFileName(uint16_t number);
-static void setFileOpFromJpeg(uint32_t jpeg_sz, uint32_t jpeg_addr);
-
 // When final activity from the FatFS Task and IF Task are complete, enter DPD
 static void sleepWhenPossible(void);
 
@@ -256,6 +260,8 @@ static void captureSequenceComplete(void);
 
 static void changeEnableState(bool setEnabled);
 static void processNNOutput(int8_t * outCategories, uint8_t classCount);
+
+static void prepareImageForDisk(int8_t * outCategories, uint8_t classCount, bool jpeg);
 
 /*************************************** Local EXIF-related Declarations *****************************/
 
@@ -276,6 +282,7 @@ static size_t get_gps_ifd_size(void);
 extern QueueHandle_t xFatTaskQueue;
 extern QueueHandle_t xIfTaskQueue;
 
+extern SemaphoreHandle_t xI2CTxSemaphore;
 extern Barrier_t shutdownBarrier;
 
 extern SemaphoreHandle_t xSDInitDoneSemaphore;
@@ -313,7 +320,8 @@ static fileOperation_t fileOp;
 // This is a value passed to cisdp_dp_init()
 // where the comment is "JPEG Encoding quantization table Selection (4x or 10x)"
 // the cisdp_dp_init() code says this can be 4 for JPEG_ENC_QTABLE_4X else JPEG_ENC_QTABLE_10X
-uint32_t g_jpeg_ratio;
+// Experimentally, x4 gives bigger files and better quality
+uint32_t g_jpg_ratio;
 
 static uint16_t g_imageSeqNum; // 0 indicates no SD card
 
@@ -352,7 +360,7 @@ const char *imageTaskEventString[APP_MSG_IMAGETASK_LAST - APP_MSG_IMAGETASK_FIRS
 };
 
 // There is only one file name for images - this can be declared here - does not need malloc
-static char imageFileName[IMAGEFILENAMELEN];
+static char g_imageFileName[IMAGEFILENAMELEN];
 
 // This is the most recently written file name
 static char lastImageFileName[IMAGEFILENAMELEN] = "";
@@ -381,7 +389,7 @@ TickType_t startTime;
 /********************************** Local Functions  *************************************/
 
 #ifdef INVESTIGATE_FLASH_BRIGHTNESS
-static uint8_t changingBrightness = 1; // set to 1% at warm boot.
+static uint8_t changingBrightness = 0; // set to 0% at warm boot. (percentage is only approximate and 0 will cause flash be on)
 
 /**
  * Experimental feature that increments flash brightness for each successive image.
@@ -400,6 +408,27 @@ static void incrementBrightness(void) {
 }
 #endif // INVESTIGATE_FLASH_BRIGHTNESS
 
+#ifdef INVESTIGATE_TONE_MAPPING
+static TONE_CONFIG_E changingTone = TONE_MAPPING_DEFAULT; // = 0
+/**
+ * Experimental feature that increments tone mapping value for each successive image.
+ * There are 4 types
+ *
+ * Call before taking the first image of the sequence then again after each frame ready event
+ *
+ * Change after each APP_MSG_IMAGETASK_FRAME_READY event
+ */
+static void incrementToneMapping(void) {
+	cisdp_sensor_set_tone(changingTone);
+
+	// increment the tone for next time
+	changingTone++;
+	if (changingTone >= TONE_MAPPING_NUMBER) {
+		// incremented too far - back off
+		changingTone = TONE_MAPPING_NUMBER - 1;
+	}
+}
+#endif // INVESTIGATE_TONE_MAPPING
 
 /**
  * This is the local callback that executes when the captureTimer expires
@@ -420,55 +449,6 @@ static void capture_timer_callback(TimerHandle_t xTimer) {
     if (xQueueSend(xImageTaskQueue, (void *)&send_msg, __QueueSendTicksToWait) != pdTRUE) {
         xprintf("send_msg=0x%x fail\r\n", send_msg.msg_event);
     }
-}
-
-/**
- * Fabricate a file name
- *
- * Place the name in imageFileName
- *
- * @param number - this forms part of the file name
- */
-static void generateImageFileName(uint16_t number)
-{
-#if FF_USE_LFN
-    // Create a file name
-    // file name: 'image_1234_2025-02-03.jpg' = 25 characters, plus trailing '\0'
-    rtc_time time;
-    exif_utc_get_rtc_as_time(&time);
-    snprintf(imageFileName, IMAGEFILENAMELEN, "image_%04d_%d-%02d-%02d.jpg",
-             (uint16_t)frame_num, time.tm_year, time.tm_mon, time.tm_mday);
-#else
-    // Must use 8.3 file name: upper case alphanumeric
-    if (woken == APP_WAKE_REASON_MD)
-    {
-        // Motion has woken us
-        snprintf(imageFileName, IMAGEFILENAMELEN, "MD%06d.JPG", (uint16_t)number);
-    }
-    else
-    {
-        // Must be a time lapse event
-        snprintf(imageFileName, IMAGEFILENAMELEN, "TL%06d.JPG", (uint16_t)number);
-    }
-
-#endif // FF_USE_LFN
-}
-
-/**
- * Sets the fileOp pointers for the data retrieved from cisdp_get_jpginfo()
- *
- * This includes setting the pointer to the jpeg buffer and setting a file name
- *
- * Parameters: uint32_t - jpeg_sz, jpeg_addr, frame_num
- */
-static void setFileOpFromJpeg(uint32_t jpeg_sz, uint32_t jpeg_addr)
-{
-
-    fileOp.fileName = imageFileName;
-    fileOp.buffer = (uint8_t *)jpeg_addr;
-    fileOp.length = jpeg_sz;
-    fileOp.senderQueue = xImageTaskQueue;
-    fileOp.closeWhenDone = true;
 }
 
 /*
@@ -698,13 +678,20 @@ static APP_MSG_DEST_T handleEventForInit(APP_MSG_T img_recv_msg) {
             g_captures_to_take = requested_captures;
             g_timer_period = requested_period;
             XP_LT_GREEN
-            xprintf("Images to capture: %d\n", g_captures_to_take);
+			xprintf("Images to capture: %d\n", g_captures_to_take);
             xprintf("Interval: %dms\n", g_timer_period);
-            XP_WHITE;
 
 #ifdef INVESTIGATE_FLASH_BRIGHTNESS
+            xprintf("LED Flash brightness increments after each image.\n");
             incrementBrightness();
 #endif // INVESTIGATE_FLASH_BRIGHTNESS
+
+#ifdef INVESTIGATE_TONE_MAPPING
+            xprintf("Tone mapping values change after each image.\n");
+            incrementToneMapping();
+#endif // INVESTIGATE_TONE_MAPPING
+
+            XP_WHITE;
 
             // Now start the image sensor.
             configure_image_sensor(CAMERA_CONFIG_RUN);
@@ -717,7 +704,7 @@ static APP_MSG_DEST_T handleEventForInit(APP_MSG_T img_recv_msg) {
         break;
 
     case APP_MSG_IMAGETASK_CHANGE_ENABLE:
-        // We have received an instruction to enable or disable the NN processing system
+    	// We have received an instruction to enable or disable the NN processing system
         setEnabled = (bool)img_recv_msg.msg_data;
         changeEnableState(setEnabled); // 0 means disabled; 1 means enabled
         if (setEnabled) {
@@ -736,8 +723,6 @@ static APP_MSG_DEST_T handleEventForInit(APP_MSG_T img_recv_msg) {
 
     case APP_MSG_IMAGETASK_INACTIVITY:
         // Inactivity detected. Prepare to enter DPD, saving state if possible.
-    	// run some sensordplib_stop functions then run HM0360_stream_off commands to the HM0360
-        configure_image_sensor(CAMERA_CONFIG_STOP);
 
         if (fatfs_getImageSequenceNumber() > 0)  {
             // TODO - can we call this without the if() and expect fatfs_task to handle it?
@@ -801,14 +786,10 @@ static APP_MSG_DEST_T handleEventForInit(APP_MSG_T img_recv_msg) {
 static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
     APP_MSG_DEST_T send_msg;
     APP_MSG_EVENT_E event;
-    uint32_t jpeg_addr;
-    uint32_t jpeg_sz;
 
     TfLiteStatus ret;
     bool setEnabled;
-    uint16_t exif_len;
     bool skip_nn = false;
-
     // Signed integers
     // Can we use a pointer to the output tensor instead?
     uint8_t classCount;
@@ -816,6 +797,7 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
 
     event = img_recv_msg.msg_event;
     send_msg.destination = NULL;
+
 #if defined(USE_HM0360) || defined(USE_HM0360_MD)
     HM0360_GAIN_T gain;
 #endif
@@ -825,11 +807,16 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
     case APP_MSG_IMAGETASK_FRAME_READY:
         // Here when the image sub-system has captured an image - via os_app_dplib_cb() callback.
 
-#ifdef INVESTIGATE_FLASH_BRIGHTNESS
-        incrementBrightness();
-#endif // INVESTIGATE_FLASH_BRIGHTNESS
+        g_cur_jpegenc_frame++; // The number in this sequence
+        g_frames_total++;      // The number since the start of time.
 
-    	ledFlashDisable(); // finished with the LED flash. Turn it off.
+#ifdef USE_HM0360_CAPTURE_TIMER
+        if (g_cur_jpegenc_frame == g_captures_to_take) {
+        	// Turn of the HM0360 ASAP to supress unwanted cycles, esp. of teh LED flash
+        	hm0360_md_setMode(CONTEXT_A, MODE_SLEEP, 0, 0);
+        	//hm0360_md_setMode(CONTEXT_A, MODE_SW_NFRAMES_SLEEP, 1, 0);
+        }
+#endif // USE_HM0360_CAPTURE_TIMER
 
 #if defined(USE_HM0360) || defined(USE_HM0360_MD)
         // By deferring the clearing of the interrupt till here we can measure the latency of interrupt to image captured.
@@ -837,8 +824,15 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
         hm0360_md_clearInterrupt(0xff); // clear all bits
 #endif
 
-        g_cur_jpegenc_frame++; // The number in this sequence
-        g_frames_total++;      // The number since the start of time.
+#ifdef INVESTIGATE_FLASH_BRIGHTNESS
+        incrementBrightness();
+#endif // INVESTIGATE_FLASH_BRIGHTNESS
+
+#ifdef INVESTIGATE_TONE_MAPPING
+        incrementToneMapping();
+#endif // INVESTIGATE_TONE_MAPPING
+
+        ledFlashDisable(); // finished with the LED flash. Turn it off.
 
         // measure time for the frame capture just completed
         xprintf("Image capture %d/%d took %dms\n\n", g_cur_jpegenc_frame, g_captures_to_take, app_getElapsedMs(startTime));
@@ -862,6 +856,7 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
 
         if (!skip_nn)  {
         	if (ret == kTfLiteOk)  {
+        		// This sends 'NN+' or 'NN-'
         		processNNOutput(outCategories, classCount) ;
         		xprintf("NN processing took %dms\n\n", app_getElapsedMs(startTime));
         	}
@@ -879,7 +874,7 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
         // This is a test to see if/how these change with illumination
         hm0360_md_getGainRegs(&gain);
 
-        snprintf(msgToMaster, MSGTOMASTERLEN, "Gain regs:\n  Integration time = %d lines\n  Analog gain = %d\n  Digital gain = %d\n  AE Mean = %d\n  AEConverged?: %c",
+        snprintf(msgToMaster, MSGTOMASTERLEN, "HM0360 AE regs:\n  Integration time = %d lines\n  Analog gain = %d\n  Digital gain = %d\n  AE Mean = %d\n  AEConverged?: %c",
         		gain.integration,
 				gain.analogGain,
 				gain.digitalGain,
@@ -913,97 +908,19 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
 		XP_WHITE;
 #endif // 0
 
-        // Proceed to write the jpeg file, even if there is no SD card
-        // since the fatfs_task will handle that.
+#ifdef SAVEBMP
+		prepareImageForDisk(NULL, 0, false);
+#else
+		prepareImageForDisk(outCategories, classCount, true);
+#endif // SAVEBMP
 
-        // Take semaphore FIRST before modifying jpeg_exif_buf
-        // This prevents jpeg_exif_buf from being overwritten before previous write completes
-        xSemaphoreTake(xJpegBufferSemaphore, portMAX_DELAY);
+		// Proceed to write the jpeg file, even if there is no SD card
+		// since the fatfs_task will handle that.
+		send_msg.destination = xFatTaskQueue;
+		send_msg.message.msg_event = APP_MSG_FATFSTASK_WRITE_FILE;
+		send_msg.message.msg_data = (uint32_t)&fileOp;
 
-        cisdp_get_jpginfo(&jpeg_sz, &jpeg_addr); // Gets JPEG buffer from hardware encoder
-        // Clearing cache between each capture
-        SCB_InvalidateDCache_by_Addr((void *)jpeg_addr, jpeg_sz);
-
-        // JPEF buffer exists but this will insert EXIF data and increase jpeg_sz
-        exif_len = insertExif(jpeg_sz, jpeg_addr, outCategories, classCount);
-
-        // Determine which buffer to use based on whether EXIF insertion succeeded
-        uint32_t buffer_to_write;
-        uint32_t size_to_write;
-
-        if (exif_len > 0)  {
-            // EXIF insertion succeeded - use combined buffer
-            buffer_to_write = (uint32_t)jpeg_exif_buf;
-            size_to_write = jpeg_sz + exif_len;
-
-            SCB_CleanDCache_by_Addr((void *)jpeg_exif_buf, size_to_write);
-        }
-        else {
-            // EXIF insertion failed - use original JPEG buffer
-            xprintf("EXIF insertion failed, using original JPEG buffer\n");
-            buffer_to_write = jpeg_addr;
-            size_to_write = jpeg_sz;
-
-            // Flush the original JPEG buffer cache
-            SCB_CleanDCache_by_Addr((void *)jpeg_addr, size_to_write);
-        }
-
-#if 0
-    	// Check by printing some of the buffer that includes the EXIF
-        //uint16_t bytesToPrint = exif_len + 8;
-        uint16_t bytesToPrint = 16;
-
-        XP_LT_GREY;
-    	xprintf("JPEG&EXIF buffer (%d bytes) begins:\n", size_to_write);
-    	for (int i = 0; i < bytesToPrint; i++) {
-    	    xprintf("%02X ", ((uint8_t*)buffer_to_write)[i]);
-    	    if (i%16 == 15) {
-    	    	xprintf("\n");
-    	    }
-    	}
-    	xprintf("\n");
-        XP_WHITE;
-#endif
-
-        g_imageSeqNum = fatfs_getImageSequenceNumber();
-        generateImageFileName(g_imageSeqNum);
-
-        setFileOpFromJpeg(size_to_write, buffer_to_write);
-
-        dbg_printf(DBG_LESS_INFO, "Writing %d bytes (%d + %d) to '%s' from 0x%08x\n",
-                   size_to_write, jpeg_sz, exif_len, fileOp.fileName, buffer_to_write);
-
-        // Save the file name as the most recent image
-        snprintf(lastImageFileName, IMAGEFILENAMELEN, "%s", fileOp.fileName);
-
-        send_msg.destination = xFatTaskQueue;
-        send_msg.message.msg_event = APP_MSG_FATFSTASK_WRITE_FILE;
-        send_msg.message.msg_data = (uint32_t)&fileOp;
-
-        //		// Also see if it is appropriate to send a "Event" message to the BLE processor
-        //		// TODO this won't work if the preceding 'NN+' message is being sent!
-        //		if ((g_cur_jpegenc_frame == g_captures_to_take) && nnPositive) {
-        //
-        //			// TODO DREADFUL HACK!!!
-        //
-        //			// This should be replaced with semaphores that delay until preceding messages have been sent!
-        //			// Instead as a quick hack I am adding a delay here in the hope that the preceding "NN+" message
-        //			// will get through
-        //
-        //			vTaskDelay(pdMS_TO_TICKS(100));
-        //
-        //			// Inform BLE processor
-        //			// For the moment the message body is identical to the "Sleep " message but we might change this later
-        //			snprintf(msgToMaster, MSGTOMASTERLEN, "Event ");
-        //
-        //			for (uint8_t i=0; i < OP_PARAMETER_NUM_ENTRIES; i++) {
-        //				uint8_t next = strlen(msgToMaster);	// points to the place where we should write the next parameter
-        //				snprintf(&msgToMaster[next], sizeof(msgToMaster), "%d ", fatfs_getOperationalParameter(i));
-        //			}
-        //			sendMsgToMaster(msgToMaster);
-        //		}
-
-        // Wait in this state till the disk write completes - expect APP_MSG_IMAGETASK_DISK_WRITE_COMPLETE
+        // Wait in NN_PROCESSING state till the disk write completes - expect APP_MSG_IMAGETASK_DISK_WRITE_COMPLETE
         image_task_state = APP_IMAGE_TASK_STATE_NN_PROCESSING;
 
         break;
@@ -1102,7 +1019,7 @@ static APP_MSG_DEST_T handleEventForNNProcessing(APP_MSG_T img_recv_msg) {
         if (g_cur_jpegenc_frame == g_captures_to_take) {
         	captureSequenceComplete();
         	// Stop the image sensor.
-        	configure_image_sensor(CAMERA_CONFIG_STOP);
+        	// move to earlier: configure_image_sensor(CAMERA_CONFIG_STOP);
         	image_task_state = APP_IMAGE_TASK_STATE_INIT;
         }
         else  {
@@ -1440,13 +1357,14 @@ static void vImageTask(void *pvParameters) {
     g_cur_jpegenc_frame = 0;
     g_captures_to_take = 0;
     g_timer_period = 0;
-#if 4XRATIO
-    // selects JPEG_ENC_QTABLE_4X
-    g_jpeg_ratio = 4;
+#define QTABLE_4X
+#ifdef QTABLE_4X
+    // selects JPEG_ENC_QTABLE_4X = better quality
+    g_jpg_ratio = 4;
 #else
     // selects JPEG_ENC_QTABLE_10X
-    g_jpeg_ratio = 0;
-#endif // 4XRATIO
+    g_jpg_ratio = 0;
+#endif // QTABLE_4X
     g_imageSeqNum = 0; // 0 indicates no SD card
     g_wdt_event = false;
 
@@ -1765,6 +1683,11 @@ static bool configure_image_sensor(CAMERA_CONFIG_E operation) {
         	processedOK = false;
         }
         else if (cisdp_sensor_init(true) != 0)    {
+        	// HM0360 reported: Memory allocated: 921600 for raw buffer, 76800 for JPEG, 100 for JPEG header
+        	// until I changed RAW_BUFSIZE. Then:
+        	// Memory allocated: 460800 for raw buffer, 76800 for JPEG, 100 for JPEG header
+        	// Then I reduced JPEG buffer to that of the RP3 (probably still too big).
+        	// RP3 camera reports: Memory allocated: 460800 for raw buffer, 46256 for JPEG, 100 for JPEG header
         	xprintf("\r\nCIS Init fail\r\n");
         	processedOK = false;
         }
@@ -1774,7 +1697,7 @@ static bool configure_image_sensor(CAMERA_CONFIG_E operation) {
 
         	// if wdma variable is zero when not init yet, then this step is a must be to retrieve wdma address
         	//  Datapath events give callbacks to os_app_dplib_cb()
-        	if (cisdp_dp_init(true, SENSORDPLIB_PATH_INT_INP_HW5X5_JPEG, os_app_dplib_cb, g_jpeg_ratio, APP_DP_RES_YUV640x480_INP_SUBSAMPLE_1X) < 0) {
+        	if (cisdp_dp_init(true, SENSORDPLIB_PATH_INT_INP_HW5X5_JPEG, os_app_dplib_cb, g_jpg_ratio, APP_DP_RES_YUV640x480_INP_SUBSAMPLE_1X) < 0) {
         		xprintf("\r\nDATAPATH Init fail\r\n");
         		return false;
         	}
@@ -1795,7 +1718,7 @@ static bool configure_image_sensor(CAMERA_CONFIG_E operation) {
         else  {
             // if wdma variable is zero when not init yet, then this step is a must be to retrieve wdma address
             //  Datapath events give callbacks to os_app_dplib_cb() in dp_task
-            if (cisdp_dp_init(true, SENSORDPLIB_PATH_INT_INP_HW5X5_JPEG, os_app_dplib_cb, g_jpeg_ratio, APP_DP_RES_YUV640x480_INP_SUBSAMPLE_1X) < 0)  {
+            if (cisdp_dp_init(true, SENSORDPLIB_PATH_INT_INP_HW5X5_JPEG, os_app_dplib_cb, g_jpg_ratio, APP_DP_RES_YUV640x480_INP_SUBSAMPLE_1X) < 0)  {
                 xprintf("\r\nDATAPATH Init fail\r\n");
                 return false;
             }
@@ -1807,7 +1730,7 @@ static bool configure_image_sensor(CAMERA_CONFIG_E operation) {
     	if (!cameraSystemEnabled) {
     		processedOK = false;
     	}
-    	else if (cisdp_dp_init(true, SENSORDPLIB_PATH_INT_INP_HW5X5_JPEG, os_app_dplib_cb, g_jpeg_ratio, APP_DP_RES_YUV640x480_INP_SUBSAMPLE_1X) < 0) {
+    	else if (cisdp_dp_init(true, SENSORDPLIB_PATH_INT_INP_HW5X5_JPEG, os_app_dplib_cb, g_jpg_ratio, APP_DP_RES_YUV640x480_INP_SUBSAMPLE_1X) < 0) {
     		xprintf("\r\nDATAPATH Init fail\r\n");
     		processedOK = false;
     	}
@@ -1825,8 +1748,7 @@ static bool configure_image_sensor(CAMERA_CONFIG_E operation) {
 #ifdef STROBE_CONTROLS_FLASH
     		// The HM0360 STROBE pin drives drive the LED
 
-    		if ((fatfs_getOperationalParameter(OP_PARAMETER_LED_BRIGHTNESS_PERCENT) > 0)
-    				&& (fatfs_getOperationalParameter(OP_PARAMETER_FLASH_LED) != 0) )  {
+    		if (fatfs_getOperationalParameter(OP_PARAMETER_FLASH_LED) != 0) {
     			hm0360_md_configureStrobe(HM0360_SENSOR_STROBE_MODE);
     		}
     		// else no strobe
@@ -1847,7 +1769,7 @@ static bool configure_image_sensor(CAMERA_CONFIG_E operation) {
     	if (!cameraSystemEnabled) {
     		processedOK = false;
     	}
-    	else if (cisdp_dp_init(true, SENSORDPLIB_PATH_INT_INP_HW5X5_JPEG, os_app_dplib_cb, g_jpeg_ratio, APP_DP_RES_YUV640x480_INP_SUBSAMPLE_1X) < 0) {
+    	else if (cisdp_dp_init(true, SENSORDPLIB_PATH_INT_INP_HW5X5_JPEG, os_app_dplib_cb, g_jpg_ratio, APP_DP_RES_YUV640x480_INP_SUBSAMPLE_1X) < 0) {
     		xprintf("\r\nDATAPATH Init fail\r\n");
     		processedOK = false;
     	}
@@ -1920,6 +1842,9 @@ static void setupLEDFlash(void) {
 static void sendMsgToMaster(char *str) {
     APP_MSG_T send_msg;
 
+	// Wait till previous I2C comms transmission is done.
+	xSemaphoreTake(xI2CTxSemaphore, portMAX_DELAY);
+
     // Send back to MKL62BA - msg_data is the string
     send_msg.msg_data = (uint32_t)str;
     send_msg.msg_parameter = strnlen(str, MSGTOMASTERLEN);
@@ -1941,7 +1866,103 @@ static void sleepWhenPossible(void) {
 	barrier_ready(&shutdownBarrier);
 }
 
+/**
+ * Prepares to write the image to the disk.
+ *
+ * This code does not actually perform the write: it sets up buffers and the fileOp object
+ * which is passed to the fatfs_task later.
+ *
+ * @param outCategories - array of NN output values
+ * @param classCount - number of entries in outCategories
+ * @param jpeg - true if we are saving a .JPG file - else .BMP
+ */
+static void prepareImageForDisk(int8_t * outCategories, uint8_t classCount, bool jpeg) {
+	uint16_t exif_len = 0;
+	uint32_t data_addr;
+	uint32_t data_sz;
+	uint32_t buffer_to_write;
+	uint32_t size_to_write;
 
+	if (jpeg) {
+		// Take semaphore FIRST before modifying jpeg_exif_buf
+		// This prevents jpeg_exif_buf from being overwritten before previous write completes
+		xSemaphoreTake(xJpegBufferSemaphore, portMAX_DELAY);
+
+		cisdp_get_jpginfo(&data_sz, &data_addr); // Gets JPEG buffer from hardware encoder
+		// Clearing cache between each capture
+		SCB_InvalidateDCache_by_Addr((void *)data_addr, data_sz);
+
+		// JPEF buffer exists but this will insert EXIF data and increase jpeg_sz
+		exif_len = insertExif(data_sz, data_addr, outCategories, classCount);
+	}
+	else {
+		// prepare a buffer here with the BMP data?
+		data_addr = app_get_raw_addr();
+		data_sz = app_get_raw_sz();
+	}
+
+	// Determine which buffer to use based on whether EXIF insertion succeeded
+	if (exif_len > 0)  {
+		// EXIF insertion succeeded - use combined buffer
+		buffer_to_write = (uint32_t)jpeg_exif_buf;
+		size_to_write = data_sz + exif_len;
+
+		SCB_CleanDCache_by_Addr((void *)jpeg_exif_buf, size_to_write);
+	}
+	else {
+		if (jpeg) {
+			// EXIF insertion failed - use original JPEG buffer
+			xprintf("EXIF insertion failed, using original JPEG buffer\n");
+		}
+
+		buffer_to_write = data_addr;
+		size_to_write = data_sz;
+
+		// Flush the original JPEG buffer cache
+		SCB_CleanDCache_by_Addr((void *)data_addr, size_to_write);
+	}
+
+#if 0
+	// Check by printing some of the buffer that includes the EXIF
+	//uint16_t bytesToPrint = exif_len + 8;
+	uint16_t bytesToPrint = 16;
+
+	XP_LT_GREY;
+	xprintf("JPEG&EXIF buffer (%d bytes) begins:\n", size_to_write);
+	for (int i = 0; i < bytesToPrint; i++) {
+		xprintf("%02X ", ((uint8_t*)buffer_to_write)[i]);
+		if (i%16 == 15) {
+			xprintf("\n");
+		}
+	}
+	xprintf("\n");
+	XP_WHITE;
+#endif
+
+	g_imageSeqNum = fatfs_getImageSequenceNumber();
+
+	// Must use 8.3 file name: upper case alphanumeric
+	if (woken == APP_WAKE_REASON_MD)  {
+		// Motion has woken us
+		snprintf(g_imageFileName, IMAGEFILENAMELEN, "MD%06d.%s", g_imageSeqNum, jpeg?"JPG":"BMP");
+	}
+	else   {
+		// Must be a time lapse event
+		snprintf(g_imageFileName, IMAGEFILENAMELEN, "TL%06d.%s", g_imageSeqNum, jpeg?"JPG":"BMP");
+	}
+
+	fileOp.fileName = g_imageFileName;	// a global
+	fileOp.buffer = (uint8_t *)buffer_to_write;
+	fileOp.length = size_to_write;
+	fileOp.senderQueue = xImageTaskQueue;
+	fileOp.closeWhenDone = true;
+
+	dbg_printf(DBG_LESS_INFO, "Writing %d bytes (%d + %d) to '%s' from 0x%08x\n",
+			size_to_write, data_sz, exif_len, fileOp.fileName, buffer_to_write);
+
+	// Save the file name as the most recent image
+	snprintf(lastImageFileName, IMAGEFILENAMELEN, "%s", fileOp.fileName);
+}
 
 /*************************************** Local EXIF-related Definitions *****************************/
 
@@ -1999,16 +2020,14 @@ static void sleepWhenPossible(void) {
 // Copy of what is in cisdp_sensor
 
 static uint16_t insertExif(uint32_t jpeg_sz, uint32_t jpeg_addr,
-                           int8_t *outCategories, uint8_t categoriesCount)
-{
+                           int8_t *outCategories, uint8_t categoriesCount) {
     uint16_t exif_len = 0;
     uint8_t *jpeg_buf;
 
     jpeg_buf = (uint8_t *)jpeg_addr;
 
     // Sanity check: must start with FFD8 and then FFE0
-    if (jpeg_buf[0] != 0xFF || jpeg_buf[1] != 0xD8 || jpeg_buf[2] != 0xFF || jpeg_buf[3] != 0xE0)
-    {
+    if (jpeg_buf[0] != 0xFF || jpeg_buf[1] != 0xD8 || jpeg_buf[2] != 0xFF || jpeg_buf[3] != 0xE0) {
         // Handle error: unexpected JPEG structure
         return 0;
     }
@@ -2017,9 +2036,9 @@ static uint16_t insertExif(uint32_t jpeg_sz, uint32_t jpeg_addr,
     exif_len = build_exif_segment(outCategories, categoriesCount);
 
     // Check for enough space (depends on your memory layout)
-    if (jpeg_sz + exif_len > SECOND_JPEG_BUFSIZE)
-    {
+    if (jpeg_sz + exif_len > SECOND_JPEG_BUFSIZE)  {
         // TODO Handle error: buffer too small
+    	xprintf("Buffer too small for JPEG\n");
         return 0;
     }
 
@@ -2106,8 +2125,9 @@ static void write32_be(uint8_t *ptr, uint32_t val) {
 */
 
 // Add an IFD entry
-static void addIFD(ExifTagID tagID, uint8_t *entry_ptr, void *tagData)
-{
+static void addIFD(ExifTagID tagID, uint8_t *entry_ptr, void *tagData) {
+
+	//xprintf("   DEBUG: adding EXIF tag 0x%04x\n", tagID);
     switch (tagID)
     {
     case TAG_X_RESOLUTION:
@@ -2290,8 +2310,7 @@ static void addIFD(ExifTagID tagID, uint8_t *entry_ptr, void *tagData)
  *
  * If the altitude is present it is 78 bytes
  */
-static size_t get_gps_ifd_size(void)
-{
+static size_t get_gps_ifd_size(void) {
     return GPS_IFD_SIZE;
 }
 
@@ -2304,8 +2323,7 @@ static size_t get_gps_ifd_size(void)
  *
  * @param gps_ifd_start - pointer to where the buffer should be
  */
-static void create_gps_ifd(uint8_t *gps_ifd_start)
-{
+static void create_gps_ifd(uint8_t *gps_ifd_start) {
     uint8_t *p = gps_ifd_start;
 
     write16_le(p, GPS_IFD_ENTRY_COUNT);
@@ -2335,7 +2353,7 @@ static void create_gps_ifd(uint8_t *gps_ifd_start)
 /**
  * Builds a valid EXIF data structure, including APP1 tag
  *
- * This particular example has hard-coded tags to add, including the X&Y resilutions.
+ * This particular example has hard-coded tags to add, including the X&Y resolutions.
  *
  */
 static uint16_t build_exif_segment(int8_t *outCategories, uint8_t categoriesCount) {
@@ -2343,7 +2361,8 @@ static uint16_t build_exif_segment(int8_t *outCategories, uint8_t categoriesCoun
     uint16_t exif_len;
     uint8_t nnData[MAX_CLASSES + 2];
 
-    // IFD count: base entries (9) + UserComment (1 if has confidence data) + DeploymentID (1 if has deployment ID)
+    // IFD count: base entries (9) = 8 starting with TAG_MAKE plus TAG_GPS_IFD_POINTER later.
+    // dynamic_ifd_count might be incremented if we add UserComment and DeploymentID
     uint16_t dynamic_ifd_count = IFD0_ENTRY_COUNT;	// 9
 
     // Insert the NN data (raw scores for backwards compatibility)
@@ -2420,9 +2439,14 @@ static uint16_t build_exif_segment(int8_t *outCategories, uint8_t categoriesCoun
 	// Only include in EXIF if not all zeros (i.e., a deployment is active)
 	bool has_deployment_id = (strcmp(deployment_id, DEPLOYMENT_ID_ZERO_UUID) != 0);
 
-
+	// dynamic_ifd_count must be incremented before it is written to the EXIF buffer,
+	// so here we look ahead to see how many extra tags might be added.
 	if (has_deployment_id) {
-		dynamic_ifd_count += 1; // Add one entry for DeploymentID
+		dynamic_ifd_count++; // Add one entry for DeploymentID
+	}
+
+	if (cv_modelLoaded()) {
+        dynamic_ifd_count++; // Add one entry for UserComment
 	}
 
     // Prepare the timestamp
@@ -2456,7 +2480,8 @@ static uint16_t build_exif_segment(int8_t *outCategories, uint8_t categoriesCoun
     write32_le(p, 0x00000008);
     p += 4;
 
-    // The number of IFD0 entries goes here (dynamic based on class count)
+    // The number of IFD0 entries goes here
+    // IMPORTANT: we can't change dynamic_ifd_count again.
     write16_le(p, dynamic_ifd_count);
     p += 2;
 
@@ -2487,7 +2512,7 @@ static uint16_t build_exif_segment(int8_t *outCategories, uint8_t categoriesCoun
     }
     next_data_ptr += gps_size; // reserve
 
-    // Add IFD entries - base entries (9) + dynamic class entries
+    // Add IFD entries - 8 here plus TAG_GPS_IFD_POINTER later
     uint8_t entry = 0;
     addIFD(TAG_MAKE, ifd_start + (entry++ * 12), "Wildlife.ai");
     addIFD(TAG_MODEL, ifd_start + (entry++ * 12), "WW500");
@@ -2512,11 +2537,12 @@ static uint16_t build_exif_segment(int8_t *outCategories, uint8_t categoriesCoun
     char user_comment[EXIF_COMMENT_LENGTH];
 	user_comment[0] = '\0';
 	size_t offset = 0;
+	int written = 0;
 
     if (cv_modelLoaded())  {
-
+    	// We add the NN results as a TAG_USER_COMMENT
     	for (uint8_t i = 0; i < categoriesCount; i++) {
-    	    int written = snprintf(
+    	    written = snprintf(
     	        user_comment + offset,
     	        EXIF_COMMENT_LENGTH - offset,
     	        "%s: %d; ",
@@ -2536,12 +2562,11 @@ static uint16_t build_exif_segment(int8_t *outCategories, uint8_t categoriesCoun
     	    }
 
     	    offset += written;
-    	}
+    	} // for(;;)
 
-        xprintf("EXIF: Adding UserComment (%d classes): '%s'\n", categoriesCount, user_comment);
+        xprintf("EXIF: Adding UserComment (%d classes, %d bytes): '%s'\n",
+        		categoriesCount, written, user_comment);
         addIFD(TAG_USER_COMMENT, ifd_start + (entry++ * 12), user_comment);
-
-        dynamic_ifd_count++; // Add one entry for UserComment
     }
 
 #endif // ENABLE_EXIF_CONFIDENCE
@@ -2552,11 +2577,12 @@ static uint16_t build_exif_segment(int8_t *outCategories, uint8_t categoriesCoun
 		addIFD(TAG_DEPLOYMENT_ID, ifd_start + (entry++ * 12), deployment_id);
 	}
 
-    // GPS:
+    // GPS: this is always added
     addIFD(TAG_GPS_IFD_POINTER, ifd_start + (entry++ * 12), &gps_ifd_offset);
 
     // Now write the GPS IFD structure if we reserved space
     if (gps_size > 0) {
+    	// This calls addIFD() 6 times
         create_gps_ifd(gps_ifd_start);
     }
 
@@ -2565,10 +2591,13 @@ static uint16_t build_exif_segment(int8_t *outCategories, uint8_t categoriesCoun
     if ((size_t)(next_data_ptr - exif_buffer) > EXIF_MAX_LEN) {
         next_data_ptr = exif_buffer + EXIF_MAX_LEN;
     }
+
     uint16_t len = (next_data_ptr - exif_buffer) - 2; // exclude 0xFFE1 marker
     write16_be(len_ptr, len);
 
     exif_len = next_data_ptr - exif_buffer;
+
+    xprintf("Added %d EXIF tags\n", entry);
 
     return exif_len;
 }
@@ -2677,6 +2706,7 @@ TaskHandle_t image_createTask(int8_t priority, APP_WAKE_REASON_E wakeReason) {
     return image_task_id;
 }
 
+
 /**
  * Returns the internal state as a number
  */
@@ -2738,11 +2768,9 @@ bool image_getEnabled(void) {
  */
 void image_sleepNow(void) {
     uint32_t timelapseDelay;
-    uint8_t brightnessPercent;
     uint16_t mdInterval;
     FlashLeds_t ledInUse;
 
-    brightnessPercent = (uint8_t)fatfs_getOperationalParameter(OP_PARAMETER_LED_BRIGHTNESS_PERCENT);
     ledInUse = fatfs_getOperationalParameter(OP_PARAMETER_FLASH_LED);
     mdInterval = fatfs_getOperationalParameter(OP_PARAMETER_MD_INTERVAL);
 
@@ -2757,8 +2785,8 @@ void image_sleepNow(void) {
     	hm0360_md_prepare(cameraSystemEnabled, mdInterval); // select CONTEXT_B registers (if enabled)
 
     	// Consider turning on the LED flashes, controlled by the HM0360 STROBE output
-    	if ((brightnessPercent == 0) || (ledInUse == 0) || (mdInterval == 0))  {
-    		// No STROBE pulses because brightness=0 or neither LED selected or MD is disabled
+    	if ((ledInUse == 0) || (mdInterval == 0))  {
+    		// No STROBE pulses because neither LED selected or MD is disabled
     		xprintf("   No LED flashes.\n");
     		hm0360_md_configureStrobe(0);
     	}

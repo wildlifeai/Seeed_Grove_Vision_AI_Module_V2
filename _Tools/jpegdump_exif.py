@@ -24,6 +24,7 @@ EXIF_TAGS = {
     0x0132: "DateTime",
     0x9286: "UserComment",
     0xC000: "Custom Data",
+    0xF200: "Deployment ID",
     0x8769: "ExifIFDPointer",
     0x8825: "GPSInfoIFDPointer",
     0x0001: "GPS Latitude Reference",

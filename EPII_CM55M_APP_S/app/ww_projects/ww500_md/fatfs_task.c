@@ -255,13 +255,16 @@ static FRESULT fileWrite(fileOperation_t *fileOp) {
 	if (bw != (fileOp->length)) {
 		xprintf("Error. Wrote %d bytes rather than %d\n", bw, fileOp->length);
 		res = FR_DISK_ERR; // TODO find a better error code? Disk full?
-	} else {
+	}
+	else {
 		xprintf("Wrote %d bytes\n", bw);
 		res = FR_OK;
 	}
+
 	XP_GREEN
 	xprintf("Wrote file to SD %s\n", fileOp->fileName);
 	XP_WHITE;
+
 	fileOp->res = res;
 	return res;
 }
@@ -295,7 +298,7 @@ static FRESULT fileWriteImage(fileOperation_t *fileOp, directoryManager_t *dirMa
 	}
 
 	XP_GREEN
-	xprintf("Wrote image to SD: %s ", fileOp->fileName);
+	xprintf("Wrote %d byte image to SD: %s ", fileOp->length, fileOp->fileName);
 	XP_WHITE;
 
 	exif_utc_get_rtc_as_time(&time);
@@ -1453,7 +1456,7 @@ int fatfs_unzip_manifest(void) {
  * @param buffer_size Size of output buffer
  */
 void fatfs_getDeploymentId(char *deployment_id_buffer, size_t buffer_size) {
-	if (buffer_size < 37) {
+	if (buffer_size < UUIDLENGTH) {
 		// Buffer too small for UUID format
 		deployment_id_buffer[0] = '\0';
 		return;

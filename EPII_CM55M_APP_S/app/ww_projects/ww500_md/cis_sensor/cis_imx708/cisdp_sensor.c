@@ -49,10 +49,11 @@
 #endif
 #endif
 
-#define JPEG_BUFSIZE  (((623+ (IMX708_HW5x5_CROP_WIDTH/16)*(IMX708_HW5x5_CROP_HEIGHT/16)* 38 + 35) >>2 ) <<2)	//YUV420 x10 Compress = ((623+ (W/16)*(H/16)* 38 + 35) >>2 ) <<2  byte
+// CGP - the calculation below seems to be for a 'x10 Compress' but
+//#define JPEG_BUFSIZE  (((623+ (IMX708_HW5x5_CROP_WIDTH/16)*(IMX708_HW5x5_CROP_HEIGHT/16)* 38 + 35) >>2 ) <<2)	//YUV420 x10 Compress = ((623+ (W/16)*(H/16)* 38 + 35) >>2 ) <<2  byte
 __attribute__(( section(".bss.NoInit"))) uint8_t jpegbuf[JPEG_BUFSIZE] __ALIGNED(32);
 
-#define RAW_BUFSIZE  (IMX708_HW5x5_CROP_WIDTH*IMX708_HW5x5_CROP_HEIGHT*3/2)   //YUV420: Y= W*H byte, U = ((W*H)>>2) byte, V = ((W*H)>>2) byte
+//#define RAW_BUFSIZE  (IMX708_HW5x5_CROP_WIDTH*IMX708_HW5x5_CROP_HEIGHT*3/2)   //YUV420: Y= W*H byte, U = ((W*H)>>2) byte, V = ((W*H)>>2) byte
 __attribute__(( section(".bss.NoInit"))) uint8_t demosbuf[RAW_BUFSIZE] __ALIGNED(32);
 
 #define JPEG_HEADER_BUFSIZE 100

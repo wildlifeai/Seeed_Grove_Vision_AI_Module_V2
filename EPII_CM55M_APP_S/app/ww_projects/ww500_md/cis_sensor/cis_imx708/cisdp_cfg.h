@@ -30,6 +30,9 @@
 #include "hx_drv_gpio.h"
 #include "hx_drv_inp.h"
 
+#include "hx_drv_jpeg.h" // for JPEG_ENC_QTABLE_4X & JPEG_ENC_QTABLE_10X
+#include "printf_x.h" // for XSTR()
+
 #define	IMG_640_480		1
 
 typedef enum
@@ -234,7 +237,38 @@ typedef enum
 #define DP_JPEG_ENC_WIDTH 			DP_HW5X5_OUT_WIDTH
 #define DP_JPEG_ENC_HEIGHT 			DP_HW5X5_OUT_HEIGHT
 #define DP_JPEG_ENCTYPE 			JPEG_ENC_TYPE_YUV420
-//#define DP_JPEG_ENCQTABLE 			JPEG_ENC_QTABLE_10X // lower quality
-#define DP_JPEG_ENCQTABLE 			JPEG_ENC_QTABLE_4X	// higher quality
+
+// CGP - changed to higher quality JPEG quality. Allowable values are 4 and 10
+// I get compile-time confusion if I use DP_JPEG_ENCQTABLE, JPEG_ENC_QTABLE_4X, JPEG_ENC_QTABLE_10X to set buffer sizes
+//#define JPEG_COMPRESSION 			10
+#define JPEG_COMPRESSION 			4
+
+/* Select bytes per MCU based on JPEG quality  */
+#if (JPEG_COMPRESSION == 10)
+    #define JPEG_BYTES_PER_MCU   38
+	#define DP_JPEG_ENCQTABLE 			JPEG_ENC_QTABLE_4X	// higher quality
+	#pragma message "JPEG x 10 compression"
+#elif (JPEG_COMPRESSION == 4)
+    #define JPEG_BYTES_PER_MCU   96
+	#define DP_JPEG_ENCQTABLE 			JPEG_ENC_QTABLE_4X	// higher quality
+	#pragma message "JPEG x 4 compression"
+#else
+    #error "Unsupported JPEG quality setting"
+#endif
+
+/* MCU count for YUV420 (16x16 blocks) */
+#define JPEG_MCU_COUNT  ((DP_INP_OUT_WIDTH/16) * (DP_INP_OUT_HEIGHT/16))
+
+/* Header + padding from vendor formula */
+#define JPEG_HEADER_SIZE   623
+#define JPEG_FOOTER_SIZE   35
+
+/* Final buffer size (aligned to 4 bytes) */
+#define JPEG_BUFSIZE  (((JPEG_HEADER_SIZE + (JPEG_MCU_COUNT * JPEG_BYTES_PER_MCU) + JPEG_FOOTER_SIZE) + 3) & ~3)
+#define RAW_BUFSIZE  (DP_INP_OUT_WIDTH * DP_INP_OUT_HEIGHT * 3/2)   //YUV420: Y= W*H byte, U = ((W*H)>>2) byte, V = ((W*H)>>2) byte
+
+#pragma message "RAW_BUFSIZE: " XSTR(RAW_BUFSIZE)
+
+#pragma message "IMX708_HW5x5_CROP_WIDTH*IMX708_HW5x5_CROP_HEIGHT" XSTR(IMX708_HW5x5_CROP_WIDTH) XSTR(IMX708_HW5x5_CROP_HEIGHT)
 
 #endif /* APP_SCENARIO_CISDP_CFG_H_ */

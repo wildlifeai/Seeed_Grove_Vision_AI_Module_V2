@@ -311,8 +311,8 @@ static FRESULT fileWriteImage(fileOperation_t *fileOp, fileBufferInfo_t * extraB
 
     // This ensures that any data in the D-cache is committed to RAM
     SCB_CleanDCache_by_Addr ((void *)fileOp->buffer, fileOp->length);
-#if 0
-	// Check by printing some of jpeg buffer
+/*
+	// Option here to check by printing some of jpeg buffer
     uint16_t bytesToPrint = 16;
     uint8_t * buffer = (uint8_t * ) SRAM_addr;
     XP_LT_GREY;
@@ -326,7 +326,7 @@ static FRESULT fileWriteImage(fileOperation_t *fileOp, fileBufferInfo_t * extraB
 	}
 	xprintf("\n");
     XP_WHITE;
-#endif // 1 (print buffer)
+*/
 
     // (3a) Write (first chunk of) data to the file
     res = f_write(&dirManager->imagesFile, (void *)fileOp->buffer, fileOp->length, &bw);
@@ -1655,6 +1655,7 @@ void fatfs_setOperationalParameter(OP_PARAMETERS_E parameter, int16_t value) {
 	}
 	else {
 		// error
+		xprintf("Operational parameter index %d out of range\n", parameter);
 	}
 }
 

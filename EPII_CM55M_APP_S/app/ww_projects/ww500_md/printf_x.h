@@ -19,9 +19,11 @@
 extern "C" {
 #endif
 
-// Define macros for stringification
-#define XSTR(x) STR(x)
+// Define macros for stringification - use like this:
+// #pragma message("The value of JPEG_COMPRESSION: " XSTR(JPEG_COMPRESSION))
+
 #define STR(x) #x
+#define XSTR(x) STR(x)
 
 // See here for colours: https://stackoverflow.com/questions/4842424/list-of-ansi-color-escape-sequences
 // https://wiki.bash-hackers.org/scripting/terminalcodes

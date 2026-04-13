@@ -49,18 +49,8 @@
 #endif
 #endif
 
-// CGP This is much larger than for the IMX708 which gives 46256
-// I think 46256 is too big also, but I will set the HM0360 to the same size
-// TODO get a better size!
-//#define JPEG_BUFSIZE  76800 //640*480/4
-#define JPEG_BUFSIZE  46256
 __attribute__(( section(".bss.NoInit"))) uint8_t jpegbuf[JPEG_BUFSIZE] __ALIGNED(32);
 
-// CGP why is this 3 bits/pixel?
-// We are using APP_DP_RES_YUV640x480_INP_SUBSAMPLE_1X
-// and app_get_raw_sz() returns 640 * 480 * 1.5
-// #define RAW_BUFSIZE  921600 //640*480*3
-#define RAW_BUFSIZE  460800 	//640*480*1.5;
 __attribute__(( section(".bss.NoInit"))) uint8_t demosbuf[RAW_BUFSIZE] __ALIGNED(32);
 
 #define JPEG_HEADER_BUFSIZE 100
@@ -472,6 +462,8 @@ int cisdp_dp_init(bool inp_init, SENSORDPLIB_PATH_E dp_type, sensordplib_CBEvent
     else {
     	jpeg_cfg.jpeg_encqtable = JPEG_ENC_QTABLE_10X;
     }
+
+    //dbg_printf(DBG_LESS_INFO, "DEBUG: %d x %d\n", jpeg_cfg.enc_width, jpeg_cfg.enc_width);
 
     HM0360_dp_wdma_addr_init(subs);
 

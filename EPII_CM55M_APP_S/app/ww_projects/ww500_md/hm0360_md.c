@@ -41,7 +41,7 @@ static bool hm0360MainCamera = false;
 static bool hm0360_present = false;
 
 static HX_CIS_SensorSetting_t HM0360_md_init_setting[] = {
-#include "HM0360_OSC_Bayer_640x480_setA_VGA_setB_QVGA_md_8b_ParallelOutput_R2.i"
+#include "..\cis_hm0360\HM0360_OSC_Bayer_640x480_setA_VGA_setB_QVGA_md_8b_ParallelOutput_R2.i"
 };
 
 /*************************************** Local Function Definitions *******************/
@@ -83,19 +83,13 @@ static void restoreMainCameraConfig(void) {
  * Do this once per boot.
  * 0x0830 gives about 1s
  *
+ * Should I check for a minimum value?
+ *
  * @param interval - in ms
  * @param value for HM0360 registers
  */
 static uint16_t calculateSleepTime(uint32_t interval) {
 	uint32_t sleepCount;
-
-//	// Make sure this has a minimum else we get multiple pulses of the LED etc
-//	if (interval < 100) {
-//		sleepCount = 100 * 0x8030 / 1000;
-//	}
-//	else {
-//		sleepCount = interval * 0x8030 / 1000;
-//	}
 
 	sleepCount = interval * 0x8030 / 1000;
 

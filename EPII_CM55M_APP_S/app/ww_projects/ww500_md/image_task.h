@@ -11,12 +11,6 @@
 
 #include "c_api_types.h"	// Tensorflow errors
 
-#define APP_BLOCK_FUNC()          \
-	do                            \
-	{                             \
-		__asm volatile("b    ."); \
-	} while (0)
-
 // List of operations to set up camera subsystem
 typedef enum {
 	CAMERA_CONFIG_INIT_COLD,

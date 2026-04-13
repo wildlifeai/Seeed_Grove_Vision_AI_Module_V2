@@ -55,6 +55,9 @@
 #include "printf_x.h"
 #include "xprintf.h"
 
+#include "hx_drv_gpio.h"
+#include "hx_drv_scu.h"
+
 // FreeRTOS kernel includes.
 #include "FreeRTOS.h"
 #include "task.h"
@@ -70,8 +73,6 @@
 #include "CLI-FATFS-commands.h"
 #include "time_handling.h"
 
-// TODO I am not using the public functions in this. Can we move the important bits of this to here?
-#include "spi_fatfs.h"
 #include "hx_drv_rtc.h"
 #include "exif_utc.h"
 #include "ww500_md.h"
@@ -118,7 +119,7 @@ static FRESULT fileRead(fileOperation_t *fileOp);
 static FRESULT fileWrite(fileOperation_t *fileOp);
 
 // Warning: list_dir() is in spi_fatfs.c - how to declare it and reuse it?
-FRESULT list_dir(const char *path);
+//FRESULT list_dir(const char *path);
 
 static FRESULT load_configuration(const char *filename, directoryManager_t *dirManager);
 FRESULT save_configuration(const char *filename, directoryManager_t *dirManager);
@@ -176,6 +177,7 @@ const char *fatFsTaskStateString[APP_FATFS_STATE_NUMSTATES] = {
 // Strings for expected messages. Values must match messages directed to fatfs Task in app_msg.h
 const char *fatFsTaskEventString[APP_MSG_FATFSTASK_LAST - APP_MSG_FATFSTASK_WRITE_FILE] = {
 	"Write file",
+	"Write image",
 	"Read file",
 	"File op done",
 	"Save State",
@@ -199,16 +201,18 @@ uint16_t op_parameter[OP_PARAMETER_NUM_ENTRIES] = {
 	TIMELAPSEINTERVAL, // 7 Interval (s) (0 inhibits)
 	INACTIVITYTIMEOUT, // 8 Delay before DPD (ms)
 	FLASHLEDDUTY,	   // 9 in percent (0 inhibits)
-	1,				   // 10 0 = disabled, 1 = enabled
+	1,				   // 10 0 = camera disabled, 1 = enabled
 	DPDINTERVAL,	   // 11 Interval (ms) between frames in MD mode (0 inhibits)
 	FLASHDURATION,	   // 12 Duration (ms) that LED Flash is on
 	0,				   // 13 LED bit mask: vis=1, IR=2, none=0
 	PROJECT_ID,		   // 14 OP_PARAMETER_MODEL_PROJECT
 	PROJECT_VER,	   // 15 OP_PARAMETER_MODEL_VERSION
 	MODEL_THRESHOLD,   // 16 OP_PARAMETER_MODEL_THRESHOLD default
-	0, 0, 0,	   		// 17-19 Reserved for future use
+	1,      	   		// 17 Motion Detection Sensitivity: 0=off, 1=low, 2=medium, 3=high
+	0, 0,    	   		// 18-19 Reserved for future use
 	0, 0, 0, 0, 0, 0, 0, 0  // 20-27 Deployment ID chunks
 };
+
 
 /********************************** Private Function definitions  *************************************/
 
@@ -275,19 +279,51 @@ static FRESULT fileWrite(fileOperation_t *fileOp) {
  * 		parameters: fileOperation_t fileOp
  * 		returns: FRESULT res
  */
-static FRESULT fileWriteImage(fileOperation_t *fileOp, directoryManager_t *dirManager) {
+static FRESULT fileWriteImage(fileOperation_t *fileOp, fileBufferInfo_t * extraBlock, directoryManager_t *dirManager) {
 	FRESULT res;
+	UINT bw;         	// Bytes written
+	UINT bwTotal;
 	rtc_time time;
 
-	// Move to fastfs_write_image()
-	//	res = f_chdir(dirManager->current_capture_dir);
-	//	if (res != FR_OK) {
-	//		return res;
-	//	}
+	// (1) Change to the image capture directory
+	res = f_chdir(dirManager->current_capture_dir);
+	if (res != FR_OK) {
+		return res;
+	}
 
-	// fastfs_write_image() expects filename is a uint8_t array
-	// TODO resolve this warning! "warning: passing argument 1 of 'fastfs_write_image' makes integer from pointer without a cast"
-	res = fastfs_write_image((uint32_t)(fileOp->buffer), fileOp->length, (uint8_t *)fileOp->fileName, dirManager);
+	// (2) Open the file
+	// tp added this to write over existing files with the same name for development phase
+	res = f_open(&dirManager->imagesFile, (TCHAR*) fileOp->fileName,  FA_WRITE | FA_CREATE_ALWAYS);
+	// res = f_open(&fil_w, (TCHAR*) filename, FA_CREATE_NEW | FA_WRITE);
+	dirManager->imagesRes = res;
+
+	if (res != FR_OK)  {
+		xprintf("f_open of '%s' failed. res = %d\r\n", fileOp->fileName, res);
+		return res;
+	}
+	dirManager->imagesOpen = true;
+
+    // This ensures that any data in the D-cache is committed to RAM
+    SCB_CleanDCache_by_Addr ((void *)fileOp->buffer, fileOp->length);
+#if 0
+	// Check by printing some of jpeg buffer
+    uint16_t bytesToPrint = 16;
+    uint8_t * buffer = (uint8_t * ) SRAM_addr;
+    XP_LT_GREY;
+
+	xprintf("Used 'SCB_CleanDCache' - writing %d bytes beginning:\n", img_size);
+	for (int i = 0; i < bytesToPrint; i++) {
+	    xprintf("%02X ", buffer[i]);
+	    if (i%16 == 15) {
+	    	xprintf("\n");
+	    }
+	}
+	xprintf("\n");
+    XP_WHITE;
+#endif // 1 (print buffer)
+
+    // (3a) Write (first chunk of) data to the file
+    res = f_write(&dirManager->imagesFile, (void *)fileOp->buffer, fileOp->length, &bw);
 
 	if (res != FR_OK) {
 		xprintf("Error writing file %s\n", fileOp->fileName);
@@ -296,9 +332,36 @@ static FRESULT fileWriteImage(fileOperation_t *fileOp, directoryManager_t *dirMa
 
 		return res;
 	}
+	bwTotal = bw;
+
+	// (3b) Write extra data to the file
+	if (extraBlock->length > 0) {
+
+	    SCB_CleanDCache_by_Addr ((void *)extraBlock->buffer, extraBlock->length);
+		res = f_write(&dirManager->imagesFile, (void *)extraBlock->buffer, extraBlock->length, &bw);
+
+		if (res != FR_OK) {
+			xprintf("Error writing file %s\n", fileOp->fileName);
+			fileOp->length = 0;
+			fileOp->res = res;
+		}
+		else {
+			bwTotal += bw;
+		}
+	}
+
+	// (4) Close the file
+     res = f_close(&dirManager->imagesFile);
+     dirManager->imagesRes = res;
+
+    if (res != FR_OK) {
+        xprintf("Failed to close image file: %d\n", res);
+    }
+
+    dirManager->imagesOpen = false;
 
 	XP_GREEN
-	xprintf("Wrote %d byte image to SD: %s ", fileOp->length, fileOp->fileName);
+	xprintf("Wrote %d byte image to SD: %s ", bwTotal, fileOp->fileName);
 	XP_WHITE;
 
 	exif_utc_get_rtc_as_time(&time);
@@ -371,22 +434,23 @@ static APP_MSG_DEST_T handleEventForUninit(APP_MSG_T rxMessage) {
 
 	switch (event) {
 
+	case APP_MSG_FATFSTASK_WRITE_IMAGE:
+		// Deliberately fall through
 	case APP_MSG_FATFSTASK_WRITE_FILE:
-		// someone wants a file written. Send back an error message
+		// Someone wants a file written. Send back an error message
 
 		// Inform the if task that the disk operation is complete
 		sendMsg.message.msg_data = (uint32_t)FR_NO_FILESYSTEM;
 		sendMsg.destination = fileOp->senderQueue;
+
 		// The message to send depends on the destination! In retrospect it would have been better
 		// if the messages were grouped by the sender rather than the receiver, so this next test was not necessary:
 		if (sendMsg.destination == xIfTaskQueue) {
 			sendMsg.message.msg_event = APP_MSG_IFTASK_DISK_WRITE_COMPLETE;
-		} else if (sendMsg.destination == xImageTaskQueue) {
+		}
+		else if (sendMsg.destination == xImageTaskQueue) {
 			sendMsg.message.msg_event = APP_MSG_IMAGETASK_DISK_WRITE_COMPLETE;
 		}
-		//    	// Complete this as necessary
-		//    	else if (sendMsg.destination == anotherTaskQueue) {
-		//        	sendMsg.message.msg_event = APP_MSG_ANOTHERTASK_DISK_WRITE_COMPLETE;
 		else {
 			// assumed to be CLI task.
 			sendMsg.message.msg_event = APP_MSG_CLITASK_DISK_WRITE_COMPLETE;
@@ -445,8 +509,10 @@ static APP_MSG_DEST_T handleEventForUninit(APP_MSG_T rxMessage) {
 static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 	APP_MSG_EVENT_E event;
 	FRESULT res;
-	fileOperation_t *fileOp;
 	static APP_MSG_DEST_T sendMsg;
+
+	fileOperation_t *fileOp;
+	fileBufferInfo_t *extraBlock;
 
 	sendMsg.destination = NULL;
 	res = FR_OK;
@@ -455,30 +521,64 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 
 	fileOp = (fileOperation_t *)rxMessage.msg_data;
 
+	extraBlock = (fileBufferInfo_t*)rxMessage.msg_parameter;
+
 	switch (event) {
 
-	case APP_MSG_FATFSTASK_WRITE_FILE:
+	case APP_MSG_FATFSTASK_WRITE_IMAGE:
 		// someone wants a file written. Structure including file name a buffer is passed in data
-		fatFs_task_state = APP_FATFS_STATE_BUSY;
+
+		xStartTime = xTaskGetTickCount();
+
+		res = fileWriteImage(fileOp, extraBlock, &dirManager);
+
+		xprintf("File write took %dms\n", app_getElapsedMs(xStartTime));\
+
+		// Inform the if task that the disk operation is complete
+		sendMsg.message.msg_data = (uint32_t)res;
+		sendMsg.destination = fileOp->senderQueue;
+
+		// The message to send depends on the destination! In retrospect it would have been better
+		// if the messages were grouped by the sender rather than the receiver, so this next test was not necessary:
+		// In practise, at the time of writing, image fiels are written from image_task.
+		// There is a CLI-commands command but (probably) not used.
+
+		if (sendMsg.destination == xIfTaskQueue) {
+			sendMsg.message.msg_event = APP_MSG_IFTASK_DISK_WRITE_COMPLETE;
+		} else if (sendMsg.destination == xImageTaskQueue) {
+			sendMsg.message.msg_event = APP_MSG_IMAGETASK_DISK_WRITE_COMPLETE;
+		} else {
+			// assumed to be CLI task.
+			sendMsg.message.msg_event = APP_MSG_CLITASK_DISK_WRITE_COMPLETE;
+		}
+
+		break;
+
+	case APP_MSG_FATFSTASK_WRITE_FILE:
+		// TODO - re-write this!
+		// someone wants a file written. Structure including file name a buffer is passed in data
+		//fatFs_task_state = APP_FATFS_STATE_BUSY;
 		xStartTime = xTaskGetTickCount();
 
 		if (fileOp->senderQueue == xImageTaskQueue) {
 			// writes image
-			res = fileWriteImage(fileOp, &dirManager);
+			res = fileWriteImage(fileOp, NULL, &dirManager);
 		} else {
 			// writes file
 			res = fileWrite(fileOp);
 		}
 
-		xprintf("File write took %dms\n", app_getElapsedMs(xStartTime));
-
-		fatFs_task_state = APP_FATFS_STATE_IDLE;
+		xprintf("File write took %dms\n", app_getElapsedMs(xStartTime));\
 
 		// Inform the if task that the disk operation is complete
 		sendMsg.message.msg_data = (uint32_t)res;
 		sendMsg.destination = fileOp->senderQueue;
+
 		// The message to send depends on the destination! In retrospect it would have been better
 		// if the messages were grouped by the sender rather than the receiver, so this next test was not necessary:
+		// In practise, at the time of writing, image fiels are written from image_task.
+		// There is a CLI-commands command but (probably) not used.
+
 		if (sendMsg.destination == xIfTaskQueue) {
 			sendMsg.message.msg_event = APP_MSG_IFTASK_DISK_WRITE_COMPLETE;
 		} else if (sendMsg.destination == xImageTaskQueue) {
@@ -1164,14 +1264,17 @@ static void vFatFsTask(void *pvParameters) {
 						fatfs_getImageSequenceNumber(),
 						(enabled == 1) ? "" : "not ",
 						op_parameter[OP_PARAMETER_LED_BRIGHTNESS_PERCENT]);
-			} else {
+			}
+			else {
 				fatfs_setOperationalParameter(OP_PARAMETER_SEQUENCE_NUMBER, 1);
 				xprintf("'%s' NOT found. (Next image #1)\r\n", STATE_FILE);
 			}
-		} else {
+		}
+		else {
 			// TODO what? Is this an error we must deal with?
 		}
-	} else {
+	}
+	else {
 		// Failure.
 		xprintf("SD card initialisation failed (reason %d)\r\n", res);
 		selfTest_setErrorBits(1 << SELF_TEST_AI_NO_SD_CARD);
@@ -1280,6 +1383,41 @@ static void vFatFsTask(void *pvParameters) {
 			}
 		}
 	} // for(;;)
+}
+
+/********************************** Public Function definitions - fatfs port  ***************************/
+
+/**
+ * Control of SD card chip select...
+ *
+ * Himax notes:
+ * app implement GPIO_Output_Level/GPIO_Pinmux/GPIO_Dir for fatfs\port\mmc_spi\mmc_we2_spi.c ARM_SPI_SS_MASTER_SW
+ *
+ * CGP - could it be that the SSPI_CS_GPIO_Pinmux() sets PB5 to be either a GPIO pin (and "GPIO16" for that matter)
+ * then the other two functions set the pin high or low, and input or output.
+ *
+ * This is used by mmc_we2_spi.c in the fatfs code.
+ */
+void SSPI_CS_GPIO_Pinmux(bool setGpioFn) {
+    if (setGpioFn) {
+        hx_drv_scu_set_PB5_pinmux(SCU_PB5_PINMUX_GPIO16, 0);
+    }
+    else {
+        hx_drv_scu_set_PB5_pinmux(SCU_PB5_PINMUX_SPI_M_CS_1, 0);
+    }
+}
+
+void SSPI_CS_GPIO_Output_Level(bool setLevelHigh) {
+    hx_drv_gpio_set_out_value(GPIO16, (GPIO_OUT_LEVEL_E) setLevelHigh);
+}
+
+void SSPI_CS_GPIO_Dir(bool setDirOut) {
+    if (setDirOut) {
+        hx_drv_gpio_set_output(GPIO16, GPIO_OUT_HIGH);
+    }
+    else {
+        hx_drv_gpio_set_input(GPIO16);
+    }
 }
 
 /********************************** Public Functions  *************************************/
@@ -1399,7 +1537,8 @@ void fatfs_setOperationalParameter(OP_PARAMETERS_E parameter, int16_t value) {
 
 	if ((parameter >= 0) && (parameter < OP_PARAMETER_NUM_ENTRIES)) {
 		op_parameter[parameter] = value;
-	} else {
+	}
+	else {
 		// error
 	}
 }
@@ -1411,7 +1550,8 @@ void fatfs_incrementOperationalParameter(OP_PARAMETERS_E parameter) {
 	if ((parameter >= 0) && (parameter < OP_PARAMETER_NUM_ENTRIES)) {
 		// TODO - do we need to prevent roll-over?
 		op_parameter[parameter]++;
-	} else {
+	}
+	else {
 		// error
 	}
 }

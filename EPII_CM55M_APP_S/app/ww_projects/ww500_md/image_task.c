@@ -130,6 +130,9 @@
 #define STROBE_CONTROLS_FLASH
 #endif 	// USE_HM0360
 
+// If uncommented, the image file is save as .bmp instead of .jpeg
+//#define SAVEBMP
+
 // If uncommented brightness will increment after each image of an image sequence
 //#define INVESTIGATE_FLASH_BRIGHTNESS
 // percentage increment for each image
@@ -137,7 +140,7 @@
 
 // If uncommented the tone mapping regsiters will change after each image of an image sequence
 // Since there are 4 options, choose to take 4 images
-#define INVESTIGATE_TONE_MAPPING
+//#define INVESTIGATE_TONE_MAPPING
 
 // TODO sort out how to allocate priorities
 #define image_task_PRIORITY (configMAX_PRIORITIES - 2)
@@ -222,14 +225,6 @@ typedef enum
     SRATIONAL = 10
 } ExifDataType;
 
-// If using the code that has a duplicate buffer then define SECOND_JPEG_BUFSIZE
-// Must be a multiple of 32 bytes.
-// #define JPEG_BUFSIZE  76800 //640*480/4
-// TODO: Surely I must make SECOND_JPEG_BUFSIZE greater than JPEG_BUFSIZE?
-// Better - shift data within the original JPEG buffer!
-//#define SECOND_JPEG_BUFSIZE 20000 // jpeg files seem to be about 9k-20k - but after iincreasing qulaity c. 22k
-#define SECOND_JPEG_BUFSIZE 32000
-
 /*************************************** Local Function Declarations *****************************/
 
 // This is the FreeRTOS task
@@ -259,14 +254,21 @@ static void sleepWhenPossible(void);
 static void captureSequenceComplete(void);
 
 static void changeEnableState(bool setEnabled);
+
 static void processNNOutput(int8_t * outCategories, uint8_t classCount);
 
-static void prepareImageForDisk(int8_t * outCategories, uint8_t classCount, bool jpeg);
+static void prepareJpegFile(int8_t * outCategories, uint8_t classCount, fileBufferInfo_t * extraBlock);
+
+#ifdef SAVEBMP
+#define BMP_GRAY8_HEADER_SIZE 1078
+static void prepareBmpFile(fileBufferInfo_t * extraBlock);
+static uint32_t bmp_create_gray8_header(uint8_t *buf,  uint32_t width, uint32_t height);
+#endif // SAVEBMP
 
 /*************************************** Local EXIF-related Declarations *****************************/
 
 // Insert the EXIF metadata into the jpeg buffer
-static uint16_t insertExif(uint32_t jpeg_sz, uint32_t jpeg_addr, int8_t *outCategories, uint8_t categoriesCount);
+//static uint16_t insertExif(uint32_t jpeg_sz, uint32_t jpeg_addr, int8_t *outCategories, uint8_t categoriesCount);
 
 static void write16_le(uint8_t *ptr, uint16_t val);
 static void write32_le(uint8_t *ptr, uint32_t val);
@@ -290,10 +292,6 @@ extern SemaphoreHandle_t xSDInitDoneSemaphore;
 extern Barrier_t startupBarrier; // Object that calls a function when all tasks are ready
 
 /*************************************** Local variables *******************************************/
-
-#ifdef SECOND_JPEG_BUFSIZE
-__attribute__((section(".bss.NoInit"))) uint8_t jpeg_exif_buf[SECOND_JPEG_BUFSIZE] __ALIGNED(32);
-#endif // SECOND_JPEG_BUFSIZE
 
 static APP_WAKE_REASON_E woken;
 
@@ -428,6 +426,7 @@ static void incrementToneMapping(void) {
 		changingTone = TONE_MAPPING_NUMBER - 1;
 	}
 }
+
 #endif // INVESTIGATE_TONE_MAPPING
 
 /**
@@ -689,6 +688,10 @@ static APP_MSG_DEST_T handleEventForInit(APP_MSG_T img_recv_msg) {
 #ifdef INVESTIGATE_TONE_MAPPING
             xprintf("Tone mapping values change after each image.\n");
             incrementToneMapping();
+#else
+	// This is the default which seems to give good results.
+    // TODO when finished testing this could be moved to an HM0360 init() call
+	cisdp_sensor_set_tone(TONE_MAPPING_LOW);
 #endif // INVESTIGATE_TONE_MAPPING
 
             XP_WHITE;
@@ -787,6 +790,8 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
     APP_MSG_DEST_T send_msg;
     APP_MSG_EVENT_E event;
 
+    static fileBufferInfo_t extraBlock;	// for writing multiple blocks to the same file
+
     TfLiteStatus ret;
     bool setEnabled;
     bool skip_nn = false;
@@ -827,10 +832,6 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
 #ifdef INVESTIGATE_FLASH_BRIGHTNESS
         incrementBrightness();
 #endif // INVESTIGATE_FLASH_BRIGHTNESS
-
-#ifdef INVESTIGATE_TONE_MAPPING
-        incrementToneMapping();
-#endif // INVESTIGATE_TONE_MAPPING
 
         ledFlashDisable(); // finished with the LED flash. Turn it off.
 
@@ -888,37 +889,88 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
 
         // and send to BLE
         sendMsgToMaster(msgToMaster);
-#endif
 
-#if 0
-		// This is a test of reading and printing the MD registers
+#if 1
+		// This is a test of reading and printing the 32 MD registers
 
 		uint8_t roiOut[ROIOUTENTRIES];
-		hm0360_md_getMDOutput(roiOut, ROIOUTENTRIES);
+		uint8_t mdBlocks;
+		uint16_t offset = 0;
 
-		XP_LT_GREY;
-		xprintf("Motion detected???:\n");
-        for (uint8_t i=0; i < ROIOUTENTRIES; i++) {
-        	xprintf("%02x ", roiOut[i]);
-        	if ((i % 8) == 7) {
-        		// space after 8 bytes
-        		xprintf("\n");
-        	}
-        }
-		XP_WHITE;
+		mdBlocks = hm0360_md_getMDOutput(roiOut, ROIOUTENTRIES);
+
+		offset += snprintf(msgToMaster + offset,
+		                   MSGTOMASTERLEN - offset,
+		                   "HM0360 motion in %d blocks:\n",
+		                   mdBlocks);
+
+		for (uint8_t i = 0; i < ROIOUTENTRIES; i++) {
+		    offset += snprintf(msgToMaster + offset,
+		                       MSGTOMASTERLEN - offset,
+		                       "%02x ",
+		                       roiOut[i]);
+
+		    if (offset >= MSGTOMASTERLEN)
+		        break;
+		}
+
+        XP_LT_GREY;
+        // print to console
+        xprintf("%s\n", msgToMaster);
+
+        // and send to BLE
+        sendMsgToMaster(msgToMaster);
+
+        // Now re-use msgToMaster to print (locally) a 16x16 grid
+        // We will do this in two chunks as MSGTOMASTERLEN is too small for all characters
+        hm0360_md_printGrid(roiOut, 128, msgToMaster, MSGTOMASTERLEN);
+        xprintf("%s", msgToMaster);
+        hm0360_md_printGrid(&roiOut[15], 128, msgToMaster, MSGTOMASTERLEN);
+        xprintf("%s\n", msgToMaster);
+
+        XP_WHITE;
+
+//		XP_LT_GREY;
+//		xprintf("HM0360 motion in %d: \n", mdBlocks);
+//        for (uint8_t i=0; i < ROIOUTENTRIES; i++) {
+//        	xprintf("%02x ", roiOut[i]);
+//        	if ((i % 8) == 7) {
+//        		// newline after 8 bytes
+//        		xprintf("\n");
+//        	}
+//        	//
+//        }
+//		XP_WHITE;
+//
 #endif // 0
+#endif // #if defined(USE_HM0360) || defined(USE_HM0360_MD)
 
 #ifdef SAVEBMP
-		prepareImageForDisk(NULL, 0, false);
+		// alternate between JPG and BMP files, to tell the difference
+		if ((g_cur_jpegenc_frame % 2) == 0) {
+#ifdef INVESTIGATE_TONE_MAPPING
+			incrementToneMapping();
+#endif // INVESTIGATE_TONE_MAPPING
+			prepareBmpFile(&extraBlock);
+		}
+		else {
+			prepareJpegFile(outCategories, classCount, &extraBlock);
+		}
 #else
-		prepareImageForDisk(outCategories, classCount, true);
+#ifdef INVESTIGATE_TONE_MAPPING
+        incrementToneMapping();
+#endif // INVESTIGATE_TONE_MAPPING
+		prepareJpegFile(outCategories, classCount, &extraBlock);
 #endif // SAVEBMP
 
 		// Proceed to write the jpeg file, even if there is no SD card
 		// since the fatfs_task will handle that.
 		send_msg.destination = xFatTaskQueue;
-		send_msg.message.msg_event = APP_MSG_FATFSTASK_WRITE_FILE;
+		send_msg.message.msg_event = APP_MSG_FATFSTASK_WRITE_IMAGE;
 		send_msg.message.msg_data = (uint32_t)&fileOp;
+
+		// extraBlock.length & extraBlock.buffer has been initialised by prepareImageForDisk()
+		send_msg.message.msg_parameter = (uint32_t)&extraBlock;
 
         // Wait in NN_PROCESSING state till the disk write completes - expect APP_MSG_IMAGETASK_DISK_WRITE_COMPLETE
         image_task_state = APP_IMAGE_TASK_STATE_NN_PROCESSING;
@@ -1330,7 +1382,6 @@ static void changeEnableState(bool setEnabled) {
     }
 }
 
-
 /********************************** FreeRTOS Task  *************************************/
 
 /**
@@ -1431,29 +1482,6 @@ static void vImageTask(void *pvParameters) {
 
 #endif // USE_HM0360_MD
 #endif // USE_HM0360
-
-#if 0
-	// This is a test of reading and printing the MD registers
-#if defined(USE_HM0360) || defined(USE_HM0360_MD)
-
-	uint8_t roiOut[ROIOUTENTRIES];
-
-	// This is a test to see if we can read MD regs
-	hm0360_md_getMDOutput(roiOut, ROIOUTENTRIES);
-
-	XP_LT_GREY;
-	xprintf("Motion detected at init?:\n");
-    for (uint8_t i=0; i < ROIOUTENTRIES; i++) {
-    	xprintf("%02x ", roiOut[i]);
-    	if ((i % 8) == 7) {
-    		// space after 8 bytes
-    		xprintf("\n");
-    	}
-    }
-	XP_WHITE;
-
-#endif // USE_HM0360_MD
-#endif // 0
 
 	// Initialise NN but only of the camera system is enabled
 	startTime = xTaskGetTickCount();
@@ -1692,6 +1720,7 @@ static bool configure_image_sensor(CAMERA_CONFIG_E operation) {
         	processedOK = false;
         }
         else  {
+        	cisdp_sensor_set_md_sensitivity(fatfs_getOperationalParameter(OP_PARAMETER_MD_SENSITIVITY));
         	// Initialise extra registers from file
         	cis_file_process(CAMERA_EXTRA_FILE);
 
@@ -1716,6 +1745,7 @@ static bool configure_image_sensor(CAMERA_CONFIG_E operation) {
             processedOK = false;
         }
         else  {
+        	cisdp_sensor_set_md_sensitivity(fatfs_getOperationalParameter(OP_PARAMETER_MD_SENSITIVITY));
             // if wdma variable is zero when not init yet, then this step is a must be to retrieve wdma address
             //  Datapath events give callbacks to os_app_dplib_cb() in dp_task
             if (cisdp_dp_init(true, SENSORDPLIB_PATH_INT_INP_HW5X5_JPEG, os_app_dplib_cb, g_jpg_ratio, APP_DP_RES_YUV640x480_INP_SUBSAMPLE_1X) < 0)  {
@@ -1867,75 +1897,60 @@ static void sleepWhenPossible(void) {
 }
 
 /**
- * Prepares to write the image to the disk.
+ * Prepares to write a JPEG file to the disk.
  *
  * This code does not actually perform the write: it sets up buffers and the fileOp object
  * which is passed to the fatfs_task later.
  *
+ * New image write scheme: prepare two buffers:
+ *  - EXIF data (plus the JPEG file's initial SOE 0xFFd8) is provided in fileOp.buffer and fileOp.length
+ *  - actual JPEG data (excluding the initial 0xFFd8) is provided in extraBuffer.buffer and extraBuffer.length
+ * Then the fatfs ? function writes the 2 buffers one after the other.
+ *
  * @param outCategories - array of NN output values
  * @param classCount - number of entries in outCategories
- * @param jpeg - true if we are saving a .JPG file - else .BMP
+ * @param extraBlock - structure for the second buffer
  */
-static void prepareImageForDisk(int8_t * outCategories, uint8_t classCount, bool jpeg) {
-	uint16_t exif_len = 0;
-	uint32_t data_addr;
-	uint32_t data_sz;
-	uint32_t buffer_to_write;
-	uint32_t size_to_write;
+static void prepareJpegFile(int8_t * outCategories, uint8_t classCount, fileBufferInfo_t * extraBlock) {
+	uint32_t exifLength = 0;
+	uint32_t jpegBuffer;
+	uint32_t jpegLength;
 
-	if (jpeg) {
-		// Take semaphore FIRST before modifying jpeg_exif_buf
-		// This prevents jpeg_exif_buf from being overwritten before previous write completes
-		xSemaphoreTake(xJpegBufferSemaphore, portMAX_DELAY);
+	// Take semaphore FIRST before modifying jpeg_exif_buf
+	// This prevents jpeg_exif_buf from being overwritten before previous write completes
+	xSemaphoreTake(xJpegBufferSemaphore, portMAX_DELAY);
 
-		cisdp_get_jpginfo(&data_sz, &data_addr); // Gets JPEG buffer from hardware encoder
-		// Clearing cache between each capture
-		SCB_InvalidateDCache_by_Addr((void *)data_addr, data_sz);
+	cisdp_get_jpginfo(&jpegLength, &jpegBuffer);
 
-		// JPEF buffer exists but this will insert EXIF data and increase jpeg_sz
-		exif_len = insertExif(data_sz, data_addr, outCategories, classCount);
+	// Gets JPEG buffer from hardware encoder
+	// Clearing cache between each capture
+	SCB_InvalidateDCache_by_Addr((void *)jpegBuffer, jpegLength);
+
+	// ignore the first 2 bytes (JPEG SOE 0xffd8) as these will be added by build_exif_segment()
+	extraBlock->buffer = ((uint8_t *)jpegBuffer) + 2;
+	extraBlock->length = jpegLength - 2;
+
+	// Build EXIF segment - placed in exif_buffer[] and size in exif_len
+	exifLength = build_exif_segment(outCategories, classCount);
+
+	fileOp.buffer = (uint8_t *)exif_buffer;
+	fileOp.length = exifLength;
+
+	if (exifLength > 0)  {
+		//SCB_CleanDCache_by_Addr((void *)exif_buffer, exif_len);
 	}
 	else {
-		// prepare a buffer here with the BMP data?
-		data_addr = app_get_raw_addr();
-		data_sz = app_get_raw_sz();
+		xprintf("EXIF insertion failed, using original JPEG buffer\n");
+		// TODO handle this!!
 	}
-
-	// Determine which buffer to use based on whether EXIF insertion succeeded
-	if (exif_len > 0)  {
-		// EXIF insertion succeeded - use combined buffer
-		buffer_to_write = (uint32_t)jpeg_exif_buf;
-		size_to_write = data_sz + exif_len;
-
-		SCB_CleanDCache_by_Addr((void *)jpeg_exif_buf, size_to_write);
-	}
-	else {
-		if (jpeg) {
-			// EXIF insertion failed - use original JPEG buffer
-			xprintf("EXIF insertion failed, using original JPEG buffer\n");
-		}
-
-		buffer_to_write = data_addr;
-		size_to_write = data_sz;
-
-		// Flush the original JPEG buffer cache
-		SCB_CleanDCache_by_Addr((void *)data_addr, size_to_write);
-	}
-
 #if 0
 	// Check by printing some of the buffer that includes the EXIF
-	//uint16_t bytesToPrint = exif_len + 8;
-	uint16_t bytesToPrint = 16;
+	uint16_t bytesToPrint = exifLength + 8;
 
 	XP_LT_GREY;
-	xprintf("JPEG&EXIF buffer (%d bytes) begins:\n", size_to_write);
-	for (int i = 0; i < bytesToPrint; i++) {
-		xprintf("%02X ", ((uint8_t*)buffer_to_write)[i]);
-		if (i%16 == 15) {
-			xprintf("\n");
-		}
-	}
-	xprintf("\n");
+	xprintf("JPEG & EXIF buffer (%d bytes) begins:\n", exifLength + jpegLength);
+	printf_x_printBuffer((uint8_t *) exif_buffer, bytesToPrint);
+
 	XP_WHITE;
 #endif
 
@@ -1944,164 +1959,169 @@ static void prepareImageForDisk(int8_t * outCategories, uint8_t classCount, bool
 	// Must use 8.3 file name: upper case alphanumeric
 	if (woken == APP_WAKE_REASON_MD)  {
 		// Motion has woken us
-		snprintf(g_imageFileName, IMAGEFILENAMELEN, "MD%06d.%s", g_imageSeqNum, jpeg?"JPG":"BMP");
+		snprintf(g_imageFileName, IMAGEFILENAMELEN, "MD%06d.JPG", g_imageSeqNum);
 	}
 	else   {
 		// Must be a time lapse event
-		snprintf(g_imageFileName, IMAGEFILENAMELEN, "TL%06d.%s", g_imageSeqNum, jpeg?"JPG":"BMP");
+		snprintf(g_imageFileName, IMAGEFILENAMELEN, "TL%06d.JPG", g_imageSeqNum);
 	}
 
 	fileOp.fileName = g_imageFileName;	// a global
-	fileOp.buffer = (uint8_t *)buffer_to_write;
-	fileOp.length = size_to_write;
 	fileOp.senderQueue = xImageTaskQueue;
 	fileOp.closeWhenDone = true;
 
 	dbg_printf(DBG_LESS_INFO, "Writing %d bytes (%d + %d) to '%s' from 0x%08x\n",
-			size_to_write, data_sz, exif_len, fileOp.fileName, buffer_to_write);
+			(jpegLength + exifLength), jpegLength, exifLength, fileOp.fileName, jpegBuffer);
 
 	// Save the file name as the most recent image
 	snprintf(lastImageFileName, IMAGEFILENAMELEN, "%s", fileOp.fileName);
 }
 
-/*************************************** Local EXIF-related Definitions *****************************/
-
-// TODO here are some notes that need to be placed in the right place
+#ifdef SAVEBMP
 
 /**
- * Insert EXIF metadata into the buffer that contains the rest of the JPEG data
+ * Prepares to write a BMP file to the disk.
  *
- * The objective is to find the appropriate place in the jpeg file to insert the EXIF,
- * then insert the EXIF there, having shifted the second part of the buffer to make space
+ * This code does not actually perform the write: it sets up buffers and the fileOp object
+ * which is passed to the fatfs_task later.
  *
- * EXIF data is probably:
- * 	- UTC time, obtained with exif_utc_get_rtc_as_exif_string()
- * 	- GPS location, obtained with exif_gps_generate_byte_array()
- * 	- Neural network output, passed as parameters to this function
- * 	- Other EXIF fields we have decided on
+ * New image write scheme: prepare two buffers:
+ *  - BMP header is provided in fileOp.buffer and fileOp.length
+ *  - actual bitmap is provided in extraBuffer.buffer and extraBuffer.length
+ * Then the fatfs ? function writes the 2 buffers one after the other.
  *
- * NOTE: the jpeg_enc_addr pointer is to an array of 32-bit words.
- * NOTE: It is not clear to me whether the JPEG buffer is big enough to allow insertion of the data.
- * There is a definition in cispd_densor:
- * 		#define JPEG_BUFSIZE  76800 //640*480/4
- * It is not clear from a qucik look at the code whether there is more than one jpeg image using this buffer.
- * In any event, it is important not to overrun that buffer.
- *
- * It would be safer to make a new buffer e.g. with malloc (or the FreeRTOS version) and copy the jpeg
- * data into that. But maybe that is not necessary. Perhaps easiest initially to try to insert the EXIF
- * in place, and only use a different approach if that fails.
- *
- * There is another approach entirely, which is not to insert the EXIT data, but to write the JPEG file
- * in 3 chunks:
- * 		1 The JPEG data up to the insertion point
- * 		2 The EXIF data
- * 		3 The JPEG data after the insertion point
- *
- * A different approach again would be write the JPEG file to SD card without inserting the EXIF,
- * then write the EXIF data to a separate file (same file name but with the extension .exif)
- * then post-process the two files off-line.
- *
- * Regardless of the approach, a number of functions will be required, something like this:
- *
- * unit32_t * exifInsertionPoint((uint32_t *jpeg_enc_filesize, uint32_t *jpeg_enc_addr);
- * void createExit(uint32_t exifBuffer, uint16_t exitBufferSize,  uint8_t * outCategories, uint16_t categoriesCount);
- *
- * IMPORTANT to figure out whether we are manipulating 8, 16 or 32 bit arrays.
- * Uncertainty here could be causing the trouble Tobyn has reported.
- *
- * See here for an investigation into exiftool:
- * 	https://chatgpt.com/share/68040174-01fc-8005-a30f-23fc363b98ec
- *
- * @param jpeg_enc_filesize - size of the jpeg buffer. Return the size of the expanded buffer, including the EXIF
- * @param jpeg_enc_addr - pointer to the buffer containing the jpeg data
- * @param outCategories - an array of integers, one for each of the neural network output categories
- * @param categoriesCount - size of that array
+ * @param extraBlock - structure for the second buffer
  */
-// Copy of what is in cisdp_sensor
+static void prepareBmpFile(fileBufferInfo_t * extraBlock) {
+	uint32_t bitMapLength = 0;
+	uint32_t jpegBuffer;
+	uint32_t headerLength;
 
-static uint16_t insertExif(uint32_t jpeg_sz, uint32_t jpeg_addr,
-                           int8_t *outCategories, uint8_t categoriesCount) {
-    uint16_t exif_len = 0;
-    uint8_t *jpeg_buf;
+	// Take semaphore FIRST before modifying jpeg_exif_buf
+	// This prevents jpeg_exif_buf from being overwritten before previous write completes
+	xSemaphoreTake(xJpegBufferSemaphore, portMAX_DELAY);
 
-    jpeg_buf = (uint8_t *)jpeg_addr;
+	// Only to find the address of the JPEG buffer which we will reuse for the BMP header
+	cisdp_get_jpginfo(&headerLength, &jpegBuffer);
 
-    // Sanity check: must start with FFD8 and then FFE0
-    if (jpeg_buf[0] != 0xFF || jpeg_buf[1] != 0xD8 || jpeg_buf[2] != 0xFF || jpeg_buf[3] != 0xE0) {
-        // Handle error: unexpected JPEG structure
-        return 0;
-    }
+	// Gets JPEG buffer from hardware encoder
+	// Clearing cache between each capture - almost certainly not required?
+	//SCB_InvalidateDCache_by_Addr((void *)jpegBuffer, jpegLength);
 
-    // Build EXIF segment - placed in exif_buffer[] and size in exif_len
-    exif_len = build_exif_segment(outCategories, categoriesCount);
+	// prepare a buffer here with the BMP data.
+	// We will re-use the JPEG buffer to be the bmp header buffer
+	uint8_t *bmp_header = (uint8_t *)jpegBuffer;
 
-    // Check for enough space (depends on your memory layout)
-    if (jpeg_sz + exif_len > SECOND_JPEG_BUFSIZE)  {
-        // TODO Handle error: buffer too small
-    	xprintf("Buffer too small for JPEG\n");
-        return 0;
-    }
+	// headerLength is set to BMP_GRAY8_HEADER_SIZE = 1078
+	headerLength = bmp_create_gray8_header(bmp_header, app_get_raw_width(), app_get_raw_height());
+	// This is the first buffer to write: the .bmp header
+	fileOp.buffer = bmp_header;
+	fileOp.length = headerLength;
 
-#if 0
-	// Check by printing EXIF buffer
-	xprintf("Added %d bytes of EXIF to %d bytes of jpeg\n", exif_len, jpeg_sz);
+	// This is the second buffer to write - the raw data
+	uint8_t *imageBuffer = (uint8_t *)app_get_raw_addr();
+	extraBlock->buffer = imageBuffer;
+	bitMapLength = app_get_raw_height() * app_get_raw_width();
+	extraBlock->length = bitMapLength;
+#if 1
+	// Check by printing some of the buffer that includes the BMP header
+	uint16_t bytesToPrint = 100;
 
-	// Print the buffer - useful for debugging
-	for (int i = 0; i < exif_len; i++) {
-	    xprintf("%02X ", exif_buffer[i]);
-	    if (i%16 == 15) {
-	    	xprintf("\n");
-	    }
-	}
-	xprintf("\n");
+	XP_LT_GREY;
+	xprintf("BMP header buffer (%d bytes) begins:\n", headerLength);
+	printf_x_printBuffer((uint8_t *) jpegBuffer, bytesToPrint);
+
+	XP_WHITE;
 #endif
 
-#ifdef SECOND_JPEG_BUFSIZE
-    jpeg_exif_buf[0] = 0xff; // Add the JPEG marker 0xffd8
-    jpeg_exif_buf[1] = 0xd8;
+	g_imageSeqNum = fatfs_getImageSequenceNumber();
 
-    // Now copy in the EXIF
-    memcpy(&jpeg_exif_buf[2], exif_buffer, exif_len);
-
-    // Finally copy in the original JPEG data (excluding 0xffd8
-    memcpy(&jpeg_exif_buf[exif_len + 2], &jpeg_buf[2], jpeg_sz - 2);
-
-#if 0
-	// Check by printing some of jpeg_exif_buf buffer
-	xprintf("Modified jpeg buffer:\n");
-	for (int i = 0; i < exif_len + 8; i++) {
-	    xprintf("%02X ", jpeg_exif_buf[i]);
-	    if (i%16 == 15) {
-	    	xprintf("\n");
-	    }
+	// Must use 8.3 file name: upper case alphanumeric
+	if (woken == APP_WAKE_REASON_MD)  {
+		// Motion has woken us
+		snprintf(g_imageFileName, IMAGEFILENAMELEN, "MD%06d.BMP", g_imageSeqNum);
 	}
-	xprintf("\n");
-#endif
+	else   {
+		// Must be a time lapse event
+		snprintf(g_imageFileName, IMAGEFILENAMELEN, "TL%06d.BMP", g_imageSeqNum);
+	}
 
-#else
-    // earlier code - try this again
-    // Shift data (move APP0 and onward forward to make room for EXIF)
-    memmove(&jpeg_buf[2] + exif_len, &jpeg_buf[2], jpeg_sz - 2);
-    // memmove((uint8_t *) jpeg_addr + 2 + exif_len, (uint8_t *) jpeg_addr + 2, jpeg_sz - 2);
+	fileOp.fileName = g_imageFileName;	// a global
+	fileOp.senderQueue = xImageTaskQueue;
+	fileOp.closeWhenDone = true;
 
-    // Insert EXIF after SOI (at jpeg_buf[2])
-    // memcpy((uint8_t *) jpeg_addr + 2, exif_buffer, exif_len);
-    memcpy(&jpeg_buf[2], exif_buffer, exif_len);
+	dbg_printf(DBG_LESS_INFO, "Writing %d bytes (%d + %d) to '%s' from 0x%08x\n",
+			(headerLength + bitMapLength), headerLength, bitMapLength, fileOp.fileName, jpegBuffer);
 
-#endif // SECOND_JPEG_BUFSIZE
-
-    return exif_len;
+	// Save the file name as the most recent image
+	snprintf(lastImageFileName, IMAGEFILENAMELEN, "%s", fileOp.fileName);
 }
 
+
+/**
+ * create a bmp header
+ *
+ * @return BMP_GRAY8_HEADER_SIZE
+ */
+uint32_t bmp_create_gray8_header(uint8_t *buf,  uint32_t width, uint32_t height) {
+    uint32_t rowSize;
+    uint32_t imageSize;
+    uint32_t fileSize;
+    uint8_t *p;
+    uint32_t i;
+
+    /* rows must be 4-byte aligned */
+    rowSize = (width + 3) & ~3;
+
+    imageSize = rowSize * height;
+    fileSize  = BMP_GRAY8_HEADER_SIZE + imageSize;
+
+    /* --- BITMAPFILEHEADER --- */
+
+    write16_le(buf + 0, 0x4D42);                 /* "BM" */
+    write32_le(buf + 2, fileSize);
+    write16_le(buf + 6, 0);
+    write16_le(buf + 8, 0);
+    write32_le(buf +10, BMP_GRAY8_HEADER_SIZE);  /* pixel data offset */
+
+    /* --- BITMAPINFOHEADER --- */
+
+    write32_le(buf +14, 40);                     /* header size */
+    write32_le(buf +18, width);
+    write32_le(buf +22, (uint32_t)(-(int32_t)height));  /* top-down bitmap */
+    write16_le(buf +26, 1);                      /* planes */
+    write16_le(buf +28, 8);                      /* 8-bit pixels */
+    write32_le(buf +30, 0);                      /* BI_RGB (no compression) */
+    write32_le(buf +34, imageSize);
+    write32_le(buf +38, 2835);                   /* 72 DPI */
+    write32_le(buf +42, 2835);
+    write32_le(buf +46, 256);                    /* palette entries */
+    write32_le(buf +50, 256);
+
+    /* --- grayscale palette (256 × 4 bytes) --- */
+
+    p = buf + 54;
+
+    for (i = 0; i < 256; i++)  {
+        p[i*4 + 0] = (uint8_t)i;   /* blue  */
+        p[i*4 + 1] = (uint8_t)i;   /* green */
+        p[i*4 + 2] = (uint8_t)i;   /* red   */
+        p[i*4 + 3] = 0;
+    }
+
+    return BMP_GRAY8_HEADER_SIZE;
+}
+#endif // SAVEBMP
+
+/*************************************** Local EXIF-related Definitions *****************************/
+
 // Helper to write 2- and 4-byte little endian values
-static void write16_le(uint8_t *ptr, uint16_t val)
-{
+static void write16_le(uint8_t *ptr, uint16_t val) {
     ptr[0] = val & 0xFF;
     ptr[1] = val >> 8;
 }
 
-static void write32_le(uint8_t *ptr, uint32_t val)
-{
+static void write32_le(uint8_t *ptr, uint32_t val) {
     ptr[0] = val & 0xFF;
     ptr[1] = (val >> 8) & 0xFF;
     ptr[2] = (val >> 16) & 0xFF;
@@ -2109,8 +2129,7 @@ static void write32_le(uint8_t *ptr, uint32_t val)
 }
 
 // Helper to write 2- and 4-byte big endian values
-static void write16_be(uint8_t *ptr, uint16_t val)
-{
+static void write16_be(uint8_t *ptr, uint16_t val) {
     ptr[1] = val & 0xFF;
     ptr[0] = val >> 8;
 }
@@ -2126,10 +2145,9 @@ static void write32_be(uint8_t *ptr, uint32_t val) {
 
 // Add an IFD entry
 static void addIFD(ExifTagID tagID, uint8_t *entry_ptr, void *tagData) {
-
 	//xprintf("   DEBUG: adding EXIF tag 0x%04x\n", tagID);
-    switch (tagID)
-    {
+
+	switch (tagID) {
     case TAG_X_RESOLUTION:
     case TAG_Y_RESOLUTION:
     {
@@ -2353,7 +2371,7 @@ static void create_gps_ifd(uint8_t *gps_ifd_start) {
 /**
  * Builds a valid EXIF data structure, including APP1 tag
  *
- * This particular example has hard-coded tags to add, including the X&Y resolutions.
+ * This particular example has soem hard-coded tags to add, including the X&Y resolutions.
  *
  */
 static uint16_t build_exif_segment(int8_t *outCategories, uint8_t categoriesCount) {
@@ -2459,7 +2477,11 @@ static uint16_t build_exif_segment(int8_t *outCategories, uint8_t categoriesCoun
 
     uint8_t *p = exif_buffer;
 
-    // Add APP1 marker
+    // Add SOE marker 0xffd8
+    *p++ = 0xFF;
+    *p++ = 0xD8;
+
+    // Add APP1 marker 0xffe1
     *p++ = 0xFF;
     *p++ = 0xE1;
 
@@ -2564,8 +2586,8 @@ static uint16_t build_exif_segment(int8_t *outCategories, uint8_t categoriesCoun
     	    offset += written;
     	} // for(;;)
 
-        xprintf("EXIF: Adding UserComment (%d classes, %d bytes): '%s'\n",
-        		categoriesCount, written, user_comment);
+//        xprintf("EXIF: Adding UserComment (%d classes, %d bytes): '%s'\n",
+//        		categoriesCount, written, user_comment);
         addIFD(TAG_USER_COMMENT, ifd_start + (entry++ * 12), user_comment);
     }
 
@@ -2573,7 +2595,7 @@ static uint16_t build_exif_segment(int8_t *outCategories, uint8_t categoriesCoun
 
 	// Add deployment ID if present (not all zeros)
 	if (has_deployment_id) {
-		xprintf("EXIF: Adding DeploymentID: %s\n", deployment_id);
+//		xprintf("EXIF: Adding DeploymentID: %s\n", deployment_id);
 		addIFD(TAG_DEPLOYMENT_ID, ifd_start + (entry++ * 12), deployment_id);
 	}
 

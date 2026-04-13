@@ -1821,9 +1821,9 @@ int cv_init(bool security_enable, bool privilege_enable, uint16_t project_id, ui
 		return -1;
 	}
 #ifdef TFLM_2412
-    xprintf("Initialising NN with 2412/ETHOS-U 2411 library. Arena size %ul\n", tensor_arena_size);
+    xprintf("Initialising NN with 2412/ETHOS-U 2411 library. Arena size %u\n", tensor_arena_size);
 #else
-    xprintf("Initialising NN 2209/ETHOS-U 2205 library. Arena size %ul\n", tensor_arena_size);
+    xprintf("Initialising NN 2209/ETHOS-U 2205 library. Arena size %u\n", tensor_arena_size);
 #endif // TFLM_2412
 
 	XP_WHITE;

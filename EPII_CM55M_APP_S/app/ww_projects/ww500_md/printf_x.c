@@ -117,6 +117,12 @@ void printf_x_test(void) {
 
 /**
  * Utility to print the contents of a buffer
+ *
+ * Print 16 bytes per line with a space after 8
+ * Addres a buffer address before the bytes and the ASCII version afterwards.
+ *
+ * @param buffer - pointer to buffer
+ * @param - number of bytes to print
  */
 void printf_x_printBuffer(const void *buff, size_t length) {
 	const uint8_t *src = (const uint8_t *)buff;
@@ -141,7 +147,7 @@ void printf_x_printBuffer(const void *buff, size_t length) {
 		xprintf("%03x: ", (unsigned)addr);
 
 		for (uint8_t i = 0; i < IN_LINE_PRINT_CNT; i++) {
-			if (i == 8) {
+			if ((i<<2) == IN_LINE_PRINT_CNT) {
 				xprintf(" ");
 			}
 

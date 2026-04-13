@@ -209,7 +209,8 @@ uint16_t op_parameter[OP_PARAMETER_NUM_ENTRIES] = {
 	PROJECT_VER,	   // 15 OP_PARAMETER_MODEL_VERSION
 	MODEL_THRESHOLD,   // 16 OP_PARAMETER_MODEL_THRESHOLD default
 	1,      	   		// 17 Motion Detection Sensitivity: 0=off, 1=low, 2=medium, 3=high
-	0, 0,    	   		// 18-19 Reserved for future use
+	0,	    	   		// 18 Test Mode Bits - one bit to enable each test function
+	0,	    	   		// 19 Reserved for future use
 	0, 0, 0, 0, 0, 0, 0, 0  // 20-27 Deployment ID chunks
 };
 
@@ -528,11 +529,17 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 	case APP_MSG_FATFSTASK_WRITE_IMAGE:
 		// someone wants a file written. Structure including file name a buffer is passed in data
 
-		xStartTime = xTaskGetTickCount();
+		if (fileOp->fileName == NULL) {
+			// Skip the actual file write operation, but send an OK response.
+			// This allows the calling code to say "don't really save a file" but all the other code can stay unchnaged
+			res = FR_OK;
+		}
+		else {
+			xStartTime = xTaskGetTickCount();
 
-		res = fileWriteImage(fileOp, extraBlock, &dirManager);
-
-		xprintf("File write took %dms\n", app_getElapsedMs(xStartTime));\
+			res = fileWriteImage(fileOp, extraBlock, &dirManager);
+			xprintf("File write took %dms\n", app_getElapsedMs(xStartTime));
+		}
 
 		// Inform the if task that the disk operation is complete
 		sendMsg.message.msg_data = (uint32_t)res;
@@ -545,9 +552,11 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 
 		if (sendMsg.destination == xIfTaskQueue) {
 			sendMsg.message.msg_event = APP_MSG_IFTASK_DISK_WRITE_COMPLETE;
-		} else if (sendMsg.destination == xImageTaskQueue) {
+		}
+		else if (sendMsg.destination == xImageTaskQueue) {
 			sendMsg.message.msg_event = APP_MSG_IMAGETASK_DISK_WRITE_COMPLETE;
-		} else {
+		}
+		else {
 			// assumed to be CLI task.
 			sendMsg.message.msg_event = APP_MSG_CLITASK_DISK_WRITE_COMPLETE;
 		}
@@ -568,7 +577,7 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 			res = fileWrite(fileOp);
 		}
 
-		xprintf("File write took %dms\n", app_getElapsedMs(xStartTime));\
+		xprintf("File write took %dms\n", app_getElapsedMs(xStartTime));
 
 		// Inform the if task that the disk operation is complete
 		sendMsg.message.msg_data = (uint32_t)res;

@@ -131,16 +131,14 @@
 #endif 	// USE_HM0360
 
 // If uncommented, the image file is save as .bmp instead of .jpeg
-//#define SAVEBMP
+#define INVESTIGATE_BMP
 
 // If uncommented brightness will increment after each image of an image sequence
-//#define INVESTIGATE_FLASH_BRIGHTNESS
-// percentage increment for each image
-#define FLASH_BRIGHTNESS_INCREMENT 18
+#define INVESTIGATE_FLASH_BRIGHTNESS
 
-// If uncommented the tone mapping regsiters will change after each image of an image sequence
+// If uncommented the tone mapping registers will change after each image of an image sequence
 // Since there are 4 options, choose to take 4 images
-//#define INVESTIGATE_TONE_MAPPING
+#define INVESTIGATE_TONE_MAPPING
 
 // TODO sort out how to allocate priorities
 #define image_task_PRIORITY (configMAX_PRIORITIES - 2)
@@ -259,11 +257,11 @@ static void processNNOutput(int8_t * outCategories, uint8_t classCount);
 
 static void prepareJpegFile(int8_t * outCategories, uint8_t classCount, fileBufferInfo_t * extraBlock);
 
-#ifdef SAVEBMP
+#ifdef INVESTIGATE_BMP
 #define BMP_GRAY8_HEADER_SIZE 1078
 static void prepareBmpFile(fileBufferInfo_t * extraBlock);
 static uint32_t bmp_create_gray8_header(uint8_t *buf,  uint32_t width, uint32_t height);
-#endif // SAVEBMP
+#endif // INVESTIGATE_BMP
 
 /*************************************** Local EXIF-related Declarations *****************************/
 
@@ -324,6 +322,7 @@ uint32_t g_jpg_ratio;
 static uint16_t g_imageSeqNum; // 0 indicates no SD card
 
 // Semaphore to ensure JPEG buffer is not reused until disk write completes
+// TODO - I suspect this actually has no effect...
 static SemaphoreHandle_t xJpegBufferSemaphore = NULL;
 
 // Strings for each of these states. Values must match APP_IMAGE_TASK_STATE_E in image_task.h
@@ -387,14 +386,22 @@ TickType_t startTime;
 /********************************** Local Functions  *************************************/
 
 #ifdef INVESTIGATE_FLASH_BRIGHTNESS
-static uint8_t changingBrightness = 0; // set to 0% at warm boot. (percentage is only approximate and 0 will cause flash be on)
+
+// percentage increment for each image
+// 17 means grab 7 images to test at the full range of brightnesses.
+#define FLASH_BRIGHTNESS_INCREMENT 17
 
 /**
- * Experimental feature that increments flash brightness for each successive image.
+ * Experimental feature that sets the LED flash brightness
+ * and increments flash brightness for successive images.
  *
- * Change after each APP_MSG_IMAGETASK_FRAME_READY event
+ * Initial brightness (after warm boot) is set to 0,
+ * but the percentage is only approximate and 0 will cause flash be on.
+ *
+ * Change brightness after each APP_MSG_IMAGETASK_FRAME_READY event
  */
 static void incrementBrightness(void) {
+	static uint8_t changingBrightness = 0; // set to 0% at warm boot.
 
 	ledFlashBrightness(changingBrightness);
 
@@ -406,17 +413,22 @@ static void incrementBrightness(void) {
 }
 #endif // INVESTIGATE_FLASH_BRIGHTNESS
 
-#ifdef INVESTIGATE_TONE_MAPPING
-static TONE_CONFIG_E changingTone = TONE_MAPPING_DEFAULT; // = 0
+#if defined(INVESTIGATE_TONE_MAPPING) && (defined(USE_HM0360) || defined(USE_HM0360_MD))
+
 /**
  * Experimental feature that increments tone mapping value for each successive image.
- * There are 4 types
+ *
+ * See data sheet section 4.10
+ * There are 4 tone types
  *
  * Call before taking the first image of the sequence then again after each frame ready event
  *
  * Change after each APP_MSG_IMAGETASK_FRAME_READY event
  */
 static void incrementToneMapping(void) {
+	static TONE_CONFIG_E changingTone = TONE_MAPPING_FLAT; // = 0
+
+	xprintf("DEBUG: Tone is now %d\n", changingTone);
 	cisdp_sensor_set_tone(changingTone);
 
 	// increment the tone for next time
@@ -681,19 +693,24 @@ static APP_MSG_DEST_T handleEventForInit(APP_MSG_T img_recv_msg) {
             xprintf("Interval: %dms\n", g_timer_period);
 
 #ifdef INVESTIGATE_FLASH_BRIGHTNESS
-            xprintf("LED Flash brightness increments after each image.\n");
-            incrementBrightness();
+            if (fatfs_getOperationalParameter(OP_PARAMETER_TEST_MODE_BITS) & TEST_BIT_FLASH_BRIGHTNESS) {
+            	xprintf("LED Flash brightness increments after each image.\n");
+            	incrementBrightness(); // This sets the brightness
+            }
 #endif // INVESTIGATE_FLASH_BRIGHTNESS
 
+#if defined(USE_HM0360) || defined(USE_HM0360_MD)
 #ifdef INVESTIGATE_TONE_MAPPING
-            xprintf("Tone mapping values change after each image.\n");
-            incrementToneMapping();
+            if (fatfs_getOperationalParameter(OP_PARAMETER_TEST_MODE_BITS) & TEST_BIT_TONE_MAPPING) {
+            	xprintf("Tone mapping values change after each image.\n");
+            	incrementToneMapping();
+            }
 #else
-	// This is the default which seems to give good results.
-    // TODO when finished testing this could be moved to an HM0360 init() call
-	cisdp_sensor_set_tone(TONE_MAPPING_LOW);
+            // This is the default which seems to give good results.
+            // TODO when finished testing this could be moved to an HM0360 init() call
+            cisdp_sensor_set_tone(TONE_MAPPING_LOW);
 #endif // INVESTIGATE_TONE_MAPPING
-
+#endif // defined(USE_HM0360) || defined(USE_HM0360_MD)
             XP_WHITE;
 
             // Now start the image sensor.
@@ -830,7 +847,9 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
 #endif
 
 #ifdef INVESTIGATE_FLASH_BRIGHTNESS
-        incrementBrightness();
+        if (fatfs_getOperationalParameter(OP_PARAMETER_TEST_MODE_BITS) & TEST_BIT_FLASH_BRIGHTNESS) {
+        	incrementBrightness(); // This sets the LED flash brightness, then increments it for teh next image
+        }
 #endif // INVESTIGATE_FLASH_BRIGHTNESS
 
         ledFlashDisable(); // finished with the LED flash. Turn it off.
@@ -945,32 +964,61 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
 #endif // 0
 #endif // #if defined(USE_HM0360) || defined(USE_HM0360_MD)
 
-#ifdef SAVEBMP
-		// alternate between JPG and BMP files, to tell the difference
-		if ((g_cur_jpegenc_frame % 2) == 0) {
-#ifdef INVESTIGATE_TONE_MAPPING
-			incrementToneMapping();
+        if (fatfs_getOperationalParameter(OP_PARAMETER_TEST_MODE_BITS) & TEST_BIT_SKIP_FILE_CREATION) {
+        	// Don't save to a file. This allows faster streaming of MD and AE data to the app
+        	fileOp.fileName = NULL; // skip file write!
+        	fileOp.senderQueue = xImageTaskQueue; // necessary so the response comes to this task.
+        	xprintf("Skipping file save.\n");
+        }
+        else {
+        	// Normal processing: create the jpg or bmp file
+
+#ifdef INVESTIGATE_BMP
+        	if (fatfs_getOperationalParameter(OP_PARAMETER_TEST_MODE_BITS) & TEST_BIT_SAVE_BMP) {
+        		// alternate between JPG and BMP files, to tell the difference
+        		if ((g_cur_jpegenc_frame % 2) == 0) {
+#if defined(INVESTIGATE_TONE_MAPPING) && (defined(USE_HM0360) || defined(USE_HM0360_MD))
+        			if (fatfs_getOperationalParameter(OP_PARAMETER_TEST_MODE_BITS) & TEST_BIT_TONE_MAPPING) {
+        				incrementToneMapping();
+        			}
 #endif // INVESTIGATE_TONE_MAPPING
-			prepareBmpFile(&extraBlock);
-		}
-		else {
-			prepareJpegFile(outCategories, classCount, &extraBlock);
-		}
+        			prepareBmpFile(&extraBlock);
+        		}
+        		else {
+        			prepareJpegFile(outCategories, classCount, &extraBlock);
+        		}
+        	}
+        	else {
+#if defined(INVESTIGATE_TONE_MAPPING) && (defined(USE_HM0360) || defined(USE_HM0360_MD))
+        		if (fatfs_getOperationalParameter(OP_PARAMETER_TEST_MODE_BITS) & TEST_BIT_TONE_MAPPING) {
+        			incrementToneMapping();
+        		}
+#endif // INVESTIGATE_TONE_MAPPING
+
+        		prepareJpegFile(outCategories, classCount, &extraBlock);
+        	}
+
 #else
-#ifdef INVESTIGATE_TONE_MAPPING
-        incrementToneMapping();
+#if defined(INVESTIGATE_TONE_MAPPING) && (defined(USE_HM0360) || defined(USE_HM0360_MD))
+        	if (fatfs_getOperationalParameter(OP_PARAMETER_TEST_MODE_BITS) & TEST_BIT_TONE_MAPPING) {
+        		incrementToneMapping();
+        	}
 #endif // INVESTIGATE_TONE_MAPPING
-		prepareJpegFile(outCategories, classCount, &extraBlock);
-#endif // SAVEBMP
 
-		// Proceed to write the jpeg file, even if there is no SD card
-		// since the fatfs_task will handle that.
-		send_msg.destination = xFatTaskQueue;
-		send_msg.message.msg_event = APP_MSG_FATFSTASK_WRITE_IMAGE;
-		send_msg.message.msg_data = (uint32_t)&fileOp;
+        	prepareJpegFile(outCategories, classCount, &extraBlock);
+#endif // INVESTIGATE_BMP
 
-		// extraBlock.length & extraBlock.buffer has been initialised by prepareImageForDisk()
-		send_msg.message.msg_parameter = (uint32_t)&extraBlock;
+        }
+
+        // Proceed to write the jpeg file, even if there is no SD card
+        // since the fatfs_task will handle that.
+
+    	send_msg.message.msg_data = (uint32_t)&fileOp;
+        send_msg.destination = xFatTaskQueue;
+        send_msg.message.msg_event = APP_MSG_FATFSTASK_WRITE_IMAGE;
+
+        // extraBlock.length & extraBlock.buffer has been initialised by prepareImageForDisk()
+        send_msg.message.msg_parameter = (uint32_t)&extraBlock;
 
         // Wait in NN_PROCESSING state till the disk write completes - expect APP_MSG_IMAGETASK_DISK_WRITE_COMPLETE
         image_task_state = APP_IMAGE_TASK_STATE_NN_PROCESSING;
@@ -978,10 +1026,10 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
         break;
 
     case APP_MSG_IMAGETASK_CHANGE_ENABLE:
-        // We have received an instruction to enable or disable the NN processing system
-        setEnabled = (bool)img_recv_msg.msg_data;
-        changeEnableState(setEnabled); // 0 means disabled; 1 means enabled
-        break;
+    	// We have received an instruction to enable or disable the NN processing system
+    	setEnabled = (bool)img_recv_msg.msg_data;
+    	changeEnableState(setEnabled); // 0 means disabled; 1 means enabled
+    	break;
 
     case APP_MSG_IMAGETASK_INACTIVITY:
         // I have seen this, followed soon after by the WDT messages.
@@ -1977,7 +2025,7 @@ static void prepareJpegFile(int8_t * outCategories, uint8_t classCount, fileBuff
 	snprintf(lastImageFileName, IMAGEFILENAMELEN, "%s", fileOp.fileName);
 }
 
-#ifdef SAVEBMP
+#ifdef INVESTIGATE_BMP
 
 /**
  * Prepares to write a BMP file to the disk.
@@ -2111,7 +2159,7 @@ uint32_t bmp_create_gray8_header(uint8_t *buf,  uint32_t width, uint32_t height)
 
     return BMP_GRAY8_HEADER_SIZE;
 }
-#endif // SAVEBMP
+#endif // INVESTIGATE_BMP
 
 /*************************************** Local EXIF-related Definitions *****************************/
 

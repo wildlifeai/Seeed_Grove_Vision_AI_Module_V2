@@ -258,7 +258,9 @@ static BaseType_t prvGetSelfTest(char *pcWriteBuffer, size_t xWriteBufferLen, co
 static BaseType_t prvSetOpParam(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 static BaseType_t prvGetOpParam(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 
+#if defined(USE_HM0360) || defined(USE_HM0360_MD)
 static BaseType_t prvMd(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) ;
+#endif // defined(USE_HM0360) || defined(USE_HM0360_MD)
 
 // A few commands to make the AI processor consistent with the MKL62BA
 static BaseType_t prvVer(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
@@ -512,14 +514,15 @@ static const CLI_Command_Definition_t xGetSelfTest = {
 	0			/* No parameters expected */
 };
 
-
+#if defined(USE_HM0360) || defined(USE_HM0360_MD)
 /* Structure that defines the "md" command line command. */
 static const CLI_Command_Definition_t xMd = {
 	"md", /* The command string to type. */
-	"md <sensitivity>:\r\n Set sensitivity (values 1, 2, 3 = low, med, high; 0 = 0ff)\r\n",
+	"md <sensitivity>:\r\n Set sensitivity (values 1, 2, 3 = low, med, high; 0 = off)\r\n",
 	prvMd, /* The function to run. */
 	1		 /* One parameter expected */
 };
+#endif // defined(USE_HM0360) || defined(USE_HM0360_MD)
 
 /********************************** Private Functions - for CLI commands *************************************/
 
@@ -1600,7 +1603,7 @@ static BaseType_t prvEraseModel(char *pcWriteBuffer, size_t xWriteBufferLen, con
 	return pdFALSE;
 }
 
-
+#if defined(USE_HM0360) || defined(USE_HM0360_MD)
 /**
  * Sets motion detection sensitivity:
  *
@@ -1617,24 +1620,26 @@ static BaseType_t prvMd(char *pcWriteBuffer, size_t xWriteBufferLen, const char 
 	/* Get parameter */
 	pcParameter = FreeRTOS_CLIGetParameter(pcCommandString, 1, &lParameterStringLength);
 	if (pcParameter != NULL) {
-		sensitivity = atoi(pcParameter); // Consider using strtol for safer parsing and error checking.
-		if ((sensitivity >= 0) && (sensitivity <= 3)) {
-			//cli_append(&pcWriteBuffer, &xWriteBufferLen, "MD sensitivity %d", sensitivity);
-			// set registers
-			cisdp_sensor_set_md_sensitivity(sensitivity);
-			// save for the future
-			fatfs_setOperationalParameter(OP_PARAMETER_MD_SENSITIVITY, sensitivity);
+		char *endptr;
+		long sensitivity_long = strtol(pcParameter, &endptr, 10);
+
+		if (endptr == pcParameter || *endptr != '\0' || sensitivity_long < 0 || sensitivity_long > 3) {
+			cli_append(&pcWriteBuffer, &xWriteBufferLen, "Error: Sensitivity must be an integer between 0 and 3.");
 		}
 		else {
-			cli_append(&pcWriteBuffer, &xWriteBufferLen, "Must supply an integer between 0 and 3");
+			sensitivity = (uint16_t)sensitivity_long;
+			cisdp_sensor_set_md_sensitivity(sensitivity);
+			fatfs_setOperationalParameter(OP_PARAMETER_MD_SENSITIVITY, sensitivity);
+			cli_append(&pcWriteBuffer, &xWriteBufferLen, "MD sensitivity set to %u", sensitivity);
 		}
 	}
 	else {
-		cli_append(&pcWriteBuffer, &xWriteBufferLen, "Must supply an integer between 0 and 3");
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "Error: Missing sensitivity parameter.");
 	}
 
 	return pdFALSE;
 }
+#endif // defined(USE_HM0360) || defined(USE_HM0360_MD)
 
 /********************************** Private Functions - Other *************************************/
 
@@ -2082,7 +2087,9 @@ static void vRegisterCLICommands(void)
 	FreeRTOS_CLIRegisterCommand(&xGetOpParam);	// Gets an Operational Parameter
 	FreeRTOS_CLIRegisterCommand(&xGetSelfTest);	// Gets self test bits
 
+#if defined(USE_HM0360) || defined(USE_HM0360_MD)
 	FreeRTOS_CLIRegisterCommand(&xMd);	// Sets motion detection sensitivity
+#endif // defined(USE_HM0360) || defined(USE_HM0360_MD)
 
 #ifdef WW500_C00
 	FreeRTOS_CLIRegisterCommand(&xLedFlash);	// Test the ledFlash code

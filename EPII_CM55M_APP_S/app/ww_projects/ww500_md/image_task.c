@@ -75,6 +75,7 @@
 #include "barrier.h"
 
 #include "selfTest.h"
+#include "exif_gps.h"
 
 /*************************************** Definitions *******************************************/
 
@@ -278,6 +279,11 @@ static void create_gps_ifd(uint8_t *gps_ifd_start);
 static size_t get_gps_ifd_size(void);
 
 /*************************************** External variables *******************************************/
+
+// GPS location of device can be set from the app, then accessed when needed
+extern GPS_Coordinate exif_gps_deviceLat;
+extern GPS_Coordinate exif_gps_deviceLon;
+extern GPS_Altitude exif_gps_deviceAlt;
 
 extern QueueHandle_t xFatTaskQueue;
 extern QueueHandle_t xIfTaskQueue;
@@ -2380,12 +2386,12 @@ static size_t get_gps_ifd_size(void) {
     return GPS_IFD_SIZE;
 }
 
-// Create a GPS IFD block
 /**
  * Create a GPS IFD block.
  *
- * TODO - this code hard-codes some GPS data - use exif_gps.c!
- * TODO - check buffer overflow
+ * Places emulated data in the EXIF block when EMULATED_GPS is uncommented.
+ * Otherwise, other code has placed the location into
+ * exif_gps_deviceLat, exif_gps_deviceLon,exif_gps_deviceAlt (in exif_gps.c)
  *
  * @param gps_ifd_start - pointer to where the buffer should be
  */
@@ -2398,8 +2404,11 @@ static void create_gps_ifd(uint8_t *gps_ifd_start) {
     uint8_t *ifd = p;
     p += GPS_IFD_ENTRY_COUNT * 12;
     write32_le(p, 0);
-    p += 4; // write terminating 4 x 0 (indictes the end of the IFDs
+    p += 4; // write terminating 4 x 0 (indicates the end of the IFDs
 
+//#define EMULATED_GPS
+#ifdef EMULATED_GPS
+    // fixed values to test
     char latRef[] = "N";
     char lonRef[] = "E";
     uint32_t lat[6] = {37, 1, 48, 1, 3000, 100};  // 37°48'30.00"
@@ -2414,6 +2423,47 @@ static void create_gps_ifd(uint8_t *gps_ifd_start) {
     addIFD(TAG_GPS_LONGITUDE, ifd + 3 * 12, lon);
     addIFD(TAG_GPS_ALTITUDE_REF, ifd + 4 * 12, &altRef);
     addIFD(TAG_GPS_ALTITUDE, ifd + 5 * 12, alt);
+
+#else
+    // Use actual GPS location which has been placed in
+    // exif_gps_deviceLat, exif_gps_deviceLon, exif_gps_deviceAlt
+
+    uint8_t lat_buf[26];   // 2 bytes ref string + 6 x uint32_t big-endian
+    uint8_t lon_buf[26];
+    uint8_t alt_buf[9];    // 1 byte ref + 2 x uint32_t big-endian
+
+    // Fetch GPS data into byte arrays
+    exif_gps_generate_byte_array(&exif_gps_deviceLat, lat_buf);
+    exif_gps_generate_byte_array(&exif_gps_deviceLon, lon_buf);
+    exif_gps_generate_altitude_byte_array(&exif_gps_deviceAlt, alt_buf);
+
+    // Extract ref strings: byte_array[0] is the char, [1] is 0x00 — already a valid C string
+    char *latRef = (char *)&lat_buf[0];   // e.g. "N\0"
+    char *lonRef = (char *)&lon_buf[0];   // e.g. "E\0"
+
+    // Extract altitude ref byte
+    uint8_t altRef = alt_buf[0];          // 0 = above sea level, 1 = below
+
+    // Convert big-endian rationals back to native little-endian for addIFD()
+    uint32_t lat[6], lon[6], alt[2];
+    exif_gps_extract_rationals(lat_buf, lat);
+    exif_gps_extract_rationals(lon_buf, lon);
+    exif_gps_extract_alt_rationals(alt_buf, alt);
+
+    // Write the 6 IFDs
+    addIFD(TAG_GPS_LATITUDE_REF,  ifd + 0 * 12, latRef);
+    addIFD(TAG_GPS_LATITUDE,      ifd + 1 * 12, lat);
+    addIFD(TAG_GPS_LONGITUDE_REF, ifd + 2 * 12, lonRef);
+    addIFD(TAG_GPS_LONGITUDE,     ifd + 3 * 12, lon);
+    addIFD(TAG_GPS_ALTITUDE_REF,  ifd + 4 * 12, &altRef);
+    addIFD(TAG_GPS_ALTITUDE,      ifd + 5 * 12, alt);
+#endif
+
+    char gps_dbg[80];
+        exif_gps_create_full_string(&exif_gps_deviceLat, &exif_gps_deviceLon,
+                                    &exif_gps_deviceAlt, gps_dbg, sizeof(gps_dbg));
+        xprintf("EXIF GPS: %s\n", gps_dbg);
+
 }
 
 /**

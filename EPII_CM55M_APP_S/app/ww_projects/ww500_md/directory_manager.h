@@ -24,14 +24,17 @@
 
 // Warning: if using 8.3 file names then this applies to directories also.
 // Names are upper case.
-#define CAPTURE_DIR "/IMAGES"
+
 #define STATE_FILE "CONFIG.TXT"
 
-//#define CONFIG_DIR "/CONFIG"
 #define CONFIG_DIR "/MANIFEST"
+#define CAPTURE_DIR "IMAGES"
+#define MEDIA_DIR "/MEDIA"
 
-// Buffer length for directory path strings. Kept separate from IMAGEFILENAMELEN
-// (which is sized for 8.3 filenames only).
+// Buffer length for directory path strings.
+// Kept separate from IMAGEFILENAMELEN (which is sized for 8.3 filenames only).
+// Typically:
+// /MEDIA/xxxxxxxx/IMAGES.000 = 27 characters including trailing \0
 #define DIRNAMELEN 32
 
 // #define MAX_TRACKED_DIRS 5
@@ -89,8 +92,6 @@ FRESULT dir_mgr_init_config(directoryManager_t *dirManager);
 FRESULT dir_mgr_init_image_dir(directoryManager_t *dirManager);
 
 void dir_mgr_generateImageFilename(char *imageFileName, uint8_t filenameLen, char *type);
-void dir_mgr_generateImageDirName(char *imageDirName, uint8_t dirNameLen);
-void dir_mgr_createImageDir(char *path_buf, directoryManager_t *dirManager);
 
 
 #endif /* APP_WW_PROJECTS_WW500_MD_DIRECTORY_MANAGER_H_ */

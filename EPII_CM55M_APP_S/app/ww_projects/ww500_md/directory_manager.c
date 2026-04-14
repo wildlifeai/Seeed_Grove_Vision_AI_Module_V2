@@ -20,6 +20,7 @@
 #include "image_task.h"
 #include "ffconf.h"
 
+#include "fatfs_task.h"
 #include "exif_utc.h"
 #include "printf_x.h"
 
@@ -33,6 +34,94 @@
 /*************************************** Global variables *******************************************/
 
 directoryManager_t dirManager;
+
+
+/*************************************** Local Function Declarations *****************************/
+
+// TODO - these are only used by directory_manager.c, so make them local
+static void generateImageDirName(char *imageDirName, uint8_t dirNameLen);
+static void createImageDir(char *path_buf, directoryManager_t *dirManager);
+
+
+/*************************************** Local Function Definitions *****************************/
+
+/**
+ * Generate a directory name for images.
+ *
+ * Must use 8.3 file name format: upper case alphanumeric.
+ *
+ * Checks whether the current image folder is full. If so, increments the
+ * folder index and resets the image count. The new index is persisted in
+ * op_parameter[] so it survives a warm boot.
+ *
+ * @param imageDirName  character array to contain the name
+ * @param dirNameLen    length of that array
+ */
+static void generateImageDirName(char *imageDirName, uint8_t dirNameLen) {
+	uint16_t imagesCount;
+	uint16_t imagesIndex;
+	// Fetch the entire UUID
+	char deployment_id[UUIDLENGTH];
+
+	imagesCount = fatfs_getOperationalParameter(OP_PARAMETER_IMAGES_COUNT);
+	imagesIndex = fatfs_getOperationalParameter(OP_PARAMETER_IMAGES_FILE_INDEX);
+
+	XP_GREEN;
+	if ((imagesCount > MAXIMAGESPERDIRECTORY) && (imagesIndex < MAXIMAGEDIRECTORIES)) {
+		xprintf("Creating a new images directory (%d > %d) ", imagesCount, MAXIMAGESPERDIRECTORY);
+		imagesIndex++;
+		fatfs_setOperationalParameter(OP_PARAMETER_IMAGES_FILE_INDEX, imagesIndex);
+		fatfs_setOperationalParameter(OP_PARAMETER_IMAGES_COUNT, 0);
+	}
+	else {
+		xprintf("Retaining existing images directory (%d <= %d) ", imagesCount, MAXIMAGESPERDIRECTORY);
+	}
+
+	// Typically:
+	// /MEDIA/xxxxxxxx/IMAGES.000
+	fatfs_getDeploymentId(deployment_id, sizeof(deployment_id));
+	// terminate the ID after 8 characters
+	deployment_id[8] = '\0';
+
+	snprintf(imageDirName, dirNameLen, "%s/%s/%s.%03d",
+			MEDIA_DIR, deployment_id, CAPTURE_DIR, imagesIndex);
+
+	// print the directory name
+	xprintf("'%s'\n", imageDirName);
+	XP_WHITE;
+}
+
+/**
+ * Create the image directory if it does not already exist, and update
+ * dirManager->current_capture_dir to point to it.
+ *
+ * @param path_buf  Name of the directory to create.
+ * @param dirManager Pointer to the directory manager structure.
+ */
+static void createImageDir(char *path_buf, directoryManager_t *dirManager) {
+	FRESULT res;
+	FILINFO fno;
+
+	res = f_stat(path_buf, &fno);
+
+	if (res == FR_OK) {
+		xprintf("Directory '%s' exists\r\n", path_buf);
+	}
+	else {
+		xprintf("Creating directory '%s'\r\n", path_buf);
+		res = fatfs_mkdir_recursive(path_buf);
+
+		if (res != FR_OK) {
+			xprintf("f_mkdir(images) failed (%d)\r\n", res);
+			dirManager->imagesRes = res;
+			return;
+		}
+	}
+
+	dirManager->imagesRes = FR_OK;
+	strcpy(dirManager->current_capture_dir, path_buf);
+}
+
 
 /*************************************** Global Function Definitions *****************************/
 
@@ -81,9 +170,11 @@ FRESULT dir_mgr_init_config(directoryManager_t *dirManager) {
 /**
  * Phase 2 initialisation — called after load_configuration(), once
  * op_parameter[] values (OP_PARAMETER_IMAGES_COUNT and
- * OP_PARAMETER_IMAGES_FILE_INDEX) have been read from CONFIG.TXT.
+ * OP_PARAMETER_IMAGES_FILE_INDEX) and the deloyment ID have been read from CONFIG.TXT.
  *
  * Generates the correct image directory name and creates it if necessary.
+ *
+ * createImageDir() also saves the directory name in dirManager->current_capture_dir
  *
  * @param dirManager Pointer to the directory manager structure.
  * @return FRESULT indicating success or failure.
@@ -91,8 +182,8 @@ FRESULT dir_mgr_init_config(directoryManager_t *dirManager) {
 FRESULT dir_mgr_init_image_dir(directoryManager_t *dirManager) {
 	char path_buf[DIRNAMELEN];
 
-	dir_mgr_generateImageDirName(path_buf, sizeof(path_buf));
-	dir_mgr_createImageDir(path_buf, dirManager);
+	generateImageDirName(path_buf, sizeof(path_buf));
+	createImageDir(path_buf, dirManager);
 
 	return dirManager->imagesRes;
 }
@@ -141,71 +232,4 @@ void dir_mgr_generateImageFilename(char *imageFileName, uint8_t filenameLen, cha
 	// Create a value which is seconds * 16 + subSeconds
 	seconds = (seconds << 4) + subSecond;
 	snprintf(imageFileName, filenameLen, "%08X.%s", (int) seconds, type);
-}
-
-/**
- * Generate a directory name for images.
- *
- * Must use 8.3 file name format: upper case alphanumeric.
- *
- * Checks whether the current image folder is full. If so, increments the
- * folder index and resets the image count. The new index is persisted in
- * op_parameter[] so it survives a warm boot.
- *
- * @param imageDirName  character array to contain the name
- * @param dirNameLen    length of that array
- */
-void dir_mgr_generateImageDirName(char *imageDirName, uint8_t dirNameLen) {
-	uint16_t imagesCount;
-	uint16_t imagesIndex;
-
-	imagesCount = fatfs_getOperationalParameter(OP_PARAMETER_IMAGES_COUNT);
-	imagesIndex = fatfs_getOperationalParameter(OP_PARAMETER_IMAGES_FILE_INDEX);
-
-	XP_GREEN;
-	if ((imagesCount > MAXIMAGESPERDIRECTORY) && (imagesIndex < MAXIMAGEDIRECTORIES)) {
-		xprintf("Created a new images directory (%d > %d) ", imagesCount, MAXIMAGESPERDIRECTORY);
-		imagesIndex++;
-		fatfs_setOperationalParameter(OP_PARAMETER_IMAGES_FILE_INDEX, imagesIndex);
-		fatfs_setOperationalParameter(OP_PARAMETER_IMAGES_COUNT, 0);
-	}
-	else {
-		xprintf("Retained existing images directory (%d <= %d) ", imagesCount, MAXIMAGESPERDIRECTORY);
-	}
-
-	snprintf(imageDirName, dirNameLen, "%s.%03d", CAPTURE_DIR, imagesIndex);
-
-	// print the directory name
-	xprintf("'%s'\n", imageDirName);
-	XP_WHITE;
-}
-
-/**
- * Create the image directory if it does not already exist, and update
- * dirManager->current_capture_dir to point to it.
- *
- * @param path_buf  Name of the directory to create.
- * @param dirManager Pointer to the directory manager structure.
- */
-void dir_mgr_createImageDir(char *path_buf, directoryManager_t *dirManager)
-{
-	FRESULT res;
-	FILINFO fno;
-
-	res = f_stat(path_buf, &fno);
-	if (res == FR_OK) {
-		xprintf("Directory '%s' exists\r\n", path_buf);
-	}
-	else {
-		xprintf("Creating directory '%s'\r\n", path_buf);
-		res = f_mkdir(path_buf);
-		if (res != FR_OK) {
-			xprintf("f_mkdir(images) failed (%d)\r\n", res);
-			dirManager->imagesRes = res;
-			return;
-		}
-	}
-
-	dirManager->imagesRes = FR_OK;
-	strcpy(dirManager->current_capture_dir, path_buf);
 }

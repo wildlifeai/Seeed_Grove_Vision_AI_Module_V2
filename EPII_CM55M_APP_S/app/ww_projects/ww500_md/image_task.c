@@ -2019,20 +2019,7 @@ static void prepareJpegFile(int8_t * outCategories, uint8_t classCount, fileBuff
 	XP_WHITE;
 #endif
 
-
-#if 0
-	// file names before 30/3/26
-	if (wokeReason == APP_WAKE_REASON_MD)  {
-		// Motion has woken us
-		snprintf(g_imageFileName, IMAGEFILENAMELEN, "MD%06d.JPG", fatfs_getImageSequenceNumber());
-	}
-	else   {
-		// Must be a time lapse event
-		snprintf(g_imageFileName, IMAGEFILENAMELEN, "TL%06d.JPG", fatfs_getImageSequenceNumber());
-	}
-#else
 	dir_mgr_generateImageFilename(g_imageFileName, IMAGEFILENAMELEN, "JPG");
-#endif
 
 	fileOp.fileName = g_imageFileName;	// a global
 	fileOp.senderQueue = xImageTaskQueue;
@@ -2103,19 +2090,7 @@ static void prepareBmpFile(fileBufferInfo_t * extraBlock) {
 	XP_WHITE;
 #endif
 
-#if 0
-	// file names before 30/3/26
-	if (wokeReason == APP_WAKE_REASON_MD)  {
-		// Motion has woken us
-		snprintf(g_imageFileName, IMAGEFILENAMELEN, "MD%06d.BMP", fatfs_getImageSequenceNumber());
-	}
-	else   {
-		// Must be a time lapse event
-		snprintf(g_imageFileName, IMAGEFILENAMELEN, "TL%06d.BMP", fatfs_getImageSequenceNumber());
-	}
-#else
 	dir_mgr_generateImageFilename(g_imageFileName, IMAGEFILENAMELEN, "BMP");
-#endif
 
 	fileOp.fileName = g_imageFileName;	// a global
 	fileOp.senderQueue = xImageTaskQueue;
@@ -2494,6 +2469,7 @@ static uint16_t build_exif_segment(int8_t *outCategories, uint8_t categoriesCoun
     char timestamp[EXIFSTRINGLENGTH] = {0}; // 22:20:36 2025:07:06 = 19 characters plus trailing \0
     uint16_t exif_len;
     uint8_t nnData[MAX_CLASSES + 2];
+	char deployment_id[UUIDLENGTH];
 
     // IFD count: base entries (9) = 8 starting with TAG_MAKE plus TAG_GPS_IFD_POINTER later.
     // dynamic_ifd_count might be incremented if we add UserComment and DeploymentID
@@ -2567,7 +2543,6 @@ static uint16_t build_exif_segment(int8_t *outCategories, uint8_t categoriesCoun
 #endif //ENABLE_EXIF_CONFIDENCE
 
 	// Get deployment ID from operational parameters
-	char deployment_id[UUIDLENGTH];
 	fatfs_getDeploymentId(deployment_id, sizeof(deployment_id));
 	
 	// Only include in EXIF if not all zeros (i.e., a deployment is active)

@@ -246,7 +246,7 @@ typedef enum
 /* Select bytes per MCU based on JPEG quality  */
 #if (JPEG_COMPRESSION == 10)
     #define JPEG_BYTES_PER_MCU   38
-	#define DP_JPEG_ENCQTABLE 			JPEG_ENC_QTABLE_4X	// higher quality
+	#define DP_JPEG_ENCQTABLE 			JPEG_ENC_QTABLE_10X	// higher quality
 	#pragma message "JPEG x 10 compression"
 #elif (JPEG_COMPRESSION == 4)
     #define JPEG_BYTES_PER_MCU   96

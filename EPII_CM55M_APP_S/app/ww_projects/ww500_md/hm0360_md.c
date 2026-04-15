@@ -41,7 +41,7 @@ static bool hm0360MainCamera = false;
 static bool hm0360_present = false;
 
 static HX_CIS_SensorSetting_t HM0360_md_init_setting[] = {
-#include "..\cis_hm0360\HM0360_OSC_Bayer_640x480_setA_VGA_setB_QVGA_md_8b_ParallelOutput_R2.i"
+#include "../cis_hm0360/HM0360_OSC_Bayer_640x480_setA_VGA_setB_QVGA_md_8b_ParallelOutput_R2.i"
 };
 
 /*************************************** Local Function Definitions *******************/

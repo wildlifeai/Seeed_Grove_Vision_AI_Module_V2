@@ -12,6 +12,7 @@
 #include "c_api_types.h"
 
 #include "ww500_md.h"
+#include "xip_manager.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -25,27 +26,9 @@ extern "C" {
 // Logit value (0-127)
 #define MODEL_THRESHOLD 15
 
-// Flash configuration - based on memory map
-#define FLASH_START_SAFE_ADDR   0x00200000  // Physical flash address after 2MB reserved for firmware
-#define FLASH_MODEL_AREA_SIZE   (14 * 1024 * 1024)  // 14MB available for models
-#define FLASH_SECTOR_SIZE       4096        // Typical sector size, adjust if needed
-#define MODEL_FLASH_ADDR        FLASH_START_SAFE_ADDR
-
-// Memory mapping - convert physical flash address to virtual CPU address
-#define FLASH_VIRTUAL_BASE 0x3A000000  // Virtual base address for flash memory
-#define FLASH_PHYSICAL_BASE 0x00000000 // Physical base address for flash memory
-
-// CGP - TODO - how does MODEL_XIP_ADDR relate to FLASH_VIRTUAL_BASE?
-#define MODEL_XIP_ADDR 			0x3A200000
-#define MODEL_XIP_INFO_SIZE 	16		// Must be divisible by 4
+// Flash configuration, model types and XIP constants are now in xip_manager.h
 // // file name: '12345678.jpg' = 12 characters, plus trailing '\0'
 //#define IMAGEFILENAMELEN		13
-
-// Maximum number of classes supported
-#define MAX_CLASSES 			16
-#define MAX_LABEL_LEN 			20	// e.g. 'no person\0'
-#define LABEL_MAGIC    0x4C41424C  // "LABL" - interestingly, treated as a LE so appears as 4C 42 43 4C in memory
-#define MAX_MODEL_NAME_LEN		13
 
 // Enable/disable transforming of tensor output to percentages
 // Uncomment this to use percentages

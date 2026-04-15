@@ -10,6 +10,8 @@
  * It primarily communicates with the FatFS task.
  */
 
+/*************************************** Includes *******************************************/
+
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>

@@ -7,17 +7,26 @@
  *
  *   0x00000000 - 0x000FFFFF   Firmware Image Slot A  (1 MB)
  *   0x00100000 - 0x001FFFFF   Firmware Image Slot B  (1 MB)
- *   0x00200000 - 0x00EFFFFF   NN model space        (13 MB)
- *   0x00FF0000 - 0x00FFFFFF   Slot A/B selector      (last sector)
+ *   0x00200000 - 0x00EFFFFF   NN model area          (13 MB)
+ *   0x00F00000 - 0x00FEFFFF   Reserved / unused
+ *   0x00FFF000 - 0x00FFFFFF   Slot A/B selector      (last 4 KB sector)
  *
  * The NN model area starts at physical 0x00200000, which maps to virtual
  * address 0x3A200000 when XIP mode is enabled.  A ModelMetaData structure
  * is stored at the start of this area, followed (on a 16-byte boundary)
  * by the raw TFLite Vela model data.
  *
- * Callers that need a tflite::Model pointer should call
- * xip_get_model_xip_address() to obtain the validated virtual address,
- * then wrap it with tflite::GetModel().
+ * ModelMetaData layout (stored at physical 0x00200000 / virtual MODEL_XIP_ADDR):
+ *   magic       (uint32_t)      — must equal LABEL_MAGIC (0x4C41424C "LABL")
+ *   class_count (uint16_t)      — number of NN output classes
+ *   label_len   (uint16_t)      — bytes allocated per label entry (MAX_LABEL_LEN)
+ *   modelName   (char[13])      — 8.3 format model filename, e.g. "1V2.TFL"
+ *   labels      (char[16][20])  — class label strings, NUL-padded
+ *   crc         (uint32_t)      — reserved for future integrity check, written as 0
+ *
+ * The model data immediately follows the metadata on a 16-byte boundary.
+ * Use xip_get_model_xip_address() to obtain the validated virtual address
+ * suitable for passing to tflite::GetModel().
  */
 
 #ifndef XIP_MANAGER_H_
@@ -34,9 +43,14 @@ extern "C" {
 
 // Flash physical address layout
 #define FLASH_START_SAFE_ADDR   0x00200000          // Physical start of model area (after 2 MB firmware slots)
-#define FLASH_MODEL_AREA_SIZE   (14 * 1024 * 1024)  // 14 MB available for models
-#define FLASH_SECTOR_SIZE       4096                 // Flash erase sector size
+#define FLASH_MODEL_AREA_SIZE   (13 * 1024 * 1024)  // 13 MB available for models
+#define FLASH_SECTOR_SIZE       4096                 // Flash erase sector size (4 KB)
 #define MODEL_FLASH_ADDR        FLASH_START_SAFE_ADDR
+
+// Total flash chip size and location of the boot-slot selector sector
+#define FLASH_TOTAL_SIZE        (16 * 1024 * 1024)  // 16 MB total flash
+#define FLASH_SELECTOR_ADDR     0x00FFF000           // Physical address of the last 4 KB slot selector sector
+#define FLASH_BLOCK_SIZE        (64 * 1024)          // 64 KB erase block size (FLASH_64KBLOCK)
 
 // XIP virtual/physical address mapping.
 // The SPI EEPROM appears at virtual base 0x3A000000 when XIP mode is active.
@@ -59,9 +73,17 @@ extern "C" {
 /*************************************** Type definitions **************************************/
 
 /**
- * Metadata record stored in XIP flash at MODEL_XIP_ADDR, immediately before
- * the model data.  Written whenever a model is loaded from the SD card.
- * The model data begins on a 16-byte boundary after this structure.
+ * Metadata record stored in XIP flash at MODEL_XIP_ADDR (physical 0x00200000),
+ * immediately before the model data.  Written whenever a model is loaded from
+ * the SD card.  The model data begins on a 16-byte boundary after this structure.
+ *
+ * Fields:
+ *   magic       — must equal LABEL_MAGIC (0x4C41424C) before the record is trusted
+ *   class_count — number of output classes; must match the model's output tensor size
+ *   label_len   — bytes allocated per label entry (MAX_LABEL_LEN)
+ *   modelName   — 8.3 format filename used to identify the stored model, e.g. "1V2.TFL"
+ *   labels      — NUL-terminated class name strings, one per output class
+ *   crc         — reserved for future integrity checking; currently written as 0
  */
 typedef struct {
     uint32_t magic;                          // Must equal LABEL_MAGIC
@@ -171,16 +193,48 @@ bool xip_copy_model_from_sd_to_flash(char *filename);
 bool xip_copy_metadata_to_flash(char *modelName);
 
 /**
- * Copy a model file (given as a full path) from the SD card to flash, writing
- * a legacy 16-byte filename header immediately before MODEL_XIP_ADDR.
+ * Read the first 32 bytes of the slot selector sector (physical FLASH_SELECTOR_ADDR)
+ * and print them to the console via printf_x_printBuffer().
  *
- * NOTE: This is an older code path kept for compatibility.
- * Prefer xip_copy_model_from_sd_to_flash() + xip_copy_metadata_to_flash().
+ * This is a diagnostic function to inspect how the bootloader manages
+ * the Slot A / Slot B selection.
  *
- * @param filename  full path including directory, e.g. "/MANIFEST/1V2.TFL"
  * @return 0 on success, -1 on failure
  */
-int xip_load_model_from_sd_to_flash(char *filename);
+int xip_dump_slot_selector(void);
+
+/*************************************** Firmware Slot Management ******************************/
+/*
+ * The following functions manage the two firmware image slots (Slot A and Slot B)
+ * and the boot-slot selector sector.  They are stubs pending further documentation
+ * on the bootloader's flash layout expectations.
+ */
+
+/**
+ * Erase one firmware image slot in flash.
+ *
+ * @param slot  0 for Slot A (physical 0x00000000), 1 for Slot B (physical 0x00100000)
+ * @return 0 on success, -1 on failure or not yet implemented
+ */
+int xip_erase_firmware_slot(uint8_t slot);
+
+/**
+ * Write a firmware image from an SD card file to the specified flash slot.
+ *
+ * @param slot      0 for Slot A, 1 for Slot B
+ * @param filename  full path to the firmware image on the SD card
+ * @return 0 on success, -1 on failure or not yet implemented
+ */
+int xip_write_firmware_from_sd(uint8_t slot, const char *filename);
+
+/**
+ * Write the slot selector sector to indicate which firmware slot the bootloader
+ * should boot from at next reset.
+ *
+ * @param slot  0 for Slot A, 1 for Slot B
+ * @return 0 on success, -1 on failure or not yet implemented
+ */
+int xip_write_slot_selector(uint8_t slot);
 
 #ifdef __cplusplus
 }

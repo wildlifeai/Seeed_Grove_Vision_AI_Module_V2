@@ -9,12 +9,24 @@
  *  - Erase flash sectors to prepare for new model writes
  *  - Validate model presence in flash
  *  - Enable/disable XIP memory-mapped access
+ *  - Read the firmware slot selector sector (diagnostic)
  *
  * Thread safety: an internal FreeRTOS mutex (xSPIMutex) serialises all SPI
  * EEPROM accesses.  XIP mode is disabled before any SPI transfer and
  * re-enabled afterwards.
  *
- * See xip_manager.h for the flash memory layout.
+ * Flash memory layout (physical addresses):
+ *   0x00000000 - 0x000FFFFF   Firmware Slot A  (1 MB)
+ *   0x00100000 - 0x001FFFFF   Firmware Slot B  (1 MB)
+ *   0x00200000 - 0x00EFFFFF   NN model area    (13 MB)
+ *   0x00F00000 - 0x00FEFFFF   Reserved / unused
+ *   0x00FFF000 - 0x00FFFFFF   Slot A/B selector (last 4 KB sector)
+ *
+ * Model area layout (starting at physical 0x00200000 / virtual MODEL_XIP_ADDR):
+ *   offset 0                          ModelMetaData struct (see xip_manager.h)
+ *   offset align16(sizeof(MetaData))  Raw TFLite Vela model data
+ *
+ * See xip_manager.h for constant definitions and the ModelMetaData type.
  */
 
 /*************************************** Includes *******************************************/
@@ -40,8 +52,10 @@
 
 /*************************************** Definitions *******************************************/
 
-// Read SD card model file in chunks of this size
-#define FILE_CHUNK_SIZE     512
+// Read SD card model file in chunks of this size.
+// Larger values reduce per-chunk overhead (f_read calls, xprintf, DMA setup).
+// Buffers are heap-allocated so this does not affect stack usage.
+#define FILE_CHUNK_SIZE     4096
 
 /*************************************** Local variables *************************************/
 
@@ -56,9 +70,9 @@ static uint8_t g_label_count = 0;
 
 /*************************************** Local Function Declarations **************************/
 
-static inline uint32_t xip_align_up(uint32_t size, uint32_t align);
-static inline uint32_t xip_virt_to_phys(uint32_t virt);
-static inline uint32_t xip_phys_to_virt(uint32_t phys);
+static inline uint32_t align_up(uint32_t size, uint32_t align);
+static inline uint32_t virt_to_phys(uint32_t virt);
+static inline uint32_t phys_to_virt(uint32_t phys);
 static bool file_exists(const char *path);
 static uint8_t load_labels_from_manifest(char *filename, char (*labels)[MAX_LABEL_LEN]);
 
@@ -73,15 +87,15 @@ static uint8_t load_labels_from_manifest(char *filename, char (*labels)[MAX_LABE
  *   size=4: 4+3=7, 7&~3=4
  *   size=5: 5+3=8, 8&~3=8
  */
-static inline uint32_t xip_align_up(uint32_t size, uint32_t align) {
+static inline uint32_t align_up(uint32_t size, uint32_t align) {
     return (size + align - 1) & ~(align - 1);
 }
 
-static inline uint32_t xip_virt_to_phys(uint32_t virt) {
+static inline uint32_t virt_to_phys(uint32_t virt) {
     return virt - FLASH_VIRTUAL_BASE + FLASH_PHYSICAL_BASE;
 }
 
-static inline uint32_t xip_phys_to_virt(uint32_t phys) {
+static inline uint32_t phys_to_virt(uint32_t phys) {
     return phys - FLASH_PHYSICAL_BASE + FLASH_VIRTUAL_BASE;
 }
 
@@ -220,23 +234,26 @@ bool xip_enable_XIP(bool enable) {
 }
 
 /**
- * Sector-erase enough flash to hold flashSizeRequired bytes, starting at
- * MODEL_XIP_ADDR.  Flash is erased in 4 kB sectors.
+ * Block-erase enough flash to hold flashSizeRequired bytes, starting at
+ * MODEL_XIP_ADDR.  Flash is erased in 64 KB blocks (FLASH_64KBLOCK).
+ *
+ * MODEL_FLASH_ADDR (0x00200000) is 64 KB aligned, so no alignment padding
+ * is needed at the start of the erase.
  */
 int xip_erase_model_flash_area(uint32_t flashSizeRequired) {
     int32_t ret = 0;
-    uint32_t sectors_needed;
-    uint32_t sector_addr;
+    uint32_t blocks_needed;
+    uint32_t block_addr;
 
     if (xip_init_flash() != 0) {
         return -1;
     }
 
-    sectors_needed = xip_align_up(flashSizeRequired, FLASH_SECTOR_SIZE) / FLASH_SECTOR_SIZE;
-    sector_addr    = xip_virt_to_phys(MODEL_XIP_ADDR);
+    blocks_needed = align_up(flashSizeRequired, FLASH_BLOCK_SIZE) / FLASH_BLOCK_SIZE;
+    block_addr    = virt_to_phys(MODEL_XIP_ADDR);
 
-    xprintf("Erasing %d sectors from 0x%08x to cover %lu bytes\n",
-            sectors_needed, sector_addr, (unsigned long)flashSizeRequired);
+    xprintf("Erasing %d x 64KB blocks from 0x%08x to cover %lu bytes\n",
+            blocks_needed, block_addr, (unsigned long)flashSizeRequired);
 
     // Disable XIP before erase
     xip_enable_XIP(false);
@@ -246,15 +263,15 @@ int xip_erase_model_flash_area(uint32_t flashSizeRequired) {
         return -1;
     }
 
-    for (uint16_t i = 0; i < sectors_needed; i++) {
-        ret = hx_lib_spi_eeprom_erase_sector(spi_inst, sector_addr, FLASH_SECTOR);
-        xprintf("  Erase sector %d addr 0x%08x -> result %d\n", i, sector_addr, ret);
+    for (uint32_t i = 0; i < blocks_needed; i++) {
+        ret = hx_lib_spi_eeprom_erase_sector(spi_inst, block_addr, FLASH_64KBLOCK);
+        xprintf("  Erase block %d addr 0x%08x -> result %d\n", i, block_addr, ret);
         if (ret != 0) {
-            xprintf("Failed to erase sector at address 0x%08x\n", sector_addr);
+            xprintf("Failed to erase block at address 0x%08x\n", block_addr);
             ret = -1;
             break;
         }
-        sector_addr += FLASH_SECTOR_SIZE;
+        block_addr += FLASH_BLOCK_SIZE;
 
         // Force a task switch to prevent the inactivity timeout firing.
         // Will cause a call to vApplicationTaskSwitchedIn()
@@ -280,14 +297,14 @@ bool xip_is_model_in_flash(char *filename, bool cold_boot) {
     }
 
     // Round up meta size to be word-aligned
-    uint32_t meta_length = xip_align_up(sizeof(ModelMetaData), 4);
+    uint32_t meta_length = align_up(sizeof(ModelMetaData), 4);
 
     if ((meta_length & 0x3) != 0) {
         return false;   // should never happen
     }
 
     // The meta data is written at the start of the XIP model area
-    meta_physical_addr = xip_virt_to_phys(MODEL_XIP_ADDR);
+    meta_physical_addr = virt_to_phys(MODEL_XIP_ADDR);
 
     // Ensure XIP is disabled before SPI access
     xip_enable_XIP(false);
@@ -387,8 +404,7 @@ bool xip_valid_model_in_flash(void) {
 
     // Ensure XIP is disabled before SPI access
     if (!xip_enable_XIP(false)) {
-        xprintf("Failed to disable XIP %d\n");   // Note: format string retained from original
-        xSemaphoreGive(xSPIMutex);               // TODO Phase 2: mutex not held here — fix
+        xprintf("Failed to disable XIP\n");
         return false;
     }
 
@@ -398,8 +414,8 @@ bool xip_valid_model_in_flash(void) {
     }
 
     // The model starts on a 16-byte boundary beyond the meta data
-    model_physical_addr = xip_virt_to_phys(MODEL_XIP_ADDR)
-                          + xip_align_up(sizeof(ModelMetaData), 16);
+    model_physical_addr = virt_to_phys(MODEL_XIP_ADDR)
+                          + align_up(sizeof(ModelMetaData), 16);
 
     if (hx_lib_spi_eeprom_word_read(spi_inst, model_physical_addr,
                                      (uint32_t *)spi_hdr, sizeof(spi_hdr)) != 0) {
@@ -440,7 +456,7 @@ uint32_t xip_get_model_xip_address(void) {
     }
 
     // The model starts on a 16-byte boundary beyond the meta data
-    return MODEL_XIP_ADDR + xip_align_up(sizeof(ModelMetaData), 16);
+    return MODEL_XIP_ADDR + align_up(sizeof(ModelMetaData), 16);
 }
 
 /**
@@ -456,7 +472,7 @@ int32_t xip_write_meta_data_to_flash(ModelMetaData *metaDataRam) {
         return -1;  // size not word-aligned (should never happen)
     }
 
-    meta_physical_addr = xip_virt_to_phys(MODEL_XIP_ADDR);
+    meta_physical_addr = virt_to_phys(MODEL_XIP_ADDR);
 
     if ((meta_physical_addr & 0x3) != 0) {
         return -2;  // address not word-aligned
@@ -532,7 +548,7 @@ bool xip_copy_model_from_sd_to_flash(char *filename) {
 
     // Step 3: erase flash to make space for the model and the meta data.
     // The model data must be pushed out to align on a 16-byte boundary.
-    flashSizeRequired = xip_align_up(sizeof(ModelMetaData), 16) + fileSize;
+    flashSizeRequired = align_up(sizeof(ModelMetaData), 16) + fileSize;
 
     if (xip_erase_model_flash_area(flashSizeRequired) != 0) {
         xprintf("Failed to erase flash for model\n");
@@ -545,7 +561,7 @@ bool xip_copy_model_from_sd_to_flash(char *filename) {
     // Step 4: write the model itself to the flash.
     // The meta data occupies the start of the XIP model area;
     // the model starts on a 16-byte boundary beyond it.
-    flash_address  = xip_virt_to_phys(MODEL_XIP_ADDR) + xip_align_up(sizeof(ModelMetaData), 16);
+    flash_address  = virt_to_phys(MODEL_XIP_ADDR) + align_up(sizeof(ModelMetaData), 16);
     totalBytesRead = 0;
 
     xprintf("Writing model to 0x%08x\n", flash_address);
@@ -576,7 +592,7 @@ bool xip_copy_model_from_sd_to_flash(char *filename) {
         }
 
         // Round up to a number of 32-bit words
-        write_size = xip_align_up(bytesRead, 4);
+        write_size = align_up(bytesRead, 4);
 
         xprintf("Writing %d bytes (aligned %d) to 0x%08x\n",
                 bytesRead, write_size, (unsigned)flash_address);
@@ -677,193 +693,71 @@ bool xip_copy_metadata_to_flash(char *modelName) {
 }
 
 /**
- * Copy a model file (given as a full path) from SD card to flash, writing
- * a legacy 16-byte filename header immediately before MODEL_XIP_ADDR.
- *
- * NOTE: This is an older code path kept for compatibility.
- * Prefer xip_copy_model_from_sd_to_flash() + xip_copy_metadata_to_flash().
+ * Read the first 32 bytes of the slot selector sector and print them to
+ * the console via printf_x_printBuffer().
  */
-int xip_load_model_from_sd_to_flash(char *filename) {
-    FRESULT res;
-    FIL file;
-    UINT bytesRead;
-    DWORD fileSize;
-
-    uint32_t model_xip_addr;
-    uint32_t header_xip_addr;
-    uint32_t model_phys_addr;
-    uint32_t header_phys_addr;
-
-    uint32_t flash_address;
-    uint32_t totalBytesRead;
-    uint32_t write_size;
-
-    union {
-        uint8_t  bytes[MODEL_XIP_INFO_SIZE];
-        uint32_t words[MODEL_XIP_INFO_SIZE / 4];
-    } fname_header, fname_verify;
-
-    // Aligned buffers
-    uint8_t write_buf[256]  __attribute__((aligned(4)));
-    uint8_t verify_buf[256] __attribute__((aligned(4)));
-
-    // If 'filename' includes a path, use it to open the file but only store
-    // the basename in the flash header
-    const char *src_path = filename;
-    const char *base = filename;
-    for (const char *p = filename; *p; ++p) {
-        if (*p == '/' || *p == '\\') {
-            base = p + 1;
-        }
-    }
-
-    xprintf("load_model_from_sd_to_flash: src_path='%s' base='%s'\n", src_path, base);
+int xip_dump_slot_selector(void) {
+    uint8_t buf[32] __attribute__((aligned(4)));
 
     if (xip_init_flash() != 0) {
         return -1;
     }
 
-    res = f_open(&file, src_path, FA_READ);
-    if (res != FR_OK) {
-        xprintf("Failed to open model file %s (error: %d)\n", src_path, res);
-        return -1;
-    }
-
-    fileSize = f_size(&file);
-    if (fileSize == 0) {
-        xprintf("Model file is empty\n");
-        f_close(&file);
-        return -1;
-    }
-    xprintf("Model file size: %lu bytes\n", fileSize);
-
-    if (xip_erase_model_flash_area(fileSize) != 0) {
-        xprintf("Failed to erase flash for model\n");
-        f_close(&file);
-        return -1;
-    }
-
-    model_xip_addr   = MODEL_XIP_ADDR;
-    header_xip_addr  = model_xip_addr - MODEL_XIP_INFO_SIZE;
-    model_phys_addr  = xip_virt_to_phys(model_xip_addr);
-    header_phys_addr = xip_virt_to_phys(header_xip_addr);
-
-    if (xSemaphoreTake(xSPIMutex, portMAX_DELAY) != pdTRUE) {
-        xprintf("Failed to take SPI mutex for header write\n");
-        f_close(&file);
-        return -1;
-    }
-
     xip_enable_XIP(false);
 
-    memset(fname_header.bytes, 0, sizeof(fname_header.bytes));
-    strncpy((char *)fname_header.bytes, base, sizeof(fname_header.bytes) - 1);
-    xprintf("Writing filename header: %s\n", fname_header.bytes);
-
-    int wr = hx_lib_spi_eeprom_word_write(spi_inst, header_phys_addr,
-                                           fname_header.words, MODEL_XIP_INFO_SIZE);
-    if (wr != 0) {
-        xprintf("Failed to write filename header to flash (err %d)\n", wr);
-        xSemaphoreGive(xSPIMutex);
-        f_close(&file);
+    if (xSemaphoreTake(xSPIMutex, portMAX_DELAY) != pdTRUE) {
+        xprintf("xip_dump_slot_selector: mutex take failed\n");
         return -1;
     }
 
-    // Small delay to let write finish
-    for (volatile int d = 0; d < 20000; ++d) {
-        asm volatile("nop");
-    }
-
-    memset(fname_verify.bytes, 0, sizeof(fname_verify.bytes));
-    if (hx_lib_spi_eeprom_word_read(spi_inst, header_phys_addr,
-                                     fname_verify.words, MODEL_XIP_INFO_SIZE) != 0) {
-        xprintf("Failed to verify filename header in flash (read error)\n");
+    if (hx_lib_spi_eeprom_word_read(spi_inst, FLASH_SELECTOR_ADDR,
+                                     (uint32_t *)buf, sizeof(buf)) != 0) {
+        xprintf("xip_dump_slot_selector: SPI read failed\n");
         xSemaphoreGive(xSPIMutex);
-        f_close(&file);
-        return -1;
-    }
-
-    if (memcmp(fname_header.bytes, fname_verify.bytes, MODEL_XIP_INFO_SIZE) != 0) {
-        xprintf("Filename header verify FAIL (SPI)\n");
-        xSemaphoreGive(xSPIMutex);
-        f_close(&file);
         return -1;
     }
 
     xSemaphoreGive(xSPIMutex);
 
-    flash_address  = model_phys_addr;
-    totalBytesRead = 0;
+    xprintf("Slot selector (0x%08x, first %u bytes):\n",
+            FLASH_SELECTOR_ADDR, (unsigned)sizeof(buf));
+    printf_x_printBuffer(buf, sizeof(buf));
 
-    while (totalBytesRead < fileSize) {
-        memset(write_buf, 0, sizeof(write_buf));
-        res = f_read(&file, write_buf, sizeof(write_buf), &bytesRead);
-        if (res != FR_OK || bytesRead == 0) {
-            break;
-        }
-        write_size = (bytesRead + 3) & ~3U;
-        if (write_size > bytesRead) {
-            memset(write_buf + bytesRead, 0, write_size - bytesRead);
-        }
+    return 0;
+}
 
-        if (xSemaphoreTake(xSPIMutex, portMAX_DELAY) != pdTRUE) {
-            xprintf("Failed to take SPI mutex for chunk write\n");
-            f_close(&file);
-            return -1;
-        }
+/*************************************** Firmware Slot Management ******************************/
 
-        xip_enable_XIP(false);
+/**
+ * Erase one firmware image slot in flash.
+ * Not yet implemented — requires further documentation on bootloader layout.
+ */
+int xip_erase_firmware_slot(uint8_t slot) {
+    /* Not yet implemented */
+    (void)slot;
+    xprintf("xip_erase_firmware_slot: not yet implemented\n");
+    return -1;
+}
 
-        xprintf("Writing %u bytes (aligned %u) to 0x%08lX\n",
-                (unsigned)bytesRead, (unsigned)write_size, (unsigned long)flash_address);
+/**
+ * Write a firmware image from an SD card file to the specified flash slot.
+ * Not yet implemented — requires further documentation on bootloader layout.
+ */
+int xip_write_firmware_from_sd(uint8_t slot, const char *filename) {
+    /* Not yet implemented */
+    (void)slot;
+    (void)filename;
+    xprintf("xip_write_firmware_from_sd: not yet implemented\n");
+    return -1;
+}
 
-        if (hx_lib_spi_eeprom_word_write(spi_inst, flash_address,
-                                          (uint32_t *)write_buf, write_size) != 0) {
-            xprintf("Flash write failed at 0x%08lX\n", (unsigned long)flash_address);
-            xSemaphoreGive(xSPIMutex);
-            f_close(&file);
-            return -1;
-        }
-
-        // Force a task switch to prevent the inactivity timeout firing
-        vTaskDelay(1);
-
-        memset(verify_buf, 0, write_size);
-        if (hx_lib_spi_eeprom_word_read(spi_inst, flash_address,
-                                         (uint32_t *)verify_buf, write_size) != 0) {
-            xprintf("Flash verify read failed at 0x%08lX\n", (unsigned long)flash_address);
-            xSemaphoreGive(xSPIMutex);
-            f_close(&file);
-            return -1;
-        }
-        if (memcmp(write_buf, verify_buf, write_size) != 0) {
-            xprintf("Verify FAIL at 0x%08lX\n", (unsigned long)flash_address);
-            xSemaphoreGive(xSPIMutex);
-            f_close(&file);
-            return -1;
-        }
-
-        xSemaphoreGive(xSPIMutex);
-
-        flash_address  += write_size;
-        totalBytesRead += bytesRead;
-    }
-
-    f_close(&file);
-
-    if (totalBytesRead == fileSize) {
-        xprintf("Model successfully written to physical 0x%08lX (%lu bytes)\n",
-                (unsigned long)MODEL_FLASH_ADDR, (unsigned long)fileSize);
-        if (xip_enable_XIP(true)) {
-            xprintf("XIP mode re-enabled\n");
-            return 0;
-        }
-        else {
-            return -1;
-        }
-    }
-
-    xprintf("Incomplete write: %lu/%lu bytes\n",
-            (unsigned long)totalBytesRead, (unsigned long)fileSize);
+/**
+ * Write the slot selector sector to indicate which firmware slot to boot from.
+ * Not yet implemented — requires further documentation on bootloader layout.
+ */
+int xip_write_slot_selector(uint8_t slot) {
+    /* Not yet implemented */
+    (void)slot;
+    xprintf("xip_write_slot_selector: not yet implemented\n");
     return -1;
 }

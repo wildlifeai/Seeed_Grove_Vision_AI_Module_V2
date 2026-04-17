@@ -1788,9 +1788,10 @@ FRESULT fatfs_mkdir_recursive(const char *path) {
     char tmp[DIRNAMELEN];
     char *p = NULL;
 
-    strncpy(tmp, path, sizeof(tmp));
-
-    tmp[sizeof(tmp) - 1] = '\0';
+    if (strlen(path) >= sizeof(tmp)) {
+        return FR_INVALID_NAME;
+    }
+    strcpy(tmp, path);
 
     // Walk the path string and create each intermediate directory level.
     // We start at tmp+1 to skip the leading '/' so that we only trigger

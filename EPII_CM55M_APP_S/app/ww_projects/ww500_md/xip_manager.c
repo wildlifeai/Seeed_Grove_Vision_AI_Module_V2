@@ -52,10 +52,29 @@
 
 /*************************************** Definitions *******************************************/
 
+// IMPORTANT — SDK API convention:
+// hx_lib_spi_eeprom_word_read() and hx_lib_spi_eeprom_word_write() take a BYTE count
+// (their parameter is named bytes_len), not a word count.  The byte count must be a
+// multiple of 4.  Do NOT divide by 4 when passing a length to these functions.
+
 // Read SD card model file in chunks of this size.
 // Larger values reduce per-chunk overhead (f_read calls, xprintf, DMA setup).
 // Buffers are heap-allocated so this does not affect stack usage.
 #define FILE_CHUNK_SIZE     4096
+
+// Slot selector checksums — constant for a given slot, independent of firmware content.
+// Captured from: 1st BL Build DATE=Jan 17 2025, Version 2.12.
+// TODO: verify these values if the bootloader is ever updated.
+#define SLOT_A_SELECTOR_CHECKSUM    0x4D04
+#define SLOT_B_SELECTOR_CHECKSUM    0x167C
+
+// Set to 1 to read back the entire firmware slot after writing and compare it
+// against the SD card file.  Set to 0 to rely on the per-chunk verification
+// that is always performed inside xip_write_firmware_from_sd().
+#define XIP_FIRMWARE_VERIFY_AFTER_WRITE    1
+
+// Maximum bare filename length for firmware images (no path, including NUL).
+#define MAX_FIRMWARE_NAME_LEN    32
 
 /*************************************** Local variables *************************************/
 
@@ -75,6 +94,11 @@ static inline uint32_t virt_to_phys(uint32_t virt);
 static inline uint32_t phys_to_virt(uint32_t phys);
 static bool file_exists(const char *path);
 static uint8_t load_labels_from_manifest(char *filename, char (*labels)[MAX_LABEL_LEN]);
+static int read_slot_selector(SlotSelectorHeader *hdr);
+static int get_active_slot(void);
+#if XIP_FIRMWARE_VERIFY_AFTER_WRITE
+static int verify_firmware_slot(uint8_t slot, const char *filepath);
+#endif
 
 /*************************************** Local Function Definitions ***************************/
 
@@ -378,7 +402,9 @@ bool xip_is_model_in_flash(char *filename, bool cold_boot) {
  * Check whether the named file exists in /MANIFEST on the SD card.
  */
 bool xip_is_file_in_sd(char *filename) {
-    char manifest_path[10 + MAX_MODEL_NAME_LEN];
+    // sizeof(CONFIG_DIR) includes its NUL; MAX_MODEL_NAME_LEN includes its NUL;
+    // the extra byte accounts for the '/' separator, giving a small margin.
+    char manifest_path[sizeof(CONFIG_DIR) + MAX_MODEL_NAME_LEN + 1];
     FILINFO fno;
     FRESULT res;
 
@@ -501,11 +527,13 @@ bool xip_copy_model_from_sd_to_flash(char *filename) {
 
     uint32_t flash_address;
     uint32_t totalBytesRead;
-    uint32_t write_size;
+    uint32_t write_size_bytes;
     int32_t result;
     uint32_t flashSizeRequired;
 
-    char manifest_path[10 + MAX_MODEL_NAME_LEN];
+    // sizeof(CONFIG_DIR) includes its NUL; MAX_MODEL_NAME_LEN includes its NUL;
+    // the extra byte accounts for the '/' separator, giving a small margin.
+    char manifest_path[sizeof(CONFIG_DIR) + MAX_MODEL_NAME_LEN + 1];
 
     // Build the full path to the model file on the SD card
     snprintf(manifest_path, sizeof(manifest_path), "%s/%s", CONFIG_DIR, filename);
@@ -591,14 +619,14 @@ bool xip_copy_model_from_sd_to_flash(char *filename) {
             break;  // EOF
         }
 
-        // Round up to a number of 32-bit words
-        write_size = align_up(bytesRead, 4);
+        // Round up to a 4-byte boundary (bytes_len must be a multiple of 4)
+        write_size_bytes = align_up(bytesRead, 4);
 
         xprintf("Writing %d bytes (aligned %d) to 0x%08x\n",
-                bytesRead, write_size, (unsigned)flash_address);
+                bytesRead, write_size_bytes, (unsigned)flash_address);
 
         result = hx_lib_spi_eeprom_word_write(spi_inst, flash_address,
-                                               (uint32_t *)write_buf, write_size);
+                                               (uint32_t *)write_buf, write_size_bytes);
         if (result != 0) {
             xprintf("Flash write failed at 0x%08x\n", (unsigned)flash_address);
             f_close(&file);
@@ -609,9 +637,9 @@ bool xip_copy_model_from_sd_to_flash(char *filename) {
         }
 
         // Verify the write
-        memset(verify_buf, 0, write_size);
+        memset(verify_buf, 0, write_size_bytes);
         result = hx_lib_spi_eeprom_word_read(spi_inst, flash_address,
-                                              (uint32_t *)verify_buf, write_size);
+                                              (uint32_t *)verify_buf, write_size_bytes);
         if (result != 0) {
             xprintf("Flash verify read failed at 0x%08x\n", (unsigned)flash_address);
             f_close(&file);
@@ -621,7 +649,7 @@ bool xip_copy_model_from_sd_to_flash(char *filename) {
             return false;
         }
 
-        if (memcmp(write_buf, verify_buf, write_size) != 0) {
+        if (memcmp(write_buf, verify_buf, write_size_bytes) != 0) {
             xprintf("Verify FAIL at 0x%08x\n", (unsigned)flash_address);
             f_close(&file);
             xSemaphoreGive(xSPIMutex);
@@ -630,7 +658,7 @@ bool xip_copy_model_from_sd_to_flash(char *filename) {
             return false;
         }
 
-        flash_address  += write_size;
+        flash_address  += write_size_bytes;
         totalBytesRead += bytesRead;
     }
 
@@ -677,7 +705,10 @@ bool xip_copy_metadata_to_flash(char *modelName) {
     printf_x_printBuffer((uint8_t *)&metaDataRam, sizeof(ModelMetaData));
     XP_WHITE;
 
-    xip_write_meta_data_to_flash(&metaDataRam);
+    if (xip_write_meta_data_to_flash(&metaDataRam) != 0) {
+        xprintf("Failed to write metadata to flash\n");
+        return false;
+    }
 
     // Enable XIP so the metaDataFlash pointer is valid for the print below
     if (xip_enable_XIP(true)) {
@@ -726,38 +757,475 @@ int xip_dump_slot_selector(void) {
     return 0;
 }
 
-/*************************************** Firmware Slot Management ******************************/
+/*************************************** Firmware Slot Management — Static Helpers ***************/
 
 /**
- * Erase one firmware image slot in flash.
- * Not yet implemented — requires further documentation on bootloader layout.
+ * Read and validate the slot selector sector header.
+ * Caller must have called xip_init_flash() first.
+ *
+ * @param hdr  output; filled on success
+ * @return 0 on success, -1 on error or invalid magic
+ */
+static int read_slot_selector(SlotSelectorHeader *hdr) {
+    xip_enable_XIP(false);
+
+    if (xSemaphoreTake(xSPIMutex, portMAX_DELAY) != pdTRUE) {
+        xprintf("read_slot_selector: mutex take failed\n");
+        return -1;
+    }
+
+    int ret = hx_lib_spi_eeprom_word_read(spi_inst, FLASH_SELECTOR_ADDR,
+                                           (uint32_t *)hdr, sizeof(SlotSelectorHeader));
+    xSemaphoreGive(xSPIMutex);
+
+    if (ret != 0) {
+        xprintf("read_slot_selector: SPI read failed\n");
+        return -1;
+    }
+
+    if (memcmp(hdr->magic, "HIMAXWE2", 8) != 0) {
+        xprintf("read_slot_selector: invalid magic\n");
+        return -1;
+    }
+
+    return 0;
+}
+
+/**
+ * Return the index of the currently active firmware slot.
+ *
+ * @return 0 (Slot A), 1 (Slot B), or -1 on error
+ */
+static int get_active_slot(void) {
+    SlotSelectorHeader hdr;
+
+    if (xip_init_flash() != 0) {
+        return -1;
+    }
+
+    if (read_slot_selector(&hdr) != 0) {
+        return -1;
+    }
+
+    if (hdr.flash_offset == FLASH_SLOT_A_ADDR) {
+        return 0;
+    }
+    if (hdr.flash_offset == FLASH_SLOT_B_ADDR) {
+        return 1;
+    }
+
+    xprintf("get_active_slot: unknown flash_offset 0x%08x\n",
+            (unsigned)hdr.flash_offset);
+    return -1;
+}
+
+#if XIP_FIRMWARE_VERIFY_AFTER_WRITE
+/**
+ * Full-pass read-back verification: re-open the SD card file and compare
+ * every byte against what was written to the flash slot.
+ *
+ * @param slot     0 for Slot A, 1 for Slot B
+ * @param filepath full path to the firmware image on the SD card
+ * @return 0 if flash contents match the file, -1 on mismatch or error
+ */
+static int verify_firmware_slot(uint8_t slot, const char *filepath) {
+    FRESULT res;
+    FIL file;
+    UINT bytes_read;
+    uint32_t flash_address = (slot == 0) ? FLASH_SLOT_A_ADDR : FLASH_SLOT_B_ADDR;
+    uint32_t total_verified = 0;
+    int ret = 0;
+
+    uint8_t *file_buf  = (uint8_t *)pvPortMalloc(FILE_CHUNK_SIZE);
+    uint8_t *flash_buf = (uint8_t *)pvPortMalloc(FILE_CHUNK_SIZE);
+
+    if (!file_buf || !flash_buf) {
+        vPortFree(file_buf);
+        vPortFree(flash_buf);
+        xprintf("verify_firmware_slot: malloc failed\n");
+        return -1;
+    }
+
+    res = f_open(&file, filepath, FA_READ);
+    if (res != FR_OK) {
+        vPortFree(file_buf);
+        vPortFree(flash_buf);
+        xprintf("verify_firmware_slot: cannot open %s (%d)\n", filepath, res);
+        return -1;
+    }
+
+    xip_enable_XIP(false);
+
+    if (xSemaphoreTake(xSPIMutex, portMAX_DELAY) != pdTRUE) {
+        f_close(&file);
+        vPortFree(file_buf);
+        vPortFree(flash_buf);
+        xprintf("verify_firmware_slot: mutex take failed\n");
+        return -1;
+    }
+
+    while (1) {
+        res = f_read(&file, file_buf, FILE_CHUNK_SIZE, &bytes_read);
+        if (res != FR_OK) {
+            xprintf("verify_firmware_slot: file read error %d\n", res);
+            ret = -1;
+            break;
+        }
+        if (bytes_read == 0) {
+            break;  // EOF — all bytes matched
+        }
+
+        uint32_t read_size = align_up(bytes_read, 4);
+
+        if (hx_lib_spi_eeprom_word_read(spi_inst, flash_address,
+                                         (uint32_t *)flash_buf, read_size) != 0) {
+            xprintf("verify_firmware_slot: flash read failed at 0x%08x\n",
+                    (unsigned)flash_address);
+            ret = -1;
+            break;
+        }
+
+        if (memcmp(file_buf, flash_buf, bytes_read) != 0) {
+            xprintf("verify_firmware_slot: mismatch at 0x%08x\n",
+                    (unsigned)flash_address);
+            ret = -1;
+            break;
+        }
+
+        flash_address  += read_size;
+        total_verified += bytes_read;
+    }
+
+    xSemaphoreGive(xSPIMutex);
+    f_close(&file);
+    vPortFree(file_buf);
+    vPortFree(flash_buf);
+
+    if (ret == 0) {
+        xprintf("verify_firmware_slot: slot %d full verify OK (%lu bytes)\n",
+                slot, (unsigned long)total_verified);
+    }
+    return ret;
+}
+#endif /* XIP_FIRMWARE_VERIFY_AFTER_WRITE */
+
+/*************************************** Firmware Slot Management ********************************/
+
+/**
+ * Erase one firmware image slot (16 × 64 KB blocks).
  */
 int xip_erase_firmware_slot(uint8_t slot) {
-    /* Not yet implemented */
-    (void)slot;
-    xprintf("xip_erase_firmware_slot: not yet implemented\n");
-    return -1;
+    uint32_t slot_addr;
+    const uint32_t blocks_needed = FLASH_SLOT_SIZE / FLASH_BLOCK_SIZE;  // 16
+
+    if (slot == 0) {
+        slot_addr = FLASH_SLOT_A_ADDR;
+    } else if (slot == 1) {
+        slot_addr = FLASH_SLOT_B_ADDR;
+    } else {
+        xprintf("xip_erase_firmware_slot: invalid slot %d\n", slot);
+        return -1;
+    }
+
+    if (xip_init_flash() != 0) {
+        return -1;
+    }
+
+    xprintf("Erasing firmware slot %d (%lu x 64KB blocks from 0x%08x)\n",
+            slot, (unsigned long)blocks_needed, (unsigned)slot_addr);
+
+    xip_enable_XIP(false);
+
+    if (xSemaphoreTake(xSPIMutex, portMAX_DELAY) != pdTRUE) {
+        xprintf("xip_erase_firmware_slot: mutex take failed\n");
+        return -1;
+    }
+
+    uint32_t addr = slot_addr;
+    for (uint32_t i = 0; i < blocks_needed; i++) {
+        int ret = hx_lib_spi_eeprom_erase_sector(spi_inst, addr, FLASH_64KBLOCK);
+        if (ret != 0) {
+            xprintf("xip_erase_firmware_slot: erase failed at 0x%08x\n", (unsigned)addr);
+            xSemaphoreGive(xSPIMutex);
+            return -1;
+        }
+        addr += FLASH_BLOCK_SIZE;
+        vTaskDelay(1);  // yield to prevent inactivity timeout
+    }
+
+    xSemaphoreGive(xSPIMutex);
+    xprintf("Firmware slot %d erased OK\n", slot);
+    return 0;
 }
 
 /**
- * Write a firmware image from an SD card file to the specified flash slot.
- * Not yet implemented — requires further documentation on bootloader layout.
+ * Write a firmware image from an SD card file to the specified flash slot,
+ * with per-chunk read-back verification.
+ *
+ * The slot must already be erased before calling this function.
+ *
+ * @param slot     0 for Slot A, 1 for Slot B
+ * @param filepath full path to the firmware image on the SD card
+ * @return 0 on success, -1 on failure
  */
-int xip_write_firmware_from_sd(uint8_t slot, const char *filename) {
-    /* Not yet implemented */
-    (void)slot;
-    (void)filename;
-    xprintf("xip_write_firmware_from_sd: not yet implemented\n");
-    return -1;
+int xip_write_firmware_from_sd(uint8_t slot, const char *filepath) {
+    FRESULT res;
+    FIL file;
+    UINT bytes_read;
+    uint32_t flash_address;
+    uint32_t total_written = 0;
+    uint32_t write_size;
+    int32_t result;
+    DWORD file_size;
+
+    if (slot == 0) {
+        flash_address = FLASH_SLOT_A_ADDR;
+    } else if (slot == 1) {
+        flash_address = FLASH_SLOT_B_ADDR;
+    } else {
+        xprintf("xip_write_firmware_from_sd: invalid slot %d\n", slot);
+        return -1;
+    }
+
+    if (xip_init_flash() != 0) {
+        return -1;
+    }
+
+    uint8_t *write_buf  = (uint8_t *)pvPortMalloc(FILE_CHUNK_SIZE);
+    uint8_t *verify_buf = (uint8_t *)pvPortMalloc(FILE_CHUNK_SIZE);
+
+    if (!write_buf || !verify_buf) {
+        vPortFree(write_buf);
+        vPortFree(verify_buf);
+        xprintf("xip_write_firmware_from_sd: malloc failed\n");
+        return -1;
+    }
+
+    res = f_open(&file, filepath, FA_READ);
+    if (res != FR_OK) {
+        vPortFree(write_buf);
+        vPortFree(verify_buf);
+        xprintf("xip_write_firmware_from_sd: cannot open %s (%d)\n", filepath, res);
+        return -1;
+    }
+
+    file_size = f_size(&file);
+    if (file_size == 0) {
+        f_close(&file);
+        vPortFree(write_buf);
+        vPortFree(verify_buf);
+        xprintf("xip_write_firmware_from_sd: file is empty\n");
+        return -1;
+    }
+
+    if (file_size > FLASH_SLOT_SIZE) {
+        f_close(&file);
+        vPortFree(write_buf);
+        vPortFree(verify_buf);
+        xprintf("xip_write_firmware_from_sd: file too large (%lu > %lu bytes)\n",
+                (unsigned long)file_size, (unsigned long)FLASH_SLOT_SIZE);
+        return -1;
+    }
+
+    xprintf("Writing %lu bytes to firmware slot %d (0x%08x)\n",
+            (unsigned long)file_size, slot, (unsigned)flash_address);
+
+    xip_enable_XIP(false);
+
+    if (xSemaphoreTake(xSPIMutex, portMAX_DELAY) != pdTRUE) {
+        f_close(&file);
+        vPortFree(write_buf);
+        vPortFree(verify_buf);
+        xprintf("xip_write_firmware_from_sd: mutex take failed\n");
+        return -1;
+    }
+
+    while (1) {
+        memset(write_buf, 0xFF, FILE_CHUNK_SIZE);   // pre-fill with erased state
+
+        res = f_read(&file, write_buf, FILE_CHUNK_SIZE, &bytes_read);
+        if (res != FR_OK) {
+            xprintf("xip_write_firmware_from_sd: file read error %d\n", res);
+            f_close(&file);
+            xSemaphoreGive(xSPIMutex);
+            vPortFree(write_buf);
+            vPortFree(verify_buf);
+            return -1;
+        }
+        if (bytes_read == 0) {
+            break;  // EOF
+        }
+
+        // Round up to a 4-byte boundary (bytes_len must be a multiple of 4)
+        write_size = align_up(bytes_read, 4);
+
+        result = hx_lib_spi_eeprom_word_write(spi_inst, flash_address,
+                                               (uint32_t *)write_buf, write_size);
+        if (result != 0) {
+            xprintf("xip_write_firmware_from_sd: write failed at 0x%08x\n",
+                    (unsigned)flash_address);
+            f_close(&file);
+            xSemaphoreGive(xSPIMutex);
+            vPortFree(write_buf);
+            vPortFree(verify_buf);
+            return -1;
+        }
+
+        // Per-chunk read-back verify
+        memset(verify_buf, 0, write_size);
+        result = hx_lib_spi_eeprom_word_read(spi_inst, flash_address,
+                                              (uint32_t *)verify_buf, write_size);
+        if (result != 0) {
+            xprintf("xip_write_firmware_from_sd: verify read failed at 0x%08x\n",
+                    (unsigned)flash_address);
+            f_close(&file);
+            xSemaphoreGive(xSPIMutex);
+            vPortFree(write_buf);
+            vPortFree(verify_buf);
+            return -1;
+        }
+
+        if (memcmp(write_buf, verify_buf, write_size) != 0) {
+            xprintf("xip_write_firmware_from_sd: verify mismatch at 0x%08x\n",
+                    (unsigned)flash_address);
+            f_close(&file);
+            xSemaphoreGive(xSPIMutex);
+            vPortFree(write_buf);
+            vPortFree(verify_buf);
+            return -1;
+        }
+
+        flash_address  += write_size;
+        total_written  += bytes_read;
+    }
+
+    xSemaphoreGive(xSPIMutex);
+    f_close(&file);
+    vPortFree(write_buf);
+    vPortFree(verify_buf);
+
+    if (total_written != (uint32_t)file_size) {
+        xprintf("xip_write_firmware_from_sd: incomplete write %lu/%lu bytes\n",
+                (unsigned long)total_written, (unsigned long)file_size);
+        return -1;
+    }
+
+    xprintf("Firmware slot %d written and chunk-verified OK (%lu bytes)\n",
+            slot, (unsigned long)total_written);
+    return 0;
 }
 
 /**
- * Write the slot selector sector to indicate which firmware slot to boot from.
- * Not yet implemented — requires further documentation on bootloader layout.
+ * Erase the slot selector sector and write a fresh 20-byte header pointing
+ * to the specified firmware slot.  The remainder of the sector is left in
+ * the erased (0xFF) state.
  */
 int xip_write_slot_selector(uint8_t slot) {
-    /* Not yet implemented */
-    (void)slot;
-    xprintf("xip_write_slot_selector: not yet implemented\n");
-    return -1;
+    SlotSelectorHeader hdr;
+
+    if (slot == 0) {
+        hdr.flash_offset = FLASH_SLOT_A_ADDR;
+        hdr.checksum     = SLOT_A_SELECTOR_CHECKSUM;
+    } else if (slot == 1) {
+        hdr.flash_offset = FLASH_SLOT_B_ADDR;
+        hdr.checksum     = SLOT_B_SELECTOR_CHECKSUM;
+    } else {
+        xprintf("xip_write_slot_selector: invalid slot %d\n", slot);
+        return -1;
+    }
+
+    memcpy(hdr.magic, "HIMAXWE2", 8);
+    hdr.constant_02 = 0x00000002;
+    hdr.hx_dsp_flag = 0x0001;
+
+    if (xip_init_flash() != 0) {
+        return -1;
+    }
+
+    xip_enable_XIP(false);
+
+    if (xSemaphoreTake(xSPIMutex, portMAX_DELAY) != pdTRUE) {
+        xprintf("xip_write_slot_selector: mutex take failed\n");
+        return -1;
+    }
+
+    // Erase the 4 KB selector sector
+    if (hx_lib_spi_eeprom_erase_sector(spi_inst, FLASH_SELECTOR_ADDR, FLASH_SECTOR) != 0) {
+        xprintf("xip_write_slot_selector: sector erase failed\n");
+        xSemaphoreGive(xSPIMutex);
+        return -1;
+    }
+
+    // Write the 20-byte header; remainder stays 0xFF (erased)
+    if (hx_lib_spi_eeprom_word_write(spi_inst, FLASH_SELECTOR_ADDR,
+                                      (uint32_t *)&hdr, sizeof(SlotSelectorHeader)) != 0) {
+        xprintf("xip_write_slot_selector: header write failed\n");
+        xSemaphoreGive(xSPIMutex);
+        return -1;
+    }
+
+    xSemaphoreGive(xSPIMutex);
+    xprintf("xip_write_slot_selector: slot %d selector written OK\n", slot);
+    return 0;
+}
+
+/**
+ * Top-level firmware update: erase inactive slot, write and verify image,
+ * then update the slot selector.
+ */
+int xip_update_firmware_from_sd(const char *filename) {
+    // sizeof(CONFIG_DIR) includes its NUL; +1 for the '/' separator
+    char filepath[sizeof(CONFIG_DIR) + MAX_FIRMWARE_NAME_LEN + 1];
+    int active_slot;
+    int target_slot;
+
+    snprintf(filepath, sizeof(filepath), "%s/%s", CONFIG_DIR, filename);
+
+    // Step 0: verify the image file exists before touching flash
+    if (!file_exists(filepath)) {
+        xprintf("firmware: %s not found on SD card\n", filepath);
+        return -1;
+    }
+
+    // Step 1: find the active slot
+    active_slot = get_active_slot();
+    if (active_slot < 0) {
+        xprintf("firmware: cannot read slot selector\n");
+        return -1;
+    }
+    xprintf("firmware: current active slot is %d\n", active_slot);
+
+    // Step 2: target is the other slot
+    target_slot = (active_slot == 0) ? 1 : 0;
+    xprintf("firmware: programming slot %d from %s\n", target_slot, filepath);
+
+    // Step 3: erase target slot
+    if (xip_erase_firmware_slot(target_slot) != 0) {
+        xprintf("firmware: slot erase failed\n");
+        return -2;
+    }
+
+    // Step 4: write firmware image with per-chunk verification
+    if (xip_write_firmware_from_sd(target_slot, filepath) != 0) {
+        xprintf("firmware: write failed — slot selector NOT updated\n");
+        return -3;
+    }
+
+#if XIP_FIRMWARE_VERIFY_AFTER_WRITE
+    // Step 4b: full-pass read-back verification
+    if (verify_firmware_slot(target_slot, filepath) != 0) {
+        xprintf("firmware: full verify failed — slot selector NOT updated\n");
+        return -4;
+    }
+#endif
+
+    // Step 5: update slot selector to point to the new image
+    if (xip_write_slot_selector(target_slot) != 0) {
+        xprintf("firmware: slot selector update failed\n");
+        return -5;
+    }
+
+    xprintf("firmware: slot %d updated OK. Type 'reset' to boot the new image.\n",
+            target_slot);
+    return 0;
 }

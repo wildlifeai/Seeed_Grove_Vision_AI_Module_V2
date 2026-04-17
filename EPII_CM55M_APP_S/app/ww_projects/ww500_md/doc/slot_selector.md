@@ -17,13 +17,19 @@ application at boot time based on a pointer stored in the last sector of the fla
 
 ## Contents of the selector sector
 
-A new CLU command `write-sel` reads the final sector and writes it as a binary file to the SD card.
-This has allowed me to check what is in it, and how it changes as different images are written..
+A new CLI command `write-sel` reads the final sector and writes it as a binary file to the SD card.
+This has allowed me to check what is in it, and how it changes as different images are written.
 
 Most of the sector contains 0xFF (the erased state). Only the first 20 bytes contain data.
 
 The bootloader gives an indication of which slot is in use. The following contains the bootloader 
 text and the selector sector data.
+
+The `write-sel` command and the function it called has been replaced by `dump-sel` and the function has been modified, 
+to simply print the first 32 bytes to the console.
+
+I programmed the firmware images into the XIP memory using the existing XMODEM mechanism, 
+then recorded the bootloader output and the contents of the slot selector sector. The results are shown below.
 
 #### Slot A
 
@@ -39,7 +45,7 @@ jump_addr=0x10000000
 Compiler Version: ARM GNU, 14.3.1 20250623
 ```
 
-Hex data
+Hex dump of slot selector sector
 
 ```
 Slot selector (0x00fff000, first 32 bytes):
@@ -69,7 +75,7 @@ jump_addr=0x10000000
 Compiler Version: ARM GNU, 14.3.1 20250623
 ```
 
-Hex data
+Hex dump of slot selector sector
 
 ```
 Slot selector (0x00fff000, first 32 bytes):

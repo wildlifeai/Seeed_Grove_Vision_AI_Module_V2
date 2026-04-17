@@ -52,6 +52,11 @@ extern "C" {
 #define FLASH_SELECTOR_ADDR     0x00FFF000           // Physical address of the last 4 KB slot selector sector
 #define FLASH_BLOCK_SIZE        (64 * 1024)          // 64 KB erase block size (FLASH_64KBLOCK)
 
+// Firmware image slot addresses and size
+#define FLASH_SLOT_A_ADDR       0x00000000           // Physical base of firmware Slot A
+#define FLASH_SLOT_B_ADDR       0x00100000           // Physical base of firmware Slot B
+#define FLASH_SLOT_SIZE         (1024 * 1024)        // 1 MB per slot (16 × 64 KB blocks)
+
 // XIP virtual/physical address mapping.
 // The SPI EEPROM appears at virtual base 0x3A000000 when XIP mode is active.
 // Physical address 0x00000000 maps to virtual 0x3A000000.
@@ -93,6 +98,24 @@ typedef struct {
     char labels[MAX_CLASSES][MAX_LABEL_LEN]; // Class label strings
     uint32_t crc;                            // Reserved — set to 0 for now
 } ModelMetaData;
+
+/**
+ * Layout of the 20-byte slot selector header at FLASH_SELECTOR_ADDR (physical 0x00FFF000).
+ * The bootloader reads this to decide which firmware slot to execute at reset.
+ *
+ * The checksum depends only on the slot address, not on firmware content.
+ * Values captured from: 1st BL Build DATE=Jan 17 2025, Version 2.12
+ *   Slot A (flash_offset 0x00000000): checksum 0x4D04
+ *   Slot B (flash_offset 0x00100000): checksum 0x167C
+ * TODO: verify these values if the bootloader is ever updated.
+ */
+typedef struct {
+    char     magic[8];       // "HIMAXWE2" (ASCII, 8 bytes, not NUL-terminated in flash)
+    uint32_t flash_offset;   // Slot base: FLASH_SLOT_A_ADDR or FLASH_SLOT_B_ADDR
+    uint32_t constant_02;    // Always 0x00000002
+    uint16_t hx_dsp_flag;    // Always 0x0001
+    uint16_t checksum;       // 0x4D04 (Slot A) or 0x167C (Slot B)
+} SlotSelectorHeader;
 
 // Read-only pointer to the metadata as it appears in XIP-mapped flash.
 // Valid only while XIP mode is enabled.
@@ -204,35 +227,45 @@ bool xip_copy_metadata_to_flash(char *modelName);
 int xip_dump_slot_selector(void);
 
 /*************************************** Firmware Slot Management ******************************/
-/*
- * The following functions manage the two firmware image slots (Slot A and Slot B)
- * and the boot-slot selector sector.  They are stubs pending further documentation
- * on the bootloader's flash layout expectations.
- */
 
 /**
- * Erase one firmware image slot in flash.
+ * Update the inactive firmware slot from a file on the SD card, then switch to it.
+ *
+ * Sequence: read slot selector → find active slot → erase inactive slot →
+ * write image → verify write → update slot selector.
+ *
+ * On any failure before the slot selector is written, the selector is left
+ * unchanged so the device continues to boot the existing firmware.
+ *
+ * @param filename  bare filename in /MANIFEST, e.g. "output.img"
+ * @return 0 on success, negative error code on failure
+ */
+int xip_update_firmware_from_sd(const char *filename);
+
+/**
+ * Erase one firmware image slot (16 × 64 KB blocks).
  *
  * @param slot  0 for Slot A (physical 0x00000000), 1 for Slot B (physical 0x00100000)
- * @return 0 on success, -1 on failure or not yet implemented
+ * @return 0 on success, -1 on failure
  */
 int xip_erase_firmware_slot(uint8_t slot);
 
 /**
- * Write a firmware image from an SD card file to the specified flash slot.
+ * Write a firmware image from a file to the specified flash slot, with
+ * per-chunk read-back verification.
  *
  * @param slot      0 for Slot A, 1 for Slot B
- * @param filename  full path to the firmware image on the SD card
- * @return 0 on success, -1 on failure or not yet implemented
+ * @param filepath  full path to the firmware image on the SD card
+ * @return 0 on success, -1 on failure
  */
-int xip_write_firmware_from_sd(uint8_t slot, const char *filename);
+int xip_write_firmware_from_sd(uint8_t slot, const char *filepath);
 
 /**
- * Write the slot selector sector to indicate which firmware slot the bootloader
- * should boot from at next reset.
+ * Erase the slot selector sector and write a fresh selector pointing to
+ * the specified firmware slot.
  *
  * @param slot  0 for Slot A, 1 for Slot B
- * @return 0 on success, -1 on failure or not yet implemented
+ * @return 0 on success, -1 on failure
  */
 int xip_write_slot_selector(uint8_t slot);
 

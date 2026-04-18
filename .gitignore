@@ -73,7 +73,10 @@ we2_image_gen_local_dpd/secureboot_tool/**/*.log
 # Node.js dependencies
 node_modules/
 
-# Claude Code files — kept locally but not committed
+# Agent and Editor settings
+.agents/
+.cursorrules
+.windsurfrules
 CLAUDE.md
 .claude/
 **/claude/

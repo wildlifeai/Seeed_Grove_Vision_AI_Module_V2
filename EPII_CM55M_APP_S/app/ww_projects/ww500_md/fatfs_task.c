@@ -1767,7 +1767,7 @@ void fatfs_printCwd(void) {
  *
  * Example:
  *   Input:  "/MEDIA/ABC12345/IMAGES.000"
- *   գործող: Creates "/MEDIA", then "/MEDIA/ABC12345", then
+ *   Operation: Creates "/MEDIA", then "/MEDIA/ABC12345", then
  *           "/MEDIA/ABC12345/IMAGES.000" as needed.
  *
  * Existing directories are not treated as an error (FR_EXIST is ignored).

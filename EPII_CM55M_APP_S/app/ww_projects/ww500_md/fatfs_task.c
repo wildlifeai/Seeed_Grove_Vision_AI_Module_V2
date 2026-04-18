@@ -311,8 +311,8 @@ static FRESULT fileWriteImage(fileOperation_t *fileOp, fileBufferInfo_t * extraB
 
     // This ensures that any data in the D-cache is committed to RAM
     SCB_CleanDCache_by_Addr ((void *)fileOp->buffer, fileOp->length);
-#if 0
-	// Check by printing some of jpeg buffer
+/*
+	// Option here to check by printing some of jpeg buffer
     uint16_t bytesToPrint = 16;
     uint8_t * buffer = (uint8_t * ) SRAM_addr;
     XP_LT_GREY;
@@ -326,7 +326,7 @@ static FRESULT fileWriteImage(fileOperation_t *fileOp, fileBufferInfo_t * extraB
 	}
 	xprintf("\n");
     XP_WHITE;
-#endif // 1 (print buffer)
+*/
 
     // (3a) Write (first chunk of) data to the file
     res = f_write(&dirManager->imagesFile, (void *)fileOp->buffer, fileOp->length, &bw);
@@ -1376,8 +1376,8 @@ static void vFatFsTask(void *pvParameters) {
 					fatfs_setOperationalParameter(OP_PARAMETER_SEQUENCE_NUMBER, 1);
 				}
 
-				// Phase 2: now that op_parameter[] is valid, determine and create the
-				// correct image directory.
+				// Phase 2: now that op_parameter[] and deployment ID are valid,
+				// determine and create the correct image directory.
 				dir_mgr_init_image_dir(&dirManager);
 			}
 			else {
@@ -1655,6 +1655,7 @@ void fatfs_setOperationalParameter(OP_PARAMETERS_E parameter, int16_t value) {
 	}
 	else {
 		// error
+		xprintf("Operational parameter index %d out of range\n", parameter);
 	}
 }
 
@@ -1715,10 +1716,7 @@ void fatfs_getDeploymentId(char *deployment_id_buffer, size_t buffer_size) {
 		return;
 	}
 
-	// Prefer the string form if it has been set
-	if (strcmp(deployment_id_string, DEPLOYMENT_ID_ZERO_UUID) != 0) {
-		snprintf(deployment_id_buffer, buffer_size, "%s", deployment_id_string);
-	}
+	snprintf(deployment_id_buffer, buffer_size, "%s", deployment_id_string);
 }
 
 /**
@@ -1757,3 +1755,67 @@ void fatfs_printCwd(void) {
 		xprintf("CWD is '%s'\n", cur_dir);
 	}
 }
+
+
+/**
+ * @brief Create a directory path recursively (mkdir -p style).
+ *
+ * This function ensures that the full directory path exists by creating
+ * each intermediate directory level as required. It is intended for use
+ * with FatFs, where f_mkdir() can only create a single directory level
+ * and will fail with FR_NO_PATH if parent directories do not exist.
+ *
+ * Example:
+ *   Input:  "/MEDIA/ABC12345/IMAGES.000"
+ *   Operation: Creates "/MEDIA", then "/MEDIA/ABC12345", then
+ *           "/MEDIA/ABC12345/IMAGES.000" as needed.
+ *
+ * Existing directories are not treated as an error (FR_EXIST is ignored).
+ *
+ * @param path  Null-terminated string containing the full directory path.
+ *
+ * @return
+ *   FR_OK        All required directories exist or were created successfully.
+ *   != FR_OK     Error returned by f_mkdir() for the first failing level.
+ *
+ * @note
+ *   - The input path buffer is not modified.
+ *   - Requires DIRNAMELEN to be large enough for a copy of the path.
+ *   - Uses '/' as the path separator.
+ */
+FRESULT fatfs_mkdir_recursive(const char *path) {
+    FRESULT res;
+    char tmp[DIRNAMELEN];
+    char *p = NULL;
+
+    strncpy(tmp, path, sizeof(tmp));
+
+    tmp[sizeof(tmp) - 1] = '\0';
+
+    // Walk the path string and create each intermediate directory level.
+    // We start at tmp+1 to skip the leading '/' so that we only trigger
+    // directory creation when we reach a separator between valid path components.
+    // At each '/', the string is temporarily truncated and f_mkdir() is called
+    // on the partial path, then restored before continuing.
+    for (p = tmp + 1; *p; p++) {
+        if (*p == '/') {
+            *p = '\0';
+
+            res = f_mkdir(tmp);
+            if (res != FR_OK && res != FR_EXIST) {
+                return res;
+            }
+
+            *p = '/';
+        }
+    }
+
+    // Create final directory
+    res = f_mkdir(tmp);
+    if (res != FR_OK && res != FR_EXIST) {
+        return res;
+    }
+
+    return FR_OK;
+}
+

@@ -260,7 +260,7 @@ static BaseType_t prvGetSelfTest(char *pcWriteBuffer, size_t xWriteBufferLen, co
 static BaseType_t prvSetOpParam(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 static BaseType_t prvGetOpParam(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 
-#if defined(USE_HM0360) || defined(USE_HM0360_MD)
+#if defined(USE_HM0360)
 static BaseType_t prvMd(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) ;
 #endif // defined(USE_HM0360) || defined(USE_HM0360_MD)
 
@@ -532,7 +532,7 @@ static const CLI_Command_Definition_t xGetSelfTest = {
 	0			/* No parameters expected */
 };
 
-#if defined(USE_HM0360) || defined(USE_HM0360_MD)
+#if defined(USE_HM0360)
 /* Structure that defines the "md" command line command. */
 static const CLI_Command_Definition_t xMd = {
 	"md", /* The command string to type. */
@@ -1663,7 +1663,9 @@ static BaseType_t prvEraseModel(char *pcWriteBuffer, size_t xWriteBufferLen, con
 	return pdFALSE;
 }
 
-#if defined(USE_HM0360) || defined(USE_HM0360_MD)
+//#if defined(USE_HM0360) || defined(USE_HM0360_MD)
+// TODO - if we need this command while using RP camera then we need to move cisdp_sensor_set_md_sensitivity()
+#if defined(USE_HM0360)
 /**
  * Sets motion detection sensitivity:
  *
@@ -2149,7 +2151,7 @@ static void vRegisterCLICommands(void)
 	FreeRTOS_CLIRegisterCommand(&xGetOpParam);	// Gets an Operational Parameter
 	FreeRTOS_CLIRegisterCommand(&xGetSelfTest);	// Gets self test bits
 
-#if defined(USE_HM0360) || defined(USE_HM0360_MD)
+#if defined(USE_HM0360)
 	FreeRTOS_CLIRegisterCommand(&xMd);	// Sets motion detection sensitivity
 #endif // defined(USE_HM0360) || defined(USE_HM0360_MD)
 

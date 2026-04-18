@@ -5,10 +5,10 @@
  *      Author: 901912
  */
 
-#include "../../../ww500_md/cis_sensor/cis_ov5647/cisdp_sensor.h"
+#include "cisdp_sensor.h"
 
-#include "../../../ww500_md/cis_sensor/cis_ov5647/cisdp_cfg.h"
-#include "../../../ww500_md/WE2_debug.h"
+#include "cisdp_cfg.h"
+#include "WE2_debug.h"
 #include "hx_drv_CIS_common.h"
 #include "hx_drv_timer.h"
 #include "hx_drv_hxautoi2c_mst.h"

@@ -417,7 +417,7 @@ static void incrementBrightness(void) {
 }
 #endif // INVESTIGATE_FLASH_BRIGHTNESS
 
-#if defined(INVESTIGATE_TONE_MAPPING) && (defined(USE_HM0360) || defined(USE_HM0360_MD))
+#if defined(INVESTIGATE_TONE_MAPPING) && defined(USE_HM0360)
 
 /**
  * Experimental feature that increments tone mapping value for each successive image.
@@ -703,7 +703,7 @@ static APP_MSG_DEST_T handleEventForInit(APP_MSG_T img_recv_msg) {
             }
 #endif // INVESTIGATE_FLASH_BRIGHTNESS
 
-#if defined(USE_HM0360) || defined(USE_HM0360_MD)
+#if defined(USE_HM0360)
 #ifdef INVESTIGATE_TONE_MAPPING
             if (fatfs_getOperationalParameter(OP_PARAMETER_TEST_MODE_BITS) & TEST_BIT_TONE_MAPPING) {
             	xprintf("Tone mapping values change after each image.\n");
@@ -948,7 +948,7 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
         // We will do this in two chunks as MSGTOMASTERLEN is too small for all characters
         hm0360_md_printGrid(roiOut, 128, msgToMaster, MSGTOMASTERLEN);
         xprintf("%s", msgToMaster);
-        hm0360_md_printGrid(&roiOut[15], 128, msgToMaster, MSGTOMASTERLEN);
+        hm0360_md_printGrid(&roiOut[16], 128, msgToMaster, MSGTOMASTERLEN);
         xprintf("%s\n", msgToMaster);
 
         XP_WHITE;
@@ -981,7 +981,7 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
         	if (fatfs_getOperationalParameter(OP_PARAMETER_TEST_MODE_BITS) & TEST_BIT_SAVE_BMP) {
         		// alternate between JPG and BMP files, to tell the difference
         		if ((g_cur_jpegenc_frame % 2) == 0) {
-#if defined(INVESTIGATE_TONE_MAPPING) && (defined(USE_HM0360) || defined(USE_HM0360_MD))
+#if defined(INVESTIGATE_TONE_MAPPING) && defined(USE_HM0360)
         			if (fatfs_getOperationalParameter(OP_PARAMETER_TEST_MODE_BITS) & TEST_BIT_TONE_MAPPING) {
         				incrementToneMapping();
         			}
@@ -993,7 +993,7 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
         		}
         	}
         	else {
-#if defined(INVESTIGATE_TONE_MAPPING) && (defined(USE_HM0360) || defined(USE_HM0360_MD))
+#if defined(INVESTIGATE_TONE_MAPPING) && defined(USE_HM0360)
         		if (fatfs_getOperationalParameter(OP_PARAMETER_TEST_MODE_BITS) & TEST_BIT_TONE_MAPPING) {
         			incrementToneMapping();
         		}
@@ -1003,7 +1003,7 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
         	}
 
 #else
-#if defined(INVESTIGATE_TONE_MAPPING) && (defined(USE_HM0360) || defined(USE_HM0360_MD))
+#if defined(INVESTIGATE_TONE_MAPPING) && (defined(USE_HM0360))
         	if (fatfs_getOperationalParameter(OP_PARAMETER_TEST_MODE_BITS) & TEST_BIT_TONE_MAPPING) {
         		incrementToneMapping();
         	}
@@ -1460,14 +1460,17 @@ static void vImageTask(void *pvParameters) {
     g_cur_jpegenc_frame = 0;
     g_captures_to_take = 0;
     g_timer_period = 0;
-#define QTABLE_4X
-#ifdef QTABLE_4X
+
+// JPEG_COMPRESSION is defined in cisdp_cfg.h as 4 or 10
+#if (JPEG_COMPRESSION == 10)
+    // selects JPEG_ENC_QTABLE_10X
+    g_jpg_ratio = 0;
+#elif (JPEG_COMPRESSION == 4)
     // selects JPEG_ENC_QTABLE_4X = better quality
     g_jpg_ratio = 4;
 #else
-    // selects JPEG_ENC_QTABLE_10X
-    g_jpg_ratio = 0;
-#endif // QTABLE_4X
+    #error "Unsupported JPEG quality setting"
+#endif
 
     g_wdt_event = false;
 
@@ -1484,6 +1487,13 @@ static void vImageTask(void *pvParameters) {
     // Observing these messages confirms the initialisation sequence
     xprintf("Starting Image Task\n");
     XP_WHITE;
+
+    // Sanity check: these are defined in cisdp_cfg.h
+    // The JPEG buffer seems much larger than necessary
+    xprintf("Image %d x %d. Raw buffer %d. JPEG buffer %d. JPEG compression x%d\n",
+    		SENCTRL_SENSOR_WIDTH, SENCTRL_SENSOR_HEIGHT,
+			RAW_BUFSIZE, JPEG_BUFSIZE,
+			JPEG_COMPRESSION );
 
     if (cameraSystemEnabled) {
     	// The CONFIG.TXT intends the came system to operate,
@@ -1769,7 +1779,9 @@ static bool configure_image_sensor(CAMERA_CONFIG_E operation) {
         	processedOK = false;
         }
         else  {
+#ifdef USE_HM0360
         	cisdp_sensor_set_md_sensitivity(fatfs_getOperationalParameter(OP_PARAMETER_MD_SENSITIVITY));
+#endif // USE_HM0360
         	// Initialise extra registers from file
         	cis_file_process(CAMERA_EXTRA_FILE);
 
@@ -1794,8 +1806,12 @@ static bool configure_image_sensor(CAMERA_CONFIG_E operation) {
             processedOK = false;
         }
         else  {
+
+#ifdef USE_HM0360
         	cisdp_sensor_set_md_sensitivity(fatfs_getOperationalParameter(OP_PARAMETER_MD_SENSITIVITY));
-            // if wdma variable is zero when not init yet, then this step is a must be to retrieve wdma address
+
+#endif // USE_HM0360
+        	// if wdma variable is zero when not init yet, then this step is a must be to retrieve wdma address
             //  Datapath events give callbacks to os_app_dplib_cb() in dp_task
             if (cisdp_dp_init(true, SENSORDPLIB_PATH_INT_INP_HW5X5_JPEG, os_app_dplib_cb, g_jpg_ratio, APP_DP_RES_YUV640x480_INP_SUBSAMPLE_1X) < 0)  {
                 xprintf("\r\nDATAPATH Init fail\r\n");
@@ -2003,27 +2019,15 @@ static void prepareJpegFile(int8_t * outCategories, uint8_t classCount, fileBuff
 	XP_WHITE;
 #endif
 
-
-#if 0
-	// file names before 30/3/26
-	if (wokeReason == APP_WAKE_REASON_MD)  {
-		// Motion has woken us
-		snprintf(g_imageFileName, IMAGEFILENAMELEN, "MD%06d.JPG", fatfs_getImageSequenceNumber());
-	}
-	else   {
-		// Must be a time lapse event
-		snprintf(g_imageFileName, IMAGEFILENAMELEN, "TL%06d.JPG", fatfs_getImageSequenceNumber());
-	}
-#else
 	dir_mgr_generateImageFilename(g_imageFileName, IMAGEFILENAMELEN, "JPG");
-#endif
 
 	fileOp.fileName = g_imageFileName;	// a global
 	fileOp.senderQueue = xImageTaskQueue;
 	fileOp.closeWhenDone = true;
 
-	dbg_printf(DBG_LESS_INFO, "Writing %d bytes (%d + %d) to '%s' from 0x%08x\n",
-			(jpegLength + exifLength), jpegLength, exifLength, fileOp.fileName, jpegBuffer);
+	// The JPEG buffer seems much much larger than necessary...
+	dbg_printf(DBG_LESS_INFO, "Writing %d bytes (%d + %d) to '%s' from jpeg buffer of %d bytes\n",
+			(jpegLength + exifLength), jpegLength, exifLength, fileOp.fileName, JPEG_BUFSIZE);
 
 	// Save the file name as the most recent image
 	snprintf(lastImageFileName, IMAGEFILENAMELEN, "%s", fileOp.fileName);
@@ -2086,26 +2090,14 @@ static void prepareBmpFile(fileBufferInfo_t * extraBlock) {
 	XP_WHITE;
 #endif
 
-#if 0
-	// file names before 30/3/26
-	if (wokeReason == APP_WAKE_REASON_MD)  {
-		// Motion has woken us
-		snprintf(g_imageFileName, IMAGEFILENAMELEN, "MD%06d.BMP", fatfs_getImageSequenceNumber());
-	}
-	else   {
-		// Must be a time lapse event
-		snprintf(g_imageFileName, IMAGEFILENAMELEN, "TL%06d.BMP", fatfs_getImageSequenceNumber());
-	}
-#else
 	dir_mgr_generateImageFilename(g_imageFileName, IMAGEFILENAMELEN, "BMP");
-#endif
 
 	fileOp.fileName = g_imageFileName;	// a global
 	fileOp.senderQueue = xImageTaskQueue;
 	fileOp.closeWhenDone = true;
 
-	dbg_printf(DBG_LESS_INFO, "Writing %d bytes (%d + %d) to '%s' from 0x%08x\n",
-			(headerLength + bitMapLength), headerLength, bitMapLength, fileOp.fileName, jpegBuffer);
+	dbg_printf(DBG_LESS_INFO, "Writing %d bytes (%d + %d) to '%s'\n",
+			(headerLength + bitMapLength), headerLength, bitMapLength, fileOp.fileName);
 
 	// Save the file name as the most recent image
 	snprintf(lastImageFileName, IMAGEFILENAMELEN, "%s", fileOp.fileName);
@@ -2477,6 +2469,7 @@ static uint16_t build_exif_segment(int8_t *outCategories, uint8_t categoriesCoun
     char timestamp[EXIFSTRINGLENGTH] = {0}; // 22:20:36 2025:07:06 = 19 characters plus trailing \0
     uint16_t exif_len;
     uint8_t nnData[MAX_CLASSES + 2];
+	char deployment_id[UUIDLENGTH];
 
     // IFD count: base entries (9) = 8 starting with TAG_MAKE plus TAG_GPS_IFD_POINTER later.
     // dynamic_ifd_count might be incremented if we add UserComment and DeploymentID
@@ -2550,7 +2543,6 @@ static uint16_t build_exif_segment(int8_t *outCategories, uint8_t categoriesCoun
 #endif //ENABLE_EXIF_CONFIDENCE
 
 	// Get deployment ID from operational parameters
-	char deployment_id[UUIDLENGTH];
 	fatfs_getDeploymentId(deployment_id, sizeof(deployment_id));
 	
 	// Only include in EXIF if not all zeros (i.e., a deployment is active)

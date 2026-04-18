@@ -171,6 +171,9 @@ int8_t fatfs_load_labels(const char *path, char labels[][MAX_LABEL_LEN], uint8_t
 
 void fatfs_printCwd(void);
 
+// Recursive directory create
+FRESULT fatfs_mkdir_recursive(const char *path);
+
 #ifdef UNZIPMANIFEST
 // Unzip Manifest.zip (method 0 STORE only - no compression)
 int fatfs_unzip_manifest(void);

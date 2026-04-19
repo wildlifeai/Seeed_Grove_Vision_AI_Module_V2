@@ -1,4 +1,4 @@
-name: Build and Release Himax Firmware
+name: Upload and Release Himax Firmware
 
 on:
   push:

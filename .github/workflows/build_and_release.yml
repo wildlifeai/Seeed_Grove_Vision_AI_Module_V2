@@ -299,20 +299,35 @@ jobs:
           dry_run: true
           tag_prefix: v
 
-      - name: Generate Unique Version
+      - name: Extract Device Version
         id: version
         run: |
-          # Get the calculated semantic version (e.g., v0.1.2)
-          SEMVER="${{ steps.semver.outputs.new_tag }}"
+          IMG_FILE="./firmware/output.img"
+          if [ ! -f "$IMG_FILE" ]; then 
+            IMG_FILE=$(find ./firmware -name "*.img" | head -n 1)
+          fi
           
-          # Add GitHub run number to ensure uniqueness (e.g., v0.1.2.1234)
-          # Run number increments with each workflow run, guaranteeing uniqueness
-          UNIQUE_VERSION="${SEMVER}.${{ github.run_number }}"
+          # Extract the exact __TIME__ and __DATE__ embedded by the C compiler
+          BUILD_TIME=$(strings "$IMG_FILE" | grep -Eo "^[0-2][0-9]:[0-5][0-9]:[0-5][0-9]$" | head -n 1)
+          BUILD_DATE=$(strings "$IMG_FILE" | grep -Eo "^[A-Z][a-z]{2} +[0-9]{1,2} 20[0-9]{2}$" | head -n 1)
+          
+          # Extract board name from ww.mk 
+          BOARD_NAME=$(grep "^BOARD_NAME_STRING" EPII_CM55M_APP_S/app/ww_projects/ww.mk | awk -F'"' '{print $2}' | head -n 1)
+          
+          if [ -z "$BOARD_NAME" ]; then 
+            BOARD_NAME="WW500_C02"
+          fi
+          
+          if [ -n "$BUILD_TIME" ] && [ -n "$BUILD_DATE" ]; then
+             UNIQUE_VERSION="${BOARD_NAME} ${BUILD_TIME} ${BUILD_DATE}"
+          else
+             # Fallback to Semantic version + build number
+             SEMVER="${{ steps.semver.outputs.new_tag }}"
+             UNIQUE_VERSION="${SEMVER}.${{ github.run_number }}"
+          fi
           
           echo "unique_version=${UNIQUE_VERSION}" >> $GITHUB_OUTPUT
-          echo "Generated unique version: ${UNIQUE_VERSION}"
-          echo "  Base version: ${SEMVER}"
-          echo "  Build number: ${{ github.run_number }}"
+          echo "Extracted device version: ${UNIQUE_VERSION}"
 
       - name: Setup Node.js
         uses: actions/setup-node@v4

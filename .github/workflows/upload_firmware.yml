@@ -6,6 +6,7 @@ on:
       - dev
       - 'fix/firmware-upload-ci'
       - 'no-model-load'
+      - 'refactor_model_loading'
   workflow_dispatch: # Allow manual triggering
 
 jobs:

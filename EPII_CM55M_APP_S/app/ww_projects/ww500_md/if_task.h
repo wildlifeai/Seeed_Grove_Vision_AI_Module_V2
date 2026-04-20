@@ -85,8 +85,8 @@ typedef enum
 #define WW130_CMD_FEATURE	I2CCOMM_FEATURE_CUSTOMER_MIN
 
 /**
- * List of command types send by the WW130 to the AI board.
- * Both boards must use the same list, in the same sequence!
+ * List of messages types used for messages between the BLE prcessor and the AI processor.
+ * IMPORTANT: Both processors must use the same list, in the same sequence!
  */
 typedef enum {
     AI_PROCESSOR_MSG_NONE,

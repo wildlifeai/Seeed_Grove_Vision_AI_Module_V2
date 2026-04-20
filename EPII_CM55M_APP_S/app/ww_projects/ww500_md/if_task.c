@@ -569,8 +569,8 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 
 	case APP_MSG_IFTASK_I2CCOMM_CLI_BINARY_RESPONSE:
 	case APP_MSG_IFTASK_I2CCOMM_CLI_BINARY_CONTINUES:
-		// Return this binary data to the WW130
-		// AI_PROCESSOR_MSG_RX_BINARY means the WW130 will see a "receive binary" message
+		// Return this binary data to the BLE processor
+		// AI_PROCESSOR_MSG_RX_BINARY means the BLE processor will see a "receive binary" message
 		sendI2CMessage((uint8_t *) data, AI_PROCESSOR_MSG_RX_BINARY, (uint16_t) length);
 		if_task_state = APP_IF_STATE_I2C_TX;
 		break;

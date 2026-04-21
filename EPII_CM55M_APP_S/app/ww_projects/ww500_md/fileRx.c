@@ -200,8 +200,8 @@ fileRx_result_t fileRx_end(uint16_t receivedCrc) {
  * Abort the current session (e.g. on BLE disconnect or unrecoverable error).
  *
  * Sets the deleteOnClose flag so the caller will delete the partial file when
- * it sends CLOSE_FILE to fatfs_task. Does not reset the path — the caller may
- * still need it for CLOSE_FILE.
+ * it sends CLOSE_FILE to fatfs_task. Does not reset the filename — the caller
+ * may still need it for CLOSE_FILE.
  */
 void fileRx_abort(void) {
     session.deleteOnClose = true;

@@ -136,6 +136,7 @@ typedef struct {
 	FRESULT 	res;		// Result code returned from fatFs
 	bool		closeWhenDone;	// If true the file is closed when the operation completes
 	bool		unmountWhenDone;	// If true the SD card is unmounted when the operation completed
+	bool		deleteOnClose;	// If true the file is deleted after closing (used by CLOSE_FILE on error)
 	QueueHandle_t senderQueue;	// FreeRTOS queue that will get the response
 } fileOperation_t;
 

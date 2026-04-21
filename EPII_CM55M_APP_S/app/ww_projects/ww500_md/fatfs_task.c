@@ -167,6 +167,10 @@ static FATFS fs; /* Filesystem object */
 
 static bool mounted;
 
+// Persistent file handle for incremental file writes (OPEN_FILE / APPEND_FILE / CLOSE_FILE)
+static FIL transferFile;
+static bool transferFileOpen = false;
+
 static TickType_t xStartTime;
 
 // Strings for each of these states. Values must match APP_TASK1_STATE_E in task1.h
@@ -183,6 +187,9 @@ const char *fatFsTaskEventString[APP_MSG_FATFSTASK_LAST - APP_MSG_FATFSTASK_WRIT
 	"Read file",
 	"File op done",
 	"Save State",
+	"Open file",
+	"Append file",
+	"Close file",
 };
 
 // Number of pictures to take after motion detect wake
@@ -485,8 +492,7 @@ static APP_MSG_DEST_T handleEventForUninit(APP_MSG_T rxMessage) {
 		break;
 
 	case APP_MSG_FATFSTASK_SAVE_STATE:
-		// Save the state of the imageSequenceNumber
-		// This is the last thing we will do before sleeping.
+		// Return an error in this state
 
 		sendMsg.message.msg_data = (uint32_t)FR_NO_FILESYSTEM;
 
@@ -495,6 +501,15 @@ static APP_MSG_DEST_T handleEventForUninit(APP_MSG_T rxMessage) {
 		sendMsg.message.msg_event = APP_MSG_IMAGETASK_DISK_WRITE_COMPLETE;
 		sendMsg.message.msg_data = (uint32_t)res;
 
+		break;
+
+	case APP_MSG_FATFSTASK_OPEN_FILE:
+	case APP_MSG_FATFSTASK_APPEND_FILE:
+	case APP_MSG_FATFSTASK_CLOSE_FILE:
+		// SD card not mounted — report failure
+		sendMsg.message.msg_data = (uint32_t)FR_NO_FILESYSTEM;
+		sendMsg.destination = fileOp->senderQueue;
+		sendMsg.message.msg_event = APP_MSG_IFTASK_DISK_WRITE_COMPLETE;
 		break;
 
 	case APP_MSG_IMAGETASK_DISK_WRITE_COMPLETE:
@@ -653,6 +668,68 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 		sendMsg.message.msg_event = APP_MSG_IMAGETASK_DISK_WRITE_COMPLETE;
 		sendMsg.message.msg_data = (uint32_t)res;
 
+		break;
+
+	case APP_MSG_FATFSTASK_OPEN_FILE:
+		// Open (create/truncate) a file for incremental writing.
+		// The file handle is kept open until APP_MSG_FATFSTASK_CLOSE_FILE.
+		if (transferFileOpen) {
+			// Stale handle from a previous aborted transfer — close it first.
+			f_close(&transferFile);
+			transferFileOpen = false;
+		}
+		res = f_open(&transferFile, fileOp->fileName, FA_WRITE | FA_CREATE_ALWAYS);
+		if (res == FR_OK) {
+			transferFileOpen = true;
+			xprintf("Opened '%s' for writing\n", fileOp->fileName);
+		} else {
+			xprintf("Failed to open '%s' (err %d)\n", fileOp->fileName, res);
+		}
+		fileOp->res = res;
+		sendMsg.message.msg_data = (uint32_t)res;
+		sendMsg.destination = fileOp->senderQueue;
+		sendMsg.message.msg_event = APP_MSG_IFTASK_DISK_WRITE_COMPLETE;
+		break;
+
+	case APP_MSG_FATFSTASK_APPEND_FILE: {
+		// Append a chunk to the currently open transfer file.
+		UINT bw = 0;
+		if (!transferFileOpen) {
+			res = FR_INVALID_OBJECT;
+		} else {
+			res = f_write(&transferFile, fileOp->buffer, fileOp->length, &bw);
+			if (res == FR_OK && bw != fileOp->length) {
+				xprintf("Short write: %u of %lu bytes\n", bw, fileOp->length);
+				res = FR_DISK_ERR;
+			}
+		}
+		fileOp->res = res;
+		sendMsg.message.msg_data = (uint32_t)res;
+		sendMsg.destination = fileOp->senderQueue;
+		sendMsg.message.msg_event = APP_MSG_IFTASK_DISK_WRITE_COMPLETE;
+		break;
+	}
+
+	case APP_MSG_FATFSTASK_CLOSE_FILE:
+		// Close the transfer file.  If deleteOnClose is set, delete it afterwards.
+		if (transferFileOpen) {
+			res = f_close(&transferFile);
+			transferFileOpen = false;
+		} else {
+			res = FR_OK;
+		}
+		if (fileOp->deleteOnClose && fileOp->fileName != NULL) {
+			FRESULT delRes = f_unlink(fileOp->fileName);
+			if (delRes != FR_OK) {
+				xprintf("Warning: failed to delete '%s' (err %d)\n", fileOp->fileName, delRes);
+			} else {
+				xprintf("Deleted '%s'\n", fileOp->fileName);
+			}
+		}
+		fileOp->res = res;
+		sendMsg.message.msg_data = (uint32_t)res;
+		sendMsg.destination = fileOp->senderQueue;
+		sendMsg.message.msg_event = APP_MSG_IFTASK_DISK_WRITE_COMPLETE;
 		break;
 
 	case APP_MSG_IMAGETASK_DISK_WRITE_COMPLETE:

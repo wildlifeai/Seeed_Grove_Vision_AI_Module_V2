@@ -44,8 +44,8 @@ typedef enum {
  * Begin a new file transfer session.
  *
  * Validates the filename (8.3 format, uppercase letters/digits/'-'/'_'),
- * builds the full /MANIFEST/<filename> path, and initialises the CRC
- * accumulator and sequence counter.
+ * stores the bare filename, and initialises the CRC accumulator and
+ * sequence counter.
  *
  * Returns FILERX_OK on success; FILERX_ERR_BAD_FILENAME if validation fails.
  * Does not perform any SD card I/O — the caller sends OPEN_FILE to fatfs_task.
@@ -78,7 +78,7 @@ fileRx_result_t fileRx_end(uint16_t receivedCrc);
 /*
  * Abort the current session (e.g. on BLE disconnect or unrecoverable error).
  * Sets the deleteOnClose flag so the caller will delete the partial file.
- * Does not reset the path — the caller may still need it for CLOSE_FILE.
+ * Does not reset the filename — the caller may still need it for CLOSE_FILE.
  */
 void fileRx_abort(void);
 

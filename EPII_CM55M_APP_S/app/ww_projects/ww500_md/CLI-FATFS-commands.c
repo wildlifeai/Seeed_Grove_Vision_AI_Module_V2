@@ -600,7 +600,6 @@ static BaseType_t prvTxFileCommand( char *pcWriteBuffer, size_t xWriteBufferLen,
 			snprintf(fileName, FF_MAX_LFN, "%s", pcParameter);
 		}
 
-
 		// Must change directory to the dirManager->current_capture_dir
 		res = f_chdir(dirManager.current_capture_dir);
 		if (res != FR_OK) {

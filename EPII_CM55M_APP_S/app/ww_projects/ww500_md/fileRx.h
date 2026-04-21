@@ -17,8 +17,12 @@
 #ifndef APP_WW_PROJECTS_WW500_MD_FILERX_H_
 #define APP_WW_PROJECTS_WW500_MD_FILERX_H_
 
+/*********************************************** Includes ****************************************************/
+
 #include <stdint.h>
 #include <stdbool.h>
+
+/*********************************************** Global Type Declarations ************************************/
 
 /*
  * Result codes returned by fileRx functions.
@@ -33,6 +37,8 @@ typedef enum {
     FILERX_ERR_SEQ_MISMATCH = 8,  // packet sequence number out of order
     FILERX_ERR_CRC_MISMATCH = 9,  // whole-file CRC verification failed
 } fileRx_result_t;
+
+/*********************************************** Global Function Declarations ********************************/
 
 /*
  * Begin a new file transfer session.
@@ -77,10 +83,11 @@ fileRx_result_t fileRx_end(uint16_t receivedCrc);
 void fileRx_abort(void);
 
 /*
- * Returns the full SD card path for the current session (e.g. "/MANIFEST/FOO.BIN").
+ * Returns the bare filename for the current session (e.g. "FOO.BIN").
+ * fatfs_task resolves the directory via f_chdir(dirManager.current_config_dir).
  * Valid from fileRx_start() until the next fileRx_start() call.
  */
-const char *fileRx_getFilePath(void);
+const char *fileRx_getFileName(void);
 
 /*
  * Returns true if the file should be deleted when closed (after error or abort).

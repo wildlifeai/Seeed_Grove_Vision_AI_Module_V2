@@ -370,6 +370,7 @@ static void i2cRxDataReady(void) {
 	uint16_t length;
 	uint8_t * payload;
 	bool crcOK;
+	bool rearmI2C = true;
 	APP_MSG_T send_msg;
 
 	feature = gRead_buf[I2CFMT_FEATURE_OFFSET];
@@ -408,6 +409,7 @@ static void i2cRxDataReady(void) {
 
 	// Now let's see if we can make sense of the message
 	switch (cmd) {
+
 	case AI_PROCESSOR_MSG_TX_STRING:
 		// I2C master has sent a string. We assume it is a command to execute
 		xprintf("MKL62BA command received: '%s'\n", (char * ) payload);
@@ -430,36 +432,48 @@ static void i2cRxDataReady(void) {
 		                   | ((uint32_t)payload[1] << 8)
 		                   | ((uint32_t)payload[2] << 16)
 		                   | ((uint32_t)payload[3] << 24);
+
 		const char *filename = (const char *)&payload[4];
+
 		fileRx_result_t result = fileRx_start(filename, totalSize);
+
 		if (result != FILERX_OK) {
 			char errStr[16];
 			snprintf(errStr, sizeof(errStr), "ftx err %d", (int)result);
 			sendI2CMessage((uint8_t *)errStr, AI_PROCESSOR_MSG_RX_STRING, strlen(errStr));
 			if_task_state = APP_IF_STATE_I2C_TX;
-			return;
+			rearmI2C = false;
+			break;
 		}
-		fileRxOp.fileName      = (char *)fileRx_getFilePath();
+
+		fileRxOp.fileName      = (char *)fileRx_getFileName();
 		fileRxOp.buffer        = NULL;
 		fileRxOp.length        = 0;
 		fileRxOp.closeWhenDone = false;
 		fileRxOp.deleteOnClose = false;
 		fileRxOp.unmountWhenDone = false;
 		fileRxOp.senderQueue   = xIfTaskQueue;
+
 		send_msg.msg_event     = APP_MSG_FATFSTASK_OPEN_FILE;
 		send_msg.msg_data      = (uint32_t)&fileRxOp;
+
 		xQueueSend(xFatTaskQueue, &send_msg, __QueueSendTicksToWait);
+
 		diskPhase        = DISK_PHASE_FILE_OPEN;
 		fileRxPendingErr = FILERX_OK;
+
 		if_task_state    = APP_IF_STATE_DISK_OP;
-		return;  // suppress I2C re-arm until ACK is sent
+		rearmI2C = false;
+		break;
 	}
 
 	case AI_PROCESSOR_MSG_FILE_DATA: {
 		uint8_t pktNum   = payload[0];
 		uint8_t *chunk   = &payload[1];
 		uint16_t chunkLen = length - 1;
+
 		fileRx_result_t result = fileRx_data(chunk, chunkLen, pktNum);
+
 		if (result != FILERX_OK) {
 			fileRxPendingErr = result;
 			fileRx_abort();
@@ -468,44 +482,60 @@ static void i2cRxDataReady(void) {
 			fileRxOp.buffer        = NULL;
 			fileRxOp.length        = 0;
 			fileRxOp.senderQueue   = xIfTaskQueue;
+
 			send_msg.msg_event     = APP_MSG_FATFSTASK_CLOSE_FILE;
 			send_msg.msg_data      = (uint32_t)&fileRxOp;
+
 			xQueueSend(xFatTaskQueue, &send_msg, __QueueSendTicksToWait);
 			diskPhase     = DISK_PHASE_FILE_CLOSE;
 			if_task_state = APP_IF_STATE_DISK_OP;
-			return;
+			rearmI2C = false;
+			break;
 		}
+
 		fileRxOp.buffer        = chunk;
 		fileRxOp.length        = chunkLen;
 		fileRxOp.closeWhenDone = false;
 		fileRxOp.deleteOnClose = false;
 		fileRxOp.senderQueue   = xIfTaskQueue;
+
 		fileRxPacketNum        = pktNum;
+
 		send_msg.msg_event     = APP_MSG_FATFSTASK_APPEND_FILE;
 		send_msg.msg_data      = (uint32_t)&fileRxOp;
+
 		xQueueSend(xFatTaskQueue, &send_msg, __QueueSendTicksToWait);
+
 		diskPhase     = DISK_PHASE_FILE_DATA;
 		if_task_state = APP_IF_STATE_DISK_OP;
-		return;  // suppress I2C re-arm until ACK is sent
+		rearmI2C = false;
+		break;
 	}
 
 	case AI_PROCESSOR_MSG_FILE_END: {
 		uint16_t receivedCrc = (uint16_t)payload[0] | ((uint16_t)payload[1] << 8);
+
 		fileRx_result_t result = fileRx_end(receivedCrc);
+
 		if (result != FILERX_OK) {
 			fileRxPendingErr = result;
 		}
+
 		fileRxOp.closeWhenDone = true;
 		fileRxOp.deleteOnClose = fileRx_shouldDelete();
 		fileRxOp.buffer        = NULL;
 		fileRxOp.length        = 0;
 		fileRxOp.senderQueue   = xIfTaskQueue;
+
 		send_msg.msg_event     = APP_MSG_FATFSTASK_CLOSE_FILE;
 		send_msg.msg_data      = (uint32_t)&fileRxOp;
+
 		xQueueSend(xFatTaskQueue, &send_msg, __QueueSendTicksToWait);
+
 		diskPhase     = DISK_PHASE_FILE_CLOSE;
 		if_task_state = APP_IF_STATE_DISK_OP;
-		return;  // suppress I2C re-arm until ACK is sent
+		rearmI2C = false;
+		break;
 	}
 
 	// Not yet implemented - do nothing
@@ -516,9 +546,12 @@ static void i2cRxDataReady(void) {
 		break;
 	}
 
-    // Prepare I2C component for the next incoming message
-	clear_read_buf_header();
-	hx_lib_i2ccomm_enable_read(iic_id, (unsigned char *) gRead_buf, WW130_MAX_RBUF_SIZE);
+    // Prepare I2C component for the next incoming message.
+	// Suppressed for FILE_* messages — re-arm happens after ACK is sent via i2cTransmissionComplete().
+	if (rearmI2C) {
+		clear_read_buf_header();
+		hx_lib_i2ccomm_enable_read(iic_id, (unsigned char *) gRead_buf, WW130_MAX_RBUF_SIZE);
+	}
 }
 
 /**
@@ -1122,7 +1155,8 @@ static APP_MSG_DEST_T  handleEventForStateDiskOp(APP_MSG_T rxMessage) {
 				fileRxPendingErr = FILERX_ERR_FILE_OPEN;
 				snprintf(ackStr, sizeof(ackStr), "ftx err %d", (int)fileRxPendingErr);
 				sendI2CMessage((uint8_t *)ackStr, AI_PROCESSOR_MSG_RX_STRING, strlen(ackStr));
-			} else {
+			}
+			else {
 				sendI2CMessage((uint8_t *)"ftx ack 0", AI_PROCESSOR_MSG_RX_STRING, 9);
 			}
 			if_task_state = APP_IF_STATE_I2C_TX;
@@ -1132,17 +1166,23 @@ static APP_MSG_DEST_T  handleEventForStateDiskOp(APP_MSG_T rxMessage) {
 			if (fileRxOp.res != FR_OK) {
 				fileRxPendingErr = FILERX_ERR_FILE_WRITE;
 				fileRx_abort();
+
 				fileRxOp.closeWhenDone = true;
 				fileRxOp.deleteOnClose = true;
 				fileRxOp.buffer        = NULL;
 				fileRxOp.length        = 0;
 				fileRxOp.senderQueue   = xIfTaskQueue;
+
 				send_msg.msg_event     = APP_MSG_FATFSTASK_CLOSE_FILE;
 				send_msg.msg_data      = (uint32_t)&fileRxOp;
+
 				xQueueSend(xFatTaskQueue, &send_msg, __QueueSendTicksToWait);
+
 				diskPhase = DISK_PHASE_FILE_CLOSE;
+
 				/* stay in DISK_OP — wait for close before reporting error */
-			} else {
+			}
+			else {
 				snprintf(ackStr, sizeof(ackStr), "ftx ack %u", (unsigned)fileRxPacketNum);
 				sendI2CMessage((uint8_t *)ackStr, AI_PROCESSOR_MSG_RX_STRING, strlen(ackStr));
 				if_task_state = APP_IF_STATE_I2C_TX;
@@ -1153,7 +1193,8 @@ static APP_MSG_DEST_T  handleEventForStateDiskOp(APP_MSG_T rxMessage) {
 			if (fileRxPendingErr != FILERX_OK) {
 				snprintf(ackStr, sizeof(ackStr), "ftx err %d", (int)fileRxPendingErr);
 				sendI2CMessage((uint8_t *)ackStr, AI_PROCESSOR_MSG_RX_STRING, strlen(ackStr));
-			} else {
+			}
+			else {
 				sendI2CMessage((uint8_t *)"ftx ack end", AI_PROCESSOR_MSG_RX_STRING, 11);
 			}
 			if_task_state = APP_IF_STATE_I2C_TX;

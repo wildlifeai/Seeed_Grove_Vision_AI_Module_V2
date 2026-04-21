@@ -89,15 +89,21 @@ typedef enum
  * IMPORTANT: Both processors must use the same list, in the same sequence!
  */
 typedef enum {
-    AI_PROCESSOR_MSG_NONE,
-    AI_PROCESSOR_MSG_TX_STRING,
-    AI_PROCESSOR_MSG_TX_BASE64,
-    AI_PROCESSOR_MSG_TX_BINARY,
-    AI_PROCESSOR_MSG_RX_STRING,
-    AI_PROCESSOR_MSG_RX_BASE64,
-    AI_PROCESSOR_MSG_RX_BINARY,
+    AI_PROCESSOR_MSG_NONE,           // 0
+    AI_PROCESSOR_MSG_TX_STRING,      // 1
+    AI_PROCESSOR_MSG_TX_BASE64,      // 2
+    AI_PROCESSOR_MSG_TX_BINARY,      // 3
+    AI_PROCESSOR_MSG_RX_STRING,      // 4
+    AI_PROCESSOR_MSG_RX_BASE64,      // 5
+    AI_PROCESSOR_MSG_RX_BINARY,      // 6
 
-	// This is used just to check on the end of the list
+    AI_PROCESSOR_MSG_FILE_START,     // 7  — begin file transfer (app → nRF52832 → HX6538)
+    AI_PROCESSOR_MSG_FILE_DATA,      // 8  — file data chunk
+    AI_PROCESSOR_MSG_FILE_END,       // 9  — end of file, carries CRC16-CCITT
+    AI_PROCESSOR_MSG_FILE_ACK,       // 10 — acknowledgement (HX6538 → nRF52832)
+    AI_PROCESSOR_MSG_FILE_ERROR,     // 11 — error (HX6538 → nRF52832)
+
+    // This is used just to check on the end of the list
     AI_PROCESSOR_MSG_END
 } aiProcessor_msg_type_t;
 

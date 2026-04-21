@@ -135,6 +135,35 @@ void crc16_ccitt_generate(uint8_t * data, uint16_t length, uint16_t * CRC) {
 
 
 /**
+ * Streaming API: initialise a new CRC accumulation.
+ * Call once before the first chunk.
+ */
+uint16_t crc16_ccitt_stream_init(void) {
+	return crc16_ccitt_init();
+}
+
+/**
+ * Streaming API: feed a chunk of data into the running CRC.
+ * Pass the value returned by the previous call (or stream_init) as 'crc'.
+ * Returns the updated CRC — store it and pass it to the next call.
+ */
+uint16_t crc16_ccitt_stream_update(const uint8_t *data, uint16_t length, uint16_t crc) {
+	for (uint16_t i = 0; i < length; i++) {
+		crc = crc16_ccitt_update(data[i], crc);
+	}
+	return crc;
+}
+
+/**
+ * Streaming API: finalise the CRC after all chunks have been fed in.
+ * The returned value can be compared directly to the CRC received from the sender.
+ */
+uint16_t crc16_ccitt_stream_final(uint16_t crc) {
+	return crc16_ccitt_finalize(crc);
+}
+
+
+/**
  * Checks the CRC for the buffer it is presented with
  *
  * The buffer contains the data with the CRC appended, as big-end data

@@ -7,21 +7,26 @@
  * Manages the HX6538 side of a generic file-receive session.
  */
 
+/*********************************************** Includes ****************************************************/
+
 #include <stdint.h>
 #include <stdbool.h>
 #include <string.h>
 #include <ctype.h>
 
+#include "xprintf.h"
+
 #include "fileRx.h"
 #include "crc16_ccitt.h"
 
-#define FILERX_PATH_PREFIX      "/MANIFEST/"
-#define FILERX_PATH_PREFIX_LEN  10      // strlen("/MANIFEST/")
-#define FILERX_MAX_FILENAME     12      // 8 + '.' + 3
-#define FILERX_MAX_PATH         (FILERX_PATH_PREFIX_LEN + FILERX_MAX_FILENAME + 1)
+/*********************************************** Local Defines ***********************************************/
+
+#define FILERX_MAX_FILENAME     12      // 8.3: up to 8 base + '.' + up to 3 ext
+
+/*********************************************** Local Type Declarations *************************************/
 
 typedef struct {
-    char     filePath[FILERX_MAX_PATH];
+    char     fileName[FILERX_MAX_FILENAME + 1];
     uint32_t totalSize;
     uint32_t bytesReceived;
     uint8_t  lastPacketNum;     // 0 means no packet received yet
@@ -30,7 +35,11 @@ typedef struct {
     bool     active;
 } fileRxSession_t;
 
+/*********************************************** Local Variables *********************************************/
+
 static fileRxSession_t session;
+
+/*********************************************** Local Function Definitions **********************************/
 
 /*
  * Validate an 8.3 filename: uppercase A-Z, digits 0-9, '-', '_'.
@@ -79,20 +88,32 @@ static bool validate_83_filename(const char *name)
     return true;
 }
 
-fileRx_result_t fileRx_start(const char *filename, uint32_t totalSize)
-{
+/*********************************************** Global Function Definitions *********************************/
+
+/**
+ * Begin a new file transfer session.
+ *
+ * Validates the filename (8.3 format, uppercase letters/digits/'-'/'_'),
+ * stores the bare filename, and initialises the CRC accumulator and
+ * sequence counter.
+ *
+ * Does not perform any SD card I/O — the caller sends OPEN_FILE to fatfs_task,
+ * which will chdir to current_config_dir before opening the file.
+ *
+ * @param filename   Null-terminated 8.3 filename (e.g. "HX6538V2.IMG")
+ * @param totalSize  Total file size in bytes (informational; not validated here)
+ * @return FILERX_OK on success; FILERX_ERR_BAD_FILENAME if validation fails
+ */
+fileRx_result_t fileRx_start(const char *filename, uint32_t totalSize) {
+
     if (!validate_83_filename(filename)) {
         return FILERX_ERR_BAD_FILENAME;
     }
 
     memset(&session, 0, sizeof(session));
 
-    /* Build "/MANIFEST/<filename>" */
-    memcpy(session.filePath, FILERX_PATH_PREFIX, FILERX_PATH_PREFIX_LEN);
-    strncpy(session.filePath + FILERX_PATH_PREFIX_LEN,
-            filename,
-            FILERX_MAX_FILENAME);
-    session.filePath[FILERX_MAX_PATH - 1] = '\0';
+    strncpy(session.fileName, filename, FILERX_MAX_FILENAME);
+    session.fileName[FILERX_MAX_FILENAME] = '\0';
 
     session.totalSize      = totalSize;
     session.bytesReceived  = 0;
@@ -101,21 +122,38 @@ fileRx_result_t fileRx_start(const char *filename, uint32_t totalSize)
     session.deleteOnClose  = false;
     session.active         = true;
 
+    xprintf("Receiving '%s' (%d bytes)\n", session.fileName, session.totalSize);
+
     return FILERX_OK;
 }
 
-fileRx_result_t fileRx_data(const uint8_t *chunk, uint16_t len, uint8_t packetNum)
-{
+/**
+ * Process one FILE_DATA chunk.
+ *
+ * Validates the packet sequence number (must increment by 1, wrapping 255 -> 1).
+ * Updates the running CRC and byte counter.
+ *
+ * Does not perform any SD card I/O — the caller sends APPEND_FILE to fatfs_task.
+ *
+ * @param chunk      Pointer to the raw chunk bytes
+ * @param len        Number of bytes in this chunk
+ * @param packetNum  Packet sequence number from the FILE_DATA frame (1–255)
+ * @return FILERX_OK on success; FILERX_ERR_SEQ_MISMATCH if sequence is out of order
+ */
+fileRx_result_t fileRx_data(const uint8_t *chunk, uint16_t len, uint8_t packetNum) {
+    uint8_t expected;
+
     /*
      * Sequence check: first packet must be 1; subsequent packets increment by 1
      * wrapping from 255 back to 1 (0 is reserved as "none received yet").
      */
-    uint8_t expected;
     if (session.lastPacketNum == 0) {
         expected = 1;
-    } else if (session.lastPacketNum == 255) {
+    }
+    else if (session.lastPacketNum == 255) {
         expected = 1;
-    } else {
+    }
+    else {
         expected = session.lastPacketNum + 1;
     }
 
@@ -130,29 +168,65 @@ fileRx_result_t fileRx_data(const uint8_t *chunk, uint16_t len, uint8_t packetNu
     return FILERX_OK;
 }
 
-fileRx_result_t fileRx_end(uint16_t receivedCrc)
-{
+/**
+ * Finalise the transfer after FILE_END is received.
+ *
+ * Computes the final CRC and compares it to receivedCrc. Sets deleteOnClose
+ * if the CRC does not match.
+ *
+ * The caller should always send CLOSE_FILE to fatfs_task regardless of the
+ * return value; fileRx_shouldDelete() indicates whether to also delete the file.
+ *
+ * @param receivedCrc  CRC16-CCITT of the entire file as reported by the sender (LE)
+ * @return FILERX_OK on CRC match; FILERX_ERR_CRC_MISMATCH otherwise
+ */
+fileRx_result_t fileRx_end(uint16_t receivedCrc) {
     uint16_t finalCrc = crc16_ccitt_stream_final(session.runningCrc);
 
     if (finalCrc != receivedCrc) {
         session.deleteOnClose = true;
+
+        xprintf("CRC error receiving '%s')\n", session.fileName);
+
         return FILERX_ERR_CRC_MISMATCH;
     }
+
+    xprintf("Received '%s' OK (%d bytes)\n", session.fileName, session.totalSize);
 
     return FILERX_OK;
 }
 
-void fileRx_abort(void)
-{
+/**
+ * Abort the current session (e.g. on BLE disconnect or unrecoverable error).
+ *
+ * Sets the deleteOnClose flag so the caller will delete the partial file when
+ * it sends CLOSE_FILE to fatfs_task. Does not reset the path — the caller may
+ * still need it for CLOSE_FILE.
+ */
+void fileRx_abort(void) {
     session.deleteOnClose = true;
 }
 
-const char *fileRx_getFilePath(void)
-{
-    return session.filePath;
+/**
+ * Returns the bare filename for the current session (e.g. "FOO.BIN").
+ *
+ * The caller passes this to fatfs_task via fileOperation_t.fileName; fatfs_task
+ * resolves the directory via f_chdir(dirManager->current_config_dir).
+ *
+ * @return Pointer to the null-terminated filename; valid from fileRx_start()
+ *         until the next fileRx_start() call
+ */
+const char *fileRx_getFileName(void) {
+    return session.fileName;
 }
 
-bool fileRx_shouldDelete(void)
-{
+/**
+ * Returns true if the file should be deleted when closed.
+ *
+ * Set by fileRx_end() on CRC mismatch, or by fileRx_abort() on error or disconnect.
+ *
+ * @return true if the caller should delete the file after closing it
+ */
+bool fileRx_shouldDelete(void) {
     return session.deleteOnClose;
 }

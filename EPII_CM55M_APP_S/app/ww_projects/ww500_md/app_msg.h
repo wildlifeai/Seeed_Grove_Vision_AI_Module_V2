@@ -203,7 +203,10 @@ typedef enum {
 	APP_MSG_FATFSTASK_READ_FILE	 				=0x0902,
 	APP_MSG_FATFSTASK_DONE		 				=0x0903,
 	APP_MSG_FATFSTASK_SAVE_STATE		 		=0x0904,
-	APP_MSG_FATFSTASK_LAST		 				=0x0905,
+	APP_MSG_FATFSTASK_OPEN_FILE					=0x0905,	// open/create a file for incremental writing
+	APP_MSG_FATFSTASK_APPEND_FILE				=0x0906,	// append a chunk to the open file
+	APP_MSG_FATFSTASK_CLOSE_FILE				=0x0907,	// close the file after all chunks written
+	APP_MSG_FATFSTASK_LAST		 				=0x0908,
 
 	// Messages directed to image task
 	// IMPORTANT! Values must have a matching string in imageTaskEventString[] in image_task.c

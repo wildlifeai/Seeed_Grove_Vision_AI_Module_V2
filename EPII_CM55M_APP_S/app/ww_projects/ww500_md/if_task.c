@@ -43,6 +43,7 @@
 #include "hx_drv_scu.h"
 
 #include "crc16_ccitt.h"
+#include "fileRx.h"
 #include "ww500_md.h"
 #include "exif_utc.h"
 #include "barrier.h"
@@ -217,7 +218,24 @@ const char *cmdString[] = {
 		"Received binary",
 		"Read string",
 		"Read base64",
-		"Read binary"	};
+		"Read binary",
+		"File start",
+		"File data",
+		"File end",
+		"File ack",
+		"File error"
+};
+
+typedef enum {
+	DISK_PHASE_FILE_OPEN,
+	DISK_PHASE_FILE_DATA,
+	DISK_PHASE_FILE_CLOSE,
+} diskPhase_t;
+
+static diskPhase_t      diskPhase;
+static fileRx_result_t  fileRxPendingErr;
+static fileOperation_t  fileRxOp;
+static uint8_t          fileRxPacketNum;
 
 // This is the final string sent before we enter DPD
 //const char * lastMessage = "Sleep";
@@ -406,6 +424,89 @@ static void i2cRxDataReady(void) {
 		// I2C master has requested a string.
 		//i2cs_slave_if_send_string((char *) returnMessage);	// prepare to send buffer to the master
 		break;
+
+	case AI_PROCESSOR_MSG_FILE_START: {
+		uint32_t totalSize = (uint32_t)payload[0]
+		                   | ((uint32_t)payload[1] << 8)
+		                   | ((uint32_t)payload[2] << 16)
+		                   | ((uint32_t)payload[3] << 24);
+		const char *filename = (const char *)&payload[4];
+		fileRx_result_t result = fileRx_start(filename, totalSize);
+		if (result != FILERX_OK) {
+			char errStr[16];
+			snprintf(errStr, sizeof(errStr), "ftx err %d", (int)result);
+			sendI2CMessage((uint8_t *)errStr, AI_PROCESSOR_MSG_RX_STRING, strlen(errStr));
+			if_task_state = APP_IF_STATE_I2C_TX;
+			return;
+		}
+		fileRxOp.fileName      = (char *)fileRx_getFilePath();
+		fileRxOp.buffer        = NULL;
+		fileRxOp.length        = 0;
+		fileRxOp.closeWhenDone = false;
+		fileRxOp.deleteOnClose = false;
+		fileRxOp.unmountWhenDone = false;
+		fileRxOp.senderQueue   = xIfTaskQueue;
+		send_msg.msg_event     = APP_MSG_FATFSTASK_OPEN_FILE;
+		send_msg.msg_data      = (uint32_t)&fileRxOp;
+		xQueueSend(xFatTaskQueue, &send_msg, __QueueSendTicksToWait);
+		diskPhase        = DISK_PHASE_FILE_OPEN;
+		fileRxPendingErr = FILERX_OK;
+		if_task_state    = APP_IF_STATE_DISK_OP;
+		return;  // suppress I2C re-arm until ACK is sent
+	}
+
+	case AI_PROCESSOR_MSG_FILE_DATA: {
+		uint8_t pktNum   = payload[0];
+		uint8_t *chunk   = &payload[1];
+		uint16_t chunkLen = length - 1;
+		fileRx_result_t result = fileRx_data(chunk, chunkLen, pktNum);
+		if (result != FILERX_OK) {
+			fileRxPendingErr = result;
+			fileRx_abort();
+			fileRxOp.closeWhenDone = true;
+			fileRxOp.deleteOnClose = true;
+			fileRxOp.buffer        = NULL;
+			fileRxOp.length        = 0;
+			fileRxOp.senderQueue   = xIfTaskQueue;
+			send_msg.msg_event     = APP_MSG_FATFSTASK_CLOSE_FILE;
+			send_msg.msg_data      = (uint32_t)&fileRxOp;
+			xQueueSend(xFatTaskQueue, &send_msg, __QueueSendTicksToWait);
+			diskPhase     = DISK_PHASE_FILE_CLOSE;
+			if_task_state = APP_IF_STATE_DISK_OP;
+			return;
+		}
+		fileRxOp.buffer        = chunk;
+		fileRxOp.length        = chunkLen;
+		fileRxOp.closeWhenDone = false;
+		fileRxOp.deleteOnClose = false;
+		fileRxOp.senderQueue   = xIfTaskQueue;
+		fileRxPacketNum        = pktNum;
+		send_msg.msg_event     = APP_MSG_FATFSTASK_APPEND_FILE;
+		send_msg.msg_data      = (uint32_t)&fileRxOp;
+		xQueueSend(xFatTaskQueue, &send_msg, __QueueSendTicksToWait);
+		diskPhase     = DISK_PHASE_FILE_DATA;
+		if_task_state = APP_IF_STATE_DISK_OP;
+		return;  // suppress I2C re-arm until ACK is sent
+	}
+
+	case AI_PROCESSOR_MSG_FILE_END: {
+		uint16_t receivedCrc = (uint16_t)payload[0] | ((uint16_t)payload[1] << 8);
+		fileRx_result_t result = fileRx_end(receivedCrc);
+		if (result != FILERX_OK) {
+			fileRxPendingErr = result;
+		}
+		fileRxOp.closeWhenDone = true;
+		fileRxOp.deleteOnClose = fileRx_shouldDelete();
+		fileRxOp.buffer        = NULL;
+		fileRxOp.length        = 0;
+		fileRxOp.senderQueue   = xIfTaskQueue;
+		send_msg.msg_event     = APP_MSG_FATFSTASK_CLOSE_FILE;
+		send_msg.msg_data      = (uint32_t)&fileRxOp;
+		xQueueSend(xFatTaskQueue, &send_msg, __QueueSendTicksToWait);
+		diskPhase     = DISK_PHASE_FILE_CLOSE;
+		if_task_state = APP_IF_STATE_DISK_OP;
+		return;  // suppress I2C re-arm until ACK is sent
+	}
 
 	// Not yet implemented - do nothing
 	case AI_PROCESSOR_MSG_TX_BINARY:
@@ -998,63 +1099,85 @@ static APP_MSG_DEST_T  handleEventForStatePA0(APP_MSG_T rxMessage) {
 /**
  * Implements state machine when in APP_IF_STATE_DISK_OP
  *
- * Expect to get the results of the disk operation.
- *
- * Expected events:
- *
- * Parameters: APP_MSG_T rxMessage
- * Returns: APP_MSG_DEST_T send_msg
+ * Entered after dispatching OPEN_FILE, APPEND_FILE, or CLOSE_FILE to fatfs_task
+ * during a file receive session. Handles the completion event and sends the
+ * appropriate "ftx ack" or "ftx err" response to the nRF52832.
  */
 static APP_MSG_DEST_T  handleEventForStateDiskOp(APP_MSG_T rxMessage) {
 	APP_MSG_EVENT_E event;
-	//uint32_t data;
-	APP_MSG_DEST_T sendMsg;
-	sendMsg.destination = NULL;
+	APP_MSG_DEST_T  sendMsg;
+	APP_MSG_T       send_msg;
+	char            ackStr[16];
 
+	sendMsg.destination = NULL;
 	event = rxMessage.msg_event;
-	//data = rxMessage.msg_data;
 
 	switch (event) {
-	// No longer expecting to do disk accesses from this task...
-//	case APP_MSG_IFTASK_I2CCOMM_DISK_WRITE_COMPLETE:
-//		//xprintf("Res code %d\n", data);	// This is the same as fileOp.res
-//		// the fileOp structure should have the results
-//		xprintf("Wrote %d bytes to '%s'. Result code: %d\n",
-//				fileOp.length, fileOp.fileName, fileOp.res);
-//
-//		if_task_state = APP_IF_STATE_IDLE;
-//		break;
-//
-//	case APP_MSG_IFTASK_I2CCOMM_DISK_READ_COMPLETE:
-//		//xprintf("Res code %d\n", data);	// This is the same as fileOp.res
-//		// the fileOp structure should have the results
-//		xprintf("Read %d bytes from '%s'. Result code: %d \n",
-//				fileOp.length, fileOp.fileName, fileOp.res);
-//		if (fileOp.res) {
-//			xprintf("Read error\n");
-//		}
-//		else {
-//			// Success. Print the file here:
-//			xprintf("Contents:\n%s\n", fileOp.buffer);
-//		}
-//
-//		if_task_state = APP_IF_STATE_IDLE;
-//		break;
 
+	case APP_MSG_IFTASK_DISK_WRITE_COMPLETE:
+		switch (diskPhase) {
+
+		case DISK_PHASE_FILE_OPEN:
+			if (fileRxOp.res != FR_OK) {
+				fileRxPendingErr = FILERX_ERR_FILE_OPEN;
+				snprintf(ackStr, sizeof(ackStr), "ftx err %d", (int)fileRxPendingErr);
+				sendI2CMessage((uint8_t *)ackStr, AI_PROCESSOR_MSG_RX_STRING, strlen(ackStr));
+			} else {
+				sendI2CMessage((uint8_t *)"ftx ack 0", AI_PROCESSOR_MSG_RX_STRING, 9);
+			}
+			if_task_state = APP_IF_STATE_I2C_TX;
+			break;
+
+		case DISK_PHASE_FILE_DATA:
+			if (fileRxOp.res != FR_OK) {
+				fileRxPendingErr = FILERX_ERR_FILE_WRITE;
+				fileRx_abort();
+				fileRxOp.closeWhenDone = true;
+				fileRxOp.deleteOnClose = true;
+				fileRxOp.buffer        = NULL;
+				fileRxOp.length        = 0;
+				fileRxOp.senderQueue   = xIfTaskQueue;
+				send_msg.msg_event     = APP_MSG_FATFSTASK_CLOSE_FILE;
+				send_msg.msg_data      = (uint32_t)&fileRxOp;
+				xQueueSend(xFatTaskQueue, &send_msg, __QueueSendTicksToWait);
+				diskPhase = DISK_PHASE_FILE_CLOSE;
+				/* stay in DISK_OP — wait for close before reporting error */
+			} else {
+				snprintf(ackStr, sizeof(ackStr), "ftx ack %u", (unsigned)fileRxPacketNum);
+				sendI2CMessage((uint8_t *)ackStr, AI_PROCESSOR_MSG_RX_STRING, strlen(ackStr));
+				if_task_state = APP_IF_STATE_I2C_TX;
+			}
+			break;
+
+		case DISK_PHASE_FILE_CLOSE:
+			if (fileRxPendingErr != FILERX_OK) {
+				snprintf(ackStr, sizeof(ackStr), "ftx err %d", (int)fileRxPendingErr);
+				sendI2CMessage((uint8_t *)ackStr, AI_PROCESSOR_MSG_RX_STRING, strlen(ackStr));
+			} else {
+				sendI2CMessage((uint8_t *)"ftx ack end", AI_PROCESSOR_MSG_RX_STRING, 11);
+			}
+			if_task_state = APP_IF_STATE_I2C_TX;
+			break;
+
+		default:
+			break;
+		}
+		break;
 
 	case APP_MSG_IFTASK_I2CCOMM_PA0_INT_IN:
-		// Not used at the moment
+		/* Not used at the moment */
 		break;
 
 	default:
-		// Here for events that are not expected in this state.
-		flagUnexpectedEvent(rxMessage);
+		/* Defer non-file events while waiting for disk op — nRF52832 is blocked on ACK */
+		XP_BROWN;
+		xprintf("Deferring event 0x%04x during disk op\n", event);
+		XP_WHITE;
+		savedMessage = rxMessage;
 		break;
 	}
 
-	// If non-null then our task sends another message to another task
 	return sendMsg;
-
 }
 
 /**

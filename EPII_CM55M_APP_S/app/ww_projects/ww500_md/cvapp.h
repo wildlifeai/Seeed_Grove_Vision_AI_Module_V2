@@ -26,10 +26,6 @@ extern "C" {
 // Logit value (0-127)
 #define MODEL_THRESHOLD 15
 
-// Flash configuration, model types and XIP constants are now in xip_manager.h
-// // file name: '12345678.jpg' = 12 characters, plus trailing '\0'
-//#define IMAGEFILENAMELEN		13
-
 // Enable/disable transforming of tensor output to percentages
 // Uncomment this to use percentages
 // CGP 24/1/26 - Disable this. Use logits instead

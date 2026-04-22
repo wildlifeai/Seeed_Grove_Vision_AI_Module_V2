@@ -428,6 +428,19 @@ static void i2cRxDataReady(void) {
 		break;
 
 	case AI_PROCESSOR_MSG_FILE_START: {
+		if (length < 5) {
+			/* Need at least 4 size bytes + 1 filename character */
+			char errStr[16];
+			snprintf(errStr, sizeof(errStr), "ftx err %d", (int)FILERX_ERR_BAD_FILENAME);
+			sendI2CMessage((uint8_t *)errStr, AI_PROCESSOR_MSG_RX_STRING, strlen(errStr));
+			if_task_state = APP_IF_STATE_I2C_TX;
+			rearmI2C = false;
+			break;
+		}
+
+		/* Force null-termination before treating payload as a C string */
+		payload[length - 1] = '\0';
+
 		uint32_t totalSize = (uint32_t)payload[0]
 		                   | ((uint32_t)payload[1] << 8)
 		                   | ((uint32_t)payload[2] << 16)
@@ -468,6 +481,27 @@ static void i2cRxDataReady(void) {
 	}
 
 	case AI_PROCESSOR_MSG_FILE_DATA: {
+		if (length < 2) {
+			/* Malformed frame: need at least 1 packet-number byte + 1 data byte */
+			fileRxPendingErr = FILERX_ERR_BAD_PAYLOAD;
+			fileRx_abort();
+
+			fileRxOp.closeWhenDone = true;
+			fileRxOp.deleteOnClose = true;
+			fileRxOp.buffer        = NULL;
+			fileRxOp.length        = 0;
+			fileRxOp.senderQueue   = xIfTaskQueue;
+
+			send_msg.msg_event = APP_MSG_FATFSTASK_CLOSE_FILE;
+			send_msg.msg_data  = (uint32_t)&fileRxOp;
+
+			xQueueSend(xFatTaskQueue, &send_msg, __QueueSendTicksToWait);
+			diskPhase     = DISK_PHASE_FILE_CLOSE;
+			if_task_state = APP_IF_STATE_DISK_OP;
+			rearmI2C = false;
+			break;
+		}
+
 		uint8_t pktNum   = payload[0];
 		uint8_t *chunk   = &payload[1];
 		uint16_t chunkLen = length - 1;
@@ -513,6 +547,26 @@ static void i2cRxDataReady(void) {
 	}
 
 	case AI_PROCESSOR_MSG_FILE_END: {
+		if (length < 2) {
+			/* Need at least 2 bytes for the CRC */
+			fileRxPendingErr = FILERX_ERR_BAD_PAYLOAD;
+			fileRx_abort();
+			fileRxOp.closeWhenDone = true;
+			fileRxOp.deleteOnClose = true;
+			fileRxOp.buffer        = NULL;
+			fileRxOp.length        = 0;
+			fileRxOp.senderQueue   = xIfTaskQueue;
+
+			send_msg.msg_event = APP_MSG_FATFSTASK_CLOSE_FILE;
+			send_msg.msg_data  = (uint32_t)&fileRxOp;
+
+			xQueueSend(xFatTaskQueue, &send_msg, __QueueSendTicksToWait);
+			diskPhase     = DISK_PHASE_FILE_CLOSE;
+			if_task_state = APP_IF_STATE_DISK_OP;
+			rearmI2C = false;
+			break;
+		}
+
 		uint16_t receivedCrc = (uint16_t)payload[0] | ((uint16_t)payload[1] << 8);
 
 		fileRx_result_t result = fileRx_end(receivedCrc);

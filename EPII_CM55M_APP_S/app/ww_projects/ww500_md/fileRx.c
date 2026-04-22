@@ -21,7 +21,7 @@
 
 /*********************************************** Local Defines ***********************************************/
 
-#define FILERX_MAX_FILENAME     12      // 8.3: up to 8 base + '.' + up to 3 ext
+#define FILERX_MAX_FILENAME     12      // 8.3: up to 8 base + '.' + up to 3 ext (= IMAGEFILENAMELEN - 1)
 
 /*********************************************** Local Type Declarations *************************************/
 
@@ -110,6 +110,10 @@ fileRx_result_t fileRx_start(const char *filename, uint32_t totalSize) {
         return FILERX_ERR_BAD_FILENAME;
     }
 
+    if (totalSize > FILERX_MAX_FILE_SIZE) {
+        return FILERX_ERR_BAD_FILENAME;
+    }
+
     memset(&session, 0, sizeof(session));
 
     strncpy(session.fileName, filename, FILERX_MAX_FILENAME);
@@ -159,6 +163,10 @@ fileRx_result_t fileRx_data(const uint8_t *chunk, uint16_t len, uint8_t packetNu
 
     if (packetNum != expected) {
         return FILERX_ERR_SEQ_MISMATCH;
+    }
+
+    if (session.bytesReceived + len > FILERX_MAX_FILE_SIZE) {
+        return FILERX_ERR_BAD_PAYLOAD;
     }
 
     session.runningCrc    = crc16_ccitt_stream_update(chunk, len, session.runningCrc);

@@ -47,7 +47,7 @@ extern "C" {
 // Model metadata limits
 #define MAX_CLASSES             16          // Maximum number of NN output classes
 #define MAX_LABEL_LEN           20          // Maximum bytes per class label string (including NUL)
-#define MAX_MODEL_NAME_LEN      13          // 8.3 format filename + NUL (e.g. "1V2.TFL\0")
+#define MAX_MODEL_NAME_LEN      IMAGEFILENAMELEN          // 8.3 format filename + NUL (e.g. "1V2.TFL\0")
 
 /*************************************** Type definitions **************************************/
 

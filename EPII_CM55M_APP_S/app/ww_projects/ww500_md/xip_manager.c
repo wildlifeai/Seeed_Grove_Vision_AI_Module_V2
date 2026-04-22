@@ -47,6 +47,7 @@
 #include "xprintf.h"
 #include "fatfs_task.h"
 #include "directory_manager.h"
+#include "image_task.h"
 #include "printf_x.h"
 #include "xip_manager.h"
 
@@ -74,7 +75,8 @@
 #define XIP_FIRMWARE_VERIFY_AFTER_WRITE    1
 
 // Maximum bare filename length for firmware images (no path, including NUL).
-#define MAX_FIRMWARE_NAME_LEN    32
+// Firmware files are 8.3 format — same constraint as IMAGEFILENAMELEN in image_task.h.
+#define MAX_FIRMWARE_NAME_LEN    IMAGEFILENAMELEN
 
 // Flash physical address layout
 #define FLASH_START_SAFE_ADDR   0x00200000          // Physical start of model area (after 2 MB firmware slots)

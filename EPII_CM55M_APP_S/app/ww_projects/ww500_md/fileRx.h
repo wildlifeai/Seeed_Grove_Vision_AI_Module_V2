@@ -22,6 +22,10 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+/*********************************************** Global Defines ***********************************************/
+
+#define FILERX_MAX_FILE_SIZE    (1024u * 1024u)     // 1 MB ceiling on received file size
+
 /*********************************************** Global Type Declarations ************************************/
 
 /*
@@ -36,6 +40,7 @@ typedef enum {
     FILERX_ERR_FILE_WRITE   = 7,  // fatfs_task reported a write error
     FILERX_ERR_SEQ_MISMATCH = 8,  // packet sequence number out of order
     FILERX_ERR_CRC_MISMATCH = 9,  // whole-file CRC verification failed
+    FILERX_ERR_BAD_PAYLOAD  = 10, // malformed frame (e.g. zero-length chunk)
 } fileRx_result_t;
 
 /*********************************************** Global Function Declarations ********************************/

@@ -77,3 +77,6 @@ node_modules/
 .agents/
 .cursorrules
 .windsurfrules
+CLAUDE.md
+.claude/
+**/claude/

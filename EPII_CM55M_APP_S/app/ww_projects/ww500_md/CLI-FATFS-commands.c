@@ -42,6 +42,7 @@
 #include "image_task.h"
 
 #include "directory_manager.h"
+#include "xip_manager.h"
 
 /*************************************** Definitions *******************************************/
 
@@ -82,6 +83,8 @@ static BaseType_t prvTypeCommand( char * pcWriteBuffer, size_t xWriteBufferLen, 
 static BaseType_t prvReadCommand( char * pcWriteBuffer, size_t xWriteBufferLen, const char * pcCommandString );
 static BaseType_t prvTxFileCommand( char * pcWriteBuffer, size_t xWriteBufferLen, const char * pcCommandString );
 static BaseType_t prvUnmountCommand( char * pcWriteBuffer, size_t xWriteBufferLen, const char * pcCommandString );
+static BaseType_t prvDumpSelCommand( char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString );
+static BaseType_t prvFirmwareCommand( char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString );
 
 
 /********************************** Structures that define CLI commands  *************************************/
@@ -157,6 +160,22 @@ static const CLI_Command_Definition_t xUnmount = {
     "unmount:\r\n Unmount (save writes?)\r\n",
     prvUnmountCommand, /* The function to run. */
     0              /* No parameters are expected. */
+};
+
+// Structure that defines the dump-sel command, which prints the flash slot selector sector.
+static const CLI_Command_Definition_t xDumpSel = {
+    "dump-sel",        /* The command string to type. */
+    "dump-sel:\r\n Print first 32 bytes of flash slot selector sector to console\r\n",
+    prvDumpSelCommand, /* The function to run. */
+    0              /* No parameters are expected. */
+};
+
+// Structure that defines the firmware command, which updates firmware from SD card.
+static const CLI_Command_Definition_t xFirmware = {
+    "firmware",        /* The command string to type. */
+    "firmware <filename>:\r\n Update firmware from /MANIFEST/<filename>. Type 'reset' to boot.\r\n",
+    prvFirmwareCommand, /* The function to run. */
+    1              /* 1 parameter expected. */
 };
 
 
@@ -693,6 +712,68 @@ static BaseType_t prvUnmountCommand( char * pcWriteBuffer,
 	return pdFALSE;
 }
 
+/**
+ * Print the first 32 bytes of the flash slot selector sector to the console.
+ *
+ * Calls xip_dump_slot_selector() in xip_manager.c.  Output goes via xprintf /
+ * printf_x_printBuffer rather than the CLI write buffer, so the CLI response
+ * is just a short status line.
+ */
+static BaseType_t prvDumpSelCommand( char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString ) {
+    (void)pcCommandString;
+
+    memset(pcWriteBuffer, 0x00, xWriteBufferLen);
+
+    int result = xip_dump_slot_selector();
+    if (result != 0) {
+        cli_append(&pcWriteBuffer, &xWriteBufferLen,
+                   "dump-sel failed (error %d)", result);
+    }
+
+    return pdFALSE;
+}
+
+/**
+ * Update firmware from a file in /MANIFEST on the SD card.
+ *
+ * Calls xip_update_firmware_from_sd() which handles the full sequence:
+ * erase inactive slot, write image, verify, update slot selector.
+ * Detailed progress is printed to the console via xprintf.
+ */
+static BaseType_t prvFirmwareCommand( char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString ) {
+    const char *pcParameter;
+    BaseType_t lParameterStringLength;
+    char filename[64];
+    int result;
+
+    memset(pcWriteBuffer, 0x00, xWriteBufferLen);
+
+    pcParameter = FreeRTOS_CLIGetParameter(pcCommandString, 1, &lParameterStringLength);
+    if (pcParameter == NULL) {
+        cli_append(&pcWriteBuffer, &xWriteBufferLen, "Usage: firmware <filename>");
+        return pdFALSE;
+    }
+
+    if (lParameterStringLength >= (BaseType_t)sizeof(filename)) {
+        cli_append(&pcWriteBuffer, &xWriteBufferLen, "Filename too long (max 63 chars)");
+        return pdFALSE;
+    }
+
+    memcpy(filename, pcParameter, lParameterStringLength);
+    filename[lParameterStringLength] = '\0';
+
+    result = xip_update_firmware_from_sd(filename);
+    if (result == 0) {
+        cli_append(&pcWriteBuffer, &xWriteBufferLen,
+                   "Firmware update OK. Type 'reset' to boot the new image.");
+    } else {
+        cli_append(&pcWriteBuffer, &xWriteBufferLen,
+                   "Firmware update FAILED (error %d). Existing firmware unchanged.", result);
+    }
+
+    return pdFALSE;
+}
+
 /********************************** Private Function Definitions - Other **************************/
 
 /**
@@ -708,6 +789,8 @@ static void vRegisterCLICommands( void ) {
 	FreeRTOS_CLIRegisterCommand( &xRead );
 	FreeRTOS_CLIRegisterCommand( &xTxFile );
 	FreeRTOS_CLIRegisterCommand( &xUnmount );
+	FreeRTOS_CLIRegisterCommand( &xDumpSel );
+	FreeRTOS_CLIRegisterCommand( &xFirmware );
 }
 
 /**

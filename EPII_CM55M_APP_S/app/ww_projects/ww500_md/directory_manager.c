@@ -85,6 +85,8 @@ static void generateImageDirName(char *imageDirName, uint8_t dirNameLen) {
 	// terminate the ID after 8 characters
 	deployment_id[8] = '\0';
 
+	// DIRNAMELEN is 32 for /MEDIA/12345678/12345678.123 max size is (3 * 9) + 4 + 1 = 32
+	// so there won't be an overflow.
 	snprintf(imageDirName, dirNameLen, "%s/%s/%s.%03d",
 			MEDIA_DIR, deployment_id, CAPTURE_DIR, imagesIndex);
 

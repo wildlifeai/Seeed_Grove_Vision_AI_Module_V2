@@ -1268,7 +1268,7 @@ static APP_MSG_DEST_T  handleEventForStateDiskOp(APP_MSG_T rxMessage) {
 				snprintf(ackStr, sizeof(ackStr), "ftx err %d", (int)fileRxPendingErr);
 			}
 			else {
-				snprintf(ackStr, sizeof(ackStr), "ftx done");
+				snprintf(ackStr, sizeof(ackStr), "ftx ack end");
 			}
 			sendI2CMessage((uint8_t *)ackStr, AI_PROCESSOR_MSG_RX_STRING, strlen(ackStr));
 

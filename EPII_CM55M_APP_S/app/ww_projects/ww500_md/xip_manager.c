@@ -47,6 +47,7 @@
 #include "xprintf.h"
 #include "fatfs_task.h"
 #include "directory_manager.h"
+#include "image_task.h"
 #include "printf_x.h"
 #include "xip_manager.h"
 
@@ -74,7 +75,8 @@
 #define XIP_FIRMWARE_VERIFY_AFTER_WRITE    1
 
 // Maximum bare filename length for firmware images (no path, including NUL).
-#define MAX_FIRMWARE_NAME_LEN    32
+// Firmware files are 8.3 format — same constraint as IMAGEFILENAMELEN in image_task.h.
+#define MAX_FIRMWARE_NAME_LEN    IMAGEFILENAMELEN
 
 // Flash physical address layout
 #define FLASH_START_SAFE_ADDR   0x00200000          // Physical start of model area (after 2 MB firmware slots)
@@ -126,6 +128,8 @@ typedef struct {
 static USE_DW_SPI_MST_E spi_inst = (USE_DW_SPI_MST_E)0;
 
 static bool flash_initialized = false;
+
+// TODO - work out if we even need this mutex - I don't think it serves any purpose.
 static SemaphoreHandle_t xSPIMutex = NULL;
 
 static uint8_t g_label_count = 0;
@@ -592,6 +596,7 @@ bool xip_copy_model_from_sd_to_flash(char *filename) {
     }
 
     // Step 1: allocate write and verify buffers from the heap to avoid stack overflow
+
     uint8_t *write_buf  = (uint8_t *)pvPortMalloc(FILE_CHUNK_SIZE);
     uint8_t *verify_buf = (uint8_t *)pvPortMalloc(FILE_CHUNK_SIZE);
 
@@ -665,7 +670,7 @@ bool xip_copy_model_from_sd_to_flash(char *filename) {
             return false;
         }
         if (bytesRead == 0) {
-            break;  // EOF
+            break;  // EOF - this is the exit from the while() loop
         }
 
         // Round up to a 4-byte boundary (bytes_len must be a multiple of 4)
@@ -709,7 +714,12 @@ bool xip_copy_model_from_sd_to_flash(char *filename) {
 
         flash_address  += write_size_bytes;
         totalBytesRead += bytesRead;
-    }
+
+        // Force a task switch to prevent the inactivity timeout firing.
+        // Will cause a call to vApplicationTaskSwitchedIn()
+        vTaskDelay(1);
+
+    } // while(1)
 
     // Step 5: close the file and report results
     xSemaphoreGive(xSPIMutex);
@@ -921,7 +931,7 @@ static int verify_firmware_slot(uint8_t slot, const char *filepath) {
             break;
         }
         if (bytes_read == 0) {
-            break;  // EOF — all bytes matched
+            break;  // EOF — all bytes matched - this is the way out of the while() loop
         }
 
         uint32_t read_size = align_up(bytes_read, 4);
@@ -943,7 +953,11 @@ static int verify_firmware_slot(uint8_t slot, const char *filepath) {
 
         flash_address  += read_size;
         total_verified += bytes_read;
-    }
+
+        // Force a task switch to prevent the inactivity timeout firing.
+        // Will cause a call to vApplicationTaskSwitchedIn()
+        vTaskDelay(1);
+    } // while (1)
 
     xSemaphoreGive(xSPIMutex);
     f_close(&file);
@@ -999,7 +1013,10 @@ static int erase_firmware_slot(uint8_t slot) {
             return -1;
         }
         addr += FLASH_BLOCK_SIZE;
-        vTaskDelay(1);  // yield to prevent inactivity timeout
+
+        // Force a task switch to prevent the inactivity timeout firing.
+        // Will cause a call to vApplicationTaskSwitchedIn()
+        vTaskDelay(1);
     }
 
     xSemaphoreGive(xSPIMutex);
@@ -1146,7 +1163,12 @@ static int write_firmware_from_sd(uint8_t slot, const char *filepath) {
 
         flash_address  += write_size;
         total_written  += bytes_read;
-    }
+
+
+        // Force a task switch to prevent the inactivity timeout firing.
+        // Will cause a call to vApplicationTaskSwitchedIn()
+        vTaskDelay(1);
+    } // while(1)
 
     xSemaphoreGive(xSPIMutex);
     f_close(&file);

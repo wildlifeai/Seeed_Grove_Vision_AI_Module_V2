@@ -35,6 +35,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include "image_task.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -47,7 +49,8 @@ extern "C" {
 // Model metadata limits
 #define MAX_CLASSES             16          // Maximum number of NN output classes
 #define MAX_LABEL_LEN           20          // Maximum bytes per class label string (including NUL)
-#define MAX_MODEL_NAME_LEN      13          // 8.3 format filename + NUL (e.g. "1V2.TFL\0")
+#define MAX_MODEL_NAME_LEN      IMAGEFILENAMELEN          // 8.3 format filename + NUL (e.g. "1V2.TFL\0")
+
 
 /*************************************** Type definitions **************************************/
 
@@ -63,14 +66,18 @@ extern "C" {
  *   modelName   — 8.3 format filename used to identify the stored model, e.g. "1V2.TFL"
  *   labels      — NUL-terminated class name strings, one per output class
  *   crc         — reserved for future integrity checking; currently written as 0
+ *
+ *   Arranged for 4-byte alignment
  */
 typedef struct {
     uint32_t magic;                          // Must equal 0x4C41424C ("LABL")
+    uint32_t crc;                            // Reserved — set to 0 for now
+
     uint16_t class_count;                    // Number of output classes
     uint16_t label_len;                      // Bytes per label (MAX_LABEL_LEN)
-    char modelName[MAX_MODEL_NAME_LEN];      // Model filename, e.g. "1V2.TFL"
+
     char labels[MAX_CLASSES][MAX_LABEL_LEN]; // Class label strings
-    uint32_t crc;                            // Reserved — set to 0 for now
+    char modelName[MAX_MODEL_NAME_LEN];      // Model filename, e.g. "1V2.TFL"
 } ModelMetaData;
 
 // Read-only pointer to the metadata as it appears in XIP-mapped flash.

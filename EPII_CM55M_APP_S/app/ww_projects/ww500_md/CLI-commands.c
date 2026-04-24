@@ -1090,7 +1090,7 @@ static BaseType_t prvWriteFile(char *pcWriteBuffer, size_t xWriteBufferLen, cons
 	char ch;
 
 	XP_LT_RED;
-	xprintf("TODO this command is not working! fileOp is not being passed to the fatfs task!\r\n");
+	xprintf("TODO: writefile uses APP_MSG_FATFSTASK_WRITE_FILE which truncates on every call.\r\n");
 	XP_WHITE;
 
 	/* Get parameter */

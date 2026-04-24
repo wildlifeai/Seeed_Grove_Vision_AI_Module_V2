@@ -24,5 +24,10 @@ void crc16_ccitt_generate(uint8_t * data, uint16_t length, uint16_t * CRC);
 // Checks the CRC for a buffer of given length, with the CRC being the final 2 bytes (BE)
 bool crc16_ccitt_validate(uint8_t * data, uint16_t length);
 
+// Streaming (incremental) API — use when data arrives in chunks
+uint16_t crc16_ccitt_stream_init(void);
+uint16_t crc16_ccitt_stream_update(const uint8_t *data, uint16_t length, uint16_t crc);
+uint16_t crc16_ccitt_stream_final(uint16_t crc);
+
 
 #endif /* CRC16_CCITT_H_ */

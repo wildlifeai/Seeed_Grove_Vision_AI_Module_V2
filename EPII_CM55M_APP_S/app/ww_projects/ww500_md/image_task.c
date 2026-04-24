@@ -384,8 +384,8 @@ static uint8_t *next_data_ptr;
 
 static uint8_t *tiff_start;
 
-// Measure duration between events
-TickType_t startTime;
+// Measure interval between events
+static TickType_t startTime;
 
 /********************************** Local Functions  *************************************/
 

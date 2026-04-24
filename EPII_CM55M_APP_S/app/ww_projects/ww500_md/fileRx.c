@@ -18,6 +18,7 @@
 
 #include "fileRx.h"
 #include "crc16_ccitt.h"
+#include "printf_x.h"
 
 /*********************************************** Local Defines ***********************************************/
 
@@ -126,7 +127,9 @@ fileRx_result_t fileRx_start(const char *filename, uint32_t totalSize) {
     session.deleteOnClose  = false;
     session.active         = true;
 
-    xprintf("Receiving '%s' (%d bytes)\n", session.fileName, session.totalSize);
+    XP_LT_BLUE;	// colour for File TX operations
+    xprintf("FileTX: Receiving '%s' (%d bytes)\n", session.fileName, session.totalSize);
+    XP_WHITE;
 
     return FILERX_OK;
 }
@@ -173,6 +176,10 @@ fileRx_result_t fileRx_data(const uint8_t *chunk, uint16_t len, uint8_t packetNu
     session.bytesReceived += len;
     session.lastPacketNum  = packetNum;
 
+    XP_LT_BLUE;	// colour for File TX operations
+    xprintf("FileTX: Received packet %d (%d bytes)\n", packetNum, len);
+    XP_WHITE;
+
     return FILERX_OK;
 }
 
@@ -191,15 +198,21 @@ fileRx_result_t fileRx_data(const uint8_t *chunk, uint16_t len, uint8_t packetNu
 fileRx_result_t fileRx_end(uint16_t receivedCrc) {
     uint16_t finalCrc = crc16_ccitt_stream_final(session.runningCrc);
 
+
     if (finalCrc != receivedCrc) {
         session.deleteOnClose = true;
 
+        XP_LT_BLUE;	// colour for File TX operations
         xprintf("CRC error receiving '%s')\n", session.fileName);
+        XP_WHITE;
 
         return FILERX_ERR_CRC_MISMATCH;
     }
 
-    xprintf("Received '%s' OK (%d bytes)\n", session.fileName, session.totalSize);
+    XP_LT_BLUE;
+    xprintf("FileTX: Received '%s' OK (%d packets, %d bytes, CRC 0x%04x)\n",
+    		session.fileName, session.lastPacketNum, session.totalSize, receivedCrc);
+    XP_WHITE;
 
     return FILERX_OK;
 }

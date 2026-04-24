@@ -244,6 +244,9 @@ bool lastMessageSent = false;
 
 bool sendWakeMsg = false;
 
+// Measure interval between events
+static TickType_t fileRxStartTime;
+
 /*********************************** I2C Local Function Definitions ************************************************/
 
 /**
@@ -470,6 +473,9 @@ static void i2cRxDataReady(void) {
 		send_msg.msg_event     = APP_MSG_FATFSTASK_OPEN_FILE;
 		send_msg.msg_data      = (uint32_t)&fileRxOp;
 
+        // Record fileTx time
+        fileRxStartTime = xTaskGetTickCount();
+
 		xQueueSend(xFatTaskQueue, &send_msg, __QueueSendTicksToWait);
 
 		diskPhase        = DISK_PHASE_FILE_OPEN;
@@ -538,6 +544,9 @@ static void i2cRxDataReady(void) {
 		send_msg.msg_event     = APP_MSG_FATFSTASK_APPEND_FILE;
 		send_msg.msg_data      = (uint32_t)&fileRxOp;
 
+        // Record fileTx time
+        fileRxStartTime = xTaskGetTickCount();
+
 		xQueueSend(xFatTaskQueue, &send_msg, __QueueSendTicksToWait);
 
 		diskPhase     = DISK_PHASE_FILE_DATA;
@@ -583,6 +592,9 @@ static void i2cRxDataReady(void) {
 
 		send_msg.msg_event     = APP_MSG_FATFSTASK_CLOSE_FILE;
 		send_msg.msg_data      = (uint32_t)&fileRxOp;
+
+        // Record fileTx time
+        fileRxStartTime = xTaskGetTickCount();
 
 		xQueueSend(xFatTaskQueue, &send_msg, __QueueSendTicksToWait);
 
@@ -1195,6 +1207,7 @@ static APP_MSG_DEST_T  handleEventForStateDiskOp(APP_MSG_T rxMessage) {
 	APP_MSG_DEST_T  sendMsg;
 	APP_MSG_T       send_msg;
 	char            ackStr[16];
+	TickType_t 		elapsedTime;
 
 	sendMsg.destination = NULL;
 	event = rxMessage.msg_event;
@@ -1202,6 +1215,13 @@ static APP_MSG_DEST_T  handleEventForStateDiskOp(APP_MSG_T rxMessage) {
 	switch (event) {
 
 	case APP_MSG_IFTASK_DISK_WRITE_COMPLETE:
+
+		// How long did it take?
+		elapsedTime = app_getElapsedMs(fileRxStartTime);
+	    XP_LT_BLUE;	// colour for File TX operations
+	    xprintf("   FileTX: disk operation took %dms\n", elapsedTime);
+	    XP_WHITE;
+
 		switch (diskPhase) {
 
 		case DISK_PHASE_FILE_OPEN:
@@ -1246,11 +1266,12 @@ static APP_MSG_DEST_T  handleEventForStateDiskOp(APP_MSG_T rxMessage) {
 		case DISK_PHASE_FILE_CLOSE:
 			if (fileRxPendingErr != FILERX_OK) {
 				snprintf(ackStr, sizeof(ackStr), "ftx err %d", (int)fileRxPendingErr);
-				sendI2CMessage((uint8_t *)ackStr, AI_PROCESSOR_MSG_RX_STRING, strlen(ackStr));
 			}
 			else {
-				sendI2CMessage((uint8_t *)"ftx ack end", AI_PROCESSOR_MSG_RX_STRING, 11);
+				snprintf(ackStr, sizeof(ackStr), "ftx done");
 			}
+			sendI2CMessage((uint8_t *)ackStr, AI_PROCESSOR_MSG_RX_STRING, strlen(ackStr));
+
 			if_task_state = APP_IF_STATE_I2C_TX;
 			break;
 

@@ -51,15 +51,21 @@ typedef enum {
 #define FLASHLEDDUTY 5
 // Deafult values of Operational Parameters
 // todo THESE
-#define NUMPICTURESTOGRAB	3
-#define PICTUREINTERVAL		1500
-#define	TIMELAPSEINTERVAL	1 * 60	// time in seconds
+#define NUMPICTURESTOGRAB	1
+#define PICTUREINTERVAL		500
+//#define	TIMELAPSEINTERVAL	1 * 60	// time in seconds
+#define	TIMELAPSEINTERVAL	0	// 0 disables timelapse
+
+// for now, 1s
+#define INACTIVITYTIMEOUT 1000
 
 // Default interval in ms between frame grabs in motion detect mode
-#define DPDINTERVAL 1000
+// 0 disables MD
+//#define DPDINTERVAL 1000
+#define DPDINTERVAL 0
 
 // Default Duration (ms) that LED Flash is on. VSYNC ends <40ms after flash starts.
-#define FLASHDURATION 50
+#define FLASHDURATION 100
 
 TaskHandle_t image_createTask(int8_t priority, APP_WAKE_REASON_E wakeReason);
 

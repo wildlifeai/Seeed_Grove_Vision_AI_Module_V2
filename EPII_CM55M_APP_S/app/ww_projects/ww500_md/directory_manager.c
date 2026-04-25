@@ -76,7 +76,8 @@ static void generateImageDirName(char *imageDirName, uint8_t dirNameLen) {
 		fatfs_setOperationalParameter(OP_PARAMETER_IMAGES_COUNT, 0);
 	}
 	else {
-		xprintf("Retaining existing images directory (%d <= %d) ", imagesCount, MAXIMAGESPERDIRECTORY);
+		xprintf("Retaining existing images directory (%d <= %d) ",
+				imagesCount, MAXIMAGESPERDIRECTORY);
 	}
 
 	// Typically:

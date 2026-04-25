@@ -1,5 +1,5 @@
 # Description of the CONFIG.TXT File
-#### CGP - 27 March 2026
+#### VAV - 24 April 2026
 
 The CONFIG.TXT file contains "Operational Parameters" for the WW500.
 

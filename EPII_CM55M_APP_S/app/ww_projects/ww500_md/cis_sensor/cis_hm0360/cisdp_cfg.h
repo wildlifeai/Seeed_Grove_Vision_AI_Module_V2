@@ -29,6 +29,8 @@
 
 #include "hx_drv_gpio.h"
 #include "hx_drv_inp.h"
+#include "hx_drv_jpeg.h" // for JPEG_ENC_QTABLE_4X & JPEG_ENC_QTABLE_10X
+#include "printf_x.h" // for XSTR()
 
 #ifdef TRUSTZONE_SEC
 #define EXT_RAM_START   BASE_ADDR_SRAM0_ALIAS
@@ -111,6 +113,7 @@ typedef enum
 #endif
 #define SENCTRL_SENSOR_WIDTH 		640
 #define SENCTRL_SENSOR_HEIGHT 		480
+// CGP - why is this 3 for a mono sensor?
 #define SENCTRL_SENSOR_CH	 		3
 
 
@@ -266,8 +269,41 @@ typedef enum
 #define DP_JPEG_PATH				JPEG_PATH_ENCODER_EN
 #define DP_JPEG_ENC_WIDTH 			DP_HW5X5_OUT_WIDTH
 #define DP_JPEG_ENC_HEIGHT 			DP_HW5X5_OUT_HEIGHT
-#define DP_JPEG_ENCTYPE 			JPEG_ENC_TYPE_YUV420
-#define DP_JPEG_ENCQTABLE 			JPEG_ENC_QTABLE_10X
 
+#define DP_JPEG_ENCTYPE 			JPEG_ENC_TYPE_YUV420
+// CGP: If I use YUV400 then the test patterns are B&W. If I use YUV420 they are in colour.
+// Lower risk to retain YUV422
+//#define DP_JPEG_ENCTYPE 			JPEG_ENC_TYPE_YUV400
+
+// CGP - changed to higher quality JPEG quality. Allowable values are 4 and 10
+// I get compile-time confusion if I use DP_JPEG_ENCQTABLE, JPEG_ENC_QTABLE_4X, JPEG_ENC_QTABLE_10X to set buffer sizes
+//#define JPEG_COMPRESSION 			10
+#define JPEG_COMPRESSION 			4
+
+/* Select bytes per MCU based on JPEG quality */
+#if (JPEG_COMPRESSION == 10)
+    #define JPEG_BYTES_PER_MCU   38
+	#define DP_JPEG_ENCQTABLE 			JPEG_ENC_QTABLE_10X	// higher quality
+	#pragma message "JPEG x 10 compression"
+#elif (JPEG_COMPRESSION == 4)
+    #define JPEG_BYTES_PER_MCU   96
+	#define DP_JPEG_ENCQTABLE 			JPEG_ENC_QTABLE_4X	// higher quality
+	#pragma message "JPEG x 4 compression"
+#else
+    #error "Unsupported JPEG quality setting"
+#endif
+
+/* MCU count for YUV420 (16x16 blocks) */
+#define JPEG_MCU_COUNT  ((SENCTRL_SENSOR_WIDTH/16) * (SENCTRL_SENSOR_HEIGHT/16))
+
+/* Header + padding from vendor formula */
+#define JPEG_HEADER_SIZE   623
+#define JPEG_FOOTER_SIZE   35
+
+/* Final buffer size (aligned to 4 bytes) */
+#define JPEG_BUFSIZE  (((JPEG_HEADER_SIZE + (JPEG_MCU_COUNT * JPEG_BYTES_PER_MCU) + JPEG_FOOTER_SIZE) + 3) & ~3)
+#define RAW_BUFSIZE  (SENCTRL_SENSOR_WIDTH * SENCTRL_SENSOR_HEIGHT * 3/2)   //YUV420: Y= W*H byte, U = ((W*H)>>2) byte, V = ((W*H)>>2) byte
+
+#pragma message "RAW_BUFSIZE: " XSTR(RAW_BUFSIZE)
 
 #endif /* APP_SCENARIO_CISDP_CFG_H_ */

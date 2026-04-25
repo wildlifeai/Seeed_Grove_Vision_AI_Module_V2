@@ -38,6 +38,8 @@ extern "C" {
 // required length for a 128-bit UUID (including trailing '\0')
 #define	UUIDLENGTH	37
 
+#define DEPLOYMENT_ID_ZERO_UUID "00000000-0000-0000-0000-000000000000"
+
 // Uncomment this to include the unzipping code
 // See error report 12/01/26 in MANIFEST_info.md
 //#define UNZIPMANIFEST
@@ -64,7 +66,7 @@ typedef enum {
 	OP_PARAMETER_PICTURE_INTERVAL,	// 6 The interval (in ms) between each of the above images. Limited to about 2000 for HM0360
 	OP_PARAMETER_TIMELAPSE_INTERVAL,// 7 The interval (in s) between entering DPD and waking again to take the next timelapse image (0 inhibits)
 	OP_PARAMETER_INTERVAL_BEFORE_DPD, // 8 The interval (in ms) between when all FreeRTOS task activity ceases and the AI processor entering DPD.
-	OP_PARAMETER_LED_BRIGHTNESS_PERCENT,	// 9 Flash LED duty cycle (brightness) in percent (0 inhibits LED flash)
+	OP_PARAMETER_LED_BRIGHTNESS_PERCENT,	// 9 Flash LED duty cycle (brightness) in percent (approximately, 0 means 'dim', not 'off')
 	OP_PARAMETER_CAMERA_ENABLED,	// 10 0 = Camera and NN system disabled, 1 = Camera and NN system enabled
 	OP_PARAMETER_MD_INTERVAL,		// 11 Interval (ms) between frames in motion detect mode (0 inhibits motion detection)
 	OP_PARAMETER_FLASH_DURATION,	// 12 Duration (ms) that LED flash is on
@@ -72,16 +74,29 @@ typedef enum {
 	OP_PARAMETER_MODEL_PROJECT,		// 14 Model project ID used for the NN model
 	OP_PARAMETER_MODEL_VERSION,		// 15 Model version number used for the NN model
 	OP_PARAMETER_MODEL_THRESHOLD,	// 16 Logit threshold for detection (0-127)
-	OP_PARAMETER_DEPLOYMENT_ID_CHUNK_1 = 20, // 20 Deployment ID Chunk 1 (Hex chars 0-3) - OP15-19 reserved for future use
-	OP_PARAMETER_DEPLOYMENT_ID_CHUNK_2,	  // 21 Deployment ID Chunk 2 (Hex chars 4-7)
-	OP_PARAMETER_DEPLOYMENT_ID_CHUNK_3,	  // 22 Deployment ID Chunk 3 (Hex chars 8-11)
-	OP_PARAMETER_DEPLOYMENT_ID_CHUNK_4,	  // 23 Deployment ID Chunk 4 (Hex chars 12-15)
-	OP_PARAMETER_DEPLOYMENT_ID_CHUNK_5,	  // 24 Deployment ID Chunk 5 (Hex chars 16-19)
-	OP_PARAMETER_DEPLOYMENT_ID_CHUNK_6,	  // 25 Deployment ID Chunk 6 (Hex chars 20-23)
-	OP_PARAMETER_DEPLOYMENT_ID_CHUNK_7,	  // 26 Deployment ID Chunk 7 (Hex chars 24-27)
-	OP_PARAMETER_DEPLOYMENT_ID_CHUNK_8,	  // 27 Deployment ID Chunk 8 (Hex chars 28-31)
+	OP_PARAMETER_MD_SENSITIVITY,	// 17 Motion Detection Sensitivity: 0=off, 1=low, 2=medium, 3=high
+	OP_PARAMETER_TEST_MODE_BITS,	// 18 To manage test configurations: bit or bits indicate a test function
+	OP_PARAMETER_IMAGES_COUNT,		// 19 Count of images in the current image folder. Use this to decide to create a new image folder.
+	OP_PARAMETER_IMAGES_FILE_INDEX,	// 20 Count of image folders
+
 	OP_PARAMETER_NUM_ENTRIES		// Not an Operational Parameters - serves to define the size of the op_parameter[] array
 } OP_PARAMETERS_E;
+
+/**
+ * Defines bits which might be used in tests
+ *
+ * Set one or more bits to invoke the test.
+ *
+ * This allows tests to be turned on and off via the app, without needing re-compilation
+ * on order to run the test. To get a sensible test, other operational parameters might need to be changed as well.
+ */
+typedef enum {
+	TEST_BIT_TONE_MAPPING = (1 << 0),	// Select a new tone after each image. Set OP_PARAMETER_NUM_PICTURES to 4
+	TEST_BIT_SAVE_BMP = (1 << 1),			// Alternate between JPG and BMP files. Set OP_PARAMETER_NUM_PICTURES to an even number
+	TEST_BIT_FLASH_BRIGHTNESS = (1 << 2),	// increment LED flash with every picture. Set OP_PARAMETER_NUM_PICTURES to 7 and select OP_PARAMETER_FLASH_LED to 1 or 2
+	TEST_BIT_SKIP_FILE_CREATION = (1 << 3),	// Don't save images to disk. Still streams MD and AE data to app.
+											// Consider making OP_PARAMETER_NUM_PICTURES = a large number and OP_PARAMETER_PICTURE_INTERVAL = 1
+} TEST_MODE_BITS_E;
 
 /**
  *
@@ -106,6 +121,12 @@ typedef enum {
 	APP_FATFS_STATE_NUMSTATES					=0x0003
 } APP_FATFS_STATE_E;
 
+// Supplementary structure when there are multiple buffers to write to a file
+typedef struct {
+	uint8_t *	buffer;		// Pointer to the buffer containing file contents
+	uint32_t 	length;		// Number of bytes to write or read
+} fileBufferInfo_t;
+
 // Structure to use for file operations:
 // Initially for reading and writing a file
 typedef struct {
@@ -115,6 +136,7 @@ typedef struct {
 	FRESULT 	res;		// Result code returned from fatFs
 	bool		closeWhenDone;	// If true the file is closed when the operation completes
 	bool		unmountWhenDone;	// If true the SD card is unmounted when the operation completed
+	bool		deleteOnClose;	// If true the file is deleted after closing (used by CLOSE_FILE on error)
 	QueueHandle_t senderQueue;	// FreeRTOS queue that will get the response
 } fileOperation_t;
 
@@ -139,15 +161,19 @@ uint16_t fatfs_getImageSequenceNumber(void);
 // Increment one of the Operational Parameters
 void fatfs_incrementOperationalParameter(OP_PARAMETERS_E parameter);
 
-// Reconstruct deployment ID UUID from OP20-OP27 chunks
+// Get deployment ID UUID string (prefers 'I ' line form; falls back to OP20-OP27 chunks)
 void fatfs_getDeploymentId(char *deployment_id_buffer, size_t buffer_size);
 
-#define DEPLOYMENT_ID_ZERO_UUID "00000000-0000-0000-0000-000000000000"
+// Set deployment ID UUID string (persisted to CONFIG.TXT on next save_configuration())
+void fatfs_setDeploymentId(const char *uuid_string);
 
 // Load labels from SD card text file
 int8_t fatfs_load_labels(const char *path, char labels[][MAX_LABEL_LEN], uint8_t *label_count, uint8_t max_labels, uint8_t max_label_len);
 
 void fatfs_printCwd(void);
+
+// Recursive directory create
+FRESULT fatfs_mkdir_recursive(const char *path);
 
 #ifdef UNZIPMANIFEST
 // Unzip Manifest.zip (method 0 STORE only - no compression)

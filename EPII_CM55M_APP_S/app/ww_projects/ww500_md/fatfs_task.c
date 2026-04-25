@@ -46,6 +46,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#include <ctype.h>
 
 #include "WE2_device.h"
 #include "WE2_debug.h"
@@ -54,6 +55,9 @@
 
 #include "printf_x.h"
 #include "xprintf.h"
+
+#include "hx_drv_gpio.h"
+#include "hx_drv_scu.h"
 
 // FreeRTOS kernel includes.
 #include "FreeRTOS.h"
@@ -70,8 +74,6 @@
 #include "CLI-FATFS-commands.h"
 #include "time_handling.h"
 
-// TODO I am not using the public functions in this. Can we move the important bits of this to here?
-#include "spi_fatfs.h"
 #include "hx_drv_rtc.h"
 #include "exif_utc.h"
 #include "ww500_md.h"
@@ -81,6 +83,7 @@
 #include "barrier.h"
 #include "selfTest.h"
 #include "cvapp.h"
+#include "exif_gps.h"
 
 // TODO this is for the default project id and version - move elsewhere?
 #include "common_config.h"
@@ -118,7 +121,7 @@ static FRESULT fileRead(fileOperation_t *fileOp);
 static FRESULT fileWrite(fileOperation_t *fileOp);
 
 // Warning: list_dir() is in spi_fatfs.c - how to declare it and reuse it?
-FRESULT list_dir(const char *path);
+//FRESULT list_dir(const char *path);
 
 static FRESULT load_configuration(const char *filename, directoryManager_t *dirManager);
 FRESULT save_configuration(const char *filename, directoryManager_t *dirManager);
@@ -131,12 +134,12 @@ static int fatfs_unzip_manifest_zip(void);
 int fatfs_unzip_manifest(void);
 #endif //  UNZIPMANIFEST
 
-/*************************************** External Function Declaraions *******************************************/
-
-extern FRESULT init_directories(directoryManager_t *dirManager);
-extern FRESULT add_capture_folder(directoryManager_t *dirManager);
-
 /*************************************** External variables *******************************************/
+
+// GPS location of device can be set from the app, then accessed when needed
+extern GPS_Coordinate exif_gps_deviceLat;
+extern GPS_Coordinate exif_gps_deviceLon;
+extern GPS_Altitude exif_gps_deviceAlt;
 
 extern directoryManager_t dirManager;
 extern QueueHandle_t xIfTaskQueue;
@@ -164,6 +167,10 @@ static FATFS fs; /* Filesystem object */
 
 static bool mounted;
 
+// Persistent file handle for incremental file writes (OPEN_FILE / APPEND_FILE / CLOSE_FILE)
+static FIL transferFile;
+static bool transferFileOpen = false;
+
 static TickType_t xStartTime;
 
 // Strings for each of these states. Values must match APP_TASK1_STATE_E in task1.h
@@ -176,9 +183,13 @@ const char *fatFsTaskStateString[APP_FATFS_STATE_NUMSTATES] = {
 // Strings for expected messages. Values must match messages directed to fatfs Task in app_msg.h
 const char *fatFsTaskEventString[APP_MSG_FATFSTASK_LAST - APP_MSG_FATFSTASK_WRITE_FILE] = {
 	"Write file",
+	"Write image",
 	"Read file",
 	"File op done",
 	"Save State",
+	"Open file",
+	"Append file",
+	"Close file",
 };
 
 // Number of pictures to take after motion detect wake
@@ -189,7 +200,7 @@ uint32_t pictureInterval = PICTUREINTERVAL;
 
 // Values to read from the CONFIG.TXT file
 uint16_t op_parameter[OP_PARAMETER_NUM_ENTRIES] = {
-	1,				   // 0 Image file number (0 indicates no SD card)
+	0,				   // 0 Image file number (0 indicates no SD card)
 	0,				   // 1 # times the NN model has run
 	0,				   // 2 # times the NN model says "yes"
 	0,				   // 3 # of AI processor cold boots
@@ -199,16 +210,22 @@ uint16_t op_parameter[OP_PARAMETER_NUM_ENTRIES] = {
 	TIMELAPSEINTERVAL, // 7 Interval (s) (0 inhibits)
 	INACTIVITYTIMEOUT, // 8 Delay before DPD (ms)
 	FLASHLEDDUTY,	   // 9 in percent (0 inhibits)
-	1,				   // 10 0 = disabled, 1 = enabled
+	1,				   // 10 0 = camera disabled, 1 = enabled
 	DPDINTERVAL,	   // 11 Interval (ms) between frames in MD mode (0 inhibits)
 	FLASHDURATION,	   // 12 Duration (ms) that LED Flash is on
 	0,				   // 13 LED bit mask: vis=1, IR=2, none=0
 	PROJECT_ID,		   // 14 OP_PARAMETER_MODEL_PROJECT
 	PROJECT_VER,	   // 15 OP_PARAMETER_MODEL_VERSION
 	MODEL_THRESHOLD,   // 16 OP_PARAMETER_MODEL_THRESHOLD default
-	0, 0, 0,	   		// 17-19 Reserved for future use
-	0, 0, 0, 0, 0, 0, 0, 0  // 20-27 Deployment ID chunks
+	1,      	   		// 17 Motion Detection Sensitivity: 0=off, 1=low, 2=medium, 3=high
+	0,	    	   		// 18 Test Mode Bits - one bit to enable each test function
+	0,	    	   		// 19 OP_PARAMETER_IMAGES_COUNT
+	0,	    	   		// 20 OP_PARAMETER_IMAGES_COUNT - increment as files are added. Start a new folder when this exceeds a threhsold
 };
+
+// Deployment ID UUID string — loaded from 'I ' line in CONFIG.TXT or set via setdid CLI command
+static char deployment_id_string[UUIDLENGTH] = DEPLOYMENT_ID_ZERO_UUID;
+
 
 /********************************** Private Function definitions  *************************************/
 
@@ -255,13 +272,16 @@ static FRESULT fileWrite(fileOperation_t *fileOp) {
 	if (bw != (fileOp->length)) {
 		xprintf("Error. Wrote %d bytes rather than %d\n", bw, fileOp->length);
 		res = FR_DISK_ERR; // TODO find a better error code? Disk full?
-	} else {
+	}
+	else {
 		xprintf("Wrote %d bytes\n", bw);
 		res = FR_OK;
 	}
+
 	XP_GREEN
 	xprintf("Wrote file to SD %s\n", fileOp->fileName);
 	XP_WHITE;
+
 	fileOp->res = res;
 	return res;
 }
@@ -272,33 +292,89 @@ static FRESULT fileWrite(fileOperation_t *fileOp) {
  * 		parameters: fileOperation_t fileOp
  * 		returns: FRESULT res
  */
-static FRESULT fileWriteImage(fileOperation_t *fileOp, directoryManager_t *dirManager) {
+static FRESULT fileWriteImage(fileOperation_t *fileOp, fileBufferInfo_t * extraBlock, directoryManager_t *dirManager) {
 	FRESULT res;
+	UINT bw;         	// Bytes written
+	UINT bwTotal;
 	rtc_time time;
 
-	// Move to fastfs_write_image()
-	//	res = f_chdir(dirManager->current_capture_dir);
-	//	if (res != FR_OK) {
-	//		return res;
-	//	}
+	// (1) Change to the image capture directory
+	res = f_chdir(dirManager->current_capture_dir);
+	if (res != FR_OK) {
+		return res;
+	}
 
-	// fastfs_write_image() expects filename is a uint8_t array
-	// TODO resolve this warning! "warning: passing argument 1 of 'fastfs_write_image' makes integer from pointer without a cast"
-	res = fastfs_write_image((uint32_t)(fileOp->buffer), fileOp->length, (uint8_t *)fileOp->fileName, dirManager);
+	// (2) Open the file
+	// tp added this to write over existing files with the same name for development phase
+	res = f_open(&dirManager->imagesFile, (TCHAR*) fileOp->fileName,  FA_WRITE | FA_CREATE_ALWAYS);
+	// res = f_open(&fil_w, (TCHAR*) filename, FA_CREATE_NEW | FA_WRITE);
+	dirManager->imagesRes = res;
+
+	if (res != FR_OK)  {
+		xprintf("f_open of '%s' failed. res = %d\r\n", fileOp->fileName, res);
+		return res;
+	}
+	dirManager->imagesOpen = true;
+
+    // This ensures that any data in the D-cache is committed to RAM
+    SCB_CleanDCache_by_Addr ((void *)fileOp->buffer, fileOp->length);
+/*
+	// Option here to check by printing some of jpeg buffer
+    uint16_t bytesToPrint = 16;
+    uint8_t * buffer = (uint8_t * ) SRAM_addr;
+    XP_LT_GREY;
+
+	xprintf("Used 'SCB_CleanDCache' - writing %d bytes beginning:\n", img_size);
+	for (int i = 0; i < bytesToPrint; i++) {
+	    xprintf("%02X ", buffer[i]);
+	    if (i%16 == 15) {
+	    	xprintf("\n");
+	    }
+	}
+	xprintf("\n");
+    XP_WHITE;
+*/
+
+    // (3a) Write (first chunk of) data to the file
+    res = f_write(&dirManager->imagesFile, (void *)fileOp->buffer, fileOp->length, &bw);
 
 	if (res != FR_OK) {
 		xprintf("Error writing file %s\n", fileOp->fileName);
 		fileOp->length = 0;
 		fileOp->res = res;
 
-		// Restore base dir
-		// f_chdir(dirManager->base_dir);
-
 		return res;
 	}
+	bwTotal = bw;
+
+	// (3b) Write extra data to the file
+	if (extraBlock->length > 0) {
+
+	    SCB_CleanDCache_by_Addr ((void *)extraBlock->buffer, extraBlock->length);
+		res = f_write(&dirManager->imagesFile, (void *)extraBlock->buffer, extraBlock->length, &bw);
+
+		if (res != FR_OK) {
+			xprintf("Error writing file %s\n", fileOp->fileName);
+			fileOp->length = 0;
+			fileOp->res = res;
+		}
+		else {
+			bwTotal += bw;
+		}
+	}
+
+	// (4) Close the file
+     res = f_close(&dirManager->imagesFile);
+     dirManager->imagesRes = res;
+
+    if (res != FR_OK) {
+        xprintf("Failed to close image file: %d\n", res);
+    }
+
+    dirManager->imagesOpen = false;
 
 	XP_GREEN
-	xprintf("Wrote image to SD: %s ", fileOp->fileName);
+	xprintf("Wrote %d byte image to SD: %s ", bwTotal, fileOp->fileName);
 	XP_WHITE;
 
 	exif_utc_get_rtc_as_time(&time);
@@ -307,9 +383,6 @@ static FRESULT fileWriteImage(fileOperation_t *fileOp, directoryManager_t *dirMa
 			time.tm_hour, time.tm_min, time.tm_sec,
 			time.tm_mday, time.tm_mon, time.tm_year);
 
-	// CGP - no need?
-	// Restore base dir
-	// res = f_chdir(dirManager->base_dir);
 	return res;
 }
 
@@ -374,22 +447,23 @@ static APP_MSG_DEST_T handleEventForUninit(APP_MSG_T rxMessage) {
 
 	switch (event) {
 
+	case APP_MSG_FATFSTASK_WRITE_IMAGE:
+		// Deliberately fall through
 	case APP_MSG_FATFSTASK_WRITE_FILE:
-		// someone wants a file written. Send back an error message
+		// Someone wants a file written. Send back an error message
 
 		// Inform the if task that the disk operation is complete
 		sendMsg.message.msg_data = (uint32_t)FR_NO_FILESYSTEM;
 		sendMsg.destination = fileOp->senderQueue;
+
 		// The message to send depends on the destination! In retrospect it would have been better
 		// if the messages were grouped by the sender rather than the receiver, so this next test was not necessary:
 		if (sendMsg.destination == xIfTaskQueue) {
 			sendMsg.message.msg_event = APP_MSG_IFTASK_DISK_WRITE_COMPLETE;
-		} else if (sendMsg.destination == xImageTaskQueue) {
+		}
+		else if (sendMsg.destination == xImageTaskQueue) {
 			sendMsg.message.msg_event = APP_MSG_IMAGETASK_DISK_WRITE_COMPLETE;
 		}
-		//    	// Complete this as necessary
-		//    	else if (sendMsg.destination == anotherTaskQueue) {
-		//        	sendMsg.message.msg_event = APP_MSG_ANOTHERTASK_DISK_WRITE_COMPLETE;
 		else {
 			// assumed to be CLI task.
 			sendMsg.message.msg_event = APP_MSG_CLITASK_DISK_WRITE_COMPLETE;
@@ -418,8 +492,7 @@ static APP_MSG_DEST_T handleEventForUninit(APP_MSG_T rxMessage) {
 		break;
 
 	case APP_MSG_FATFSTASK_SAVE_STATE:
-		// Save the state of the imageSequenceNumber
-		// This is the last thing we will do before sleeping.
+		// Return an error in this state
 
 		sendMsg.message.msg_data = (uint32_t)FR_NO_FILESYSTEM;
 
@@ -428,6 +501,15 @@ static APP_MSG_DEST_T handleEventForUninit(APP_MSG_T rxMessage) {
 		sendMsg.message.msg_event = APP_MSG_IMAGETASK_DISK_WRITE_COMPLETE;
 		sendMsg.message.msg_data = (uint32_t)res;
 
+		break;
+
+	case APP_MSG_FATFSTASK_OPEN_FILE:
+	case APP_MSG_FATFSTASK_APPEND_FILE:
+	case APP_MSG_FATFSTASK_CLOSE_FILE:
+		// SD card not mounted — report failure
+		sendMsg.message.msg_data = (uint32_t)FR_NO_FILESYSTEM;
+		sendMsg.destination = fileOp->senderQueue;
+		sendMsg.message.msg_event = APP_MSG_IFTASK_DISK_WRITE_COMPLETE;
 		break;
 
 	case APP_MSG_IMAGETASK_DISK_WRITE_COMPLETE:
@@ -448,8 +530,10 @@ static APP_MSG_DEST_T handleEventForUninit(APP_MSG_T rxMessage) {
 static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 	APP_MSG_EVENT_E event;
 	FRESULT res;
-	fileOperation_t *fileOp;
 	static APP_MSG_DEST_T sendMsg;
+
+	fileOperation_t *fileOp;
+	fileBufferInfo_t *extraBlock;
 
 	sendMsg.destination = NULL;
 	res = FR_OK;
@@ -458,32 +542,73 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 
 	fileOp = (fileOperation_t *)rxMessage.msg_data;
 
+	extraBlock = (fileBufferInfo_t*)rxMessage.msg_parameter;
+
 	switch (event) {
 
-	case APP_MSG_FATFSTASK_WRITE_FILE:
+	case APP_MSG_FATFSTASK_WRITE_IMAGE:
 		// someone wants a file written. Structure including file name a buffer is passed in data
-		fatFs_task_state = APP_FATFS_STATE_BUSY;
+
+		if (fileOp->fileName == NULL) {
+			// Skip the actual file write operation, but send an OK response.
+			// This allows the calling code to say "don't really save a file" but all the other code can stay unchnaged
+			res = FR_OK;
+		}
+		else {
+			xStartTime = xTaskGetTickCount();
+
+			res = fileWriteImage(fileOp, extraBlock, &dirManager);
+			fatfs_incrementOperationalParameter(OP_PARAMETER_IMAGES_COUNT);
+			xprintf("File write took %dms\n", app_getElapsedMs(xStartTime));
+		}
+
+		// Inform the if task that the disk operation is complete
+		sendMsg.message.msg_data = (uint32_t)res;
+		sendMsg.destination = fileOp->senderQueue;
+
+		// The message to send depends on the destination! In retrospect it would have been better
+		// if the messages were grouped by the sender rather than the receiver, so this next test was not necessary:
+		// In practise, at the time of writing, image fiels are written from image_task.
+		// There is a CLI-commands command but (probably) not used.
+
+		if (sendMsg.destination == xIfTaskQueue) {
+			sendMsg.message.msg_event = APP_MSG_IFTASK_DISK_WRITE_COMPLETE;
+		}
+		else if (sendMsg.destination == xImageTaskQueue) {
+			sendMsg.message.msg_event = APP_MSG_IMAGETASK_DISK_WRITE_COMPLETE;
+		}
+		else {
+			// assumed to be CLI task.
+			sendMsg.message.msg_event = APP_MSG_CLITASK_DISK_WRITE_COMPLETE;
+		}
+
+		break;
+
+	case APP_MSG_FATFSTASK_WRITE_FILE:
+		// TODO - re-write this!
+		// someone wants a file written. Structure including file name a buffer is passed in data
+		//fatFs_task_state = APP_FATFS_STATE_BUSY;
 		xStartTime = xTaskGetTickCount();
 
 		if (fileOp->senderQueue == xImageTaskQueue) {
 			// writes image
-			res = fileWriteImage(fileOp, &dirManager);
+			res = fileWriteImage(fileOp, NULL, &dirManager);
 		} else {
 			// writes file
 			res = fileWrite(fileOp);
 		}
 
-		xprintf("File write from 0x%08x took %dms\n",
-				fileOp->buffer,
-				(xTaskGetTickCount() - xStartTime) * portTICK_PERIOD_MS);
-
-		fatFs_task_state = APP_FATFS_STATE_IDLE;
+		xprintf("File write took %dms\n", app_getElapsedMs(xStartTime));
 
 		// Inform the if task that the disk operation is complete
 		sendMsg.message.msg_data = (uint32_t)res;
 		sendMsg.destination = fileOp->senderQueue;
+
 		// The message to send depends on the destination! In retrospect it would have been better
 		// if the messages were grouped by the sender rather than the receiver, so this next test was not necessary:
+		// In practise, at the time of writing, image fiels are written from image_task.
+		// There is a CLI-commands command but (probably) not used.
+
 		if (sendMsg.destination == xIfTaskQueue) {
 			sendMsg.message.msg_event = APP_MSG_IFTASK_DISK_WRITE_COMPLETE;
 		} else if (sendMsg.destination == xImageTaskQueue) {
@@ -525,13 +650,22 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 	case APP_MSG_FATFSTASK_SAVE_STATE:
 		// Save the state of the imageSequenceNumber
 		// This is the last thing we will do before sleeping.
-		if (fatfs_getOperationalParameter(OP_PARAMETER_SEQUENCE_NUMBER) > 0) {
+
+		// Close any file transfer that was interrupted (e.g. BLE disconnect before FILE_END).
+		if (transferFileOpen) {
+			xprintf("WARNING: incomplete file transfer — closing before DPD");
+			f_close(&transferFile);
+			transferFileOpen = false;
+		}
+
+		if (fatfs_getImageSequenceNumber() > 0) {
 			res = save_configuration(STATE_FILE, &dirManager);
 			f_unmount(DRV);
 
 			if (res) {
 				xprintf("Error %d saving state\n", res);
-			} else {
+			}
+			else {
 				xprintf("Saved state to SD card. Image sequence number = %d\n",
 						fatfs_getImageSequenceNumber());
 			}
@@ -541,6 +675,92 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 		sendMsg.destination = xImageTaskQueue; // fileOp->senderQueue;
 		sendMsg.message.msg_event = APP_MSG_IMAGETASK_DISK_WRITE_COMPLETE;
 		sendMsg.message.msg_data = (uint32_t)res;
+
+		break;
+
+	case APP_MSG_FATFSTASK_OPEN_FILE:
+		// Open (create/truncate) a file for incremental writing.
+		// The file handle is kept open until APP_MSG_FATFSTASK_CLOSE_FILE.
+		if (transferFileOpen) {
+			// Stale handle from a previous aborted transfer — close it first.
+			f_close(&transferFile);
+			transferFileOpen = false;
+		}
+
+		// fileOp->fileName is a bare 8.3 name; resolve it in the config directory.
+		res = f_chdir(dirManager.current_config_dir);
+		if (res != FR_OK) {
+			xprintf("Failed to chdir to '%s' (err %d)\n", dirManager.current_config_dir, res);
+		}
+		else {
+			res = f_open(&transferFile, fileOp->fileName, FA_WRITE | FA_CREATE_ALWAYS);
+		}
+
+		if (res == FR_OK) {
+			transferFileOpen = true;
+			xprintf("Opened '%s' for writing\n", fileOp->fileName);
+		}
+		else {
+			xprintf("Failed to open '%s' (err %d)\n", fileOp->fileName, res);
+		}
+
+		fileOp->res = res;
+
+		sendMsg.message.msg_data = (uint32_t)res;
+		sendMsg.destination = fileOp->senderQueue;
+		sendMsg.message.msg_event = APP_MSG_IFTASK_DISK_WRITE_COMPLETE;
+
+		break;
+
+	case APP_MSG_FATFSTASK_APPEND_FILE: {
+		// Append a chunk to the currently open transfer file.
+		UINT bw = 0;
+
+		if (!transferFileOpen) {
+			res = FR_INVALID_OBJECT;
+		}
+		else {
+			res = f_write(&transferFile, fileOp->buffer, fileOp->length, &bw);
+			if (res == FR_OK && bw != fileOp->length) {
+				xprintf("Short write: %u of %lu bytes\n", bw, fileOp->length);
+				res = FR_DISK_ERR;
+			}
+		}
+
+		fileOp->res = res;
+
+		sendMsg.message.msg_data = (uint32_t)res;
+		sendMsg.destination = fileOp->senderQueue;
+		sendMsg.message.msg_event = APP_MSG_IFTASK_DISK_WRITE_COMPLETE;
+
+		break;
+	}
+
+	case APP_MSG_FATFSTASK_CLOSE_FILE:
+		// Close the transfer file.  If deleteOnClose is set, delete it afterwards.
+		if (transferFileOpen) {
+			res = f_close(&transferFile);
+			transferFileOpen = false;
+		}
+		else {
+			res = FR_OK;
+		}
+
+		if (fileOp->deleteOnClose && fileOp->fileName != NULL) {
+			FRESULT delRes = f_unlink(fileOp->fileName);
+			if (delRes != FR_OK) {
+				xprintf("Warning: failed to delete '%s' (err %d)\n", fileOp->fileName, delRes);
+			}
+			else {
+				xprintf("Deleted '%s'\n", fileOp->fileName);
+			}
+		}
+
+		fileOp->res = res;
+
+		sendMsg.message.msg_data = (uint32_t)res;
+		sendMsg.destination = fileOp->senderQueue;
+		sendMsg.message.msg_event = APP_MSG_IFTASK_DISK_WRITE_COMPLETE;
 
 		break;
 
@@ -649,11 +869,55 @@ static FRESULT fatFsInit(void) {
 }
 
 /**
+ * Process any GPS string in the CONFIG.TXT file
+ *
+ * Parses the string and sets exif_gps_deviceLat, exif_gps_deviceLon, exif_gps_deviceAlt
+ *
+ * The location can be entered manually in CONFIG.TXT but is normally written there
+ * before the processor enters DPD.
+ *
+ * The code was created by Claude which suggested the following test strings
+ * for test other formats:
+ *
+Seems to be working. I can manually edit the file to test the system reads and write the GPS string - example:
+G 1°2'3" N 4°5'6" E 7 Above
+
+Can you suggest a few more strings that can be used to test other string formats, including decimal values.11:57Here are some test strings covering the important variations:
+G 36°49'55" S 174°47'51" E 31 Above
+G 36°49'55.5" S 174°47'51.8" E 31.2 Above
+G 36°49'55.68" S 174°47'51.83" E 31.234 Above
+G 51°30'26.123" N 0°7'39.456" W 11.5 Above
+G 90°0'0" S 180°0'0" W 0 Above
+G 0°0'0" N 0°0'0" E 8848.86 Above
+G 27°59'17.28" N 86°55'30.12" E 8848.86 Above
+G 35°41'22.2" N 139°41'30.5" E 40 Below
+The reasoning behind each:
+
+Line 1–3: Auckland roughly, progressively adding decimal places to seconds — good for checking the fractional parsing at different precisions
+Line 4: London — tests a near-zero longitude (single digit degrees, W direction)
+Line 5: Extreme corner case — maximum lat/lon values, all zeros for seconds
+Line 6: Null Island (0,0) with a non-zero altitude — isolates altitude parsing from coordinate parsing
+Line 7: Mount Everest summit — realistic high altitude with decimal seconds in both coordinates
+Line 8: Tests Below sea level, e.g. Dead Sea area — the only case that exercises the alt->ref == 1 path
+
+@param line = string read from the file (after the "G " characters)
+*/
+static void processGPS(char * gps_line) {
+	exif_gps_parse_full_string(&exif_gps_deviceLat, &exif_gps_deviceLon,
+	                           &exif_gps_deviceAlt, gps_line);
+
+	// test that worked:
+	// xprintf("Read GPS location from file: '%s'\n", gps_line);
+}
+
+/**
  * Loads configuration information from a file.
  *
  * The file comprises several lines each with two integers.
  * The first integer is an index into the configuration[] array.
  * The second integer is the value to place into the array.
+ *
+ * There is a special case for the GPS location:
  *
  * Default values for configuration[] are set in the task initialisation.
  *
@@ -703,30 +967,49 @@ static FRESULT load_configuration(const char *filename, directoryManager_t *dirM
 				continue;
 			}
 
-			// The first call to strtok() should have a pointer to the string which
-			// should be split, while any following calls should use NULL as an
-			// argument. Each time the function is called a pointer to a different
-			// token is returned until there are no more tokens.
-			// At that point each function call returns NULL.
-			token = strtok(line, " ");
-			if (token == NULL) {
-				continue;
+			// Special case if the first 2 characters are 'G ' for GPS
+			if ((line[0] == 'G') && (line[1] == ' ')) {
+				processGPS(&line[2]);
 			}
-
-			index = (uint8_t)atoi(token);
-
-			token = strtok(NULL, " ");
-			if (token == NULL) {
-				continue;
+			// Special case if the first 2 characters are 'I ' for deployment ID
+			else if ((line[0] == 'I') && (line[1] == ' ')) {
+				strncpy(deployment_id_string, &line[2], UUIDLENGTH - 1);
+				deployment_id_string[UUIDLENGTH - 1] = '\0';
+				char *nl = strchr(deployment_id_string, '\n');
+				if (nl) {
+					*nl = '\0';
+				}
+				for (char *p = deployment_id_string; *p; p++) {
+					*p = tolower((unsigned char)*p);
+				}
 			}
+			else {
 
-			value = (uint16_t)atoi(token);
+				// The first call to strtok() should have a pointer to the string which
+				// should be split, while any following calls should use NULL as an
+				// argument. Each time the function is called a pointer to a different
+				// token is returned until there are no more tokens.
+				// At that point each function call returns NULL.
+				token = strtok(line, " ");
+				if (token == NULL) {
+					continue;
+				}
 
-			// Set array value if index is in range
-			if (index >= 0 && index < OP_PARAMETER_NUM_ENTRIES) {
-				op_parameter[index] = value;
-				// debug only:
-				// xprintf("   op_parameter[%d] = %d\n", index, value);
+				index = (uint8_t)atoi(token);
+
+				token = strtok(NULL, " ");
+				if (token == NULL) {
+					continue;
+				}
+
+				value = (uint16_t)atoi(token);
+
+				// Set array value if index is in range
+				if (index >= 0 && index < OP_PARAMETER_NUM_ENTRIES) {
+					op_parameter[index] = value;
+					// debug only:
+					// xprintf("   op_parameter[%d] = %d\n", index, value);
+				}
 			}
 		}
 	}
@@ -739,8 +1022,6 @@ static FRESULT load_configuration(const char *filename, directoryManager_t *dirM
 		dirManager->configOpen = false;
 	}
 	dirManager->configRes = res;
-	// Restore the original directory
-	f_chdir(dirManager->base_dir);
 
 	return res;
 }
@@ -825,6 +1106,27 @@ FRESULT save_configuration(const char *filename, directoryManager_t *dirManager)
 			f_write(&dirManager->configFile, line, strlen(line), &bytesWritten);
 		}
 
+		// Write the GPS location
+		line[0] = 'G';
+		line[1] = ' ';	// initialise with "G "
+		// Write the GPS string as the next characters
+		exif_gps_create_full_string(&exif_gps_deviceLat, &exif_gps_deviceLon,
+		                            &exif_gps_deviceAlt, &line[2], sizeof(line) - 2);
+		// Append newline (exif_gps_create_full_string does not add one)
+		size_t gps_len = strlen(line);
+		if (gps_len < sizeof(line) - 1) {
+			line[gps_len]     = '\n';
+			line[gps_len + 1] = '\0';
+		}
+
+		//xprintf("Wrote GPS location to file: '%s'\n", line);
+
+		f_write(&dirManager->configFile, line, strlen(line), &bytesWritten);
+
+		// Write the deployment ID
+		snprintf(line, sizeof(line), "I %s\n", deployment_id_string);
+		f_write(&dirManager->configFile, line, strlen(line), &bytesWritten);
+
 		// Close file and restore original directory
 		res = f_close(&dirManager->configFile);
 		if (res != FR_OK) {
@@ -833,8 +1135,9 @@ FRESULT save_configuration(const char *filename, directoryManager_t *dirManager)
 			dirManager->configOpen = false;
 		}
 		dirManager->configRes = res;
-		f_chdir(dirManager->base_dir);
 	}
+
+
 
 	return dirManager->configRes;
 }
@@ -1148,6 +1451,9 @@ static void vFatFsTask(void *pvParameters) {
 	// One-off initialisation here...
 	startTime = xTaskGetTickCount();
 
+	// Initialise GPS coordinates before traying to process them
+	exif_gps_init_defaults();
+
 	// TODO - experiment - do I need settling time for 3V3_WE?
 	vTaskDelay(pdMS_TO_TICKS(10));
 	res = fatFsInit();
@@ -1157,7 +1463,8 @@ static void vFatFsTask(void *pvParameters) {
 		// Only if the file system is working should we add CLI commands for FATFS
 		cli_fatfs_init();
 
-		res = dir_mgr_init_directories(&dirManager);
+		// Phase 1: ensure /MANIFEST exists and initialise dirManager state.
+		res = dir_mgr_init_config(&dirManager);
 		if (res == FR_OK) {
 			xprintf("SD card initialised. ");
 			fatfs_printCwd();	// for debug purposes
@@ -1172,14 +1479,22 @@ static void vFatFsTask(void *pvParameters) {
 						fatfs_getImageSequenceNumber(),
 						(enabled == 1) ? "" : "not ",
 						op_parameter[OP_PARAMETER_LED_BRIGHTNESS_PERCENT]);
-			} else {
-				fatfs_setOperationalParameter(OP_PARAMETER_SEQUENCE_NUMBER, 1);
-				xprintf("'%s' NOT found. (Next image #1)\r\n", STATE_FILE);
+
+				if (fatfs_getImageSequenceNumber() == 0)  {
+					// Change this, since 0 means "no SD card"
+					fatfs_setOperationalParameter(OP_PARAMETER_SEQUENCE_NUMBER, 1);
+				}
+
+				// Phase 2: now that op_parameter[] and deployment ID are valid,
+				// determine and create the correct image directory.
+				dir_mgr_init_image_dir(&dirManager);
 			}
-		} else {
-			// TODO what? Is this an error we must deal with?
+			else {
+				xprintf("'%s' NOT found.\r\n", STATE_FILE);
+			}
 		}
-	} else {
+	}
+	else {
 		// Failure.
 		xprintf("SD card initialisation failed (reason %d)\r\n", res);
 		selfTest_setErrorBits(1 << SELF_TEST_AI_NO_SD_CARD);
@@ -1290,6 +1605,41 @@ static void vFatFsTask(void *pvParameters) {
 	} // for(;;)
 }
 
+/********************************** Public Function definitions - fatfs port  ***************************/
+
+/**
+ * Control of SD card chip select...
+ *
+ * Himax notes:
+ * app implement GPIO_Output_Level/GPIO_Pinmux/GPIO_Dir for fatfs\port\mmc_spi\mmc_we2_spi.c ARM_SPI_SS_MASTER_SW
+ *
+ * CGP - could it be that the SSPI_CS_GPIO_Pinmux() sets PB5 to be either a GPIO pin (and "GPIO16" for that matter)
+ * then the other two functions set the pin high or low, and input or output.
+ *
+ * This is used by mmc_we2_spi.c in the fatfs code.
+ */
+void SSPI_CS_GPIO_Pinmux(bool setGpioFn) {
+    if (setGpioFn) {
+        hx_drv_scu_set_PB5_pinmux(SCU_PB5_PINMUX_GPIO16, 0);
+    }
+    else {
+        hx_drv_scu_set_PB5_pinmux(SCU_PB5_PINMUX_SPI_M_CS_1, 0);
+    }
+}
+
+void SSPI_CS_GPIO_Output_Level(bool setLevelHigh) {
+    hx_drv_gpio_set_out_value(GPIO16, (GPIO_OUT_LEVEL_E) setLevelHigh);
+}
+
+void SSPI_CS_GPIO_Dir(bool setDirOut) {
+    if (setDirOut) {
+        hx_drv_gpio_set_output(GPIO16, GPIO_OUT_HIGH);
+    }
+    else {
+        hx_drv_gpio_set_input(GPIO16);
+    }
+}
+
 /********************************** Public Functions  *************************************/
 
 /**
@@ -1375,7 +1725,8 @@ uint16_t fatfs_getOperationalParameter(OP_PARAMETERS_E parameter) {
 
 	if ((parameter >= 0) && (parameter < OP_PARAMETER_NUM_ENTRIES)) {
 		return op_parameter[parameter];
-	} else {
+	}
+	else {
 		return 0;
 	}
 }
@@ -1384,6 +1735,9 @@ uint16_t fatfs_getOperationalParameter(OP_PARAMETERS_E parameter) {
  * Get the image sequence number
  *
  * Short-hand version of fatfs_getOperationalParameter(OP_PARAMETER_SEQUENCE_NUMBER)
+ *
+ * If tis returns 0 then that means there is no SD card, so it is a way of skipping
+ * file write attempts.
  */
 uint16_t fatfs_getImageSequenceNumber(void) {
 	return op_parameter[OP_PARAMETER_SEQUENCE_NUMBER];
@@ -1407,8 +1761,10 @@ void fatfs_setOperationalParameter(OP_PARAMETERS_E parameter, int16_t value) {
 
 	if ((parameter >= 0) && (parameter < OP_PARAMETER_NUM_ENTRIES)) {
 		op_parameter[parameter] = value;
-	} else {
+	}
+	else {
 		// error
+		xprintf("Operational parameter index %d out of range\n", parameter);
 	}
 }
 
@@ -1419,7 +1775,8 @@ void fatfs_incrementOperationalParameter(OP_PARAMETERS_E parameter) {
 	if ((parameter >= 0) && (parameter < OP_PARAMETER_NUM_ENTRIES)) {
 		// TODO - do we need to prevent roll-over?
 		op_parameter[parameter]++;
-	} else {
+	}
+	else {
 		// error
 	}
 }
@@ -1452,52 +1809,43 @@ int fatfs_unzip_manifest(void) {
 #endif //UNZIPMANIFEST
 
 /**
- * Reconstruct deployment ID UUID from operational parameters OP20-OP27
- * 
- * Algorithm per FIRMWARE_DEPLOYMENT_ID_SPEC.md:
- * 1. Read OP20-OP27 (8 uint16_t values)
- * 2. If all are 0, return "00000000-0000-0000-0000-000000000000"
- * 3. Convert each to 4-char hex string (with leading zeros)
- * 4. Insert hyphens at positions 8, 12, 16, 20 (UUID format)
- * 
- * @param deployment_id_buffer Output buffer (min 37 bytes for UUID + null)
+ * Get the deployment ID UUID string.
+ *
+ * Expects string form loaded from the 'I ' line in CONFIG.TXT or set via
+ * fatfs_setDeploymentId().
+ *
+ * @param deployment_id_buffer Output buffer (min UUIDLENGTH bytes)
  * @param buffer_size Size of output buffer
  */
 void fatfs_getDeploymentId(char *deployment_id_buffer, size_t buffer_size) {
-	if (buffer_size < 37) {
-		// Buffer too small for UUID format
-		deployment_id_buffer[0] = '\0';
+
+	deployment_id_buffer[0] = '\0';
+
+	if (buffer_size < UUIDLENGTH) {
 		return;
 	}
-	
-	// Read 8 chunks from OP20-OP27
-	uint16_t chunks[8];
-	bool all_zero = true;
-	
-	for (int i = 0; i < 8; i++) {
-		chunks[i] = fatfs_getOperationalParameter(OP_PARAMETER_DEPLOYMENT_ID_CHUNK_1 + i);
-		if (chunks[i] != 0) {
-			all_zero = false;
-		}
-	}
-	
-	// All zeros = no deployment
-	if (all_zero) {
-		snprintf(deployment_id_buffer, buffer_size, "%s", DEPLOYMENT_ID_ZERO_UUID);
-		return;
-	}
-	
-	// Reconstruct UUID: XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX
-	// Chunks map to: 01-2-3-4-567 (each chunk = 4 hex chars)
-	snprintf(deployment_id_buffer, buffer_size,
-			 "%04x%04x-%04x-%04x-%04x-%04x%04x%04x",
-			 chunks[0], chunks[1],  // 8 chars
-			 chunks[2],              // 4 chars
-			 chunks[3],              // 4 chars
-			 chunks[4],              // 4 chars
-			 chunks[5], chunks[6], chunks[7]  // 12 chars
-	);
+
+	snprintf(deployment_id_buffer, buffer_size, "%s", deployment_id_string);
 }
+
+/**
+ * Set the deployment ID UUID string.
+ *
+ * The value is stored in RAM and written to the 'I ' line in CONFIG.TXT the
+ * next time save_configuration() is called.
+ *
+ * @param uuid_string UUID string in standard format (xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)
+ */
+void fatfs_setDeploymentId(const char *uuid_string) {
+	strncpy(deployment_id_string, uuid_string, UUIDLENGTH - 1);
+	deployment_id_string[UUIDLENGTH - 1] = '\0';
+
+	// Make lower-case
+	for (char *p = deployment_id_string; *p; p++) {
+		*p = tolower((unsigned char)*p);
+	}
+}
+
 
 /**
  * Prints the CWD
@@ -1516,3 +1864,68 @@ void fatfs_printCwd(void) {
 		xprintf("CWD is '%s'\n", cur_dir);
 	}
 }
+
+
+/**
+ * @brief Create a directory path recursively (mkdir -p style).
+ *
+ * This function ensures that the full directory path exists by creating
+ * each intermediate directory level as required. It is intended for use
+ * with FatFs, where f_mkdir() can only create a single directory level
+ * and will fail with FR_NO_PATH if parent directories do not exist.
+ *
+ * Example:
+ *   Input:  "/MEDIA/ABC12345/IMAGES.000"
+ *   Operation: Creates "/MEDIA", then "/MEDIA/ABC12345", then
+ *           "/MEDIA/ABC12345/IMAGES.000" as needed.
+ *
+ * Existing directories are not treated as an error (FR_EXIST is ignored).
+ *
+ * @param path  Null-terminated string containing the full directory path.
+ *
+ * @return
+ *   FR_OK        All required directories exist or were created successfully.
+ *   != FR_OK     Error returned by f_mkdir() for the first failing level.
+ *
+ * @note
+ *   - The input path buffer is not modified.
+ *   - Requires DIRNAMELEN to be large enough for a copy of the path.
+ *   - Uses '/' as the path separator.
+ */
+FRESULT fatfs_mkdir_recursive(const char *path) {
+    FRESULT res;
+    char tmp[DIRNAMELEN];
+    char *p = NULL;
+
+    if (strlen(path) >= sizeof(tmp)) {
+        return FR_INVALID_NAME;
+    }
+    strcpy(tmp, path);
+
+    // Walk the path string and create each intermediate directory level.
+    // We start at tmp+1 to skip the leading '/' so that we only trigger
+    // directory creation when we reach a separator between valid path components.
+    // At each '/', the string is temporarily truncated and f_mkdir() is called
+    // on the partial path, then restored before continuing.
+    for (p = tmp + 1; *p; p++) {
+        if (*p == '/') {
+            *p = '\0';
+
+            res = f_mkdir(tmp);
+            if (res != FR_OK && res != FR_EXIST) {
+                return res;
+            }
+
+            *p = '/';
+        }
+    }
+
+    // Create final directory
+    res = f_mkdir(tmp);
+    if (res != FR_OK && res != FR_EXIST) {
+        return res;
+    }
+
+    return FR_OK;
+}
+

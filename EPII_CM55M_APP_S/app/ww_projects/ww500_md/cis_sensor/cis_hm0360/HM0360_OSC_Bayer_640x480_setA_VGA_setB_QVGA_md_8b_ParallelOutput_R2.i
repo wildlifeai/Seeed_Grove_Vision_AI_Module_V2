@@ -23,8 +23,8 @@
 		{HX_CIS_I2C_Action_W, 0x101f, 0x00},
 		{HX_CIS_I2C_Action_W, 0x1020, 0x01},
 		{HX_CIS_I2C_Action_W, 0x1021, 0x5d},
-		{HX_CIS_I2C_Action_W, 0x102f, 0x08},
-		{HX_CIS_I2C_Action_W, 0x1030, 0x09},
+		{HX_CIS_I2C_Action_W, 0x102f, 0x08},	// CMPRS_CTRL	
+		{HX_CIS_I2C_Action_W, 0x1030, 0x09},	// CMPRS_01 (this table has the 'low' values - see data sheet Table 4.5)
 		{HX_CIS_I2C_Action_W, 0x1031, 0x12},
 		{HX_CIS_I2C_Action_W, 0x1032, 0x23},
 		{HX_CIS_I2C_Action_W, 0x1033, 0x31},
@@ -39,7 +39,7 @@
 		{HX_CIS_I2C_Action_W, 0x103c, 0x98},
 		{HX_CIS_I2C_Action_W, 0x103d, 0xb2},
 		{HX_CIS_I2C_Action_W, 0x103e, 0xcc},
-		{HX_CIS_I2C_Action_W, 0x103f, 0xe6},
+		{HX_CIS_I2C_Action_W, 0x103f, 0xe6},	// CMPRS_16
 		{HX_CIS_I2C_Action_W, 0x1041, 0x00},
 		{HX_CIS_I2C_Action_W, 0x2000, 0x3f},	// AE_CTRL
 		{HX_CIS_I2C_Action_W, 0x202b, 0x04},	// AE MAX_AGAIN
@@ -75,12 +75,13 @@
 		{HX_CIS_I2C_Action_W, 0x2061, 0x00},	// INT level mode
 		{HX_CIS_I2C_Action_W, 0x2062, 0x02},
 		{HX_CIS_I2C_Action_W, 0x2063, 0xc8},
+												// Motion Detection Context a (defaults to low sensitivity)
 		{HX_CIS_I2C_Action_W, 0x2080, 0x31},	// MD_CTRL [5:4]: MD latency select, [0]: Motion detect enable		
-		{HX_CIS_I2C_Action_W, 0x2081, 0xa4},	// ROI_V
-		{HX_CIS_I2C_Action_W, 0x2082, 0xb5},	// ROI_H
+		{HX_CIS_I2C_Action_W, 0x2081, 0xa4},	// Context A ROI_V [7:4] ROI_END_V, [3:0] ROI_START_V - so 14:0
+		{HX_CIS_I2C_Action_W, 0x2082, 0xb5},	// Context A ROI_H [7:4] ROI_END_H, [3:0] ROI_START_H - So 15:0 
 		{HX_CIS_I2C_Action_W, 0x2083, 0x01},
-		{HX_CIS_I2C_Action_W, 0x2084, 0x30},	// MD_TH_STR_L [0x30/0x20/0x10]
-		{HX_CIS_I2C_Action_W, 0x2085, 0x30},	// MD_TH_STR_H [0x30/0x20/0x10]
+		{HX_CIS_I2C_Action_W, 0x2084, 0x30},	// Context A MD_TH_STR_L [0x30/0x20/0x10]
+		{HX_CIS_I2C_Action_W, 0x2085, 0x30},	// Context A MD_TH_STR_H [0x30/0x20/0x10]
 		{HX_CIS_I2C_Action_W, 0x2086, 0x01},
 		{HX_CIS_I2C_Action_W, 0x2087, 0x06},
 		{HX_CIS_I2C_Action_W, 0x2088, 0x0c},
@@ -100,8 +101,9 @@
 		{HX_CIS_I2C_Action_W, 0x2096, 0x14},
 		{HX_CIS_I2C_Action_W, 0x2097, 0x18},
 		{HX_CIS_I2C_Action_W, 0x2098, 0x20},
+												// Generic MD registers (??? Over-ridden by contex A&B equivalents?)
 		{HX_CIS_I2C_Action_W, 0x2099, 0x20},	// MD_LIGHT_COEF [0x20/0x18/0x10]
-		{HX_CIS_I2C_Action_W, 0x209a, 0x00},	// MD_IIR_PARAMETER [0x00/0x80/0xf0]
+		{HX_CIS_I2C_Action_W, 0x209a, 0x00},	// MD_IIR_PARAMETER (for context A&B) {0x00, 0x80, 0xf0}
 		{HX_CIS_I2C_Action_W, 0x209b, 0x04},	// MD MD_BLOCK_NUM_TH
 		{HX_CIS_I2C_Action_W, 0x209c, 0x01},
 		{HX_CIS_I2C_Action_W, 0x209d, 0x33},	// MD_LATENCY_TH [7:4]: s, [3:0]: m		
@@ -124,7 +126,7 @@
 		{HX_CIS_I2C_Action_W, 0x3021, 0x00},
 		{HX_CIS_I2C_Action_W, 0x3024, 0x00},	// CTX_SEL [1] = 0 (SW, I2C), [0] 0 : Context A, 1 : Context B
 		{HX_CIS_I2C_Action_W, 0x3025, 0x12},
-		{HX_CIS_I2C_Action_W, 0x3026, 0x03},
+		{HX_CIS_I2C_Action_W, 0x3026, 0x03},	// PMU_CFG_5 premeter
 		{HX_CIS_I2C_Action_W, 0x3027, 0x81},
 		{HX_CIS_I2C_Action_W, 0x3028, 0x01},
 		{HX_CIS_I2C_Action_W, 0x3029, 0x15},
@@ -171,15 +173,15 @@
 		{HX_CIS_I2C_Action_W, 0x307d, 0xff},
 		{HX_CIS_I2C_Action_W, 0x307e, 0xff},
 		{HX_CIS_I2C_Action_W, 0x307f, 0xff},
-		{HX_CIS_I2C_Action_W, 0x3080, 0x00},	// STROBE_CFG enable 
-		{HX_CIS_I2C_Action_W, 0x3081, 0x00},	// STROBE_SEL	
-		{HX_CIS_I2C_Action_W, 0x3082, 0x00},	// STROBE_FRONT_H
+		{HX_CIS_I2C_Action_W, 0x3080, 0x03},	// STROBE_CFG Modes: Static=5; Dynamic 1=3; Dynamic 2=B; Multiple = 13
+		{HX_CIS_I2C_Action_W, 0x3081, 0x00},	// STROBE_SEL		0: align to start of reset field 1: align to end of reset field	
+		{HX_CIS_I2C_Action_W, 0x3082, 0x00},	// STROBE_FRONT_H 	= front porch (in PCLKO clocks)
 		{HX_CIS_I2C_Action_W, 0x3083, 0x20},	// STROBE_FRONT_L
-		{HX_CIS_I2C_Action_W, 0x3084, 0x00},	// STROBE_END_H
+		{HX_CIS_I2C_Action_W, 0x3084, 0x00},	// STROBE_END_H		= back porch
 		{HX_CIS_I2C_Action_W, 0x3085, 0x40},	// STROBE_END_L
-		{HX_CIS_I2C_Action_W, 0x3086, 0x00},	// STROBE_LINE_H
+		{HX_CIS_I2C_Action_W, 0x3086, 0x00},	// STROBE_LINE_H	= line (in rows)
 		{HX_CIS_I2C_Action_W, 0x3087, 0x20},	// STROBE_LINE_L
-		{HX_CIS_I2C_Action_W, 0x3088, 0x00},	// STROBE_FRAME_H
+		{HX_CIS_I2C_Action_W, 0x3088, 0x00},	// STROBE_FRAME_H	= number of strobes
 		{HX_CIS_I2C_Action_W, 0x3089, 0x04},	// STROBE_FRAME_L
 		{HX_CIS_I2C_Action_W, 0x3094, 0x02},
 		{HX_CIS_I2C_Action_W, 0x3095, 0x02},
@@ -352,11 +354,12 @@
 		{HX_CIS_I2C_Action_W, 0x352c, 0x00},
 		{HX_CIS_I2C_Action_W, 0x352d, 0xe1},
 		{HX_CIS_I2C_Action_W, 0x3549, 0x04},
-		{HX_CIS_I2C_Action_W, 0x354a, 0x35},
+		{HX_CIS_I2C_Action_W, 0x354a, 0x35},		
+												// Motion Detection Context A (defaults to low sensitivity)
 		{HX_CIS_I2C_Action_W, 0x354b, 0x41},	// Context A MD_LIGHT_COEF [0x41/0x31/0x21]
 		{HX_CIS_I2C_Action_W, 0x354c, 0x04},	// Context A MD_BLOCK_NUM_TH
-		{HX_CIS_I2C_Action_W, 0x354d, 0xe0},	// Context A ROI_V
-		{HX_CIS_I2C_Action_W, 0x354e, 0xf0},	// Context A ROI_H
+		{HX_CIS_I2C_Action_W, 0x354d, 0xe0},	// Context A ROI_V [7:4] ROI_END_V, [3:0] ROI_START_V - so 14:0
+		{HX_CIS_I2C_Action_W, 0x354e, 0xf0},	// Context A ROI_H [7:4] ROI_END_H, [3:0] ROI_START_H - So 15:0 
 		{HX_CIS_I2C_Action_W, 0x354f, 0x30},	// Context A MD_TH_STR_H [0x30/0x20/0x10]
 		{HX_CIS_I2C_Action_W, 0x3550, 0x30},	// Context A MD_TH_STR_L [0x30/0x20/0x10]
 		{HX_CIS_I2C_Action_W, 0x3551, 0x10},
@@ -419,6 +422,7 @@
 		{HX_CIS_I2C_Action_W, 0x358d, 0x36},
 		{HX_CIS_I2C_Action_W, 0x35a3, 0x04},
 		{HX_CIS_I2C_Action_W, 0x35a4, 0x35},
+												// Motion Detection Context B (defaults to low sensitivity)
 		{HX_CIS_I2C_Action_W, 0x35a5, 0x41},	// Context B MD_LIGHT_COEF [0x41/0x31/0x21]
 		{HX_CIS_I2C_Action_W, 0x35a6, 0x04},	// Context B MD_BLOCK_NUM_TH
 		{HX_CIS_I2C_Action_W, 0x35a7, 0xe0},	// Context B ROI_V

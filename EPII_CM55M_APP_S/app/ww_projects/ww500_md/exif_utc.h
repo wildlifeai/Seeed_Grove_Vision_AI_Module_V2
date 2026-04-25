@@ -60,6 +60,9 @@ RTC_ERROR_E exif_utc_get_rtc_as_time_dpd(rtc_time * tm);
 // reads the RTC hardware to produce a rtc_time object
 RTC_ERROR_E exif_utc_get_rtc_as_time(rtc_time * tm);
 
+// reads the RTC hardware to produce time in seconds
+RTC_ERROR_E exif_utc_get_rtc_as_seconds(uint32_t * tm);
+
 // sets the RTC hardware from a rtc_time object
 RTC_ERROR_E exif_utc_set_rtc_from_time(rtc_time * tm);
 

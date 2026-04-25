@@ -10,6 +10,7 @@
 /********************************** Includes ******************************************/
 
 #include <stdbool.h>
+
 #include "xprintf.h"
 #include "printf_x.h"	// Print colours
 #include "hm0360_md.h"
@@ -20,6 +21,7 @@
 
 
 /*************************************** Defines **************************************/
+
 
 /*************************************** Local Function Declarations ******************/
 
@@ -39,7 +41,7 @@ static bool hm0360MainCamera = false;
 static bool hm0360_present = false;
 
 static HX_CIS_SensorSetting_t HM0360_md_init_setting[] = {
-#include "../../../ww500_md/cis_sensor/cis_hm0360/HM0360_OSC_Bayer_640x480_setA_VGA_setB_QVGA_md_8b_ParallelOutput_R2.i"
+#include "../cis_hm0360/HM0360_OSC_Bayer_640x480_setA_VGA_setB_QVGA_md_8b_ParallelOutput_R2.i"
 };
 
 /*************************************** Local Function Definitions *******************/
@@ -52,10 +54,12 @@ static HX_CIS_SensorSetting_t HM0360_md_init_setting[] = {
  * Configure the image sensor I2C address to be the HM0360.
  */
 static void saveMainCameraConfig(void) {
+
 	if (hm0360MainCamera) {
 		// Don't waste time saving and restoring this
 		return;
 	}
+
 	hx_drv_cis_get_slaveID(&mainCameraID);
     hx_drv_cis_set_slaveID(HM0360_SENSOR_I2CID);
 }
@@ -79,6 +83,8 @@ static void restoreMainCameraConfig(void) {
  * Do this once per boot.
  * 0x0830 gives about 1s
  *
+ * Should I check for a minimum value?
+ *
  * @param interval - in ms
  * @param value for HM0360 registers
  */
@@ -92,7 +98,7 @@ static uint16_t calculateSleepTime(uint32_t interval) {
 		sleepCount = 0xffff;
 	}
 
-	xprintf("Interval of %dms gives sleep count = 0x%04x\n", interval, sleepCount);
+	xprintf("   Interval of %dms gives sleep count = 0x%04x\n", interval, sleepCount);
 
 	return (uint16_t) sleepCount;
 }
@@ -101,6 +107,9 @@ static uint16_t calculateSleepTime(uint32_t interval) {
 
 /**
  * Tests whether _any_ sensor is present, by doing a read from the I2C address
+ *
+ * Side effect: if the sensor address is for the HM0360 then the variable
+ * 'hm0360_present' will also be updated.
  *
  * If the sensor is present at the sensorAddress the I2C read will work.
  * Otherwise the driver code will print an error and the call will fail.
@@ -265,7 +274,7 @@ HX_CIS_ERROR_E hm0360_md_setMode(uint8_t context, mode_select_t newMode,
 	// Stay in MODE_SW_NFRAMES_SLEEP, set slowest possible frame rate, inhibit MD interrupts
 	if (sleepTime == 0) {
 		sleepCount = 0xffff;	// maximum value = slowest rate
-		xprintf("Inhibiting MD\n");
+		xprintf("   Inhibiting MD\n");
 
 		// Disable MD interrupt
 		hm0360_md_disableInterrupt();
@@ -280,7 +289,7 @@ HX_CIS_ERROR_E hm0360_md_setMode(uint8_t context, mode_select_t newMode,
 		hm0360_md_enableInterrupt();
 	}
 
-	xprintf("  Changing mode from %d to %d with nFrames=%d, sleepTime=%d sleepCount = 0x%04x\r\n",
+	xprintf("   Changing mode from %d to %d with nFrames=%d, sleepTime=%d sleepCount = 0x%04x\r\n",
 			currentMode, newMode, numFrames, sleepTime, sleepCount);
 
 	// Disable before making changes by going to MODE_SLEEP
@@ -428,41 +437,6 @@ HX_CIS_ERROR_E hm0360_md_disableInterrupt(void) {
 }
 
 /**
- * Called when the AI processor is about to enter DPD.
- *
- * Get the HM0360 ready to detect motion
- *
- *  Select CONTEXT_B registers
- *
- *  @param cameraSystemEnabled - true if OP_PARAMETER_CAMERA_ENABLED is set
- */
-HX_CIS_ERROR_E hm0360_md_prepare(bool cameraSystemEnabled) {
-	HX_CIS_ERROR_E ret;
-	uint16_t mdInterval;
-
-	// Don't proceed if the HM0360 is missing or faulty
-	if (!hm0360_present) {
-		return HX_CIS_UNKNOWN_ERROR;
-	}
-
-	if (cameraSystemEnabled) {
-		mdInterval = fatfs_getOperationalParameter(OP_PARAMETER_MD_INTERVAL);
-	}
-	else {
-		mdInterval = 0;
-	}
-
-	// This writes to register 0x2065
-	// MD interrupt will be enabled in hm0360_md_setMode() if MD is enabled
-	hm0360_md_clearInterrupt(0xff);		// clear all bits
-
-	// Don't use MODE_SLEEP even if camera system is disabled, as it draws more power!
-	ret = hm0360_md_setMode(CONTEXT_B, MODE_SW_NFRAMES_SLEEP, 1, mdInterval);
-
-	return ret;
-}
-
-/**
  * Reads status registers related to Automatic Exposure
 
  * @param val - pointer to a structure that accepts the results
@@ -480,26 +454,26 @@ HX_CIS_ERROR_E hm0360_md_getGainRegs(HM0360_GAIN_T * val) {
 
     saveMainCameraConfig();
 
-    // Integration registers 0x0202 & 0x0203
+    // Integration registers 0x0202 & 0x0203 "course integration time in lines"
     // See data sheet section 9.3. Relates to "exposure time"
 	ret = hx_drv_cis_get_reg(INTEGRATION_H, &valueH);
 	ret |= hx_drv_cis_get_reg(INTEGRATION_L, &valueL);
 	val->integration = (valueH << 8) + valueL;
 
-	// Analog gain register 0x0205
+	// Analog gain register 0x0205 (bits 4-6 only, hence the shift)
 	ret |= hx_drv_cis_get_reg(ANALOG_GAIN, &valueL);
-	val->analogGain = valueL;
+	val->analogGain = (valueL >> 4) & 0x07; // (bits 4-6 only, hence the shift)
 
-	// Digital gain registers 0x020E & 0x020F
+	// Digital gain registers 0x020E & 0x020F (seems to be [1-0] from 020e and [7-2] from 020f
 	ret |= hx_drv_cis_get_reg(DIGITAL_GAIN_H, &valueH);
 	ret |= hx_drv_cis_get_reg(DIGITAL_GAIN_L, &valueL);
-	val->digitalGain = (valueH << 8) + valueL;
+	val->digitalGain = ((valueH & 0x03) << 6) + ((valueL & 0xfa) >> 6);
 
-	// AE Mean register 0x205d
+	// AE Mean register 0x205d (RO)
 	ret |= hx_drv_cis_get_reg(AE_MEAN, &valueL);
 	val->aeMean = valueL;
 
-	// AE converged register 0x2060
+	// AE converged register 0x2060 (RO) - bit 0 only
 	ret |= hx_drv_cis_get_reg(AE_CONVERGE, &valueL);
 	val->aeConverged = valueL;
 
@@ -510,18 +484,23 @@ HX_CIS_ERROR_E hm0360_md_getGainRegs(HM0360_GAIN_T * val) {
 /**
  * Reads the Motion Detection ROI registers
  *
- * There are 32 ROI_OUT registers 20A1-20C0
+ * There are 32 ROI_OUT registers 20A1-20C0 - see HM0360 data sheet section 4.1
+ *
+ * @param regTable - address of teh bufferto hold the data
+ * @param length - number of bytes to read (must be 32)
+ * @return number of blocks with motion detected
  */
-void hm0360_md_getMDOutput(uint8_t * regTable, uint8_t length) {
+uint16_t hm0360_md_getMDOutput(uint8_t * regTable, uint8_t length) {
 	uint8_t val;
+	uint16_t motionCount = 0;
 
 	// Don't proceed if the HM0360 is missing or faulty
 	if (!hm0360_present) {
-		return;
+		return 0;
 	}
 
 	if (length != ROIOUTENTRIES) {
-		return;
+		return 0;
 	}
 
 	saveMainCameraConfig();
@@ -529,11 +508,49 @@ void hm0360_md_getMDOutput(uint8_t * regTable, uint8_t length) {
 	for (uint8_t i=0; i < ROIOUTENTRIES; i++) {
 		hx_drv_cis_get_reg(MD_ROI_OUT_0 + i, &val);
 		regTable[i] = val;
+
+        // Count bits set in this register
+        while (val) {
+            motionCount += (val & 1);
+            val >>= 1;
+        }
 	}
 
 	restoreMainCameraConfig();
+
+	return motionCount;
 }
 
+/**
+ * Format a string that can print a 16x16 array showing where motion bits are detected
+ *
+ * @param regTable - address of the buffer that holds the ROI register data
+ * @param msg - address of the character array (string)
+ * @param length - length of that array
+ */
+void hm0360_md_printGrid(uint8_t *roiOut, uint16_t numBlocks, char *msg, uint16_t msgLen) {
+	uint16_t offset = 0;
+
+	for (uint16_t block = 0; block < numBlocks; block++) {
+
+		uint8_t reg = block >> 3;      // block / 8
+		uint8_t bit = block & 7;       // block % 8
+
+		char c = (roiOut[reg] & (1 << bit)) ? '#' : '.';
+
+		if (offset < (msgLen - 2)) {
+			msg[offset++] = c;
+		}
+
+		if ((block & 0x0F) == 15) {    // every 16 cells
+			if (offset < (msgLen - 2)) {
+				msg[offset++] = '\n';
+			}
+		}
+	}
+
+	msg[offset] = '\0';
+}
 /**
  * Sets the HM0360 STROBE_CFG register
  *
@@ -542,9 +559,9 @@ void hm0360_md_getMDOutput(uint8_t * regTable, uint8_t length) {
  *
  * The default register settings file leaves the strobe disabled:
  *
-		{HX_CIS_I2C_Action_W, 0x3080, 0x00},	// STROBE_CFG diasable
+		{HX_CIS_I2C_Action_W, 0x3080, 0x00},	// STROBE_CFG disable
 		or:
-		{HX_CIS_I2C_Action_W, 0x3080, 0x0B},	// STROBE_CFG enable 1: Static, 3 = Dynamic 1, B = Dynamic 2, Multiple = 13
+		{HX_CIS_I2C_Action_W, 0x3080, 0x03},	// STROBE_CFG Modes: Static=5; Dynamic 1=3; Dynamic 2=B; Multiple = 13
 
  * Bit 0 - 1 enables, 0 disables
  *
@@ -569,38 +586,91 @@ HX_CIS_ERROR_E hm0360_md_configureStrobe(uint8_t val) {
 
 }
 
+
 /**
- * Sets HM0360 for motion detection, prior to entering deep sleep.
+ * Called when the AI processor is about to enter DPD.
  *
- * @param mdInterval - interval in ms between frames in MD mode
- * @return error code
+ * Get the HM0360 ready to detect motion
+ *
+ *  Select CONTEXT_B registers
+ *
+ *  @param cameraSystemEnabled - true if OP_PARAMETER_CAMERA_ENABLED is set
  */
-HX_CIS_ERROR_E hm0360_md_enableMD(uint16_t mdFrameInterval) {
+HX_CIS_ERROR_E hm0360_md_prepare(bool cameraSystemEnabled, uint16_t mdFrameInterval) {
 	HX_CIS_ERROR_E ret;
+	uint16_t mdInterval;
 
 	// Don't proceed if the HM0360 is missing or faulty
 	if (!hm0360_present) {
 		return HX_CIS_UNKNOWN_ERROR;
 	}
 
-    saveMainCameraConfig();
+	if (cameraSystemEnabled) {
+		mdInterval = mdFrameInterval;
+	}
+	else {
+		mdInterval = 0;
+	}
 
-	// Clear interrupts
-    hx_drv_cis_set_reg(INT_CLEAR, 0xff, 0x01);
+	if (mdInterval > 0) {
+		dbg_printf(DBG_LESS_INFO, "   HM0360 Motion Detection on! %dms frame interval\r\n", mdFrameInterval);
+	}
+	else {
+		dbg_printf(DBG_LESS_INFO, "   HM0360 Motion Detection off.\r\n");
+	}
 
-    // Set HM0360 mode to SLEEP before initialisation
-    ret = hm0360_md_setMode(CONTEXT_B, MODE_SW_NFRAMES_SLEEP, 1, mdFrameInterval);
+	saveMainCameraConfig();
 
-    if (ret != HX_CIS_NO_ERROR) {
-    	dbg_printf(DBG_LESS_INFO, "HM0360 md on fail\r\n");
-        restoreMainCameraConfig();
-        return -1;
-    }
+	// This writes to register 0x2065
+	// MD interrupt will be enabled in hm0360_md_setMode() if MD is enabled
+	hm0360_md_clearInterrupt(0xff);		// clear all bits
 
-    // This version has no delay
-    dbg_printf(DBG_LESS_INFO, "HM0360 Motion Detection on! %dms frame interval\r\n", mdFrameInterval);
+	// Don't use MODE_SLEEP even if camera system is disabled, as it draws more power!
+	ret = hm0360_md_setMode(CONTEXT_B, MODE_SW_NFRAMES_SLEEP, 1, mdInterval);
 
-    restoreMainCameraConfig();
+	restoreMainCameraConfig();
 
-	return 0;
+	return ret;
 }
+
+//// Replaced by hm0360_md_prepare()
+///**
+// * Sets HM0360 for motion detection, prior to entering deep sleep.
+// * Only called when HM0360 is the main camera
+// *
+// * @param mdInterval - interval in ms between frames in MD mode
+// * @return error code
+// */
+//HX_CIS_ERROR_E hm0360_md_enableMD(uint16_t mdFrameInterval) {
+//	HX_CIS_ERROR_E ret;
+//
+//	// Don't proceed if the HM0360 is missing or faulty
+//	if (!hm0360_present) {
+//		return HX_CIS_UNKNOWN_ERROR;
+//	}
+//
+//	saveMainCameraConfig();
+//
+//	// Clear interrupts
+//	hx_drv_cis_set_reg(INT_CLEAR, 0xff, 0x01);
+//
+//	// Set HM0360 mode to SLEEP before initialisation
+//	ret = hm0360_md_setMode(CONTEXT_B, MODE_SW_NFRAMES_SLEEP, 1, mdFrameInterval);
+//
+//	if (ret != HX_CIS_NO_ERROR) {
+//		dbg_printf(DBG_LESS_INFO, "HM0360 md on fail\r\n");
+//		restoreMainCameraConfig();
+//		return -1;
+//	}
+//
+//	if (mdFrameInterval == 0) {
+//		// MD has been disabled in hm0360_md_setMode() - so don't print the following line
+//	}
+//	else {
+//		dbg_printf(DBG_LESS_INFO, "HM0360 Motion Detection on! %dms frame interval\r\n", mdFrameInterval);
+//	}
+//
+//	restoreMainCameraConfig();
+//
+//	return 0;
+//}

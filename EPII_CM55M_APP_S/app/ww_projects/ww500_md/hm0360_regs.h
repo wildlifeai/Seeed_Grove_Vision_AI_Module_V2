@@ -82,6 +82,14 @@
 #define         BINNING_MODE                    0x0382
 // Test pattern control
 #define         TEST_PATTERN_MODE               0x0601
+#define         TEST_DATA_BLUE_H                0x0602
+#define         TEST_DATA_BLUE_L                0x0603
+#define         TEST_DATA_GB_H                  0x0604
+#define         TEST_DATA_GB_L                  0x0605
+#define         TEST_DATA_GR_H                  0x0606
+#define         TEST_DATA_GR_L                  0x0607
+#define         TEST_DATA_RED_H                 0x0608
+#define         TEST_DATA_RED_L                 0x0609
 // Black level control
 #define         BLC_TGT                         0x1004
 #define         BLC2_TGT                        0x1009
@@ -189,7 +197,7 @@
 // Context switch control registers
 #define         PMU_CFG_3                       0x3024
 #define         PMU_CFG_4                       0x3025
-#define         PMU_CFG_5                       0x3026
+#define         PMU_CFG_5                       0x3026		// pre-meter
 #define         PMU_CFG_6                       0x3027
 #define         PMU_CFG_7                       0x3028		// Output frame count
 #define         PMU_CFG_8                       0x3029		// Sleep Count High
@@ -220,7 +228,8 @@
 #define         STROBE_FRONT_H					0x3082
 #define         STROBE_FRONT_L					0x3083
 #define         STROBE_END_H					0x3084
-#define         STROBE_LINE_H					0x3085
+#define         STROBE_END_L					0x3085
+#define         STROBE_LINE_H					0x3086
 #define         STROBE_LINE_L					0x3087
 #define         STROBE_FRAME_H					0x3088
 #define         STROBE_FRAME_L					0x3089

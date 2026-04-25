@@ -20,7 +20,8 @@
 
 #define HM0360_SENSOR_I2CID				(0x24)
 
-// CGP some defines here
+// Use Dynamic 1 mode (value 3) as default strobe enabe setting for STROBE_CFG (0x3080)
+#define HM0360_SENSOR_STROBE_MODE		(0x03)
 
 #define HM0360NUMGAINREGS 5
 
@@ -68,14 +69,17 @@ HX_CIS_ERROR_E hm0360_md_enableInterrupt(void);
 HX_CIS_ERROR_E hm0360_md_disableInterrupt(void);
 
 // Prepare the MD
-HX_CIS_ERROR_E hm0360_md_prepare(bool cameraSystemEnabled);
+HX_CIS_ERROR_E hm0360_md_prepare(bool cameraSystemEnabled, uint16_t mdFrameInterval);
 HX_CIS_ERROR_E hm0360_md_getGainRegs(HM0360_GAIN_T * val);
 
-void hm0360_md_getMDOutput(uint8_t * regTable, uint8_t length);
+uint16_t hm0360_md_getMDOutput(uint8_t * regTable, uint8_t length);
+
+void hm0360_md_printGrid(uint8_t *roiOut, uint16_t numBlocks, char *msg, uint16_t msgLen);
 
 // Configure the HM0360 STROBE pin which can drive the flash cct
 HX_CIS_ERROR_E hm0360_md_configureStrobe(uint8_t val);
 
-HX_CIS_ERROR_E hm0360_md_enableMD(uint16_t mdFrameInterval);
+// Replaced by hm0360_md_prepare()
+//HX_CIS_ERROR_E hm0360_md_enableMD(uint16_t mdFrameInterval);
 
 #endif /* HM0360_MD_H_ */

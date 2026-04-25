@@ -408,7 +408,7 @@ void sleep_mode_enter_dpd(SLEEPMODE_WAKE_SOURCE_E wakeSource, uint16_t alarmDela
 	exif_utc_time_to_exif_string(&time, timeString, sizeof(timeString));
 
 	XP_LT_RED;
-	xprintf("Entering DPD at %s\n\n", timeString);
+	xprintf(">>> Entering DPD at %s\n\n", timeString);
 	XP_LT_GREY;	// Grey so the bootloader messages are printed in grey, on exit from DPD
 
 #if 0
@@ -529,7 +529,7 @@ void sleep_mode_enter_dpd(SLEEPMODE_WAKE_SOURCE_E wakeSource, uint16_t alarmDela
 	//app_clk_disable();
 	exif_utc_clk_disable();
 
-	/*Use PMU lib to control HSC_CLK and LSC_CLK so set thoes parameter to 0*/
+	/*Use PMU lib to control HSC_CLK and LSC_CLK so set those parameters to 0*/
 	memset(&hsc_cfg, 0, sizeof(SCU_PDHSC_HSCCLK_CFG_T));
 	memset(&lsc_cfg, 0, sizeof(SCU_LSC_CLK_CFG_T));
 
@@ -537,48 +537,3 @@ void sleep_mode_enter_dpd(SLEEPMODE_WAKE_SOURCE_E wakeSource, uint16_t alarmDela
 	hx_lib_pm_trigger(hsc_cfg, lsc_cfg, PM_CLK_PARA_CTRL_BYPMLIB);
 }
 
-// RTC functions are now in exif_tuc.c
-
-///**
-// * Returns the calendar clock time
-// *
-// * Slower. uses RTC_TIME_AFTER_DPD_1ST_READ_YES -  It need to sync new counter in DPD period
-// *
-// * @return UTC time in a rtc_time structure (separated hhh, mm, ss, etc)
-// */
-//RTC_ERROR_E RTC_GetTimeDPD(rtc_time *tm) {
-//	RTC_ERROR_E ret;
-//
-//	ret = hx_drv_rtc_read_time(RTC_ID_0, tm, RTC_TIME_AFTER_DPD_1ST_READ_YES);
-//
-//	return ret;
-//}
-//
-///**
-// * Returns the calendar clock time
-// *
-// * Faster uses RTC_TIME_AFTER_DPD_1ST_READ_NO
-// *
-// * @return UTC time in a rtc_time structure (separated hhh, mm, ss, etc)
-// */
-//RTC_ERROR_E RTC_GetTime(rtc_time *tm) {
-//	RTC_ERROR_E ret;
-//
-//	ret = hx_drv_rtc_read_time(RTC_ID_0, tm, RTC_TIME_AFTER_DPD_1ST_READ_NO);
-//
-//	return ret;
-//}
-//
-//RTC_ERROR_E RTC_SetTime(rtc_time *tm) {
-//	RTC_ERROR_E ret;
-//
-//	xprintf("RTC SetTime : %d/%02d/%02d %02d:%02d:%02d\r\n",
-//		tm->tm_year, tm->tm_mon, tm->tm_mday, tm->tm_hour, tm->tm_min, tm->tm_sec);
-//
-//	if ((ret = hx_drv_rtc_set_time(RTC_ID_0, tm)) != RTC_NO_ERROR) {
-//		xprintf("set rtc fail %d\r\n", ret);
-//	} else {
-//		xprintf("set rtc success %d\r\n", ret);
-//	}
-//	return ret;
-//}

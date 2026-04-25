@@ -93,6 +93,8 @@ char * app_get_version_string(void);
 char * app_get_board_name_string(void);
 char * app_get_camera_string(void);
 
+uint32_t app_getElapsedMs(TickType_t startTime);
+
 void app_onInactivityDetection(void);
 
 #ifdef __cplusplus

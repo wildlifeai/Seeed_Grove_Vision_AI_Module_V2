@@ -1,0 +1,18 @@
+// Test patterns - see data sheet Fig 4,2, section 10.8
+// TEST_PATTERN_MODE = 0x0601 Bit 0 is enable. Bits [6:4] set the mode:
+//	0x01 = colour bar
+//  0x11 = fade to grey
+//  0x21 = walking 1s
+//  0x31 = solid pattern (next regs set the colour? 10 BITS.)
+//  0x41 = PN9
+		{HX_CIS_I2C_Action_W, 0x0601, 0x31},		// TEST_PATTERN_MODE
+		{HX_CIS_I2C_Action_W, 0x0602, 0},	// TEST_DATA_BLUE_H
+		{HX_CIS_I2C_Action_W, 0x0603, 0},	// TEST_DATA_BLUE_L
+		{HX_CIS_I2C_Action_W, 0x0604, 0},	//TEST_DATA_GB_H	
+		{HX_CIS_I2C_Action_W, 0x0605, 0},	//TEST_DATA_GB_H		
+		{HX_CIS_I2C_Action_W, 0x0606, 0x03},	//TEST_DATA_GR_H		// green?
+		{HX_CIS_I2C_Action_W, 0x0607, 0xff},	//TEST_DATA_GR_H		
+		{HX_CIS_I2C_Action_W, 0x0608, 0},	//TEST_DATA_RED_H		
+		{HX_CIS_I2C_Action_W, 0x0609, 0},	//TEST_DATA_RED_H		
+
+		

@@ -49,10 +49,11 @@
 #endif
 #endif
 
-#define JPEG_BUFSIZE  (((623+ (IMX708_HW5x5_CROP_WIDTH/16)*(IMX708_HW5x5_CROP_HEIGHT/16)* 38 + 35) >>2 ) <<2)	//YUV420 x10 Compress = ((623+ (W/16)*(H/16)* 38 + 35) >>2 ) <<2  byte
+// CGP - the calculation below seems to be for a 'x10 Compress' but
+//#define JPEG_BUFSIZE  (((623+ (IMX708_HW5x5_CROP_WIDTH/16)*(IMX708_HW5x5_CROP_HEIGHT/16)* 38 + 35) >>2 ) <<2)	//YUV420 x10 Compress = ((623+ (W/16)*(H/16)* 38 + 35) >>2 ) <<2  byte
 __attribute__(( section(".bss.NoInit"))) uint8_t jpegbuf[JPEG_BUFSIZE] __ALIGNED(32);
 
-#define RAW_BUFSIZE  (IMX708_HW5x5_CROP_WIDTH*IMX708_HW5x5_CROP_HEIGHT*3/2)   //YUV420: Y= W*H byte, U = ((W*H)>>2) byte, V = ((W*H)>>2) byte
+//#define RAW_BUFSIZE  (IMX708_HW5x5_CROP_WIDTH*IMX708_HW5x5_CROP_HEIGHT*3/2)   //YUV420: Y= W*H byte, U = ((W*H)>>2) byte, V = ((W*H)>>2) byte
 __attribute__(( section(".bss.NoInit"))) uint8_t demosbuf[RAW_BUFSIZE] __ALIGNED(32);
 
 #define JPEG_HEADER_BUFSIZE 100
@@ -297,6 +298,8 @@ void set_mipi_csirx_disable()
 
 int cisdp_sensor_init(bool sensor_init) {
     dbg_printf(DBG_LESS_INFO, "Initialising IMX708 at 0x%02x (p.u. delay %dms)\r\n", CIS_I2C_ID, CIS_POWERUP_DELAY);
+    dbg_printf(DBG_LESS_INFO, "Memory allocated: %ld for raw buffer, %d for JPEG, %d for JPEG header\n",
+            			sizeof(demosbuf), sizeof(jpegbuf), sizeof(jpegfilesizebuf));
 
      hx_drv_cis_set_slaveID(CIS_I2C_ID);
 
@@ -465,7 +468,14 @@ int cisdp_dp_init(bool inp_init, SENSORDPLIB_PATH_E dp_type, sensordplib_CBEvent
     jpeg_cfg.enc_width = DP_JPEG_ENC_WIDTH;
     jpeg_cfg.enc_height = DP_JPEG_ENC_HEIGHT;
     jpeg_cfg.jpeg_enctype = DP_JPEG_ENCTYPE;
-    jpeg_cfg.jpeg_encqtable = DP_JPEG_ENCQTABLE;
+    //jpeg_cfg.jpeg_encqtable = DP_JPEG_ENCQTABLE;
+
+    if(jpg_ratio == 4) {
+    	jpeg_cfg.jpeg_encqtable = JPEG_ENC_QTABLE_4X;
+    }
+    else {
+    	jpeg_cfg.jpeg_encqtable = JPEG_ENC_QTABLE_10X;
+    }
 
     cisdp_wdma_addr_init(subs);
 

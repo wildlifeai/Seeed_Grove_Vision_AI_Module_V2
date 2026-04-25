@@ -11,12 +11,6 @@
 
 #include "c_api_types.h"	// Tensorflow errors
 
-#define APP_BLOCK_FUNC()          \
-	do                            \
-	{                             \
-		__asm volatile("b    ."); \
-	} while (0)
-
 // List of operations to set up camera subsystem
 typedef enum {
 	CAMERA_CONFIG_INIT_COLD,
@@ -24,7 +18,6 @@ typedef enum {
 	CAMERA_CONFIG_RUN,
 	CAMERA_CONFIG_CONTINUE,
 	CAMERA_CONFIG_STOP,
-	CAMERA_CONFIG_MD,
 } CAMERA_CONFIG_E;
 
 // Possible states. Values must match imageTaskStateString[] in image_task.c
@@ -51,13 +44,8 @@ typedef enum {
 // 15 minutes -
 #define MAX_IMAGE_INTERVAL 15 * 60 * 1000
 
-#if FF_USE_LFN
-// file name: 'image_2025-02-03_1234.jpg' = 25 characters, plus trailing '\0'
-#define IMAGEFILENAMELEN	26
-#else
 // file name: '12345678.jpg' = 12 characters, plus trailing '\0'
 #define IMAGEFILENAMELEN		13
-#endif // FF_USE_LFN
 
 // default 5%
 #define FLASHLEDDUTY 5
@@ -70,8 +58,8 @@ typedef enum {
 // Default interval in ms between frame grabs in motion detect mode
 #define DPDINTERVAL 1000
 
-// Default Duration (ms) that LED Flash is on
-#define FLASHDURATION 100
+// Default Duration (ms) that LED Flash is on. VSYNC ends <40ms after flash starts.
+#define FLASHDURATION 50
 
 TaskHandle_t image_createTask(int8_t priority, APP_WAKE_REASON_E wakeReason);
 
@@ -80,14 +68,6 @@ uint16_t image_getState(void);
 const char * image_getStateString(void);
 
 const char * image_getLastImageFile(void);
-
-// Temporary until I can make this work through the state machine
-void image_hackInactive(void);
-
-// returns true if neural network has detected target
-// Not used
-// bool image_nnDetected(void);
-
 
 // Returns whether the camera system is enabled
 bool image_getEnabled(void);

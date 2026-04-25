@@ -138,6 +138,18 @@ RTC_ERROR_E exif_utc_get_rtc_as_time(rtc_time * tm) {
 }
 
 /**
+ * Reads the RTC hardware to produce the time in seconds
+ *
+ * @param - pointer to an integer to receive the count
+ * @return error code
+ */
+RTC_ERROR_E exif_utc_get_rtc_as_seconds(uint32_t * tm) {
+	return hx_drv_rtc_read_val(RTC_ID_0, tm, RTC_TIME_AFTER_DPD_1ST_READ_NO);
+
+}
+
+
+/**
  * Sets the RTC hardware from a rtc_time object
  *
  * This function appears to take 1-2s

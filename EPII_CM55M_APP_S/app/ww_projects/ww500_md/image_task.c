@@ -748,7 +748,7 @@ static APP_MSG_DEST_T handleEventForInit(APP_MSG_T img_recv_msg) {
     case APP_MSG_IMAGETASK_INACTIVITY:
         // Inactivity detected. Prepare to enter DPD, saving state if possible.
 
-        if (fatfs_getImageSequenceNumber() > 0)  {
+        if (fatfs_mounted())  {
             // TODO - can we call this without the if() and expect fatfs_task to handle it?
             // Ask the FatFS task to save state onto the SD card
             send_msg.destination = xFatTaskQueue;
@@ -1058,7 +1058,7 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
     	g_wdt_event = true;
         configure_image_sensor(CAMERA_CONFIG_STOP); // run some sensordplib_stop functions then run HM0360_stream_off commands to the HM0360
 
-        if (fatfs_getImageSequenceNumber() > 0)  {
+        if (fatfs_mounted())  {
             // TODO - can we call this without the if() and expect fatfs_task to handle it?
             // Ask the FatFS task to save state onto the SD card
             send_msg.destination = xFatTaskQueue;
@@ -1278,7 +1278,7 @@ static APP_MSG_DEST_T handleEventForWaitForTimer(APP_MSG_T img_recv_msg) {
     	// run some sensordplib_stop functions then run HM0360_stream_off commands to the HM0360
         configure_image_sensor(CAMERA_CONFIG_STOP);
 
-        if (fatfs_getImageSequenceNumber() > 0)  {
+        if (fatfs_mounted())  {
             // TODO - can we call this without the if() and expect fatfs_task to handle it?
             // Ask the FatFS task to save state onto the SD card
             send_msg.destination = xFatTaskQueue;

@@ -1,5 +1,5 @@
 # Description of the CONFIG.TXT File
-#### CGP - 27 March 2026
+#### CGP - 25 April 2026
 
 The CONFIG.TXT file contains "Operational Parameters" for the WW500.
 
@@ -35,23 +35,23 @@ Operational Parameters which are not present in CONFIG.TXT are given their defau
 
 | Index | Name                                  | Default Value | Notes                                                |
 | ----- | ------------------------------------- | ------------- | ---------------------------------------------------- |
-|     0 | OP_PARAMETER_SEQUENCE_NUMBER          | 0             | Image file number. Increments when the file is written.  |
+|     0 | OP_PARAMETER_SEQUENCE_NUMBER          | 1             | Image file number. Increments when the file is written.  |
 |     1 | OP_PARAMETER_NUM_NN_ANALYSES          | 0             | The number of times the neural network model has run. |
 |     2 | OP_PARAMETER_NUM_POSITIVE_NN_ANALYSES | 0             | The number of times the neural network model detects the target. |
 |     3 | OP_PARAMETER_NUM_COLD_BOOTS           | 0             | The number of AI processor cold boots.  |
 |     4 | OP_PARAMETER_NUM_WARM_BOOTS           | 0             | The number of AI processor warm boots. |
-|     5 | OP_PARAMETER_NUM_PICTURES             | 3             | The number of images to capture each time the processor receives a motion detect event or a time lapse event. |
-|     6 | OP_PARAMETER_PICTURE_INTERVAL         | 1500          | The interval (in ms) between each of the above images. Limited to about 2000 for HM0360. Must be less than OP_PARAMETER_INTERVAL_BEFORE_DPD |
-|     7 | OP_PARAMETER_TIMELAPSE_INTERVAL       | 60            | The interval (in s) between entering DPD and waking again to take the next timelapse image (0 inhibits) |
-|     8 | OP_PARAMETER_INTERVAL_BEFORE_DPD      | 10000         | The interval (in ms) between when all FreeRTOS task activity ceases and the AI processor entering DPD.|
+|     5 | OP_PARAMETER_NUM_PICTURES             | 1             | The number of images to capture each time the processor receives a motion detect event or a time lapse event. |
+|     6 | OP_PARAMETER_PICTURE_INTERVAL         | 500           | The interval (in ms) between each of the above images. Limited to about 2000 for HM0360. Must be less than OP_PARAMETER_INTERVAL_BEFORE_DPD |
+|     7 | OP_PARAMETER_TIMELAPSE_INTERVAL       | 0             | The interval (in s) between entering DPD and waking again to take the next timelapse image (0 inhibits) |
+|     8 | OP_PARAMETER_INTERVAL_BEFORE_DPD      | 1000          | The interval (in ms) between when all FreeRTOS task activity ceases and the AI processor entering DPD.|
 |     9 | OP_PARAMETER_LED_BRIGHTNESS_PERCENT   | 5             | Flash LED duty cycle (brightness) in percent (0 inhibits LED flash) |
 |    10 | OP_PARAMETER_CAMERA_ENABLED           | 1             | Camera and NN system disabled, 1 = Camera and NN system enabled |
-|    11 | OP_PARAMETER_MD_INTERVAL              | 1000          | Interval (ms) between frames in motion detect mode (0 inhibits motion detection)|
+|    11 | OP_PARAMETER_MD_INTERVAL              | 0             | Interval (ms) between frames in motion detect mode (0 inhibits motion detection)|
 |    12 | OP_PARAMETER_FLASH_DURATION           | 100           | Duration (ms) that LED flash is on                  |
 |    13 | OP_PARAMETER_FLASH_LED                | 0             | LED bit mask: visible LED used = 1, infra-red LED used =2, none = 0              |
-|    14 | OP_PARAMETER_MODEL_PROJECT            | 0             | Model project ID used for the NN model|
+|    14 | OP_PARAMETER_MODEL_PROJECT            | 0             | Model project ID used for the NN model (0 disables NN)|
 |    15 | OP_PARAMETER_MODEL_VERSION            | 0             | Model version number used for the NN model |
-|    16 | OP_PARAMETER_MODEL_THRESHOLD          | 0             | Logit threshold for detection (0-127) |
+|    16 | OP_PARAMETER_MODEL_THRESHOLD          | 18             | Logit threshold for detection (0-127) |
 |    17 | OP_PARAMETER_MD_SENSITIVITY           | 1             | Motion Detection Sensitivity: 0=off, 1=low, 2=medium, 3=high |
 |    18 | OP_PARAMETER_TEST_MODE_BITS           | 0             | To manage test configurations: bit or bits indicate a test function |
 |    19 | OP_PARAMETER_IMAGES_COUNT     		| 0             | Count of images in the current image folder. Use this to decide to create a new image folder. |

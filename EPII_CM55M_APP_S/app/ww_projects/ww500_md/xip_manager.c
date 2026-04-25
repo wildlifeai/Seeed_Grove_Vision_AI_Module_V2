@@ -1236,7 +1236,11 @@ static int write_slot_selector(uint8_t slot) {
     }
 
     xSemaphoreGive(xSPIMutex);
+
+    enable_xip(true);
+
     xprintf("write_slot_selector: slot %d selector written OK\n", slot);
+
     return 0;
 }
 

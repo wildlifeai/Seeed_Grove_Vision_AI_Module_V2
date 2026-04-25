@@ -24,7 +24,7 @@ extern "C" {
 #define PROJECT_ID 0
 #define PROJECT_VER 0
 // Logit value (0-127)
-#define MODEL_THRESHOLD 15
+#define MODEL_THRESHOLD 18
 
 // Enable/disable transforming of tensor output to percentages
 // Uncomment this to use percentages

@@ -441,7 +441,8 @@ static void i2cRxDataReady(void) {
 			break;
 		}
 
-		/* Force null-termination before treating payload as a C string */
+		// Force null-termination before treating payload as a C string
+		// Could truncate file name unless the name includes \0 (it does)
 		payload[length - 1] = '\0';
 
 		uint32_t totalSize = (uint32_t)payload[0]

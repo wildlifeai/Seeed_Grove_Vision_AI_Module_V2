@@ -30,8 +30,10 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             ENVIRONMENT="${{ inputs.environment }}"
-          else
+          elif [ "${{ github.ref_name }}" = "main" ]; then
             ENVIRONMENT="production"
+          else
+            ENVIRONMENT="dev"
           fi
           echo "ENVIRONMENT=$ENVIRONMENT" >> $GITHUB_OUTPUT
 
@@ -108,10 +110,10 @@ jobs:
     environment: ${{ needs.setup.outputs.environment }}
     
     env:
-      SUPABASE_URL: ${{ secrets.SUPABASE_URL || secrets.SUPABASE_URL_DEV }}
-      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY || secrets.SUPABASE_SERVICE_ROLE_KEY_DEV }}
-      SYSTEM_EMAIL: ${{ secrets.SYSTEM_EMAIL || secrets.SYSTEM_EMAIL_DEV }}
-      FALLBACK_USER_ID: ${{ secrets.FALLBACK_USER_ID || secrets.FALLBACK_USER_ID_DEV }}
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      SYSTEM_EMAIL: ${{ secrets.SYSTEM_EMAIL }}
+      FALLBACK_USER_ID: ${{ secrets.FALLBACK_USER_ID }}
 
     steps:
       - name: Checkout Repository

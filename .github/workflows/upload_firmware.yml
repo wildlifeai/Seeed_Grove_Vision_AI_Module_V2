@@ -199,13 +199,12 @@ jobs:
         env:
           FIRMWARE_VERSION: ${{ steps.version.outputs.unique_version }}
           RELEASE_NOTES: |
-            Automated firmware build ${{ steps.version.outputs.unique_version }}
-            
-            Base version: ${{ steps.semver.outputs.new_tag }}
-            Build: #${{ github.run_number }}
+            Himax AI firmware ${{ steps.version.outputs.unique_version }}
+            Branch: ${{ github.ref_name }}
             Commit: ${{ github.sha }}
+            Build: #${{ github.run_number }}
             
-            Changes:
+            Changes since last tag:
             ${{ steps.semver.outputs.changelog }}
         run: node upload_firmware.js
         

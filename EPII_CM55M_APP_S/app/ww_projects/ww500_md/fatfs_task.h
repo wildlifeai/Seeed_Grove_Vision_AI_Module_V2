@@ -69,9 +69,9 @@ typedef enum {
 	OP_PARAMETER_LED_BRIGHTNESS_PERCENT,	// 9 Flash LED duty cycle (brightness) in percent (approximately, 0 means 'dim', not 'off')
 	OP_PARAMETER_CAMERA_ENABLED,	// 10 0 = Camera and NN system disabled, 1 = Camera and NN system enabled
 	OP_PARAMETER_MD_INTERVAL,		// 11 Interval (ms) between frames in motion detect mode (0 inhibits motion detection)
-	OP_PARAMETER_FLASH_DURATION,	// 12 Duration (ms) that LED flash is on
+	OP_PARAMETER_FLASH_DURATION,	// 12 Duration (ms) that LED flash is on (RP camera only)
 	OP_PARAMETER_FLASH_LED,			// 13 Flash LED bit mask: visible LED used = 1, infra-red LED used =2, none = 0
-	OP_PARAMETER_MODEL_PROJECT,		// 14 Model project ID used for the NN model
+	OP_PARAMETER_MODEL_PROJECT,		// 14 Model project ID used for the NN model (0 disables NN)
 	OP_PARAMETER_MODEL_VERSION,		// 15 Model version number used for the NN model
 	OP_PARAMETER_MODEL_THRESHOLD,	// 16 Logit threshold for detection (0-127)
 	OP_PARAMETER_MD_SENSITIVITY,	// 17 Motion Detection Sensitivity: 0=off, 1=low, 2=medium, 3=high

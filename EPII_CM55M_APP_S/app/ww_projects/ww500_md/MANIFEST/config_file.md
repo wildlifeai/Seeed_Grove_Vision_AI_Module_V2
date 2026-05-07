@@ -44,10 +44,10 @@ Operational Parameters which are not present in CONFIG.TXT are given their defau
 |     6 | OP_PARAMETER_PICTURE_INTERVAL         | 1000          | The interval (in ms) between each of the above images. Limited to about 2000 for HM0360. Must be less than OP_PARAMETER_INTERVAL_BEFORE_DPD |
 |     7 | OP_PARAMETER_TIMELAPSE_INTERVAL       | 0             | The interval (in s) between entering DPD and waking again to take the next timelapse image (0 inhibits) |
 |     8 | OP_PARAMETER_INTERVAL_BEFORE_DPD      | 1000          | The interval (in ms) between when all FreeRTOS task activity ceases and the AI processor entering DPD.|
-|     9 | OP_PARAMETER_LED_BRIGHTNESS_PERCENT   | 5             | Flash LED duty cycle (brightness) in percent (0 inhibits LED flash) |
-|    10 | OP_PARAMETER_CAMERA_ENABLED           | 0             | 0 = Camera and NN system disabled, 1 = Camera and NN system enabled |
+|     9 | OP_PARAMETER_LED_BRIGHTNESS_PERCENT   | 5             | Flash LED duty cycle (brightness) in percent (approximately, 0 means 'dim', not 'off') |
+|    10 | OP_PARAMETER_CAMERA_ENABLED           | 1             | Camera and NN system disabled, 1 = Camera and NN system enabled |
 |    11 | OP_PARAMETER_MD_INTERVAL              | 0             | Interval (ms) between frames in motion detect mode (0 inhibits motion detection)|
-|    12 | OP_PARAMETER_FLASH_DURATION           | 100           | Duration (ms) that LED flash is on                  |
+|    12 | OP_PARAMETER_FLASH_DURATION           | 100           | Duration (ms) that LED flash is on (RP camera only)                 |
 |    13 | OP_PARAMETER_FLASH_LED                | 0             | LED bit mask: visible LED used = 1, infra-red LED used =2, none = 0              |
 |    14 | OP_PARAMETER_MODEL_PROJECT            | 0             | Model project ID used for the NN model (0 disables NN)|
 |    15 | OP_PARAMETER_MODEL_VERSION            | 0             | Model version number used for the NN model |

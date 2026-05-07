@@ -214,7 +214,7 @@ uint16_t op_parameter[OP_PARAMETER_NUM_ENTRIES] = {
 	DPDINTERVAL,	   // 11 Interval (ms) between frames in MD mode (0 inhibits)
 	FLASHDURATION,	   // 12 Duration (ms) that LED Flash is on
 	0,				   // 13 LED bit mask: vis=1, IR=2, none=0
-	PROJECT_ID,		   // 14 OP_PARAMETER_MODEL_PROJECT
+	PROJECT_ID,		   // 14 OP_PARAMETER_MODEL_PROJECT (0 disables NN)
 	PROJECT_VER,	   // 15 OP_PARAMETER_MODEL_VERSION
 	MODEL_THRESHOLD,   // 16 OP_PARAMETER_MODEL_THRESHOLD default
 	1,      	   		// 17 Motion Detection Sensitivity: 0=off, 1=low, 2=medium, 3=high

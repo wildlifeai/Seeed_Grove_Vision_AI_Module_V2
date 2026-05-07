@@ -78,6 +78,7 @@ typedef struct {
 
     char labels[MAX_CLASSES][MAX_LABEL_LEN]; // Class label strings
     char modelName[MAX_MODEL_NAME_LEN];      // Model filename, e.g. "1V2.TFL"
+    uint8_t reserved[3];                     // Padding to 4-byte boundary
 } ModelMetaData;
 
 // Read-only pointer to the metadata as it appears in XIP-mapped flash.

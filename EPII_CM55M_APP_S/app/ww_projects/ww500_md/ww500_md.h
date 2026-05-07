@@ -53,8 +53,7 @@ extern "C" {
 
 #define NUMBEROFTASKS	5
 
-// for now, 10s
-#define INACTIVITYTIMEOUT 10000
+
 // For cold boot go straight to sleep
 #define INACTIVITYTIMEOUTCB 1000
 // Use an extended period if the user starts to use the console, for debugging

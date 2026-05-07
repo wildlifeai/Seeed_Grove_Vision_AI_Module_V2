@@ -210,7 +210,7 @@ uint16_t op_parameter[OP_PARAMETER_NUM_ENTRIES] = {
 	TIMELAPSEINTERVAL, // 7 Interval (s) (0 inhibits)
 	INACTIVITYTIMEOUT, // 8 Delay before DPD (ms)
 	FLASHLEDDUTY,	   // 9 in percent (0 inhibits)
-	1,				   // 10 0 = camera disabled, 1 = enabled
+	0,				   // 10 0 = camera disabled, 1 = enabled
 	DPDINTERVAL,	   // 11 Interval (ms) between frames in MD mode (0 inhibits)
 	FLASHDURATION,	   // 12 Duration (ms) that LED Flash is on
 	0,				   // 13 LED bit mask: vis=1, IR=2, none=0
@@ -658,7 +658,7 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 			transferFileOpen = false;
 		}
 
-		if (fatfs_getImageSequenceNumber() > 0) {
+		if (fatfs_mounted()) {
 			res = save_configuration(STATE_FILE, &dirManager);
 			f_unmount(DRV);
 
@@ -1465,6 +1465,7 @@ static void vFatFsTask(void *pvParameters) {
 
 		// Phase 1: ensure /MANIFEST exists and initialise dirManager state.
 		res = dir_mgr_init_config(&dirManager);
+
 		if (res == FR_OK) {
 			xprintf("SD card initialised. ");
 			fatfs_printCwd();	// for debug purposes
@@ -1478,20 +1479,14 @@ static void vFatFsTask(void *pvParameters) {
 						STATE_FILE,
 						fatfs_getImageSequenceNumber(),
 						(enabled == 1) ? "" : "not ",
-						op_parameter[OP_PARAMETER_LED_BRIGHTNESS_PERCENT]);
-
-				if (fatfs_getImageSequenceNumber() == 0)  {
-					// Change this, since 0 means "no SD card"
-					fatfs_setOperationalParameter(OP_PARAMETER_SEQUENCE_NUMBER, 1);
-				}
-
-				// Phase 2: now that op_parameter[] and deployment ID are valid,
-				// determine and create the correct image directory.
-				dir_mgr_init_image_dir(&dirManager);
+								op_parameter[OP_PARAMETER_LED_BRIGHTNESS_PERCENT]);
 			}
 			else {
 				xprintf("'%s' NOT found.\r\n", STATE_FILE);
 			}
+			// Phase 2: now that op_parameter[] and deployment ID are valid,
+			// determine and create the correct image directory.
+			dir_mgr_init_image_dir(&dirManager);
 		}
 	}
 	else {

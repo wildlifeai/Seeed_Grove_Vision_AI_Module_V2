@@ -35,7 +35,7 @@ Operational Parameters which are not present in CONFIG.TXT are given their defau
 
 | Index | Name                                  | Default Value | Notes                                                |
 | ----- | ------------------------------------- | ------------- | ---------------------------------------------------- |
-|     0 | OP_PARAMETER_SEQUENCE_NUMBER          | 0             | Image file number. Increments when the file is written.  |
+|     0 | OP_PARAMETER_SEQUENCE_NUMBER          | 1             | Image file number. Increments when the file is written.  |
 |     1 | OP_PARAMETER_NUM_NN_ANALYSES          | 0             | The number of times the neural network model has run. |
 |     2 | OP_PARAMETER_NUM_POSITIVE_NN_ANALYSES | 0             | The number of times the neural network model detects the target. |
 |     3 | OP_PARAMETER_NUM_COLD_BOOTS           | 0             | The number of AI processor cold boots.  |
@@ -49,7 +49,7 @@ Operational Parameters which are not present in CONFIG.TXT are given their defau
 |    11 | OP_PARAMETER_MD_INTERVAL              | 0             | Interval (ms) between frames in motion detect mode (0 inhibits motion detection)|
 |    12 | OP_PARAMETER_FLASH_DURATION           | 100           | Duration (ms) that LED flash is on                  |
 |    13 | OP_PARAMETER_FLASH_LED                | 0             | LED bit mask: visible LED used = 1, infra-red LED used =2, none = 0              |
-|    14 | OP_PARAMETER_MODEL_PROJECT            | 0             | Model project ID used for the NN model|
+|    14 | OP_PARAMETER_MODEL_PROJECT            | 0             | Model project ID used for the NN model (0 disables NN)|
 |    15 | OP_PARAMETER_MODEL_VERSION            | 0             | Model version number used for the NN model |
 |    16 | OP_PARAMETER_MODEL_THRESHOLD          | 64            | Logit threshold for detection (0-127) |
 |    17 | OP_PARAMETER_MD_SENSITIVITY           | 1             | Motion Detection Sensitivity: 0=off, 1=low, 2=medium, 3=high |

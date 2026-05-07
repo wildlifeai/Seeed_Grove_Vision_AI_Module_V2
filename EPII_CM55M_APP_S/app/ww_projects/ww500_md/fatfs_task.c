@@ -210,7 +210,7 @@ uint16_t op_parameter[OP_PARAMETER_NUM_ENTRIES] = {
 	TIMELAPSEINTERVAL, // 7 Interval (s) (0 inhibits)
 	INACTIVITYTIMEOUT, // 8 Delay before DPD (ms)
 	FLASHLEDDUTY,	   // 9 in percent (0 inhibits)
-	1,				   // 10 0 = camera disabled, 1 = enabled
+	0,				   // 10 0 = camera disabled, 1 = enabled
 	DPDINTERVAL,	   // 11 Interval (ms) between frames in MD mode (0 inhibits)
 	FLASHDURATION,	   // 12 Duration (ms) that LED Flash is on
 	0,				   // 13 LED bit mask: vis=1, IR=2, none=0

@@ -6,12 +6,12 @@ const path = require('path');
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const FIRMWARE_PATH = process.env.FIRMWARE_PATH; // Path to the generated .img file
-const FIRMWARE_VERSION = process.env.FIRMWARE_VERSION || `commit-${process.env.GITHUB_SHA?.substring(0, 7)}`; // Use semantic version if available, fallback to commit hash
+const FIRMWARE_VERSION = process.env.FIRMWARE_VERSION || `commit-${process.env.GITHUB_SHA?.substring(0, 7)}`;
 const RELEASE_NOTES = process.env.RELEASE_NOTES || `Automated build from commit ${process.env.GITHUB_SHA}`;
-const FIRMWARE_TYPE = process.env.FIRMWARE_TYPE || 'himax'; // Configurable firmware type (himax, ble, config, etc.)
-const BUCKET_NAME = process.env.BUCKET_NAME || 'firmware'; // Configurable bucket name for different environments
-const SYSTEM_EMAIL = process.env.SYSTEM_EMAIL || 'system@wildlife.ai'; // Email to query for system user
-const FALLBACK_USER_ID = process.env.FALLBACK_USER_ID || '00000000-0000-0000-0000-000000000000'; // Fallback user ID if queries fail
+const FIRMWARE_TYPE = process.env.FIRMWARE_TYPE || 'himax';
+const BUCKET_NAME = process.env.BUCKET_NAME || 'firmware';
+const SYSTEM_EMAIL = process.env.SYSTEM_EMAIL || 'system@wildlife.ai';
+const FALLBACK_USER_ID = process.env.FALLBACK_USER_ID || '00000000-0000-0000-0000-000000000000';
 
 if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !FIRMWARE_PATH) {
   console.error('Error: Missing required environment variables.');
@@ -23,6 +23,15 @@ if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !FIRMWARE_PATH) {
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
+/**
+ * Sanitize a version string for use in storage paths.
+ * Replaces spaces with underscores and colons with hyphens.
+ * e.g. "WW500_C02 12:39:43 Apr 25 2026" → "WW500_C02_12-39-43_Apr_25_2026"
+ */
+function sanitizeForPath(version) {
+  return version.replace(/:/g, '-').replace(/\s+/g, '_');
+}
+
 async function uploadFirmware() {
   try {
     // 1. Ensure bucket exists
@@ -33,20 +42,20 @@ async function uploadFirmware() {
     if (!bucketExists) {
       console.log(`Creating bucket: ${BUCKET_NAME}`);
       const { error: createError } = await supabase.storage.createBucket(BUCKET_NAME, {
-        public: true, // or false, depending on access needs
+        public: true,
       });
       if (createError) throw createError;
     }
 
-    // 2. Upload file
+    // 2. Upload file to storage
     const fileName = path.basename(FIRMWARE_PATH);
     const fileContent = fs.readFileSync(FIRMWARE_PATH);
-    // Use semantic version in filename for easy identification
-    const versionTag = FIRMWARE_VERSION.replace(/^v/, ''); // Remove 'v' prefix if present
+    const fileSize = fs.statSync(FIRMWARE_PATH).size;
+    const versionTag = sanitizeForPath(FIRMWARE_VERSION);
     const storagePath = `${FIRMWARE_TYPE}/${versionTag}_${fileName}`;
 
-    console.log(`Uploading ${fileName} to ${storagePath}...`);
-    const { data: uploadData, error: uploadError } = await supabase.storage
+    console.log(`Uploading ${fileName} to ${BUCKET_NAME}/${storagePath} (${fileSize} bytes)...`);
+    const { error: uploadError } = await supabase.storage
       .from(BUCKET_NAME)
       .upload(storagePath, fileContent, {
         contentType: 'application/octet-stream',
@@ -54,93 +63,143 @@ async function uploadFirmware() {
       });
 
     if (uploadError) throw uploadError;
+    console.log(`✅ Storage upload complete: ${storagePath}`);
 
-    // 3. Insert record into database
-    const fileSize = fs.statSync(FIRMWARE_PATH).size;
+    // 3. Resolve system user ID
+    const systemUserId = await resolveSystemUserId();
 
-    console.log(`Registering firmware version ${FIRMWARE_VERSION} in database...`);
+    // 4. Generate firmware name
+    const firmwareName = generateFirmwareName(FIRMWARE_TYPE, FIRMWARE_VERSION);
 
-    // Resolve system user ID with multiple fallback strategies
-    let systemUserId = process.env.SYSTEM_USER_ID;
+    // 5. Upsert database record (check existing, then update or insert)
+    const record = {
+      name: firmwareName,
+      version: FIRMWARE_VERSION,
+      type: FIRMWARE_TYPE,
+      location_path: storagePath,
+      file_size_bytes: fileSize,
+      release_notes: RELEASE_NOTES,
+      is_active: true,
+      modified_by: systemUserId
+    };
 
-    if (!systemUserId) {
-      console.log('SYSTEM_USER_ID not provided, querying database for system user...');
-
-      // Strategy 1: Look for user with system email
-      const { data: systemUser, error: userError } = await supabase
-        .from('users')
-        .select('id')
-        .eq('email', SYSTEM_EMAIL)
-        .is('deleted_at', null)
-        .limit(1)
-        .single();
-
-      if (systemUser && !userError) {
-        systemUserId = systemUser.id;
-        console.log(`Found system user via email: ${systemUserId}`);
-      } else {
-        // Strategy 2: Look for any ww_admin system role
-        const { data: adminRole, error: roleError } = await supabase
-          .from('user_roles')
-          .select('user_id')
-          .eq('role', 'ww_admin')
-          .eq('scope_type', 'system')
-          .is('deleted_at', null)
-          .order('created_at', { ascending: true }) // Ensure deterministic selection
-          .limit(1)
-          .single();
-
-        if (adminRole && !roleError) {
-          systemUserId = adminRole.user_id;
-          console.log(`Found system user via ww_admin role: ${systemUserId}`);
-        } else {
-          // Strategy 3: Fallback to hardcoded UUID (with warning)
-          systemUserId = FALLBACK_USER_ID;
-          console.warn(`⚠️  WARNING: Using hardcoded system user ID as fallback: ${systemUserId}`);
-          console.warn('Consider setting SYSTEM_USER_ID environment variable or ensuring a system user exists.');
-        }
-      }
-    } else {
-      console.log(`Using provided SYSTEM_USER_ID: ${systemUserId}`);
-    }
-
-    // Generate appropriate firmware name based on type
-    let firmwareName;
-    if (FIRMWARE_TYPE === 'config') {
-      firmwareName = `Config Firmware ${FIRMWARE_VERSION}`;
-    } else if (FIRMWARE_TYPE === 'ble') {
-      firmwareName = `BLE Firmware ${FIRMWARE_VERSION}`;
-    } else if (FIRMWARE_TYPE === 'himax') {
-      firmwareName = `Himax Firmware ${FIRMWARE_VERSION}`;
-    } else {
-      firmwareName = `${FIRMWARE_TYPE.toUpperCase()} Firmware ${FIRMWARE_VERSION}`;
-    }
-
-    const { data: insertData, error: insertError } = await supabase
+    // Check if a record with this (type, version) already exists
+    const { data: existing, error: findError } = await supabase
       .from('firmware')
-      .insert({
-        name: firmwareName,
-        version: FIRMWARE_VERSION,
-        type: FIRMWARE_TYPE,
-        location_path: storagePath,
-        file_size_bytes: fileSize,
-        release_notes: RELEASE_NOTES,
-        is_active: true,
-        modified_by: systemUserId
-      })
-      .select();
+      .select('id')
+      .eq('type', FIRMWARE_TYPE)
+      .eq('version', FIRMWARE_VERSION)
+      .is('deleted_at', null)
+      .limit(1)
+      .maybeSingle();
 
-    if (insertError) throw insertError;
+    if (findError) throw findError;
 
-    console.log('Firmware uploaded and registered successfully!');
-    console.log(`Version: ${FIRMWARE_VERSION}`);
-    console.log(`Storage Path: ${storagePath}`);
-    console.log(insertData);
+    let result;
+    if (existing) {
+      console.log(`Firmware (${FIRMWARE_TYPE}, ${FIRMWARE_VERSION}) already exists — updating record ${existing.id}...`);
+      const { data, error } = await supabase
+        .from('firmware')
+        .update({
+          name: record.name,
+          location_path: record.location_path,
+          file_size_bytes: record.file_size_bytes,
+          release_notes: record.release_notes,
+          is_active: record.is_active,
+          modified_by: record.modified_by,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', existing.id)
+        .select();
+
+      if (error) throw error;
+      result = data;
+      console.log('✅ Existing firmware record updated.');
+    } else {
+      console.log(`Registering new firmware (${FIRMWARE_TYPE}, ${FIRMWARE_VERSION})...`);
+      const { data, error } = await supabase
+        .from('firmware')
+        .insert(record)
+        .select();
+
+      if (error) throw error;
+      result = data;
+      console.log('✅ New firmware record inserted.');
+    }
+
+    console.log(`  Version:       ${FIRMWARE_VERSION}`);
+    console.log(`  Name:          ${firmwareName}`);
+    console.log(`  Storage Path:  ${storagePath}`);
+    console.log(`  File Size:     ${fileSize} bytes`);
+    console.log(`  Release Notes: ${RELEASE_NOTES.split('\n')[0]}...`);
+    console.log(result);
 
   } catch (error) {
     console.error('Deployment failed:', error);
     process.exit(1);
   }
+}
+
+/**
+ * Resolve the system user ID using multiple fallback strategies.
+ */
+async function resolveSystemUserId() {
+  let systemUserId = process.env.SYSTEM_USER_ID;
+
+  if (systemUserId) {
+    console.log(`Using provided SYSTEM_USER_ID: ${systemUserId}`);
+    return systemUserId;
+  }
+
+  console.log('SYSTEM_USER_ID not provided, querying database for system user...');
+
+  // Strategy 1: Look for user with system email
+  const { data: systemUser, error: userError } = await supabase
+    .from('users')
+    .select('id')
+    .eq('email', SYSTEM_EMAIL)
+    .is('deleted_at', null)
+    .limit(1)
+    .single();
+
+  if (systemUser && !userError) {
+    console.log(`Found system user via email: ${systemUser.id}`);
+    return systemUser.id;
+  }
+
+  // Strategy 2: Look for any ww_admin system role
+  const { data: adminRole, error: roleError } = await supabase
+    .from('user_roles')
+    .select('user_id')
+    .eq('role', 'ww_admin')
+    .eq('scope_type', 'system')
+    .is('deleted_at', null)
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .single();
+
+  if (adminRole && !roleError) {
+    console.log(`Found system user via ww_admin role: ${adminRole.user_id}`);
+    return adminRole.user_id;
+  }
+
+  // Strategy 3: Fallback to hardcoded UUID
+  console.warn(`⚠️  WARNING: Using hardcoded system user ID as fallback: ${FALLBACK_USER_ID}`);
+  console.warn('Consider setting SYSTEM_USER_ID environment variable or ensuring a system user exists.');
+  return FALLBACK_USER_ID;
+}
+
+/**
+ * Generate a descriptive firmware name based on type and version.
+ */
+function generateFirmwareName(type, version) {
+  const typeLabels = {
+    himax: 'Himax AI Processor',
+    ble: 'BLE Nordic',
+    config: 'Config',
+  };
+  const label = typeLabels[type] || type.toUpperCase();
+  return `${label} Firmware ${version}`;
 }
 
 uploadFirmware();

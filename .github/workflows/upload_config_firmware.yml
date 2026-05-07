@@ -6,17 +6,44 @@ on:
       - main
     paths:
       - 'EPII_CM55M_APP_S/app/ww_projects/ww500_md/MANIFEST/**'
-  workflow_dispatch: # Allow manual triggering
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target Supabase environment'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - production
 
 jobs:
-  upload-config-firmware:
+  setup:
     runs-on: ubuntu-latest
+    outputs:
+      environment: ${{ steps.env_select.outputs.ENVIRONMENT }}
+    steps:
+      - name: Resolve Environment
+        id: env_select
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            ENVIRONMENT="${{ inputs.environment }}"
+          else
+            ENVIRONMENT="production"
+          fi
+          echo "ENVIRONMENT=$ENVIRONMENT" >> $GITHUB_OUTPUT
+
+  upload-config-firmware:
+    needs: setup
+    runs-on: ubuntu-latest
+    environment: ${{ needs.setup.outputs.environment }}
     
     env:
-      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-      SYSTEM_EMAIL: ${{ secrets.SYSTEM_EMAIL }}
-      FALLBACK_USER_ID: ${{ secrets.FALLBACK_USER_ID }}
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL || secrets.SUPABASE_URL_DEV }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY || secrets.SUPABASE_SERVICE_ROLE_KEY_DEV }}
+      SYSTEM_EMAIL: ${{ secrets.SYSTEM_EMAIL || secrets.SYSTEM_EMAIL_DEV }}
+      FALLBACK_USER_ID: ${{ secrets.FALLBACK_USER_ID || secrets.FALLBACK_USER_ID_DEV }}
 
     steps:
       - name: Checkout Repository

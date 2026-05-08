@@ -52,7 +52,7 @@ typedef enum {
 // Deafult values of Operational Parameters
 // todo THESE
 #define NUMPICTURESTOGRAB	1
-#define PICTUREINTERVAL		1000
+#define PICTUREINTERVAL		500
 //#define	TIMELAPSEINTERVAL	1 * 60	// time in seconds
 #define	TIMELAPSEINTERVAL	0	// 0 disables timelapse
 

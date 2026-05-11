@@ -12,6 +12,7 @@
 # embedded environments.
 
 import struct
+import argparse
 
 EXIF_TAGS = {
     0x010F: "Make",
@@ -23,6 +24,7 @@ EXIF_TAGS = {
     0x9004: "Datetime Create",
     0x0132: "DateTime",
     0x9286: "UserComment",
+    0x927C: "MakerNote",
     0xC000: "Custom Data",
     0xF200: "Deployment ID",
     0x8769: "ExifIFDPointer",
@@ -46,8 +48,15 @@ TYPE_SIZES = {
     10: 8,  # SRATIONAL
 }
 
-def format_value(value, type_id):
+def format_value(value, type_id, tag_id=0):
     if isinstance(value, bytes):
+        if tag_id == 0x9286:
+            # UserComment: first 8 bytes are charset identifier (e.g. b'ASCII\x00\x00\x00')
+            text = value[8:] if len(value) >= 8 else value
+            return text.decode('ascii', errors='replace').strip('\x00').strip()
+        if tag_id in (0x927C, 0xF200):
+            # MakerNote and Deployment ID are written as plain ASCII by this firmware
+            return value.decode('ascii', errors='replace').strip('\x00').strip()
         if type_id == 2:  # ASCII
             try:
                 return value.decode('ascii', errors='replace').strip('\x00')
@@ -88,6 +97,7 @@ def parse_ifd(fp, base_offset, ifd_offset, endian, check_next_ifd=True):
             return
 
         tag, type_id, count, value_offset = struct.unpack(endian + 'HHII', entry)
+        next_entry_pos = fp.tell()  # save before any sub-IFD descent moves fp
         type_size = TYPE_SIZES.get(type_id, 1)
         total_size = type_size * count
 
@@ -115,15 +125,17 @@ def parse_ifd(fp, base_offset, ifd_offset, endian, check_next_ifd=True):
 
         print(f"  Tag: {safe_tag_name:<22} (0x{tag:04X})")
         print(f"    Type: {type_id}  Count: {count}  Offset: 0x{entry_offset:08X}")
-        print(f"    Value: {format_value(value, type_id)}")
+        print(f"    Value: {format_value(value, type_id, tag_id=tag)}")
 
-        # Auto-follow pointer tags
+        # Auto-follow pointer tags; restore fp afterwards so remaining IFD entries are not missed
         if tag == 0x8825:  # GPSInfoIFDPointer
             print(f"    --> Following GPSInfoIFDPointer to 0x{value_offset:08X}")
             parse_ifd(fp, base_offset, value_offset, endian, check_next_ifd=False)
+            fp.seek(next_entry_pos)
         elif tag == 0x8769:  # ExifIFDPointer
             print(f"    --> Following ExifIFDPointer to 0x{value_offset:08X}")
             parse_ifd(fp, base_offset, value_offset, endian, check_next_ifd=False)
+            fp.seek(next_entry_pos)
 
     # Parse next IFD in chain (if any)
     if check_next_ifd:
@@ -207,8 +219,22 @@ def dump_jpeg_with_exif(path):
                 break
 
 if __name__ == "__main__":
-    import sys
-    if len(sys.argv) < 2:
-        print("Usage: python jpegdump_exif_ascii.py <image.jpg>")
-    else:
-        dump_jpeg_with_exif(sys.argv[1])
+    parser = argparse.ArgumentParser(
+        description=(
+            "Dump EXIF metadata from a JPEG file to the console.\n"
+            "\n"
+            "Parses the APP1 segment, walks IFD0 and any linked sub-IFDs\n"
+            "(Exif, GPS), and prints every tag with its type, file offset,\n"
+            "and decoded value.  Unknown tags are shown with their hex ID.\n"
+            "\n"
+            "Tags with special decoding:\n"
+            "  UserComment  (0x9286) -- 8-byte charset prefix stripped, rest shown as ASCII\n"
+            "  MakerNote    (0x927C) -- decoded as plain ASCII\n"
+            "  Deployment ID (0xF200) -- decoded as plain ASCII\n"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="Example:  python jpegdump_exif.py image.jpg",
+    )
+    parser.add_argument("image", help="Path to the JPEG file to inspect")
+    args = parser.parse_args()
+    dump_jpeg_with_exif(args.image)

@@ -15,6 +15,10 @@ EXIF_TAGS = {
     0x0110: "Model",
     0x0132: "DateTime",
     0x8769: "ExifIFDPointer",
+    0x9003: "DatetimeOriginal",
+    0x9004: "DatetimeCreate",
+    0x9286: "UserComment",
+    0x927C: "MakerNote",
     0x8825: "GPSInfoIFDPointer",
     0x0001: "GPSLatitudeRef",
     0x0002: "GPSLatitude",
@@ -22,15 +26,26 @@ EXIF_TAGS = {
     0x0004: "GPSLongitude",
     0x0005: "GPSAltitudeRef",
     0x0006: "GPSAltitude",
+    0xF200: "DeploymentID",
 }
+
+# These tags are structural pointers used for parser navigation; excluded from CSV output
+POINTER_TAGS = {0x8769, 0x8825}
 
 TYPE_SIZES = {
     1: 1, 2: 1, 3: 2, 4: 4,
     5: 8, 7: 1, 9: 4, 10: 8,
 }
 
-def format_value(value, type_id):
+def format_value(value, type_id, tag_id=0):
     if isinstance(value, bytes):
+        if tag_id == 0x9286:
+            # UserComment: first 8 bytes are charset code (e.g. "ASCII\0\0\0"), rest is text
+            text = value[8:] if len(value) >= 8 else value
+            return text.decode('ascii', errors='replace').strip('\x00').strip()
+        if tag_id in (0x927C, 0xF200):
+            # MakerNote and DeploymentID are written as ASCII by this firmware
+            return value.decode('ascii', errors='replace').strip('\x00').strip()
         if type_id == 2:  # ASCII
             try:
                 return value.decode('ascii', errors='replace').strip('\x00')
@@ -65,6 +80,7 @@ def parse_ifd(fp, base_offset, ifd_offset, endian, tags, collected, check_next_i
         if len(entry) < 12:
             return
         tag, type_id, count, value_offset = struct.unpack(endian + 'HHII', entry)
+        next_entry_pos = fp.tell()  # sub-IFD recursion moves fp; save to restore afterwards
         tag_name = EXIF_TAGS.get(tag)
         type_size = TYPE_SIZES.get(type_id, 1)
         total_size = type_size * count
@@ -82,14 +98,16 @@ def parse_ifd(fp, base_offset, ifd_offset, endian, tags, collected, check_next_i
                 value = b''
             fp.seek(cur)
 
-        if tag_name:
-            collected[tag_name] = format_value(value, type_id)
+        if tag_name and tag not in POINTER_TAGS:
+            collected[tag_name] = format_value(value, type_id, tag_id=tag)
 
         # Handle pointer tags
         if tag == 0x8825:  # GPSInfoIFDPointer
             parse_ifd(fp, base_offset, value_offset, endian, tags, collected, check_next_ifd=False)
+            fp.seek(next_entry_pos)
         elif tag == 0x8769:  # ExifIFDPointer
             parse_ifd(fp, base_offset, value_offset, endian, tags, collected, check_next_ifd=False)
+            fp.seek(next_entry_pos)
 
     if check_next_ifd:
         next_ifd = fp.read(4)
@@ -173,8 +191,9 @@ def main():
                     "FileTime": timestamp.strftime('%Y-%m-%d %H:%M') if timestamp else ''
                 }
 
-                for key in EXIF_TAGS.values():
-                    row[key] = tags.get(key, '')
+                for k, key in EXIF_TAGS.items():
+                    if k not in POINTER_TAGS:
+                        row[key] = tags.get(key, '')
 
                 image_rows.append(row)
 
@@ -184,8 +203,8 @@ def main():
                         log_entries.append(f"  {k}: {v}")
                     log_entries.append("")
 
-    # Determine column order
-    fieldnames = ["FileName", "SizeKB", "FileTime"] + list(EXIF_TAGS.values())
+    # Determine column order; exclude structural pointer tags from output
+    fieldnames = ["FileName", "SizeKB", "FileTime"] + [v for k, v in EXIF_TAGS.items() if k not in POINTER_TAGS]
     write_csv(args.output_csv, image_rows, fieldnames)
 
     if args.output_txt:

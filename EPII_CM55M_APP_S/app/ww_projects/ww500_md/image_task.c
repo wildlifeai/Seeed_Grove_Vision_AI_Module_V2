@@ -2984,7 +2984,36 @@ void image_sleepNow(void) {
     	timelapseDelay = fatfs_getOperationalParameter(OP_PARAMETER_TIMELAPSE_INTERVAL);
     }
 
-    if (timelapseDelay > 0) {
+	// CLI command might have requested this after firmware update
+	if (app_getResetRequest()) {
+#if 0
+		XP_LT_RED;
+		xprintf(">>> Resetting\n\n");
+		XP_LT_GREY;	// Grey so the bootloader messages are printed in grey, on exit from DPD
+
+		// does not work
+		vTaskDelay(pdMS_TO_TICKS(300));
+		// does not return
+		NVIC_SystemReset();
+#else
+		XP_LT_RED;
+		xprintf(">>> Reset by watchdog\n\n");
+		XP_LT_GREY;	// Grey so the bootloader messages are printed in grey, on exit from DPD
+
+#define WATCH_DOG_TIMEOUT_TH	(100) //ms
+		//watch dog start
+		WATCHDOG_CFG_T wdg_cfg;
+		wdg_cfg.period = WATCH_DOG_TIMEOUT_TH;
+		wdg_cfg.ctrl = WATCHDOG_CTRL_CPU;
+		wdg_cfg.state = WATCHDOG_STATE_DC;
+		wdg_cfg.type = WATCHDOG_RESET; // or WATCHDOG_INT;
+		//hx_drv_watchdog_start(WATCHDOG_ID_0, &wdg_cfg , WDG_Reset_ISR_CB);
+		hx_drv_watchdog_start(WATCHDOG_ID_0, &wdg_cfg , NULL);
+		xprintf("hx_drv_watchdog_start\n");
+#endif
+	}
+
+	else if (timelapseDelay > 0) {
         // Enable wakeup on WAKE pin and timer
         sleep_mode_enter_dpd(SLEEPMODE_WAKE_SOURCE_WAKE_PIN | SLEEPMODE_WAKE_SOURCE_RTC,
                              timelapseDelay, false); // Does not return

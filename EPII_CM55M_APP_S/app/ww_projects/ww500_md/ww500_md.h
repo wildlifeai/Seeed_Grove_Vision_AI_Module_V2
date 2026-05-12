@@ -96,6 +96,10 @@ uint32_t app_getElapsedMs(TickType_t startTime);
 
 void app_onInactivityDetection(void);
 
+void app_setResetRequest(bool resetPlease);
+
+bool app_getResetRequest(void);
+
 #ifdef __cplusplus
 }
 #endif

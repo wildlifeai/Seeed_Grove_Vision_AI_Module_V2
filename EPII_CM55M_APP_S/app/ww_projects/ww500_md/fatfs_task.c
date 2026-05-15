@@ -679,6 +679,7 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 		break;
 
 	case APP_MSG_FATFSTASK_OPEN_FILE:
+		// 1/3 commands for sending files from the app to the SD card
 		// Open (create/truncate) a file for incremental writing.
 		// The file handle is kept open until APP_MSG_FATFSTASK_CLOSE_FILE.
 		if (transferFileOpen) {
@@ -713,6 +714,7 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 		break;
 
 	case APP_MSG_FATFSTASK_APPEND_FILE: {
+		// 2/3 commands for sending files from the app to the SD card
 		// Append a chunk to the currently open transfer file.
 		UINT bw = 0;
 
@@ -737,6 +739,7 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 	}
 
 	case APP_MSG_FATFSTASK_CLOSE_FILE:
+		// 3/3 commands for sending files from the app to the SD card
 		// Close the transfer file.  If deleteOnClose is set, delete it afterwards.
 		if (transferFileOpen) {
 			res = f_close(&transferFile);
@@ -746,15 +749,16 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 			res = FR_OK;
 		}
 
-		if (fileOp->deleteOnClose && fileOp->fileName != NULL) {
-			FRESULT delRes = f_unlink(fileOp->fileName);
-			if (delRes != FR_OK) {
-				xprintf("Warning: failed to delete '%s' (err %d)\n", fileOp->fileName, delRes);
-			}
-			else {
-				xprintf("Deleted '%s'\n", fileOp->fileName);
-			}
-		}
+// Claude wrote this code. There is no way that we will want to delete the file we have just transferred.
+//		if (fileOp->deleteOnClose && fileOp->fileName != NULL) {
+//			FRESULT delRes = f_unlink(fileOp->fileName); //delete file
+//			if (delRes != FR_OK) {
+//				xprintf("Warning: failed to delete '%s' (err %d)\n", fileOp->fileName, delRes);
+//			}
+//			else {
+//				xprintf("Deleted '%s'\n", fileOp->fileName);
+//			}
+//		}
 
 		fileOp->res = res;
 

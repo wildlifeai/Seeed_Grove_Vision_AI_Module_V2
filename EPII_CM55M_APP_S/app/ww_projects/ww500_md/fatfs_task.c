@@ -679,6 +679,8 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 		break;
 
 	case APP_MSG_FATFSTASK_OPEN_FILE:
+		// 1/3 commands for sending files from the app to the SD card
+
 		// Open (create/truncate) a file for incremental writing.
 		// The file handle is kept open until APP_MSG_FATFSTASK_CLOSE_FILE.
 		if (transferFileOpen) {
@@ -713,6 +715,8 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 		break;
 
 	case APP_MSG_FATFSTASK_APPEND_FILE: {
+		// 2/3 commands for sending files from the app to the SD card
+
 		// Append a chunk to the currently open transfer file.
 		UINT bw = 0;
 
@@ -737,6 +741,8 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 	}
 
 	case APP_MSG_FATFSTASK_CLOSE_FILE:
+		// 3/3 commands for sending files from the app to the SD card
+
 		// Close the transfer file.  If deleteOnClose is set, delete it afterwards.
 		if (transferFileOpen) {
 			res = f_close(&transferFile);

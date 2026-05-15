@@ -261,7 +261,9 @@ static BaseType_t prvSetOpParam(char *pcWriteBuffer, size_t xWriteBufferLen, con
 static BaseType_t prvGetOpParam(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 
 #if defined(USE_HM0360)
+
 static BaseType_t prvMd(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) ;
+static BaseType_t prvReinitHM0360(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) ;
 #endif // defined(USE_HM0360) || defined(USE_HM0360_MD)
 
 // A few commands to make the AI processor consistent with the MKL62BA
@@ -532,6 +534,8 @@ static const CLI_Command_Definition_t xGetSelfTest = {
 	0			/* No parameters expected */
 };
 
+
+
 #if defined(USE_HM0360)
 /* Structure that defines the "md" command line command. */
 static const CLI_Command_Definition_t xMd = {
@@ -540,6 +544,15 @@ static const CLI_Command_Definition_t xMd = {
 	prvMd, /* The function to run. */
 	1		 /* One parameter expected */
 };
+
+/* Structure that defines the "inithm0360" command line command. */
+static const CLI_Command_Definition_t xReinitHM0360 = {
+	"inithm0360", /* The command string to type. */
+	"inithm0360:\r\n Reinitialise HM0360\r\n",
+	prvReinitHM0360, /* The function to run. */
+	0			/* No parameters expected */
+};
+
 #endif // defined(USE_HM0360) || defined(USE_HM0360_MD)
 
 /********************************** Private Functions - for CLI commands *************************************/
@@ -654,12 +667,9 @@ static BaseType_t prvReset(char *pcWriteBuffer, size_t xWriteBufferLen, const ch
 	(void)xWriteBufferLen;
 	configASSERT(pcWriteBuffer);
 
-	XP_RED;
-	xprintf("Forcing reset.\r\n");
-	XP_WHITE;
-	vTaskDelay(pdMS_TO_TICKS(300));
+	cli_append(&pcWriteBuffer, &xWriteBufferLen, "Forcing reset soon.");
 
-	NVIC_SystemReset();
+	app_setResetRequest(true);
 
 	/* There is no more data to return after this single string, so return pdFALSE. */
 	return pdFALSE;
@@ -1701,6 +1711,31 @@ static BaseType_t prvMd(char *pcWriteBuffer, size_t xWriteBufferLen, const char 
 
 	return pdFALSE;
 }
+
+/**
+ * Reinitialise HM0360 registers
+ *
+ */
+static BaseType_t prvReinitHM0360(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) {
+
+	HX_CIS_ERROR_E ret;
+
+	(void)pcCommandString;
+	(void)xWriteBufferLen;
+	configASSERT(pcWriteBuffer);
+
+	ret = hm0360_md_reInitialise();
+	if (ret == HX_CIS_NO_ERROR) {
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "OK");
+	}
+	else {
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "Error.");
+	}
+
+	/* There is no more data to return after this single string, so return pdFALSE. */
+	return pdFALSE;
+}
+
 #endif // defined(USE_HM0360) || defined(USE_HM0360_MD)
 
 /********************************** Private Functions - Other *************************************/
@@ -2151,8 +2186,10 @@ static void vRegisterCLICommands(void)
 	FreeRTOS_CLIRegisterCommand(&xGetOpParam);	// Gets an Operational Parameter
 	FreeRTOS_CLIRegisterCommand(&xGetSelfTest);	// Gets self test bits
 
+
 #if defined(USE_HM0360)
 	FreeRTOS_CLIRegisterCommand(&xMd);	// Sets motion detection sensitivity
+	FreeRTOS_CLIRegisterCommand(&xReinitHM0360);	// Reinitialise HM0360 long register list
 #endif // defined(USE_HM0360) || defined(USE_HM0360_MD)
 
 #ifdef WW500_C00

@@ -119,6 +119,9 @@ static char versionString[64]; // Make sure the buffer is large enough
 Barrier_t startupBarrier;
 Barrier_t shutdownBarrier;  // Object that calls a function when all tasks are ready to shut down
 
+// If set true then the processor can reset instead of entering DPD.
+static bool resetRequested = false;
+
 /*************************************** Local routine prototypes  *************************************/
 
 static void pinmux_init(void);
@@ -575,6 +578,26 @@ uint32_t app_getElapsedMs(TickType_t startTime) {
     elapsedTime = presentTime - startTime;
 
     return (elapsedTime * 1000) / configTICK_RATE_HZ;
+}
+
+/**
+ * Request a reset instead of entering DPD.
+ *
+ * Set by a CLI command after updating the firmware
+ *
+ * bool resetPlease - reset if true
+ */
+void app_setResetRequest(bool resetPlease) {
+	resetRequested = resetPlease;
+}
+
+/**
+ * Returns true if a reset is requested instead of entering DPD
+ *
+ * @return true if reset is requested.
+ */
+bool app_getResetRequest(void) {
+	return resetRequested;
 }
 
 /*************************************** Main()  *************************************/

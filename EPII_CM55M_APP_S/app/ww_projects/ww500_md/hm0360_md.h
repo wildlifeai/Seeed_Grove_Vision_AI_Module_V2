@@ -79,6 +79,9 @@ void hm0360_md_printGrid(uint8_t *roiOut, uint16_t numBlocks, char *msg, uint16_
 // Configure the HM0360 STROBE pin which can drive the flash cct
 HX_CIS_ERROR_E hm0360_md_configureStrobe(uint8_t val);
 
+// Re-program the HM0360 with the long register list
+HX_CIS_ERROR_E hm0360_md_reInitialise(void);
+
 // Replaced by hm0360_md_prepare()
 //HX_CIS_ERROR_E hm0360_md_enableMD(uint16_t mdFrameInterval);
 

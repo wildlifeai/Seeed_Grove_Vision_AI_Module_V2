@@ -188,6 +188,9 @@
 // Buffer for EXIF comment
 #define EXIF_COMMENT_LENGTH 256
 
+// Define this to add extra EXIF field (AE gain values)
+#define EXIF_MAKER_NOTES
+
 // Tag IDs enum
 typedef enum
 {
@@ -207,6 +210,7 @@ typedef enum
     TAG_GPS_ALTITUDE 		= 0x0006,
     TAG_NN_DATA 			= 0xC000,               // Neural network output array - arbitrary custom tag ID
     TAG_USER_COMMENT 		= 0x9286,      // Standard EXIF UserComment tag for summary text
+	TAG_MAKER_NOTE			= 0x927c,		// maker defined binary
     TAG_DEPLOYMENT_ID 		= 0xF200,		   // Deployment ID (matches ww130_cli convention)
     TAG_WW_CONFIDENCE_BASE 	= 0xF300	   // Base for confidence tags (0xF300, 0xF301, ...)
 } ExifTagID;
@@ -257,6 +261,7 @@ static void changeEnableState(bool setEnabled);
 static void processNNOutput(int8_t * outCategories, uint8_t classCount);
 
 static void prepareJpegFile(int8_t * outCategories, uint8_t classCount, fileBufferInfo_t * extraBlock);
+
 
 #ifdef INVESTIGATE_BMP
 #define BMP_GRAY8_HEADER_SIZE 1078
@@ -386,6 +391,11 @@ static uint8_t *tiff_start;
 
 // Measure interval between events
 static TickType_t startTime;
+
+#if defined(USE_HM0360) || defined(USE_HM0360_MD)
+	// HM0360 AE registers
+    HM0360_GAIN_T gain;
+#endif
 
 /********************************** Local Functions  *************************************/
 
@@ -823,10 +833,6 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
 
     event = img_recv_msg.msg_event;
     send_msg.destination = NULL;
-
-#if defined(USE_HM0360) || defined(USE_HM0360_MD)
-    HM0360_GAIN_T gain;
-#endif
 
     switch (event) {
 
@@ -1977,6 +1983,7 @@ static void sleepWhenPossible(void) {
  * @param extraBlock - structure for the second buffer
  */
 static void prepareJpegFile(int8_t * outCategories, uint8_t classCount, fileBufferInfo_t * extraBlock) {
+
 	uint32_t exifLength = 0;
 	uint32_t jpegBuffer;
 	uint32_t jpegLength;
@@ -2226,6 +2233,7 @@ static void addIFD(ExifTagID tagID, uint8_t *entry_ptr, void *tagData) {
     case TAG_DEPLOYMENT_ID:
     case TAG_GPS_LATITUDE_REF:
     case TAG_GPS_LONGITUDE_REF:
+    case TAG_MAKER_NOTE:	// Although TAG_MAKER_NOTE is designed for binary I will send a string
     {
         char *ascii = (char *)tagData;
         uint32_t length = strlen(ascii) + 1; // include null terminator
@@ -2288,6 +2296,7 @@ static void addIFD(ExifTagID tagID, uint8_t *entry_ptr, void *tagData) {
         entry_ptr[8] = value;
         break;
     }
+
     case TAG_NN_DATA:
     {
         // For NN output we use a byte array, with the first entry being the number of bytes that follow
@@ -2462,7 +2471,7 @@ static void create_gps_ifd(uint8_t *gps_ifd_start) {
 /**
  * Builds a valid EXIF data structure, including APP1 tag
  *
- * This particular example has soem hard-coded tags to add, including the X&Y resolutions.
+ * This particular example has some hard-coded tags to add, including the X&Y resolutions.
  *
  */
 static uint16_t build_exif_segment(int8_t *outCategories, uint8_t categoriesCount) {
@@ -2558,6 +2567,10 @@ static uint16_t build_exif_segment(int8_t *outCategories, uint8_t categoriesCoun
         dynamic_ifd_count++; // Add one entry for TAG_USER_COMMENT
 	}
 
+#ifdef EXIF_MAKER_NOTES
+	dynamic_ifd_count++; // Add one entry for Maker Notes
+#endif // EXIF_MAKER_NOTES
+
     // Prepare the timestamp
     exif_utc_get_rtc_as_exif_string(timestamp, sizeof(timestamp));
 
@@ -2635,6 +2648,20 @@ static uint16_t build_exif_segment(int8_t *outCategories, uint8_t categoriesCoun
     addIFD(TAG_DATETIME_ORIGINAL, ifd_start + (entry++ * 12), timestamp);
     addIFD(TAG_CREATE_DATE, ifd_start + (entry++ * 12), timestamp);
     addIFD(TAG_NN_DATA, ifd_start + (entry++ * 12), nnData); // Neural network output (raw, for backwards compatibility)
+
+#ifdef EXIF_MAKER_NOTES
+    // say 1234, 2345, 123, 123, Y say 32
+#define MAKERDATALEN 32
+    char makerNoteData[MAKERDATALEN];
+    snprintf(makerNoteData, MAKERDATALEN, "%d, %d, %d, %d, %c",
+    		gain.integration,
+			gain.analogGain,
+			gain.digitalGain,
+			gain.aeMean,
+			(gain.aeConverged == 1)?'Y':'N');
+
+    addIFD(TAG_MAKER_NOTE, ifd_start + (entry++ * 12), makerNoteData); // Auto-exposure registers
+#endif // EXIF_MAKER_NOTES
 
 #ifdef ENABLE_EXIF_CONFIDENCE
     // Add UserComment with model results if available
@@ -2957,7 +2984,36 @@ void image_sleepNow(void) {
     	timelapseDelay = fatfs_getOperationalParameter(OP_PARAMETER_TIMELAPSE_INTERVAL);
     }
 
-    if (timelapseDelay > 0) {
+	// CLI command might have requested this after firmware update
+	if (app_getResetRequest()) {
+#if 0
+		XP_LT_RED;
+		xprintf(">>> Resetting\n\n");
+		XP_LT_GREY;	// Grey so the bootloader messages are printed in grey, on exit from DPD
+
+		// does not work
+		vTaskDelay(pdMS_TO_TICKS(300));
+		// does not return
+		NVIC_SystemReset();
+#else
+		XP_LT_RED;
+		xprintf(">>> Reset by watchdog\n\n");
+		XP_LT_GREY;	// Grey so the bootloader messages are printed in grey, on exit from DPD
+
+#define WATCH_DOG_TIMEOUT_TH	(100) //ms
+		//watch dog start
+		WATCHDOG_CFG_T wdg_cfg;
+		wdg_cfg.period = WATCH_DOG_TIMEOUT_TH;
+		wdg_cfg.ctrl = WATCHDOG_CTRL_CPU;
+		wdg_cfg.state = WATCHDOG_STATE_DC;
+		wdg_cfg.type = WATCHDOG_RESET; // or WATCHDOG_INT;
+		//hx_drv_watchdog_start(WATCHDOG_ID_0, &wdg_cfg , WDG_Reset_ISR_CB);
+		hx_drv_watchdog_start(WATCHDOG_ID_0, &wdg_cfg , NULL);
+		xprintf("hx_drv_watchdog_start\n");
+#endif
+	}
+
+	else if (timelapseDelay > 0) {
         // Enable wakeup on WAKE pin and timer
         sleep_mode_enter_dpd(SLEEPMODE_WAKE_SOURCE_WAKE_PIN | SLEEPMODE_WAKE_SOURCE_RTC,
                              timelapseDelay, false); // Does not return

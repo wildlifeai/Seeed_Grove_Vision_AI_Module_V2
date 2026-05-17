@@ -1,6 +1,47 @@
 # WW500 FatFS Behaviour Analysis
 #### CGP / Claude — 16 May 2026
 
+## Executive Summary
+
+This work was triggered by two problems: a 64 GB SD card that refused to mount, and JPEG
+file writes that took ~200 ms each — too slow for practical field use.
+
+**Card failure:** The 64 GB card was found to be counterfeit.  It correctly enters SPI idle
+state and passes the CMD8 interface condition check, but stops driving MISO after a single
+CMD55/ACMD41 exchange — behaviour that violates the SD specification and cannot be worked
+around in software.  The card also presents as 16 GB FAT32 on a nominally 64 GB body.
+Standard 32 GB SDHC cards from reputable suppliers (SanDisk, Samsung) work correctly.
+
+**Write speed — results achieved:**
+
+| Configuration | Write time |
+|---|---|
+| Original | ~200 ms |
+| After polling fix | ~50 ms |
+| After SPI clock increase | ~40 ms |
+
+Three changes account for the improvement:
+
+- **Polling loop fix** (~200 ms → ~50 ms): `wait_ready` and `rcvr_datablock` had a fixed
+  1 ms `DELAY()` on every poll iteration.  Replacing this with a real-time timeout driven by
+  `xTaskGetTickCount()` lets the code poll at SPI speed rather than at 1 kHz.
+- **SPI clock increase** (~50 ms → ~40 ms): `SPI_CLOCK_FAST` raised from 12 MHz to 25 MHz;
+  the hardware divider rounds this to 24 MHz.  The modest gain confirms that card NAND
+  programming latency — not raw SPI transfer time — is now the dominant cost.
+- **EXIF sector alignment** (eliminates one wasted write per file): the EXIF header was
+  420 bytes, causing FatFS to split the first write at a non-sector boundary.  Padding the
+  EXIF to a 512-byte multiple with a JPEG Comment segment (harmless to all decoders) lets
+  FatFS batch the entire JPEG body in a single multi-block CMD25 transaction.
+
+**Further options identified but not implemented:**
+
+- **8-byte burst polling in `wait_ready`**: amortise CMSIS driver call overhead across 8
+  bytes per iteration.  Small gain expected — NAND programming time dominates.
+- **Suppress FSINFO write (`FF_FS_NOFSINFO = 1`)**: saves one CMD24 sector write per file
+  close at the cost of a potentially stale free-cluster count after an unclean shutdown.
+
+---
+
 ## Scope
 
 This document covers two related issues in the FatFS SPI-mode SD card stack on the WW500

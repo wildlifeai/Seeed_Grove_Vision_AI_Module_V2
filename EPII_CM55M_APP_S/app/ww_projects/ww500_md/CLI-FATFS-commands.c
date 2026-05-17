@@ -43,6 +43,7 @@
 
 #include "directory_manager.h"
 #include "xip_manager.h"
+#include "fatfs_task.h"
 
 /*************************************** Definitions *******************************************/
 
@@ -154,13 +155,14 @@ static const CLI_Command_Definition_t xTxFile = {
     1              /* 1 parameter is expected. */
 };
 
-// Structure that defines the pwd command line command, which prints the current directory.
+// Structure that defines the 'unmount' command line command, which prints the current directory.
 static const CLI_Command_Definition_t xUnmount = {
     "unmount",         /* The command string to type. */
     "unmount:\r\n Unmount (save writes?)\r\n",
     prvUnmountCommand, /* The function to run. */
     0              /* No parameters are expected. */
 };
+
 
 // Structure that defines the dump-sel command, which prints the flash slot selector sector.
 static const CLI_Command_Definition_t xDumpSel = {
@@ -710,6 +712,7 @@ static BaseType_t prvUnmountCommand( char * pcWriteBuffer,
 	/* There is no more data to return after this single string, so return pdFALSE. */
 	return pdFALSE;
 }
+
 
 /**
  * Print the first 32 bytes of the flash slot selector sector to the console.

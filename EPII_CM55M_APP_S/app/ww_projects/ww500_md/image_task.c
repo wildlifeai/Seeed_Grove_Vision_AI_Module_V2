@@ -1411,16 +1411,20 @@ static APP_MSG_DEST_T flagUnexpectedEvent(APP_MSG_T img_recv_msg)
  * Placed here as a separate routine as it is called from 2 places.
  */
 static void captureSequenceComplete(uint32_t accumulatedTime) {
-    // Current captures sequence completed
+    uint16_t averageTime;
+
+    averageTime = (g_captures_to_take == 0) ? 0 : (accumulatedTime / g_captures_to_take);
+
     XP_GREEN;
     xprintf("Current captures completed: %d\n", g_captures_to_take);
-    xprintf("Average file write time %dms\n", accumulatedTime / g_captures_to_take);
+    xprintf("Average file write time %dms\n", averageTime);
+
     xprintf("Total frames captured since last reset: %d\n", g_frames_total);
     XP_WHITE;
 
     // Inform BLE processor
     snprintf(msgToMaster, MSGTOMASTERLEN, "Captured %d images. Last is %s (File write %dms avg.)",
-             (int)g_captures_to_take, lastImageFileName, (int) (accumulatedTime / g_captures_to_take));
+             (int)g_captures_to_take, lastImageFileName, averageTime);
 
     sendMsgToMaster(msgToMaster);
 

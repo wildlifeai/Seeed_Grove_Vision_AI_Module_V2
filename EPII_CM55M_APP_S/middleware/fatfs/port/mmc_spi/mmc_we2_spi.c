@@ -28,7 +28,9 @@
 #error "SPEEDIMPROVEMENTS requires FreeRTOS (configTICK_RATE_HZ not found). \
 Provide your own MMC_GET_MS() and remove this guard."
 #endif
-#define MMC_GET_MS()  ((uint32_t)xTaskGetTickCount())
+// In practise configTICK_RATE_HZ is 1000...
+//#define MMC_GET_MS()  ((uint32_t)xTaskGetTickCount())
+#define MMC_GET_MS() ((uint32_t)(xTaskGetTickCount() * portTICK_PERIOD_MS))
 #endif // SPEEDIMPROVEMENTS
 
 #include "WE2_device.h"

@@ -107,7 +107,7 @@ static const CLI_Command_Definition_t xDir = {
     0              /* No parameters are expected. */
 };
 
-// Structure that defines the pwd command line command, which prints the current directory.
+// Structure that defines the 'pwd' command line command, which prints the current directory.
 static const CLI_Command_Definition_t xPwd = {
     "pwd",         /* The command string to type. */
     "pwd:\r\n Displays current directory\r\n",
@@ -115,7 +115,7 @@ static const CLI_Command_Definition_t xPwd = {
     0              /* No parameters are expected. */
 };
 
-// Structure that defines the pwd command line command, which prints the current directory.
+// Structure that defines the 'cd' command line command, which prints the current directory.
 static const CLI_Command_Definition_t xChdir = {
     "cd",         /* The command string to type. */
     "cd <new_dir>:\r\n Change directory to <new_dir>\r\n",
@@ -123,7 +123,7 @@ static const CLI_Command_Definition_t xChdir = {
     1              /* 1 parameter is expected. */
 };
 
-// Structure that defines the pwd command line command, which prints the current directory.
+// Structure that defines the 'mkdir' command line command, which prints the current directory.
 static const CLI_Command_Definition_t xMkdir = {
     "mkdir",         /* The command string to type. */
     "mkdir <new_dir>:\r\n Make new directory <new_dir>\r\n",
@@ -131,7 +131,7 @@ static const CLI_Command_Definition_t xMkdir = {
     1              /* 1 parameter is expected. */
 };
 
-// Structure that defines the pwd command line command, which prints the current directory.
+// Structure that defines the 'type' command line command, which prints the current directory.
 static const CLI_Command_Definition_t xType = {
     "type",         /* The command string to type. */
     "type <file>:\r\n Prints (text) contents of <file>\r\n",

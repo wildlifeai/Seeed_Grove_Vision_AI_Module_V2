@@ -568,9 +568,9 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 		}
 
 		// Inform the if task that the disk operation is complete
-		sendMsg.message.msg_data = (uint32_t)res;
 		sendMsg.destination = fileOp->senderQueue;
-		sendMsg.message.msg_parameter = accumulatedTime;
+		sendMsg.message.msg_data = (uint32_t)res;
+		sendMsg.message.msg_parameter = accumulatedTime;	// Lets image task calculate the average write time
 
 		// The message to send depends on the destination! In retrospect it would have been better
 		// if the messages were grouped by the sender rather than the receiver, so this next test was not necessary:
@@ -1855,7 +1855,6 @@ void fatfs_setDeploymentId(const char *uuid_string) {
 	}
 }
 
-
 /**
  * Prints the CWD
  *
@@ -1873,7 +1872,6 @@ void fatfs_printCwd(void) {
 		xprintf("CWD is '%s'\n", cur_dir);
 	}
 }
-
 
 /**
  * @brief Create a directory path recursively (mkdir -p style).

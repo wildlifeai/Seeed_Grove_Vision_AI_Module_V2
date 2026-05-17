@@ -221,8 +221,11 @@ static BaseType_t prvInfoCommand( char * pcWriteBuffer,
 	free_sectors = free_clusters * getFreeFs->csize;
 
 	cli_append(&pcWriteBuffer, &xWriteBufferLen,
-			"%10lu K total drive space.\r\n%10lu K available.",
-			total_sectors / 2, free_sectors / 2);
+			"%10lu K total drive space.\r\n%10lu K available.\r\n"
+			"Cluster size: %lu sectors (%lu bytes).",
+			total_sectors / 2, free_sectors / 2,
+			(unsigned long)getFreeFs->csize,
+			(unsigned long)getFreeFs->csize * 512UL);
 
 	/* There is no more data to return after this single string, so return pdFALSE. */
 	return pdFALSE;

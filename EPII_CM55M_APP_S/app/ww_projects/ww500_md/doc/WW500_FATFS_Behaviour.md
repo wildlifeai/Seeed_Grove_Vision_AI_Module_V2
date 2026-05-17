@@ -205,61 +205,100 @@ here.
 ### Implementation — `#ifdef SPEEDIMPROVEMENTS`
 
 The production code in `mmc_we2_spi.c` implements both paths under a compile-time switch.
-Define `SPEEDIMPROVEMENTS` (e.g. `-DSPEEDIMPROVEMENTS` in the makefile) to activate the fast
-path; omit it to use the safe original path.
+`SPEEDIMPROVEMENTS` is currently `#define`d near the top of the file; comment it out to
+revert to the safe original path.
+
+Two functions are affected: `wait_ready` (write path) and `rcvr_datablock` (read path).
+Both had the same `DELAY(1)`-per-poll pattern.
 
 **Default (`SPEEDIMPROVEMENTS` not defined) — original code, known reliable:**
 
 ```c
+/* wait_ready */
 while (datain != 0xFF && cnt <= wt) {
     datain = xchg_spi(0xFF);
     DELAY(1);                 // 1 ms per poll — wt is in milliseconds
     wait_spi_completed(1);    // redundant but harmless
     cnt++;
 }
+
+/* rcvr_datablock */
+while ((token == 0xFF) && cnt <= wt_ms) {
+    token = xchg_spi(0xFF);
+    DELAY(1);
+    cnt++;
+}
 ```
 
-**With `SPEEDIMPROVEMENTS` — FreeRTOS tick-count timeout, no fixed delay:**
+**With `SPEEDIMPROVEMENTS` — `MMC_GET_MS()` timeout, no fixed delay:**
 
 ```c
-TickType_t start = xTaskGetTickCount();
-
+/* wait_ready */
+uint32_t start = MMC_GET_MS();
 datain = xchg_spi(0xFF);
 while (datain != 0xFF) {
-    if ((xTaskGetTickCount() - start) >= pdMS_TO_TICKS(wt)) {
+    if ((MMC_GET_MS() - start) >= (uint32_t)wt)
         return 0;   // genuine timeout after wt milliseconds
-    }
     datain = xchg_spi(0xFF);
 }
 return 1;
+
+/* rcvr_datablock */
+uint32_t start = MMC_GET_MS();
+token = xchg_spi(0xFF);
+while (token == 0xFF) {
+    if ((MMC_GET_MS() - start) >= 200U)
+        break;      // genuine timeout after 200 ms
+    token = xchg_spi(0xFF);
+}
 ```
 
-Key differences from a naive DELAY removal:
+Key differences from a naive `DELAY` removal:
 
 - `wt` retains its millisecond meaning — callers do not need to change.
 - The loop polls as fast as the SPI allows when the card is busy, but the timeout is
-  still a real wall-clock value rather than a poll count.
-- The redundant `wait_spi_completed(1)` (already done inside `xchg_spi`) is omitted.
-- Requires `FreeRTOS.h` and `task.h`; these are included under `#ifdef SPEEDIMPROVEMENTS`.
+  a real wall-clock value rather than a poll count.
+- The redundant `wait_spi_completed(1)` inside `wait_ready` (already done by `xchg_spi`)
+  is omitted.
 
-### Measured write times (12 KB JPEG, 12 MHz SPI)
+### `MMC_GET_MS()` and portability
 
-| Configuration | Write time |
-|---|---|
-| Original (`DELAY(1)` in `wait_ready`) | ~200 ms |
-| `SPEEDIMPROVEMENTS` (tick-count polling) | ~40 ms |
+The `SPEEDIMPROVEMENTS` block defines a single macro for the ms counter:
+
+```c
+#define MMC_GET_MS()  ((uint32_t)xTaskGetTickCount())
+```
+
+`xTaskGetTickCount()` reads the FreeRTOS software tick counter, which is incremented every
+1 ms by the SysTick ISR.  A compile-time guard enforces that FreeRTOS is present:
+
+```c
+#ifndef configTICK_RATE_HZ
+#error "SPEEDIMPROVEMENTS requires FreeRTOS. Provide your own MMC_GET_MS() and remove this guard."
+#endif
+```
+
+A non-FreeRTOS port needs only to replace `MMC_GET_MS()` with whatever ms counter the
+target platform provides and remove the `#error`.
+
+### Measured write times
+
+| Configuration | SPI clock | Write time |
+|---|---|---|
+| Original (`DELAY(1)` in `wait_ready` and `rcvr_datablock`) | 12 MHz | ~200 ms |
+| `SPEEDIMPROVEMENTS` | 12 MHz | ~50 ms |
+| `SPEEDIMPROVEMENTS` | 24 MHz (`SPI_CLOCK_FAST = 25000000`, rounded to 24 MHz by hardware divider) | ~40 ms |
 
 The 200 ms baseline includes the `CTRL_SYNC` wait inside `f_close`, which correctly polls
-until NAND programming completes.  The 40 ms path does the same wait but polls at SPI speed
-instead of 1 ms steps.
+until NAND programming completes.  The fast paths do the same wait but poll at SPI speed
+instead of 1 ms steps.  The modest improvement from 50 ms to 40 ms when doubling the SPI
+clock confirms that card NAND programming latency, not raw data transfer time, dominates.
 
-### Further options (not yet implemented)
+### Further options
 
 **Poll in 8-byte bursts** — amortises CMSIS driver call overhead across 8 bytes per
-iteration.  Would slightly reduce the 40 ms further but requires more invasive changes.
-
-**Increase SPI clock** — `SPI_CLOCK_FAST = 25000000` may approximately halve raw transfer
-time.  Verify with the specific card and PCB routing before committing.
+iteration in `wait_ready`.  Would reduce the 40 ms slightly but requires more invasive
+changes.  Given that NAND programming time dominates, the gain is likely small.
 
 ---
 
@@ -428,15 +467,86 @@ existing lock-table slot.
 
 ---
 
-## 6. Summary of changes made
+## 6. Per-file disk_write anatomy
+
+After the `SPEEDIMPROVEMENTS` and EXIF padding fixes, a single JPEG write produces the
+following `disk_write` calls.  The example below is from a 21 658-byte file on a card with
+32-sector (16 384-byte) clusters.
+
+### EXIF sector-alignment fix
+
+`build_exif_segment` originally returned 420 bytes.  When `f_write(exif_buffer, 420)` was
+called, FatFS buffered the data without issuing a `disk_write` (sub-sector write; the FIL
+sector buffer holds up to 512 bytes).  The subsequent `f_write(jpeg_body, N)` started at
+`fp->fptr = 420`, which is not sector-aligned.  FatFS had to fill the remaining 92 bytes to
+complete the first sector (a dirty-buffer flush → `disk_write(count=1)`), then batch the
+remaining data.  The split created one unnecessary card programming stall per file.
+
+The fix appends a JPEG Comment segment (marker `0xFF 0xFE` + 2-byte length field + zero
+fill) to `exif_buffer` until `exifLength` reaches the next multiple of 512.  After padding,
+`fp->fptr` is sector-aligned before the JPEG body write, so FatFS batches the entire body
+without a partial flush.  JPEG Comment segments are valid anywhere between markers per
+ISO 10918-1 B.2.4.5 and are silently ignored by all conforming decoders.
+
+Buffer sizing constants in `image_task.c`:
+
+```c
+#define EXIF_MAX_LEN 1024   // must stay a multiple of 512; increase in 512-byte steps
+static uint8_t exif_buffer[EXIF_MAX_LEN + 512];  // +512 absorbs worst-case padding
+```
+
+Worst case: content = 1023 bytes → pad = 1 → rounds up to 513 (Comment segment needs ≥ 4
+bytes, so advance to the following sector boundary) → total = 1536 = `EXIF_MAX_LEN + 512`.
+Because `EXIF_MAX_LEN` is always a multiple of 512, a completely full buffer (e.g. exactly
+1024 bytes) is already aligned and needs no padding.
+
+### Measured disk_write sequence (21 KB JPEG, 32-sector clusters)
+
+```
+sector=64992 count= 1  CMD24   (1) f_open directory reservation
+sector=65120 count= 1  CMD24   (2) EXIF data (512 bytes — padded to sector boundary)
+sector=65121 count=31  CMD25   (3) JPEG body cluster 1 (clipped at cluster boundary)
+sector=65152 count=10  CMD25   (4) JPEG body cluster 2
+sector=65162 count= 1  CMD24   (5) tail bytes flushed at f_close / f_sync
+sector=11163 count= 1  CMD24   (6) FAT table 1 — cluster chain
+sector=26064 count= 1  CMD24   (7) FAT table 2 — FAT32 mirror
+sector=64992 count= 1  CMD24   (8) directory entry — final size and timestamp
+sector= 8193 count= 1  CMD24   (9) FSINFO — free cluster count
+```
+
+### What each write is and whether it is avoidable
+
+| # | What | Avoidable? |
+|---|------|-----------|
+| 1 | `f_open` writes a tentative directory entry to reserve the file slot before any data is written | No — FatFS always does this |
+| 2 | EXIF buffer (512 bytes; padded to sector boundary so the JPEG body starts aligned) | No — file header data |
+| 3 | JPEG body, cluster 1: FatFS clips the write count to `csize − csect` at each cluster boundary; 32 − 1 = 31 sectors | No — cluster boundary is unavoidable |
+| 4 | JPEG body, cluster 2: remaining 10 sectors after crossing the cluster boundary | No — any file larger than one cluster produces two CMD25 calls |
+| 5 | Partial last sector: leftover bytes past the last full sector, flushed by `f_sync` inside `f_close` | No |
+| 6 | FAT table 1 — new cluster chain entries written for this file | No |
+| 7 | FAT table 2 — mandatory FAT32 mirror of FAT table 1 | No |
+| 8 | Directory entry — final file size and timestamp stamped when the file is closed | No |
+| 9 | FSINFO sector — free cluster count updated | Could suppress with `FF_FS_NOFSINFO = 1`; saves one CMD24 per file but risks stale free-count if power fails between (8) and (9) |
+
+The 31 + 10 cluster split (writes 3 and 4) is unavoidable for any file larger than one
+cluster (16 384 bytes).  Files of 16 384 bytes or smaller would produce a single CMD25 call.
+
+Before the EXIF padding fix the sequence had ten writes: an extra `count=1 CMD24` between
+(2) and (3) to flush the partial first sector caused by the unaligned EXIF size.
+
+---
+
+## 7. Summary of changes made
 
 | Item | File | Status |
 |------|------|--------|
 | Add `Uninitialize()` to `power_off()` | `mmc_we2_spi.c` | Done — fixes assertion |
 | `deselect()` before ACMD41 retry delay | `mmc_we2_spi.c` | Done — CS timing fix |
 | ACMD41 argument includes voltage range bits | `mmc_we2_spi.c` | Done |
-| `#ifdef SPEEDIMPROVEMENTS` in `wait_ready` | `mmc_we2_spi.c` | Done — 200 ms → 40 ms |
+| `#ifdef SPEEDIMPROVEMENTS` in `wait_ready` and `rcvr_datablock` | `mmc_we2_spi.c` | Done — ~200 ms → ~50 ms |
 | Fix bugs A–D in `fileWriteImage` | `fatfs_task.c` | Done |
+| Raise `SPI_CLOCK_FAST` to 25 MHz (hardware rounds to 24 MHz) | `mmc_we2_spi.c` | Done — ~50 ms → ~40 ms |
+| EXIF Comment padding to next 512-byte boundary | `image_task.c` | Done — eliminates split CMD24 flush per file |
+| Print cluster size in `info` command | `CLI-FATFS-commands.c` | Done |
 | 64 GB card — counterfeit, no fix possible | — | Documented |
-| Increase SPI clock to 25 MHz | `mmc_we2_spi.c` | Not yet tried |
-| Poll in 8-byte bursts in `wait_ready` | `mmc_we2_spi.c` | Not yet tried |
+| Poll in 8-byte bursts in `wait_ready` | `mmc_we2_spi.c` | Not tried — NAND programming time dominates; gain would be small |

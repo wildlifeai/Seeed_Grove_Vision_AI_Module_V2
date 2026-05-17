@@ -73,7 +73,12 @@ FnPtr_GPIO_Pinmux getFnPtr_CMSIS_Driver_SPI0_SSPI_CS_GPIO_Pinmux(void) {
 }
 
 #define SPI_CLOCK_SLOW   (200000)
+#ifdef SPEEDIMPROVEMENTS
+// In SPI mode, all compliant SD cards are required to support 25 MHz
+#define SPI_CLOCK_FAST   (25000000)
+#else
 #define SPI_CLOCK_FAST   (12000000)
+#endif // SPEEDIMPROVEMENTS
 
 #define ASSERT_HIGH(X)  assert(X == ARM_DRIVER_OK)
 

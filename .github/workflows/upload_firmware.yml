@@ -80,21 +80,36 @@ jobs:
           echo "Generated release notes:"
           echo "$COMMITS"
 
-      - name: Find Generated Image
+      - name: Find and Rename Generated Image
         id: find_image
         shell: bash
         run: |
           # Use the pre-built image committed to the repository
           IMG_FILE="./we2_image_gen_local_dpd/output_case1_sec_wlcsp/output.img"
           
-          if [ -f "$IMG_FILE" ]; then
-            FULL_PATH=$(readlink -f "$IMG_FILE")
-            echo "Found image: $FULL_PATH"
-            echo "firmware_path=$FULL_PATH" >> $GITHUB_OUTPUT
-          else
+          if [ ! -f "$IMG_FILE" ]; then
             echo "Error: Pre-built .img file not found at $IMG_FILE!"
             exit 1
           fi
+          
+          # Extract board name from ww.mk for the filename
+          BOARD_NAME=$(grep "^BOARD_NAME_STRING" EPII_CM55M_APP_S/app/ww_projects/ww.mk | awk -F'"' '{print $2}' | head -n 1)
+          if [ -z "$BOARD_NAME" ]; then
+            BOARD_NAME="WW500_C02"
+          fi
+          
+          # Generate timestamped filename: BOARD_YYYYMMDDHHMMSS.img
+          TIMESTAMP=$(date -u +"%Y%m%d%H%M%S")
+          NEW_NAME="${BOARD_NAME}_${TIMESTAMP}.img"
+          
+          # Rename the file so the artifact and storage path use the new name
+          NEW_PATH="$(dirname "$IMG_FILE")/$NEW_NAME"
+          cp "$IMG_FILE" "$NEW_PATH"
+          
+          FULL_PATH=$(readlink -f "$NEW_PATH")
+          echo "Found image: $FULL_PATH"
+          echo "firmware_path=$FULL_PATH" >> $GITHUB_OUTPUT
+          echo "firmware_filename=$NEW_NAME" >> $GITHUB_OUTPUT
 
       - name: Upload Build Artifact
         uses: actions/upload-artifact@v4

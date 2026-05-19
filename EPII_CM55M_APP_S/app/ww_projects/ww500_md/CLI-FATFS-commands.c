@@ -822,8 +822,12 @@ static BaseType_t prvFirmwareCommand( char *pcWriteBuffer, size_t xWriteBufferLe
         if (actual_crc != expected_crc) {
             cli_append(&pcWriteBuffer, &xWriteBufferLen,
                        "Error: CRC mismatch - file 0x%04X, expected 0x%04X. Flash NOT modified.",
-                       (unsigned)actual_crc, (unsigned)expected_crc);
+                       actual_crc, expected_crc);
             return pdFALSE;
+        }
+        else {
+        	cli_append(&pcWriteBuffer, &xWriteBufferLen,
+        	                   "Firmware CRC 0x%04X matched. ", expected_crc);
         }
     }
 

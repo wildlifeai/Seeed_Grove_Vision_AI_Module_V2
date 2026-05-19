@@ -2981,37 +2981,6 @@ void image_sleepNow(void) {
     }
 #endif // USE_HM0360
 
-// Now merged (above)
-//#ifdef USE_HM0360_MD
-//    // HM0360 for motion detection only.
-//    // If the camera system is disabled then ensure MD is off and flash LED is off
-//    if (hm0360_md_isHM0360Present()) {
-//    	hm0360_md_prepare(enabled, mdInterval); // select CONTEXT_B registers (if enabled)
-//
-//    	// Consider turning on the LED flashes, controlled by the HM0360 STROBE output
-//    	if (!enabled) {
-//    		// No STROBE pulses
-//    		xprintf("Camera disabled - no LED flashes\n");
-//    		hm0360_md_configureStrobe(0);
-//    	}
-//    	else if ((brightnessPercent == 0) || (ledInUse == 0))  {
-//    		// No STROBE pulses
-//    		xprintf("Preparing HM0360 for MD - no LED flashes\n");
-//    		hm0360_md_configureStrobe(0);
-//    	}
-//    	else   {
-//            // Configure STROBE pulses - NOTE: normal mode is 0x0b = 'dynamic 2'
-//            xprintf("Preparing HM0360 for MD - with LED flashes 0x%02x\n", fatfs_getOperationalParameter(OP_PARAMETER_STROBE_MODE));
-//            hm0360_md_configureStrobe(HM0360_SENSOR_STROBE_MODE);
-//    	}
-//    }
-//    else {
-//    	// HM0360 is missing
-//    	xprintf("HM0360 missing...\n");
-//    }
-//
-//#endif // USE_HM0360_MD
-
     // TODO - We could retry if we had a timeout?
     if (g_wdt_event) {
     	XP_YELLOW;

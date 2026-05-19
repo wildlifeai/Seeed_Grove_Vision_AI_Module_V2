@@ -44,6 +44,7 @@
 #include "directory_manager.h"
 #include "xip_manager.h"
 #include "fatfs_task.h"
+#include "crc16_ccitt.h"
 
 /*************************************** Definitions *******************************************/
 
@@ -86,6 +87,8 @@ static BaseType_t prvTxFileCommand( char * pcWriteBuffer, size_t xWriteBufferLen
 static BaseType_t prvUnmountCommand( char * pcWriteBuffer, size_t xWriteBufferLen, const char * pcCommandString );
 static BaseType_t prvDumpSelCommand( char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString );
 static BaseType_t prvFirmwareCommand( char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString );
+static BaseType_t prvCrcCommand( char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString );
+static FRESULT compute_file_crc( const char *path, uint16_t *crc_out, uint32_t *size_out );
 
 
 /********************************** Structures that define CLI commands  *************************************/
@@ -174,10 +177,21 @@ static const CLI_Command_Definition_t xDumpSel = {
 
 // Structure that defines the firmware command, which updates firmware from SD card.
 static const CLI_Command_Definition_t xFirmware = {
-    "firmware",        /* The command string to type. */
-    "firmware <filename>:\r\n Update firmware from /MANIFEST/<filename>. Type 'reset' to boot.\r\n",
-    prvFirmwareCommand, /* The function to run. */
-    1              /* 1 parameter expected. */
+    "firmware",
+    "firmware <filename> [0xCRC]:\r\n"
+    " Update firmware from /MANIFEST/<filename>.\r\n"
+    " Optional 0xCRC: CRC16-CCITT of file must match before flash is touched.\r\n"
+    " Type 'reset' to boot after update.\r\n",
+    prvFirmwareCommand,
+    -1              /* variable: 1 required, 1 optional */
+};
+
+// Structure that defines the crc command, which reports the CRC16-CCITT of a file.
+static const CLI_Command_Definition_t xCrc = {
+    "crc",
+    "crc <filename>:\r\n Print CRC16-CCITT and size of <filename> in current directory\r\n",
+    prvCrcCommand,
+    1
 };
 
 
@@ -744,28 +758,74 @@ static BaseType_t prvDumpSelCommand( char *pcWriteBuffer, size_t xWriteBufferLen
  * Calls xip_update_firmware_from_sd() which handles the full sequence:
  * erase inactive slot, write image, verify, update slot selector.
  * Detailed progress is printed to the console via xprintf.
+ *
+ * Optional second parameter: CRC16-CCITT of the file in 0xNNNN format.
+ * If supplied, the file CRC is checked before any flash operation begins.
  */
 static BaseType_t prvFirmwareCommand( char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString ) {
     const char *pcParameter;
-    BaseType_t lParameterStringLength;
-    char filename[64];
-    int result;
+    BaseType_t  lParameterStringLength;
+    char        filename[64];
+    int         result;
 
     memset(pcWriteBuffer, 0x00, xWriteBufferLen);
 
+    /* Parameter 1: filename */
     pcParameter = FreeRTOS_CLIGetParameter(pcCommandString, 1, &lParameterStringLength);
     if (pcParameter == NULL) {
-        cli_append(&pcWriteBuffer, &xWriteBufferLen, "Usage: firmware <filename>");
+        cli_append(&pcWriteBuffer, &xWriteBufferLen, "Usage: firmware <filename> [0xCRC]");
         return pdFALSE;
     }
 
     if (lParameterStringLength >= (BaseType_t)sizeof(filename)) {
-        cli_append(&pcWriteBuffer, &xWriteBufferLen, "Filename too long (max 63 chars)");
+        cli_append(&pcWriteBuffer, &xWriteBufferLen, "Error: filename too long (max 63 chars)");
         return pdFALSE;
     }
 
     memcpy(filename, pcParameter, lParameterStringLength);
     filename[lParameterStringLength] = '\0';
+
+    /* Parameter 2: optional CRC — "0x1234" is always exactly 6 characters */
+    pcParameter = FreeRTOS_CLIGetParameter(pcCommandString, 2, &lParameterStringLength);
+    if (pcParameter != NULL) {
+        if (lParameterStringLength != 6) {
+            cli_append(&pcWriteBuffer, &xWriteBufferLen,
+                       "Error: CRC must be in format 0xNNNN");
+            return pdFALSE;
+        }
+
+        char crc_str[7];
+        memcpy(crc_str, pcParameter, 6);
+        crc_str[6] = '\0';
+
+        char *end;
+        unsigned long parsed = strtoul(crc_str, &end, 0);
+        if (end == crc_str || *end != '\0') {
+            cli_append(&pcWriteBuffer, &xWriteBufferLen,
+                       "Error: invalid CRC '%s' (expected 0xNNNN)", crc_str);
+            return pdFALSE;
+        }
+        uint16_t expected_crc = (uint16_t)(parsed & 0xFFFFu);
+
+        char filepath[sizeof(CONFIG_DIR) + sizeof(filename) + 1];
+        snprintf(filepath, sizeof(filepath), "%s/%s", CONFIG_DIR, filename);
+
+        uint16_t actual_crc;
+        uint32_t file_size;
+        FRESULT res = compute_file_crc(filepath, &actual_crc, &file_size);
+        if (res != FR_OK) {
+            cli_append(&pcWriteBuffer, &xWriteBufferLen,
+                       "Error: cannot read '%s' for CRC check (%d)", filepath, res);
+            return pdFALSE;
+        }
+
+        if (actual_crc != expected_crc) {
+            cli_append(&pcWriteBuffer, &xWriteBufferLen,
+                       "Error: CRC mismatch - file 0x%04X, expected 0x%04X. Flash NOT modified.",
+                       (unsigned)actual_crc, (unsigned)expected_crc);
+            return pdFALSE;
+        }
+    }
 
     result = xip_update_firmware_from_sd(filename);
     if (result == 0) {
@@ -777,6 +837,84 @@ static BaseType_t prvFirmwareCommand( char *pcWriteBuffer, size_t xWriteBufferLe
     }
 
     return pdFALSE;
+}
+
+/**
+ * Report the CRC16-CCITT and byte count of a file in the current directory.
+ */
+static BaseType_t prvCrcCommand( char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString ) {
+    const char *pcParameter;
+    BaseType_t  lParameterStringLength;
+    char        filename[64];
+    uint16_t    crc;
+    uint32_t    size;
+    FRESULT     res;
+
+    memset(pcWriteBuffer, 0x00, xWriteBufferLen);
+
+    pcParameter = FreeRTOS_CLIGetParameter(pcCommandString, 1, &lParameterStringLength);
+    if (pcParameter == NULL) {
+        cli_append(&pcWriteBuffer, &xWriteBufferLen, "Usage: crc <filename>");
+        return pdFALSE;
+    }
+
+    if (lParameterStringLength >= (BaseType_t)sizeof(filename)) {
+        cli_append(&pcWriteBuffer, &xWriteBufferLen, "Error: filename too long");
+        return pdFALSE;
+    }
+
+    memcpy(filename, pcParameter, lParameterStringLength);
+    filename[lParameterStringLength] = '\0';
+
+    res = compute_file_crc(filename, &crc, &size);
+    if (res != FR_OK) {
+        cli_append(&pcWriteBuffer, &xWriteBufferLen,
+                   "Error: cannot open '%s' (%d)", filename, (int)res);
+        return pdFALSE;
+    }
+
+    cli_append(&pcWriteBuffer, &xWriteBufferLen,
+               "CRC 0x%04X (%lu bytes)", (unsigned)crc, (unsigned long)size);
+    return pdFALSE;
+}
+
+/**
+ * Compute CRC16-CCITT of the file at 'path' using the streaming API.
+ * Reads in 512-byte chunks to bound stack usage.
+ * Returns FR_OK on success; writes crc and size. Returns a FatFS error code on failure.
+ */
+static FRESULT compute_file_crc( const char *path, uint16_t *crc_out, uint32_t *size_out ) {
+    FIL      file;
+    FRESULT  res;
+    uint8_t  buf[512];
+    UINT     bytes_read;
+    uint32_t total = 0;
+    uint16_t crc;
+
+    res = f_open(&file, path, FA_READ);
+    if (res != FR_OK) {
+        return res;
+    }
+
+    crc = crc16_ccitt_stream_init();
+
+    for (;;) {
+        res = f_read(&file, buf, sizeof(buf), &bytes_read);
+        if (res != FR_OK) {
+            f_close(&file);
+            return res;
+        }
+        if (bytes_read == 0) {
+            break;
+        }
+        crc    = crc16_ccitt_stream_update(buf, (uint16_t)bytes_read, crc);
+        total += bytes_read;
+    }
+
+    f_close(&file);
+    *crc_out  = crc16_ccitt_stream_final(crc);
+    *size_out = total;
+    return FR_OK;
 }
 
 /********************************** Private Function Definitions - Other **************************/
@@ -796,6 +934,7 @@ static void vRegisterCLICommands( void ) {
 	FreeRTOS_CLIRegisterCommand( &xUnmount );
 	FreeRTOS_CLIRegisterCommand( &xDumpSel );
 	FreeRTOS_CLIRegisterCommand( &xFirmware );
+	FreeRTOS_CLIRegisterCommand( &xCrc );
 }
 
 /**

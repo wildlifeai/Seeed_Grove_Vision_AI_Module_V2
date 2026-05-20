@@ -7,19 +7,38 @@ on:
       - 'fix/firmware-upload-ci'
       - 'no-model-load'
       - 'refactor_model_loading'
-  workflow_dispatch: # Allow manual triggering
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target Supabase environment'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - production
 
 jobs:
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      environment: ${{ steps.env_select.outputs.ENVIRONMENT }}
+    steps:
+      - name: Resolve Environment
+        id: env_select
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            ENVIRONMENT="${{ inputs.environment }}"
+          elif [ "${{ github.ref_name }}" = "main" ]; then
+            ENVIRONMENT="production"
+          else
+            ENVIRONMENT="dev"
+          fi
+          echo "ENVIRONMENT=$ENVIRONMENT" >> $GITHUB_OUTPUT
+
   build-and-deploy:
     runs-on: ubuntu-latest
-
-    env:
-      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-      # Optional: Email address to query for system user
-      SYSTEM_EMAIL: ${{ secrets.SYSTEM_EMAIL }}
-      # Optional: Fallback user ID if database queries fail
-      FALLBACK_USER_ID: ${{ secrets.FALLBACK_USER_ID }}
 
     steps:
       - name: Checkout Repository
@@ -61,21 +80,36 @@ jobs:
           echo "Generated release notes:"
           echo "$COMMITS"
 
-      - name: Find Generated Image
+      - name: Find and Rename Generated Image
         id: find_image
         shell: bash
         run: |
           # Use the pre-built image committed to the repository
           IMG_FILE="./we2_image_gen_local_dpd/output_case1_sec_wlcsp/output.img"
           
-          if [ -f "$IMG_FILE" ]; then
-            FULL_PATH=$(readlink -f "$IMG_FILE")
-            echo "Found image: $FULL_PATH"
-            echo "firmware_path=$FULL_PATH" >> $GITHUB_OUTPUT
-          else
+          if [ ! -f "$IMG_FILE" ]; then
             echo "Error: Pre-built .img file not found at $IMG_FILE!"
             exit 1
           fi
+          
+          # Extract board name from ww.mk for the filename
+          BOARD_NAME=$(grep "^BOARD_NAME_STRING" EPII_CM55M_APP_S/app/ww_projects/ww.mk | awk -F'"' '{print $2}' | head -n 1)
+          if [ -z "$BOARD_NAME" ]; then
+            BOARD_NAME="WW500_C02"
+          fi
+          
+          # Generate timestamped filename: BOARD_YYYYMMDDHHMMSS.img
+          TIMESTAMP=$(date -u +"%Y%m%d%H%M%S")
+          NEW_NAME="${BOARD_NAME}_${TIMESTAMP}.img"
+          
+          # Rename the file so the artifact and storage path use the new name
+          NEW_PATH="$(dirname "$IMG_FILE")/$NEW_NAME"
+          cp "$IMG_FILE" "$NEW_PATH"
+          
+          FULL_PATH=$(readlink -f "$NEW_PATH")
+          echo "Found image: $FULL_PATH"
+          echo "firmware_path=$FULL_PATH" >> $GITHUB_OUTPUT
+          echo "firmware_filename=$NEW_NAME" >> $GITHUB_OUTPUT
 
       - name: Upload Build Artifact
         uses: actions/upload-artifact@v4
@@ -85,9 +119,10 @@ jobs:
           retention-days: 30
 
   upload-to-supabase:
-    needs: build-and-deploy
+    needs: [build-and-deploy, setup]
     runs-on: ubuntu-latest
     if: success()
+    environment: ${{ needs.setup.outputs.environment }}
     
     env:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
@@ -150,7 +185,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
 
       - name: Install Node Dependencies
         run: npm install @supabase/supabase-js
@@ -181,13 +216,12 @@ jobs:
         env:
           FIRMWARE_VERSION: ${{ steps.version.outputs.unique_version }}
           RELEASE_NOTES: |
-            Automated firmware build ${{ steps.version.outputs.unique_version }}
-            
-            Base version: ${{ steps.semver.outputs.new_tag }}
-            Build: #${{ github.run_number }}
+            Himax AI firmware ${{ steps.version.outputs.unique_version }}
+            Branch: ${{ github.ref_name }}
             Commit: ${{ github.sha }}
+            Build: #${{ github.run_number }}
             
-            Changes:
+            Changes since last tag:
             ${{ steps.semver.outputs.changelog }}
         run: node upload_firmware.js
         

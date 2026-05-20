@@ -30,8 +30,8 @@
 
 #define MAXIMAGEDIRECTORIES     999
 // Use a low number for testing
-//#define MAXIMAGESPERDIRECTORY   100
-#define MAXIMAGESPERDIRECTORY   4
+#define MAXIMAGESPERDIRECTORY   100
+//#define MAXIMAGESPERDIRECTORY   4
 
 /*************************************** Global variables *******************************************/
 

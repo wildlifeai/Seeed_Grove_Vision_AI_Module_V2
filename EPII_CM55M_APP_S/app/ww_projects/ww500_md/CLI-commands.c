@@ -135,6 +135,7 @@
 #include "cvapp.h"
 #include "common_config.h"
 #include "selfTest.h"
+#include "ff.h"
 
 /*************************************** Definitions *******************************************/
 
@@ -260,8 +261,13 @@ static BaseType_t prvGetSelfTest(char *pcWriteBuffer, size_t xWriteBufferLen, co
 static BaseType_t prvSetOpParam(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 static BaseType_t prvGetOpParam(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 
+static BaseType_t prvFormatCommand( char * pcWriteBuffer, size_t xWriteBufferLen, const char * pcCommandString );
+
+
 #if defined(USE_HM0360)
+
 static BaseType_t prvMd(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) ;
+static BaseType_t prvReinitHM0360(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) ;
 #endif // defined(USE_HM0360) || defined(USE_HM0360_MD)
 
 // A few commands to make the AI processor consistent with the MKL62BA
@@ -532,6 +538,61 @@ static const CLI_Command_Definition_t xGetSelfTest = {
 	0			/* No parameters expected */
 };
 
+
+/* Structure that defines the 'format' command. */
+static const CLI_Command_Definition_t xFormat = {
+    "format",
+    "format:\r\n Formats the SD card as FAT32. Run twice to confirm — operation takes several seconds.\r\n",
+    prvFormatCommand,
+    0
+};
+
+/**
+ * Format the SD card as FAT32.
+ *
+ * Must be run twice: the first invocation prints a warning and arms the command;
+ * the second invocation performs the format.  This prevents accidental data loss.
+ * After a successful format the card must be remounted — reboot to do so.
+ *
+ * See https://elm-chan.org/fsw/ff/doc/mkfs.html
+ */
+static BaseType_t prvFormatCommand( char * pcWriteBuffer,
+                                    size_t xWriteBufferLen,
+                                    const char * pcCommandString ) {
+    static bool armed = false;
+
+    if (!armed) {
+        armed = true;
+        cli_append(&pcWriteBuffer, &xWriteBufferLen,
+                   "WARNING: all data on the SD card will be erased.\r\n"
+                   "Run 'format' again to confirm. This will take several seconds.");
+        return pdFALSE;
+    }
+
+    armed = false;
+
+    /* Static to avoid allocating 1 KB on the CLI task stack. */
+    static uint8_t work[FF_MAX_SS * 2];
+
+    MKFS_PARM mkfs_params = {
+        .fmt     = FM_FAT32,
+        .n_fat   = 2,    /* Two FAT tables — standard for FAT32 */
+        .align   = 0,    /* Auto-align */
+        .au_size = 0,    /* Default cluster size */
+        .n_root  = 512   /* Ignored for FAT32 */
+    };
+
+    FRESULT res = f_mkfs("0:", &mkfs_params, work, sizeof(work));
+
+    if (res) {
+        cli_append(&pcWriteBuffer, &xWriteBufferLen, "Format failed (FRESULT %d).", res);
+    } else {
+        cli_append(&pcWriteBuffer, &xWriteBufferLen, "Formatted OK. Reboot to remount.");
+    }
+    return pdFALSE;
+}
+
+
 #if defined(USE_HM0360)
 /* Structure that defines the "md" command line command. */
 static const CLI_Command_Definition_t xMd = {
@@ -540,6 +601,15 @@ static const CLI_Command_Definition_t xMd = {
 	prvMd, /* The function to run. */
 	1		 /* One parameter expected */
 };
+
+/* Structure that defines the "inithm0360" command line command. */
+static const CLI_Command_Definition_t xReinitHM0360 = {
+	"inithm0360", /* The command string to type. */
+	"inithm0360:\r\n Reinitialise HM0360\r\n",
+	prvReinitHM0360, /* The function to run. */
+	0			/* No parameters expected */
+};
+
 #endif // defined(USE_HM0360) || defined(USE_HM0360_MD)
 
 /********************************** Private Functions - for CLI commands *************************************/
@@ -654,12 +724,9 @@ static BaseType_t prvReset(char *pcWriteBuffer, size_t xWriteBufferLen, const ch
 	(void)xWriteBufferLen;
 	configASSERT(pcWriteBuffer);
 
-	XP_RED;
-	xprintf("Forcing reset.\r\n");
-	XP_WHITE;
-	vTaskDelay(pdMS_TO_TICKS(300));
+	cli_append(&pcWriteBuffer, &xWriteBufferLen, "Forcing reset soon.");
 
-	NVIC_SystemReset();
+	app_setResetRequest(true);
 
 	/* There is no more data to return after this single string, so return pdFALSE. */
 	return pdFALSE;
@@ -1701,6 +1768,31 @@ static BaseType_t prvMd(char *pcWriteBuffer, size_t xWriteBufferLen, const char 
 
 	return pdFALSE;
 }
+
+/**
+ * Reinitialise HM0360 registers
+ *
+ */
+static BaseType_t prvReinitHM0360(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) {
+
+	HX_CIS_ERROR_E ret;
+
+	(void)pcCommandString;
+	(void)xWriteBufferLen;
+	configASSERT(pcWriteBuffer);
+
+	ret = hm0360_md_reInitialise();
+	if (ret == HX_CIS_NO_ERROR) {
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "OK");
+	}
+	else {
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "Error.");
+	}
+
+	/* There is no more data to return after this single string, so return pdFALSE. */
+	return pdFALSE;
+}
+
 #endif // defined(USE_HM0360) || defined(USE_HM0360_MD)
 
 /********************************** Private Functions - Other *************************************/
@@ -2151,8 +2243,11 @@ static void vRegisterCLICommands(void)
 	FreeRTOS_CLIRegisterCommand(&xGetOpParam);	// Gets an Operational Parameter
 	FreeRTOS_CLIRegisterCommand(&xGetSelfTest);	// Gets self test bits
 
+	FreeRTOS_CLIRegisterCommand( &xFormat );
+
 #if defined(USE_HM0360)
 	FreeRTOS_CLIRegisterCommand(&xMd);	// Sets motion detection sensitivity
+	FreeRTOS_CLIRegisterCommand(&xReinitHM0360);	// Reinitialise HM0360 long register list
 #endif // defined(USE_HM0360) || defined(USE_HM0360_MD)
 
 #ifdef WW500_C00

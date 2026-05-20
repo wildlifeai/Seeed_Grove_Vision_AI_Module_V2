@@ -172,7 +172,11 @@
 #define CAMERA_EXTRA_FILE "CAMERA_EX.BIN"
 #endif // USE_HM0360
 
-#define EXIF_MAX_LEN 512 // I have seen 350 used...
+// Maximum bytes that build_exif_segment() may write into exif_buffer[].
+// Must be a multiple of 512 so that a full buffer never needs padding
+// (see sector-alignment padding below).  Increase in 512-byte steps if
+// the EXIF content grows beyond this limit.
+#define EXIF_MAX_LEN 1024
 // Limit how many dynamic class entries we will write to EXIF to avoid buffer growth
 // TODO - should this not be the same as the maximaum number of classes defined elsewhere? e.g. the max number of labels?
 #define EXIF_MAX_DYNAMIC_CLASSES 4
@@ -187,6 +191,9 @@
 
 // Buffer for EXIF comment
 #define EXIF_COMMENT_LENGTH 256
+
+// Define this to add extra EXIF field (AE gain values)
+#define EXIF_MAKER_NOTES
 
 // Tag IDs enum
 typedef enum
@@ -207,6 +214,7 @@ typedef enum
     TAG_GPS_ALTITUDE 		= 0x0006,
     TAG_NN_DATA 			= 0xC000,               // Neural network output array - arbitrary custom tag ID
     TAG_USER_COMMENT 		= 0x9286,      // Standard EXIF UserComment tag for summary text
+	TAG_MAKER_NOTE			= 0x927c,		// maker defined binary
     TAG_DEPLOYMENT_ID 		= 0xF200,		   // Deployment ID (matches ww130_cli convention)
     TAG_WW_CONFIDENCE_BASE 	= 0xF300	   // Base for confidence tags (0xF300, 0xF301, ...)
 } ExifTagID;
@@ -250,13 +258,14 @@ static void sendMsgToMaster(char *str);
 // When final activity from the FatFS Task and IF Task are complete, enter DPD
 static void sleepWhenPossible(void);
 
-static void captureSequenceComplete(void);
+static void captureSequenceComplete(uint32_t accumulatedTime);
 
 static void changeEnableState(bool setEnabled);
 
 static void processNNOutput(int8_t * outCategories, uint8_t classCount);
 
 static void prepareJpegFile(int8_t * outCategories, uint8_t classCount, fileBufferInfo_t * extraBlock);
+
 
 #ifdef INVESTIGATE_BMP
 #define BMP_GRAY8_HEADER_SIZE 1078
@@ -377,7 +386,9 @@ static char msgToMaster[MSGTOMASTERLEN];
 static uint8_t cameraSystemEnabled = 0; // 0 = disabled 1 = enabled
 
 // Support for EXIF
-static uint8_t exif_buffer[EXIF_MAX_LEN];
+// Extra 512 bytes beyond EXIF_MAX_LEN absorbs the worst-case JPEG Comment
+// padding needed to reach the next sector boundary (see prepareJpegFile).
+static uint8_t exif_buffer[EXIF_MAX_LEN + 512];
 
 // Global cursor to where non-inline data will be appended
 static uint8_t *next_data_ptr;
@@ -386,6 +397,11 @@ static uint8_t *tiff_start;
 
 // Measure interval between events
 static TickType_t startTime;
+
+#if defined(USE_HM0360) || defined(USE_HM0360_MD)
+	// HM0360 AE registers
+    HM0360_GAIN_T gain;
+#endif
 
 /********************************** Local Functions  *************************************/
 
@@ -824,10 +840,6 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
     event = img_recv_msg.msg_event;
     send_msg.destination = NULL;
 
-#if defined(USE_HM0360) || defined(USE_HM0360_MD)
-    HM0360_GAIN_T gain;
-#endif
-
     switch (event) {
 
     case APP_MSG_IMAGETASK_FRAME_READY:
@@ -1121,7 +1133,7 @@ static APP_MSG_DEST_T handleEventForNNProcessing(APP_MSG_T img_recv_msg) {
         // This represents the point at which an image has been captured and processed.
 
         if (g_cur_jpegenc_frame == g_captures_to_take) {
-        	captureSequenceComplete();
+        	captureSequenceComplete(img_recv_msg.msg_parameter);
         	// Stop the image sensor.
         	// move to earlier: configure_image_sensor(CAMERA_CONFIG_STOP);
         	image_task_state = APP_IMAGE_TASK_STATE_INIT;
@@ -1398,16 +1410,22 @@ static APP_MSG_DEST_T flagUnexpectedEvent(APP_MSG_T img_recv_msg)
  *
  * Placed here as a separate routine as it is called from 2 places.
  */
-static void captureSequenceComplete(void) {
-    // Current captures sequence completed
+static void captureSequenceComplete(uint32_t accumulatedTime) {
+    uint16_t averageTime;
+
+    averageTime = (g_captures_to_take == 0) ? 0 : (accumulatedTime / g_captures_to_take);
+
     XP_GREEN;
     xprintf("Current captures completed: %d\n", g_captures_to_take);
+    xprintf("Average file write time %dms\n", averageTime);
+
     xprintf("Total frames captured since last reset: %d\n", g_frames_total);
     XP_WHITE;
 
     // Inform BLE processor
-    snprintf(msgToMaster, MSGTOMASTERLEN, "Captured %d images. Last is %s",
-             (int)g_captures_to_take, lastImageFileName);
+    snprintf(msgToMaster, MSGTOMASTERLEN, "Captured %d images. Last is %s (File write %dms avg.)",
+             (int)g_captures_to_take, lastImageFileName, averageTime);
+
     sendMsgToMaster(msgToMaster);
 
     // Reset counters
@@ -1977,6 +1995,7 @@ static void sleepWhenPossible(void) {
  * @param extraBlock - structure for the second buffer
  */
 static void prepareJpegFile(int8_t * outCategories, uint8_t classCount, fileBufferInfo_t * extraBlock) {
+
 	uint32_t exifLength = 0;
 	uint32_t jpegBuffer;
 	uint32_t jpegLength;
@@ -1997,6 +2016,33 @@ static void prepareJpegFile(int8_t * outCategories, uint8_t classCount, fileBuff
 
 	// Build EXIF segment - placed in exif_buffer[] and size in exif_len
 	exifLength = build_exif_segment(outCategories, classCount);
+
+	// Pad exif_buffer to the next 512-byte sector boundary using a JPEG Comment
+	// segment (marker 0xFF 0xFE).  Without this, the non-sector-aligned EXIF size
+	// causes FatFS to split the write: one CMD24 flush for the partial first sector
+	// (EXIF + start of JPEG body), then a CMD25 batch for the remainder.  With the
+	// pad, fp->fptr lands on a sector boundary before the JPEG body, so FatFS writes
+	// the entire JPEG body as a single CMD25 transaction.
+	// JPEG Comment segments are valid anywhere between markers (ISO 10918-1 B.2.4.5)
+	// and are silently ignored by all conforming decoders.
+	// EXIF_MAX_LEN is a multiple of 512, so a full buffer never needs padding.
+	// exif_buffer is declared EXIF_MAX_LEN + 512 bytes to absorb the worst case.
+	if (exifLength > 0 && (exifLength % 512u) != 0) {
+		uint32_t pad = 512u - (exifLength % 512u);
+		if (pad < 4u) {
+			// A Comment segment needs at least 4 bytes (marker + 2-byte length).
+			// Skip to the following sector boundary if there is not enough room.
+			pad += 512u;
+		}
+		uint8_t *p = exif_buffer + exifLength;
+		*p++ = 0xFF;
+		*p++ = 0xFE;                             // JPEG Comment marker
+		uint16_t data_len = (uint16_t)(pad - 4u);
+		*p++ = (uint8_t)((data_len + 2u) >> 8);  // segment length MSB
+		*p++ = (uint8_t)((data_len + 2u) & 0xFF); // segment length LSB
+		memset(p, 0, data_len);
+		exifLength += pad;
+	}
 
 	fileOp.buffer = (uint8_t *)exif_buffer;
 	fileOp.length = exifLength;
@@ -2226,6 +2272,7 @@ static void addIFD(ExifTagID tagID, uint8_t *entry_ptr, void *tagData) {
     case TAG_DEPLOYMENT_ID:
     case TAG_GPS_LATITUDE_REF:
     case TAG_GPS_LONGITUDE_REF:
+    case TAG_MAKER_NOTE:	// Although TAG_MAKER_NOTE is designed for binary I will send a string
     {
         char *ascii = (char *)tagData;
         uint32_t length = strlen(ascii) + 1; // include null terminator
@@ -2288,6 +2335,7 @@ static void addIFD(ExifTagID tagID, uint8_t *entry_ptr, void *tagData) {
         entry_ptr[8] = value;
         break;
     }
+
     case TAG_NN_DATA:
     {
         // For NN output we use a byte array, with the first entry being the number of bytes that follow
@@ -2462,7 +2510,7 @@ static void create_gps_ifd(uint8_t *gps_ifd_start) {
 /**
  * Builds a valid EXIF data structure, including APP1 tag
  *
- * This particular example has soem hard-coded tags to add, including the X&Y resolutions.
+ * This particular example has some hard-coded tags to add, including the X&Y resolutions.
  *
  */
 static uint16_t build_exif_segment(int8_t *outCategories, uint8_t categoriesCount) {
@@ -2558,6 +2606,10 @@ static uint16_t build_exif_segment(int8_t *outCategories, uint8_t categoriesCoun
         dynamic_ifd_count++; // Add one entry for TAG_USER_COMMENT
 	}
 
+#ifdef EXIF_MAKER_NOTES
+	dynamic_ifd_count++; // Add one entry for Maker Notes
+#endif // EXIF_MAKER_NOTES
+
     // Prepare the timestamp
     exif_utc_get_rtc_as_exif_string(timestamp, sizeof(timestamp));
 
@@ -2635,6 +2687,20 @@ static uint16_t build_exif_segment(int8_t *outCategories, uint8_t categoriesCoun
     addIFD(TAG_DATETIME_ORIGINAL, ifd_start + (entry++ * 12), timestamp);
     addIFD(TAG_CREATE_DATE, ifd_start + (entry++ * 12), timestamp);
     addIFD(TAG_NN_DATA, ifd_start + (entry++ * 12), nnData); // Neural network output (raw, for backwards compatibility)
+
+#ifdef EXIF_MAKER_NOTES
+    // say 1234, 2345, 123, 123, Y say 32
+#define MAKERDATALEN 32
+    char makerNoteData[MAKERDATALEN];
+    snprintf(makerNoteData, MAKERDATALEN, "%d, %d, %d, %d, %c",
+    		gain.integration,
+			gain.analogGain,
+			gain.digitalGain,
+			gain.aeMean,
+			(gain.aeConverged == 1)?'Y':'N');
+
+    addIFD(TAG_MAKER_NOTE, ifd_start + (entry++ * 12), makerNoteData); // Auto-exposure registers
+#endif // EXIF_MAKER_NOTES
 
 #ifdef ENABLE_EXIF_CONFIDENCE
     // Add UserComment with model results if available
@@ -2957,7 +3023,36 @@ void image_sleepNow(void) {
     	timelapseDelay = fatfs_getOperationalParameter(OP_PARAMETER_TIMELAPSE_INTERVAL);
     }
 
-    if (timelapseDelay > 0) {
+	// CLI command might have requested this after firmware update
+	if (app_getResetRequest()) {
+#if 0
+		XP_LT_RED;
+		xprintf(">>> Resetting\n\n");
+		XP_LT_GREY;	// Grey so the bootloader messages are printed in grey, on exit from DPD
+
+		// does not work
+		vTaskDelay(pdMS_TO_TICKS(300));
+		// does not return
+		NVIC_SystemReset();
+#else
+		XP_LT_RED;
+		xprintf(">>> Reset by watchdog\n\n");
+		XP_LT_GREY;	// Grey so the bootloader messages are printed in grey, on exit from DPD
+
+#define WATCH_DOG_TIMEOUT_TH	(100) //ms
+		//watch dog start
+		WATCHDOG_CFG_T wdg_cfg;
+		wdg_cfg.period = WATCH_DOG_TIMEOUT_TH;
+		wdg_cfg.ctrl = WATCHDOG_CTRL_CPU;
+		wdg_cfg.state = WATCHDOG_STATE_DC;
+		wdg_cfg.type = WATCHDOG_RESET; // or WATCHDOG_INT;
+		//hx_drv_watchdog_start(WATCHDOG_ID_0, &wdg_cfg , WDG_Reset_ISR_CB);
+		hx_drv_watchdog_start(WATCHDOG_ID_0, &wdg_cfg , NULL);
+		xprintf("hx_drv_watchdog_start\n");
+#endif
+	}
+
+	else if (timelapseDelay > 0) {
         // Enable wakeup on WAKE pin and timer
         sleep_mode_enter_dpd(SLEEPMODE_WAKE_SOURCE_WAKE_PIN | SLEEPMODE_WAKE_SOURCE_RTC,
                              timelapseDelay, false); // Does not return

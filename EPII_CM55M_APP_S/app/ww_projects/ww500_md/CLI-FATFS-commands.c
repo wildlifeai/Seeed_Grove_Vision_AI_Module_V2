@@ -43,6 +43,7 @@
 
 #include "directory_manager.h"
 #include "xip_manager.h"
+#include "fatfs_task.h"
 
 /*************************************** Definitions *******************************************/
 
@@ -106,7 +107,7 @@ static const CLI_Command_Definition_t xDir = {
     0              /* No parameters are expected. */
 };
 
-// Structure that defines the pwd command line command, which prints the current directory.
+// Structure that defines the 'pwd' command line command, which prints the current directory.
 static const CLI_Command_Definition_t xPwd = {
     "pwd",         /* The command string to type. */
     "pwd:\r\n Displays current directory\r\n",
@@ -114,7 +115,7 @@ static const CLI_Command_Definition_t xPwd = {
     0              /* No parameters are expected. */
 };
 
-// Structure that defines the pwd command line command, which prints the current directory.
+// Structure that defines the 'cd' command line command, which prints the current directory.
 static const CLI_Command_Definition_t xChdir = {
     "cd",         /* The command string to type. */
     "cd <new_dir>:\r\n Change directory to <new_dir>\r\n",
@@ -122,7 +123,7 @@ static const CLI_Command_Definition_t xChdir = {
     1              /* 1 parameter is expected. */
 };
 
-// Structure that defines the pwd command line command, which prints the current directory.
+// Structure that defines the 'mkdir' command line command, which prints the current directory.
 static const CLI_Command_Definition_t xMkdir = {
     "mkdir",         /* The command string to type. */
     "mkdir <new_dir>:\r\n Make new directory <new_dir>\r\n",
@@ -130,7 +131,7 @@ static const CLI_Command_Definition_t xMkdir = {
     1              /* 1 parameter is expected. */
 };
 
-// Structure that defines the pwd command line command, which prints the current directory.
+// Structure that defines the 'type' command line command, which prints the current directory.
 static const CLI_Command_Definition_t xType = {
     "type",         /* The command string to type. */
     "type <file>:\r\n Prints (text) contents of <file>\r\n",
@@ -154,13 +155,14 @@ static const CLI_Command_Definition_t xTxFile = {
     1              /* 1 parameter is expected. */
 };
 
-// Structure that defines the pwd command line command, which prints the current directory.
+// Structure that defines the 'unmount' command line command, which prints the current directory.
 static const CLI_Command_Definition_t xUnmount = {
     "unmount",         /* The command string to type. */
     "unmount:\r\n Unmount (save writes?)\r\n",
     prvUnmountCommand, /* The function to run. */
     0              /* No parameters are expected. */
 };
+
 
 // Structure that defines the dump-sel command, which prints the flash slot selector sector.
 static const CLI_Command_Definition_t xDumpSel = {
@@ -219,8 +221,11 @@ static BaseType_t prvInfoCommand( char * pcWriteBuffer,
 	free_sectors = free_clusters * getFreeFs->csize;
 
 	cli_append(&pcWriteBuffer, &xWriteBufferLen,
-			"%10lu K total drive space.\r\n%10lu K available.",
-			total_sectors / 2, free_sectors / 2);
+			"%10lu K total drive space.\r\n%10lu K available.\r\n"
+			"Cluster size: %lu sectors (%lu bytes).",
+			total_sectors / 2, free_sectors / 2,
+			(unsigned long)getFreeFs->csize,
+			(unsigned long)getFreeFs->csize * 512UL);
 
 	/* There is no more data to return after this single string, so return pdFALSE. */
 	return pdFALSE;
@@ -710,6 +715,7 @@ static BaseType_t prvUnmountCommand( char * pcWriteBuffer,
 	/* There is no more data to return after this single string, so return pdFALSE. */
 	return pdFALSE;
 }
+
 
 /**
  * Print the first 32 bytes of the flash slot selector sector to the console.

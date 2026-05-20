@@ -95,8 +95,6 @@
 
 #define FATFS_TASK_QUEUE_LEN 10
 
-#define DRV ""
-
 // Length of lines in configuration.txt
 #define MAXCOMMENTLENGTH 80
 // Max number of comment lines in configuration.txt
@@ -172,6 +170,7 @@ static FIL transferFile;
 static bool transferFileOpen = false;
 
 static TickType_t xStartTime;
+static TickType_t accumulatedTime;
 
 // Strings for each of these states. Values must match APP_TASK1_STATE_E in task1.h
 const char *fatFsTaskStateString[APP_FATFS_STATE_NUMSTATES] = {
@@ -298,6 +297,22 @@ static FRESULT fileWriteImage(fileOperation_t *fileOp, fileBufferInfo_t * extraB
 	UINT bwTotal;
 	rtc_time time;
 
+	// Guard: capture dir must be set. An empty string causes f_chdir("") to silently
+	// leave the CWD unchanged (wherever it was — often /MANIFEST after load_configuration).
+	if (dirManager->current_capture_dir[0] == '\0') {
+		xprintf("fileWriteImage: capture directory not set\n");
+		return FR_NO_PATH;
+	}
+
+	// Guard: if a previous write leaked an open file, close it before opening a new one.
+	// Without this, f_open would overwrite the FIL object without releasing the FatFS
+	// lock-table slot, eventually producing FR_TOO_MANY_OPEN_FILES.
+	if (dirManager->imagesOpen) {
+		xprintf("fileWriteImage: closing stale open file\n");
+		f_close(&dirManager->imagesFile);
+		dirManager->imagesOpen = false;
+	}
+
 	// (1) Change to the image capture directory
 	res = f_chdir(dirManager->current_capture_dir);
 	if (res != FR_OK) {
@@ -305,9 +320,7 @@ static FRESULT fileWriteImage(fileOperation_t *fileOp, fileBufferInfo_t * extraB
 	}
 
 	// (2) Open the file
-	// tp added this to write over existing files with the same name for development phase
 	res = f_open(&dirManager->imagesFile, (TCHAR*) fileOp->fileName,  FA_WRITE | FA_CREATE_ALWAYS);
-	// res = f_open(&fil_w, (TCHAR*) filename, FA_CREATE_NEW | FA_WRITE);
 	dirManager->imagesRes = res;
 
 	if (res != FR_OK)  {
@@ -318,22 +331,6 @@ static FRESULT fileWriteImage(fileOperation_t *fileOp, fileBufferInfo_t * extraB
 
     // This ensures that any data in the D-cache is committed to RAM
     SCB_CleanDCache_by_Addr ((void *)fileOp->buffer, fileOp->length);
-/*
-	// Option here to check by printing some of jpeg buffer
-    uint16_t bytesToPrint = 16;
-    uint8_t * buffer = (uint8_t * ) SRAM_addr;
-    XP_LT_GREY;
-
-	xprintf("Used 'SCB_CleanDCache' - writing %d bytes beginning:\n", img_size);
-	for (int i = 0; i < bytesToPrint; i++) {
-	    xprintf("%02X ", buffer[i]);
-	    if (i%16 == 15) {
-	    	xprintf("\n");
-	    }
-	}
-	xprintf("\n");
-    XP_WHITE;
-*/
 
     // (3a) Write (first chunk of) data to the file
     res = f_write(&dirManager->imagesFile, (void *)fileOp->buffer, fileOp->length, &bw);
@@ -342,13 +339,14 @@ static FRESULT fileWriteImage(fileOperation_t *fileOp, fileBufferInfo_t * extraB
 		xprintf("Error writing file %s\n", fileOp->fileName);
 		fileOp->length = 0;
 		fileOp->res = res;
-
+		f_close(&dirManager->imagesFile);
+		dirManager->imagesOpen = false;
 		return res;
 	}
 	bwTotal = bw;
 
-	// (3b) Write extra data to the file
-	if (extraBlock->length > 0) {
+	// (3b) Write extra data to the file (extraBlock may be NULL when called from WRITE_FILE)
+	if (extraBlock != NULL && extraBlock->length > 0) {
 
 	    SCB_CleanDCache_by_Addr ((void *)extraBlock->buffer, extraBlock->length);
 		res = f_write(&dirManager->imagesFile, (void *)extraBlock->buffer, extraBlock->length, &bw);
@@ -363,7 +361,7 @@ static FRESULT fileWriteImage(fileOperation_t *fileOp, fileBufferInfo_t * extraB
 		}
 	}
 
-	// (4) Close the file
+	// (4) Close the file (f_close calls f_sync which calls CTRL_SYNC — card confirmed idle on return)
      res = f_close(&dirManager->imagesFile);
      dirManager->imagesRes = res;
 
@@ -531,6 +529,7 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 	APP_MSG_EVENT_E event;
 	FRESULT res;
 	static APP_MSG_DEST_T sendMsg;
+	static TickType_t elapsedTime;
 
 	fileOperation_t *fileOp;
 	fileBufferInfo_t *extraBlock;
@@ -559,12 +558,19 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 
 			res = fileWriteImage(fileOp, extraBlock, &dirManager);
 			fatfs_incrementOperationalParameter(OP_PARAMETER_IMAGES_COUNT);
-			xprintf("File write took %dms\n", app_getElapsedMs(xStartTime));
+
+			elapsedTime = app_getElapsedMs(xStartTime);
+			accumulatedTime += elapsedTime;		// add these all together so we can average them at the end.
+
+			XP_YELLOW;	// Make this stand out while investigation SD card speed
+			xprintf("File write took %dms\n", elapsedTime);
+			XP_WHITE;
 		}
 
 		// Inform the if task that the disk operation is complete
-		sendMsg.message.msg_data = (uint32_t)res;
 		sendMsg.destination = fileOp->senderQueue;
+		sendMsg.message.msg_data = (uint32_t)res;
+		sendMsg.message.msg_parameter = accumulatedTime;	// Lets image task calculate the average write time
 
 		// The message to send depends on the destination! In retrospect it would have been better
 		// if the messages were grouped by the sender rather than the receiver, so this next test was not necessary:
@@ -1449,6 +1455,8 @@ static void vFatFsTask(void *pvParameters) {
 	TickType_t elapsedTime;
 	uint32_t elapsedMs;
 
+    accumulatedTime = 0;	// we will aggregate file write times so we can average them at the end
+
 	XP_CYAN;
 	// Observing these messages confirms the initialisation sequence
 	xprintf("Starting FatFS Task\n");
@@ -1847,7 +1855,6 @@ void fatfs_setDeploymentId(const char *uuid_string) {
 	}
 }
 
-
 /**
  * Prints the CWD
  *
@@ -1865,7 +1872,6 @@ void fatfs_printCwd(void) {
 		xprintf("CWD is '%s'\n", cur_dir);
 	}
 }
-
 
 /**
  * @brief Create a directory path recursively (mkdir -p style).

@@ -33,6 +33,9 @@ extern "C" {
 
 /**************************************** Global Defines  *************************************/
 
+// default drive?
+#define DRV ""
+
 // TODO Experimental: set a limit on the name of files
 #define	FNAMELEN 16
 // required length for a 128-bit UUID (including trailing '\0')

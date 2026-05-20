@@ -172,7 +172,11 @@
 #define CAMERA_EXTRA_FILE "CAMERA_EX.BIN"
 #endif // USE_HM0360
 
-#define EXIF_MAX_LEN 512 // I have seen 350 used...
+// Maximum bytes that build_exif_segment() may write into exif_buffer[].
+// Must be a multiple of 512 so that a full buffer never needs padding
+// (see sector-alignment padding below).  Increase in 512-byte steps if
+// the EXIF content grows beyond this limit.
+#define EXIF_MAX_LEN 1024
 // Limit how many dynamic class entries we will write to EXIF to avoid buffer growth
 // TODO - should this not be the same as the maximaum number of classes defined elsewhere? e.g. the max number of labels?
 #define EXIF_MAX_DYNAMIC_CLASSES 4
@@ -254,7 +258,7 @@ static void sendMsgToMaster(char *str);
 // When final activity from the FatFS Task and IF Task are complete, enter DPD
 static void sleepWhenPossible(void);
 
-static void captureSequenceComplete(void);
+static void captureSequenceComplete(uint32_t accumulatedTime);
 
 static void changeEnableState(bool setEnabled);
 
@@ -382,7 +386,9 @@ static char msgToMaster[MSGTOMASTERLEN];
 static uint8_t cameraSystemEnabled = 0; // 0 = disabled 1 = enabled
 
 // Support for EXIF
-static uint8_t exif_buffer[EXIF_MAX_LEN];
+// Extra 512 bytes beyond EXIF_MAX_LEN absorbs the worst-case JPEG Comment
+// padding needed to reach the next sector boundary (see prepareJpegFile).
+static uint8_t exif_buffer[EXIF_MAX_LEN + 512];
 
 // Global cursor to where non-inline data will be appended
 static uint8_t *next_data_ptr;
@@ -1127,7 +1133,7 @@ static APP_MSG_DEST_T handleEventForNNProcessing(APP_MSG_T img_recv_msg) {
         // This represents the point at which an image has been captured and processed.
 
         if (g_cur_jpegenc_frame == g_captures_to_take) {
-        	captureSequenceComplete();
+        	captureSequenceComplete(img_recv_msg.msg_parameter);
         	// Stop the image sensor.
         	// move to earlier: configure_image_sensor(CAMERA_CONFIG_STOP);
         	image_task_state = APP_IMAGE_TASK_STATE_INIT;
@@ -1404,16 +1410,22 @@ static APP_MSG_DEST_T flagUnexpectedEvent(APP_MSG_T img_recv_msg)
  *
  * Placed here as a separate routine as it is called from 2 places.
  */
-static void captureSequenceComplete(void) {
-    // Current captures sequence completed
+static void captureSequenceComplete(uint32_t accumulatedTime) {
+    uint16_t averageTime;
+
+    averageTime = (g_captures_to_take == 0) ? 0 : (accumulatedTime / g_captures_to_take);
+
     XP_GREEN;
     xprintf("Current captures completed: %d\n", g_captures_to_take);
+    xprintf("Average file write time %dms\n", averageTime);
+
     xprintf("Total frames captured since last reset: %d\n", g_frames_total);
     XP_WHITE;
 
     // Inform BLE processor
-    snprintf(msgToMaster, MSGTOMASTERLEN, "Captured %d images. Last is %s",
-             (int)g_captures_to_take, lastImageFileName);
+    snprintf(msgToMaster, MSGTOMASTERLEN, "Captured %d images. Last is %s (File write %dms avg.)",
+             (int)g_captures_to_take, lastImageFileName, averageTime);
+
     sendMsgToMaster(msgToMaster);
 
     // Reset counters
@@ -2004,6 +2016,33 @@ static void prepareJpegFile(int8_t * outCategories, uint8_t classCount, fileBuff
 
 	// Build EXIF segment - placed in exif_buffer[] and size in exif_len
 	exifLength = build_exif_segment(outCategories, classCount);
+
+	// Pad exif_buffer to the next 512-byte sector boundary using a JPEG Comment
+	// segment (marker 0xFF 0xFE).  Without this, the non-sector-aligned EXIF size
+	// causes FatFS to split the write: one CMD24 flush for the partial first sector
+	// (EXIF + start of JPEG body), then a CMD25 batch for the remainder.  With the
+	// pad, fp->fptr lands on a sector boundary before the JPEG body, so FatFS writes
+	// the entire JPEG body as a single CMD25 transaction.
+	// JPEG Comment segments are valid anywhere between markers (ISO 10918-1 B.2.4.5)
+	// and are silently ignored by all conforming decoders.
+	// EXIF_MAX_LEN is a multiple of 512, so a full buffer never needs padding.
+	// exif_buffer is declared EXIF_MAX_LEN + 512 bytes to absorb the worst case.
+	if (exifLength > 0 && (exifLength % 512u) != 0) {
+		uint32_t pad = 512u - (exifLength % 512u);
+		if (pad < 4u) {
+			// A Comment segment needs at least 4 bytes (marker + 2-byte length).
+			// Skip to the following sector boundary if there is not enough room.
+			pad += 512u;
+		}
+		uint8_t *p = exif_buffer + exifLength;
+		*p++ = 0xFF;
+		*p++ = 0xFE;                             // JPEG Comment marker
+		uint16_t data_len = (uint16_t)(pad - 4u);
+		*p++ = (uint8_t)((data_len + 2u) >> 8);  // segment length MSB
+		*p++ = (uint8_t)((data_len + 2u) & 0xFF); // segment length LSB
+		memset(p, 0, data_len);
+		exifLength += pad;
+	}
 
 	fileOp.buffer = (uint8_t *)exif_buffer;
 	fileOp.length = exifLength;

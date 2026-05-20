@@ -162,9 +162,11 @@ jobs:
              # Fallback to Semantic version + build number
              SEMVER="${{ steps.semver.outputs.new_tag }}"
              UNIQUE_VERSION="${SEMVER}.${{ github.run_number }}"
+             BUILD_DATE=$(date "+%b %d %Y") # Fallback date
           fi
           
           echo "unique_version=${UNIQUE_VERSION}" >> $GITHUB_OUTPUT
+          echo "build_date=${BUILD_DATE}" >> $GITHUB_OUTPUT
           echo "Extracted device version: ${UNIQUE_VERSION}"
 
       - name: Setup Node.js
@@ -193,13 +195,17 @@ jobs:
           else
             echo "Error: firmware file not found!"
             ls -R ./firmware/
-            exit 1
-          fi
+      - name: Compute Firmware CRC
+        id: crc
+        run: |
+          node scripts/compute_firmware_crc.js "$FIRMWARE_PATH"
 
       - name: Upload to Supabase
         working-directory: ./scripts
         env:
           FIRMWARE_VERSION: ${{ steps.version.outputs.unique_version }}
+          FIRMWARE_BUILD_DATE: ${{ steps.version.outputs.build_date }}
+          FIRMWARE_CRC: ${{ steps.crc.outputs.crc }}
           RELEASE_NOTES: |
             Himax AI firmware ${{ steps.version.outputs.unique_version }}
             Branch: ${{ github.ref_name }}

@@ -195,6 +195,9 @@ jobs:
           else
             echo "Error: firmware file not found!"
             ls -R ./firmware/
+            exit 1
+          fi
+
       - name: Compute Firmware CRC
         id: crc
         run: |

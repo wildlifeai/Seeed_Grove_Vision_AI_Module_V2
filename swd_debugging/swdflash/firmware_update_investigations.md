@@ -251,18 +251,30 @@ Boot sequence:
 4. 2nd_bootloader loads `cm55m_application` from the selected slot
    (Slot A: 0x28000, Slot B: 0x128000)
 
-**Experimental evidence (all four cases tested, May 2026):**
+**Experimental evidence (five cases tested, May 2026):**
 
-| Slot A  | Slot B  | Selector | Result                        |
-|---------|---------|----------|-------------------------------|
-| valid   | valid   | B        | boots — runs Slot B app       |
-| empty   | valid   | B        | **does not boot**             |
-| valid   | valid   | A        | boots — runs Slot A app       |
-| valid   | empty   | A        | boots — runs Slot A app       |
+| Slot A        | Slot B                     | Selector | Result                    |
+|---------------|----------------------------|----------|---------------------------|
+| valid         | valid                      | B        | boots — runs Slot B app   |
+| empty         | valid                      | B        | **does not boot**         |
+| valid         | valid                      | A        | boots — runs Slot A app   |
+| valid         | empty                      | A        | boots — runs Slot A app   |
+| valid         | app only (0x28000+), no boot chain | B | **does not boot**   |
 
-Slot B content is entirely irrelevant to whether the board boots.
-Slot A must always contain a valid, RSA-verifiable boot chain image.
-The selector controls only which cm55m_application is executed.
+The fifth case is critical: Slot A intact, Slot B has application data at 0x128000
+but its 0x100000–0x127FFF is all 0xFF (boot chain absent) — board does not boot
+from Slot B even though Slot A is valid and selected.
+
+**Refined understanding:**
+- ROM always loads 2nd_bootloader from Slot A (unchanged)
+- 2nd_bootloader reads `hx_mem_descriptor_ota` from the **selected slot** (slot_base
+  + 0x27000) to locate that slot's application
+- If the selected slot's `hx_mem_descriptor_ota` is absent (0xFF), boot fails
+- Therefore Slot B must receive a complete image (including boot chain descriptors)
+  whenever it is written
+
+Slot A's boot chain must never be erased while the board runs from Slot B.
+Slot B's boot chain can be fully erased and rewritten at any time (safe).
 
 **Why both slots contain bootloader components:**
 Both slots carry `hx_memory_descriptor`, `2nd_bootloader`, `bootloader`, and
@@ -289,34 +301,38 @@ This was confirmed with `erase_app.bat 0` while booted from Slot 1:
 - `dump_flash.bat` + `check_slots.bat` verified the boot chain was preserved
 - Board booted normally after the erase
 
-**Fix implemented in `firmware` CLI command (May 2026, tested OK):**
-`erase_firmware_slot()`, `write_firmware_from_sd()`, and `verify_firmware_slot()`
-in `xip_manager.c` now all start at `FLASH_APP_OFFSET` (0x28000) within the slot,
-not at the slot base.  The boot chain (0x00000–0x27FFF) is never erased, written,
-or compared during a normal application OTA update.
+**Fix implemented in `firmware` CLI command (May 2026):**
 
-Key constant added to `xip_manager.c`:
+Key constant in `xip_manager.c`:
 ```c
 #define FLASH_APP_OFFSET  0x28000   // cm55m_application start (dpd layout)
 ```
 
-`erase_firmware_slot()` uses a two-phase erase because 0x28000 is not 64 KB-aligned:
-- Phase 1: 8 × 4 KB sector erases  (0x28000–0x2FFFF)
-- Phase 2: 13 × 64 KB block erases (0x30000–0xFFFFF)
+The erase/write/verify behaviour depends on which slot is the target:
 
-`write_firmware_from_sd()` seeks to `FLASH_APP_OFFSET` in the SD card file with
-`f_lseek()` then writes from `slot_base + FLASH_APP_OFFSET` in flash.
+**Target = Slot A** (board running from Slot B):
+- Erase: from `FLASH_APP_OFFSET` only — boot chain at 0x00000–0x27FFF preserved
+- Erase uses two phases (0x28000 is not 64 KB-aligned):
+  - Phase 1: 8 × 4 KB sector erases  (0x28000–0x2FFFF)
+  - Phase 2: 13 × 64 KB block erases (0x30000–0xFFFFF)
+- Write: `f_lseek` to `FLASH_APP_OFFSET` in file, write to `0x00028000` in flash
+- Verify: `f_lseek` to `FLASH_APP_OFFSET` in file, read from `0x00028000` in flash
 
-`verify_firmware_slot()` also seeks to `FLASH_APP_OFFSET` in the file and reads
-from `slot_base + FLASH_APP_OFFSET` in flash — verifying exactly what was written.
-The CRC check in `prvFirmwareCommand()` (CLI-FATFS-commands.c) is unchanged and
-still covers the entire file before any flash operation.
+**Target = Slot B** (board running from Slot A):
+- Erase: full 1 MB (16 × 64 KB blocks from 0x00100000)
+- Write: full image from file byte 0 to flash `0x00100000`
+- Verify: full image from file byte 0 vs flash `0x00100000`
+- Reason: the 2nd_bootloader (always from Slot A) reads Slot B's
+  `hx_mem_descriptor_ota` at 0x00127000 to locate the application.
+  If this is absent (0xFF), the board will not boot from Slot B even
+  though Slot A and the selector are intact.
 
-The boot chain components (hx_memory_descriptor, 2nd_bootloader, bootloader,
-hx_mem_descriptor_ota) at 0x00000–0x27FFF appear invariant across application
-builds that use the same Himax SDK version.  If the SDK is ever updated with new
-bootloader blobs, those components must be reprogrammed via SWD (`burn.bat`), not
-via the `firmware` CLI command.
+The CRC check in `prvFirmwareCommand()` (CLI-FATFS-commands.c) covers the entire
+file before any flash operation — unchanged.
+
+The Himax-supplied boot chain blobs at 0x00000–0x27FFF appear invariant across
+application builds using the same SDK.  SDK updates that change the bootloader
+require SWD reprogramming via `burn.bat`.
 
 ### Diagnosis of the faulty board (May 2026)
 

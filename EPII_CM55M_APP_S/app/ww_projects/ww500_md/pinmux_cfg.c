@@ -48,6 +48,8 @@ void aon_gpio1_pinmux_cfg(SCU_PINMUX_CFG_T *pinmux_cfg)
 	pinmux_cfg->pin_pa1 = SCU_PA1_PINMUX_AON_GPIO1;         /*!< pin PA1*/
 }
 
+#if 0
+// Not used
 // Initialise a pin for RP camera enable: SENSOR_ENABLE
 void rp_sensor_enable_gpio1_pinmux_cfg(SCU_PINMUX_CFG_T *pinmux_cfg) {
 
@@ -58,11 +60,16 @@ void rp_sensor_enable_gpio1_pinmux_cfg(SCU_PINMUX_CFG_T *pinmux_cfg) {
 	pinmux_cfg->pin_pb10 = SCU_PB10_PINMUX_GPIO1;         /*!< pin PB10*/
 #endif // WW500_C00
 }
+#endif
+
 
 /**
  * Controls the RP SENSOR_ENABLE signal
  *
- * Note required if the HM0360 is the only camera
+ * Not required if the HM0360 is the only camera
+ *
+ * WARNING: if this is called the PB7 is changed to a GPIO Pin so no longer
+ * works as a SWD pin. This prevents the SWD accessing the XIP memory chip.
  *
  * @param enable - if true then enable the RP camera
  */

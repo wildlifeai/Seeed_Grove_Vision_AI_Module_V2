@@ -938,7 +938,8 @@ static int verify_firmware_slot(uint8_t slot, const char *filepath) {
     FRESULT res;
     FIL file;
     UINT bytes_read;
-    uint32_t flash_address = (slot == 0) ? FLASH_SLOT_A_ADDR : FLASH_SLOT_B_ADDR;
+    uint32_t slot_base     = (slot == 0) ? FLASH_SLOT_A_ADDR : FLASH_SLOT_B_ADDR;
+    uint32_t flash_address = slot_base + FLASH_APP_OFFSET;
     uint32_t total_verified = 0;
     int ret = 0;
 
@@ -960,6 +961,20 @@ static int verify_firmware_slot(uint8_t slot, const char *filepath) {
         return -1;
     }
 
+    // Skip the boot chain — verify only the application portion that was written.
+    res = f_lseek(&file, FLASH_APP_OFFSET);
+    if (res != FR_OK) {
+        f_close(&file);
+        vPortFree(file_buf);
+        vPortFree(flash_buf);
+        xprintf("verify_firmware_slot: seek to 0x%08x failed (%d)\n",
+                (unsigned)FLASH_APP_OFFSET, res);
+        return -1;
+    }
+
+    xprintf("verify_firmware_slot: slot %d — verifying application 0x%08x onwards\n",
+            slot, (unsigned)flash_address);
+
     if (!disable_xip()) {
         f_close(&file);
         vPortFree(file_buf);
@@ -976,7 +991,7 @@ static int verify_firmware_slot(uint8_t slot, const char *filepath) {
             break;
         }
         if (bytes_read == 0) {
-            break;  // EOF — all bytes matched - this is the way out of the while() loop
+            break;  // EOF — all bytes matched
         }
 
         uint32_t read_size = align_up(bytes_read, 4);
@@ -1010,8 +1025,11 @@ static int verify_firmware_slot(uint8_t slot, const char *filepath) {
     vPortFree(flash_buf);
 
     if (ret == 0) {
-        xprintf("verify_firmware_slot: slot %d full verify OK (%lu bytes)\n",
-                slot, (unsigned long)total_verified);
+        xprintf("verify_firmware_slot: slot %d application verify OK"
+                "  0x%08x–0x%08x  (%lu bytes)\n",
+                slot, (unsigned)(slot_base + FLASH_APP_OFFSET),
+                (unsigned)(slot_base + FLASH_APP_OFFSET + total_verified - 1),
+                (unsigned long)total_verified);
     }
     return ret;
 }

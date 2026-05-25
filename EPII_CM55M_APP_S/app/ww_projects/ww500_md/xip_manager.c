@@ -94,6 +94,15 @@
 #define FLASH_SLOT_B_ADDR       0x00100000           // Physical base of firmware Slot B
 #define FLASH_SLOT_SIZE         (1024 * 1024)        // 1 MB per slot (16 × 64 KB blocks)
 
+// Offset within each slot at which the cm55m_application BLP packet begins (dpd layout).
+// Components below this offset (hx_memory_descriptor, 2nd_bootloader, bootloader,
+// hx_mem_descriptor_ota) are Himax-supplied blobs that are identical across all
+// application builds.  The ROM bootloader always loads the boot chain from Slot A
+// regardless of the slot selector, so these components must never be erased during
+// a firmware update — corruption of this region bricks the board even when Slot B
+// is intact and selected.  Erase and program operations start at this offset.
+#define FLASH_APP_OFFSET        0x28000              // 160 KB (dpd layout)
+
 // XIP virtual/physical address mapping
 #define FLASH_VIRTUAL_BASE      0x3A000000
 #define FLASH_PHYSICAL_BASE     0x00000000
@@ -1011,11 +1020,19 @@ static int verify_firmware_slot(uint8_t slot, const char *filepath) {
 /*************************************** Firmware Slot Management ********************************/
 
 /**
- * Erase one firmware image slot (16 × 64 KB blocks).
+ * Erase the application portion of one firmware slot.
+ *
+ * Only erases from FLASH_APP_OFFSET (0x28000) to end-of-slot, leaving the
+ * boot chain components at slot_base + 0x00000–0x27FFF intact.  This ensures
+ * that an interrupted firmware update cannot corrupt the boot chain.
+ *
+ * FLASH_APP_OFFSET (0x28000 = 160 KB) is not 64 KB-aligned, so two erase
+ * phases are used:
+ *   Phase 1: 8 × 4 KB sector erases  (0x28000–0x2FFFF)
+ *   Phase 2: 13 × 64 KB block erases (0x30000–0xFFFFF)
  */
 static int erase_firmware_slot(uint8_t slot) {
     uint32_t slot_addr;
-    const uint32_t blocks_needed = FLASH_SLOT_SIZE / FLASH_BLOCK_SIZE;  // 16
 
     if (slot == 0) {
         slot_addr = FLASH_SLOT_A_ADDR;
@@ -1030,30 +1047,52 @@ static int erase_firmware_slot(uint8_t slot) {
         return -1;
     }
 
-    xprintf("Erasing firmware slot %d (%lu x 64KB blocks from 0x%08x)\n",
-            slot, (unsigned long)blocks_needed, (unsigned)slot_addr);
+    uint32_t app_start      = slot_addr + FLASH_APP_OFFSET;
+    uint32_t block_boundary = ((app_start + FLASH_BLOCK_SIZE - 1) / FLASH_BLOCK_SIZE) * FLASH_BLOCK_SIZE;
+    uint32_t slot_end       = slot_addr + FLASH_SLOT_SIZE;
+    uint32_t n_sectors      = (block_boundary - app_start) / FLASH_SECTOR_SIZE;   // 8
+    uint32_t n_blocks       = (slot_end - block_boundary)  / FLASH_BLOCK_SIZE;    // 13
+
+    xprintf("erase_firmware_slot: slot %d — boot chain preserved 0x%08x–0x%08x\n",
+            slot, (unsigned)slot_addr, (unsigned)(app_start - 1));
+    xprintf("erase_firmware_slot: phase 1: %lu x 4KB sectors  0x%08x–0x%08x\n",
+            (unsigned long)n_sectors, (unsigned)app_start, (unsigned)(block_boundary - 1));
+    xprintf("erase_firmware_slot: phase 2: %lu x 64KB blocks  0x%08x–0x%08x\n",
+            (unsigned long)n_blocks, (unsigned)block_boundary, (unsigned)(slot_end - 1));
 
     if (!disable_xip()) {
         return -1;
     }
 
-    uint32_t addr = slot_addr;
-    for (uint32_t i = 0; i < blocks_needed; i++) {
+    // Phase 1: 4 KB sector erases up to the next 64 KB boundary
+    uint32_t addr = app_start;
+    for (uint32_t i = 0; i < n_sectors; i++) {
+        int ret = hx_lib_spi_eeprom_erase_sector(spi_inst, addr, FLASH_SECTOR);
+        if (ret != 0) {
+            xprintf("erase_firmware_slot: 4KB erase failed at 0x%08x\n", (unsigned)addr);
+            enable_xip();
+            return -1;
+        }
+        addr += FLASH_SECTOR_SIZE;
+        vTaskDelay(1);
+    }
+
+    // Phase 2: 64 KB block erases to end of slot
+    addr = block_boundary;
+    for (uint32_t i = 0; i < n_blocks; i++) {
         int ret = hx_lib_spi_eeprom_erase_sector(spi_inst, addr, FLASH_64KBLOCK);
         if (ret != 0) {
-            xprintf("erase_firmware_slot: erase failed at 0x%08x\n", (unsigned)addr);
+            xprintf("erase_firmware_slot: 64KB erase failed at 0x%08x\n", (unsigned)addr);
             enable_xip();
             return -1;
         }
         addr += FLASH_BLOCK_SIZE;
-
-        // Force a task switch to prevent the inactivity timeout firing.
-        // Will cause a call to vApplicationTaskSwitchedIn()
         vTaskDelay(1);
     }
 
     enable_xip();
-    xprintf("Firmware slot %d erased OK\n", slot);
+    xprintf("erase_firmware_slot: slot %d application area erased OK  0x%08x–0x%08x\n",
+            slot, (unsigned)app_start, (unsigned)(slot_end - 1));
     return 0;
 }
 
@@ -1076,11 +1115,12 @@ static int write_firmware_from_sd(uint8_t slot, const char *filepath) {
     uint32_t write_size;
     int32_t result;
     DWORD file_size;
+    uint32_t slot_base;
 
     if (slot == 0) {
-        flash_address = FLASH_SLOT_A_ADDR;
+        slot_base = FLASH_SLOT_A_ADDR;
     } else if (slot == 1) {
-        flash_address = FLASH_SLOT_B_ADDR;
+        slot_base = FLASH_SLOT_B_ADDR;
     } else {
         xprintf("write_firmware_from_sd: invalid slot %d\n", slot);
         return -1;
@@ -1126,8 +1166,38 @@ static int write_firmware_from_sd(uint8_t slot, const char *filepath) {
         return -1;
     }
 
-    xprintf("Writing %lu bytes to firmware slot %d (0x%08x)\n",
-            (unsigned long)file_size, slot, (unsigned)flash_address);
+    if (file_size <= FLASH_APP_OFFSET) {
+        f_close(&file);
+        vPortFree(write_buf);
+        vPortFree(verify_buf);
+        xprintf("write_firmware_from_sd: file too small — no application data beyond 0x%08x\n",
+                (unsigned)FLASH_APP_OFFSET);
+        return -1;
+    }
+
+    // Skip boot chain — seek to application start in the image file.
+    // The boot chain (file bytes 0x00000–0x27FFF) is already in flash and must not
+    // be overwritten.  Only the application (file bytes 0x28000 onwards) is written.
+    res = f_lseek(&file, FLASH_APP_OFFSET);
+    if (res != FR_OK) {
+        f_close(&file);
+        vPortFree(write_buf);
+        vPortFree(verify_buf);
+        xprintf("write_firmware_from_sd: seek to 0x%08x failed (%d)\n",
+                (unsigned)FLASH_APP_OFFSET, res);
+        return -1;
+    }
+
+    flash_address = slot_base + FLASH_APP_OFFSET;
+    uint32_t app_bytes = (uint32_t)file_size - FLASH_APP_OFFSET;
+
+    xprintf("write_firmware_from_sd: slot %d — writing application only\n", slot);
+    xprintf("  file  0x%08x–0x%08x  →  flash 0x%08x–0x%08x  (%lu bytes)\n",
+            (unsigned)FLASH_APP_OFFSET, (unsigned)(file_size - 1),
+            (unsigned)flash_address,    (unsigned)(flash_address + app_bytes - 1),
+            (unsigned long)app_bytes);
+    xprintf("  boot chain (file 0x00000000–0x%08x) skipped — unchanged in flash\n",
+            (unsigned)(FLASH_APP_OFFSET - 1));
 
     if (!disable_xip()) {
         f_close(&file);
@@ -1205,14 +1275,17 @@ static int write_firmware_from_sd(uint8_t slot, const char *filepath) {
     vPortFree(write_buf);
     vPortFree(verify_buf);
 
-    if (total_written != (uint32_t)file_size) {
+    if (total_written != app_bytes) {
         xprintf("write_firmware_from_sd: incomplete write %lu/%lu bytes\n",
-                (unsigned long)total_written, (unsigned long)file_size);
+                (unsigned long)total_written, (unsigned long)app_bytes);
         return -1;
     }
 
-    xprintf("Firmware slot %d written and chunk-verified OK (%lu bytes)\n",
-            slot, (unsigned long)total_written);
+    xprintf("write_firmware_from_sd: slot %d application written and chunk-verified OK\n"
+            "  flash 0x%08x–0x%08x  (%lu bytes)\n",
+            slot, (unsigned)(slot_base + FLASH_APP_OFFSET),
+            (unsigned)(slot_base + FLASH_APP_OFFSET + total_written - 1),
+            (unsigned long)total_written);
     return 0;
 }
 

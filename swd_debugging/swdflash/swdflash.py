@@ -729,10 +729,10 @@ def main():
                 print(colorama.Fore.RED + f"Connection attempt {attempt}/{args.retries} failed: {e}" + colorama.Style.RESET_ALL)
                 if attempt < args.retries:
                     if attempt == 1:
-                        print(colorama.Fore.CYAN + "  Release RESET now — waiting 2s for bootloader to configure SWD pins..." + colorama.Style.RESET_ALL)
+                        print(colorama.Fore.CYAN + "  Release RESET now — waiting 0.5s for bootloader to configure SWD pins..." + colorama.Style.RESET_ALL)
                     else:
-                        print(f"  Retrying in 2s...")
-                    time.sleep(2)
+                        print(f"  Retrying in 0.5s...")
+                    time.sleep(0.5)
 
         if not connected:
             print(colorama.Fore.RED + "ERROR: Could not connect. Check SWD wiring and power. Hold RESET during countdown, release when attempt 1 fails." + colorama.Style.RESET_ALL)

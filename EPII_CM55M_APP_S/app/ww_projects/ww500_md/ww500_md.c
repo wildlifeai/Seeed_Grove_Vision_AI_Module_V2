@@ -569,7 +569,6 @@ void app_ledGreen(bool on) {
  */
 void app_ledBlue(bool on) {
 #ifdef PB10ISLEDBLUE
-	error
 	if (on) {
 		hx_drv_gpio_set_out_value(GPIO1, GPIO_OUT_HIGH);
 	}

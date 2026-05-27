@@ -67,6 +67,11 @@ we2_image_gen_local_dpd/secureboot_tool/**/*.log
 # No need to do anything else � they are tracked by default
 
 
+# Python bytecode
+*.pyc
+*.pyo
+__pycache__/
+
 # Editor config
 .vscode/
 

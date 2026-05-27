@@ -128,6 +128,7 @@ options = {
     'option_defaults': {
         'frequency': 7200000,
         'reset_type': 'sw_sysresetreq',
+        'connect_mode': 'under-reset',  # allows connection when firmware is running
     },
 }
 
@@ -698,14 +699,45 @@ def main():
     print("===== start =====")
     signal.signal(signal.SIGINT, signal_handler)
 
-    try:
-        session = ConnectHelper.session_with_chosen_probe(
-            blocking=True,
-#            target_override="we2",
-            target_override="cortex-m",
-            **options)
+    if args.delay > 0:
+        print(colorama.Fore.CYAN + f">>> Hold RESET during countdown, release when attempt 1 fails — connecting in {args.delay}s <<<" + colorama.Style.RESET_ALL)
+        print(colorama.Fore.CYAN + "    (SWD pins are configured by the bootloader; attempt 2 connects after boot)" + colorama.Style.RESET_ALL)
+        for i in range(args.delay, 0, -1):
+            print(f"  {i}...  ", end='\r', flush=True)
+            time.sleep(1)
+        print()
 
-        session.open()
+    try:
+        connected = False
+        for attempt in range(1, args.retries + 1):
+            try:
+                session = ConnectHelper.session_with_chosen_probe(
+                    blocking=True,
+#                    target_override="we2",
+                    target_override="cortex-m",
+                    **options)
+                session.open()
+                connected = True
+                break
+            except exceptions.TransferError as e:
+                if session is not None:
+                    try:
+                        session.close()
+                    except Exception:
+                        pass
+                    session = None
+                print(colorama.Fore.RED + f"Connection attempt {attempt}/{args.retries} failed: {e}" + colorama.Style.RESET_ALL)
+                if attempt < args.retries:
+                    if attempt == 1:
+                        print(colorama.Fore.CYAN + "  Release RESET now — waiting 0.5s for bootloader to configure SWD pins..." + colorama.Style.RESET_ALL)
+                    else:
+                        print(f"  Retrying in 0.5s...")
+                    time.sleep(0.5)
+
+        if not connected:
+            print(colorama.Fore.RED + "ERROR: Could not connect. Check SWD wiring and power. Hold RESET during countdown, release when attempt 1 fails." + colorama.Style.RESET_ALL)
+            return
+
         target = session.board.target
         target.reset_and_halt()
 
@@ -836,8 +868,16 @@ if __name__ == '__main__':
 
     parser.add_argument("--device",
                         default=Device.W25Q128JW_4096, type=str,
-                        choices=[Device.W25Q128JW_4096, Device.W25Q128JW_8192], 
+                        choices=[Device.W25Q128JW_4096, Device.W25Q128JW_8192],
                         help="Select flash device. Default is " + Device.W25Q128JW_4096)
+
+    parser.add_argument("--delay",
+                        default=5, type=int,
+                        help="Countdown seconds before connecting — hold RESET during this time. 0 to skip. Default is 5.")
+
+    parser.add_argument("--retries",
+                        default=3, type=int,
+                        help="Number of connection attempts before giving up. Default is 3.")
 
     args = parser.parse_args()
 

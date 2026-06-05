@@ -1,5 +1,8 @@
 name: Upload and Release Himax Firmware
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 on:
   push:
     branches:
@@ -55,7 +58,6 @@ jobs:
           release_branches: main
           dry_run: true # Don't create tag yet, just calculate version
           tag_prefix: v
-          initial_version: 0.0.0
           
       - name: Generate Release Notes
         id: release_notes

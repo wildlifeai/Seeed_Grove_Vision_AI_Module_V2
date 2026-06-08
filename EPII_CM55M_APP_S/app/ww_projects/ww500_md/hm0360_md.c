@@ -565,11 +565,12 @@ void hm0360_md_printGrid(uint8_t *roiOut, uint16_t numBlocks, char *msg, uint16_
 
  * Bit 0 - 1 enables, 0 disables
  *
- * @param - value written to the register
+ * @param - true if the flash is required
  * @return error code
  */
-HX_CIS_ERROR_E hm0360_md_configureStrobe(uint8_t val) {
+HX_CIS_ERROR_E hm0360_md_configureStrobe(bool flashRequired) {
 	HX_CIS_ERROR_E ret;
+	uint8_t val;
 
 	// Don't proceed if the HM0360 is missing or faulty
 	if (!hm0360_present) {
@@ -577,6 +578,13 @@ HX_CIS_ERROR_E hm0360_md_configureStrobe(uint8_t val) {
 	}
 
     saveMainCameraConfig();
+
+    if (flashRequired) {
+    	val = HM0360_SENSOR_STROBE_MODE;
+    }
+    else {
+    	val = 0;
+    }
 
     ret = hx_drv_cis_set_reg(STROBE_CFG, val, 0);
 

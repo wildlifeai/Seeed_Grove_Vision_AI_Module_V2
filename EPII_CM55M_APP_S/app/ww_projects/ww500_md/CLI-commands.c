@@ -982,7 +982,9 @@ static BaseType_t prvLedFlash(char *pcWriteBuffer, size_t xWriteBufferLen, const
 	ledFlashInit();
 	ledFlashBrightness(brightness);	// Call before ledFlashSelectLED()
 	ledFlashSelectLED(VIS_LED);
-	ledFlashEnable(duration);
+	// set duration OP_PARAMETER_FLASH_DURATION
+	fatfs_setOperationalParameter(OP_PARAMETER_FLASH_DURATION, duration);
+	ledFlashEnable();
 
 	/* There is no more data to return after this single string, so return pdFALSE. */
 	return pdFALSE;
@@ -1024,6 +1026,9 @@ static BaseType_t prvSetUtc(char *pcWriteBuffer, size_t xWriteBufferLen, const c
 		ret = exif_utc_set_rtc_from_time(&tm);	// This takes 1-2s
 		elapsedTime = xTaskGetTickCount() - startTime;
 		elapsedMs = (elapsedTime * 1000) / configTICK_RATE_HZ;
+
+		// We also need to tell the ledFlash code in case the timer is set by the time of day
+		ledFlashNewTime(tm);
 
 		if (ret == RTC_NO_ERROR) {
 			snprintf(pcWriteBuffer, xWriteBufferLen, "RTC set to %s (this took %dms)", pcParameter, (int) elapsedMs);

@@ -23,6 +23,8 @@
 #include "ledFlash.h"
 #include "pca9574.h"
 
+#include "hm0360_md.h"
+#include "hx_drv_rtc.h"
 
 /*************************************** Defines **************************************/
 
@@ -42,6 +44,9 @@
 // Probably not needed as the state machine should also turn it off.
 //#define TIMER_TURNS_OFF_FLASH
 
+// There are 1440 minutes in a day
+#define MINUTES_PER_DAY (24 * 60)
+
 /*************************************** Local Function Declarations ******************/
 
 #ifdef TIMER_TURNS_OFF_FLASH
@@ -55,7 +60,20 @@ extern QueueHandle_t xImageTaskQueue;
 
 /*************************************** Local variables ******************************/
 
+// What determines how to figure out if the LED shoud flash
+static FlashLedMode_t flashMode = FLASH_MODE_OFF;
+
 static bool ledFlashInitialised = false;
+
+// The flash should be operating as determined by OpParam settings, AE values and time of day
+static bool flashActive = false;
+
+// Minutes after midnight, UTC
+static uint16_t flashStartTime;
+
+// Minutes (stop time determined by this and the start time)
+uint16_t flashDuration;
+
 
 // Need to maintain a copy of bits sent to the control/status chip, so we can change individual bits
 static uint8_t controlBits = 0;
@@ -110,6 +128,9 @@ static void FlashOffTimerCallback(TimerHandle_t xTimer) {
  */
 bool ledFlashInit(void) {
 	HX_CIS_ERROR_E ret;
+
+	flashMode = FLASH_MODE_OFF;
+	flashActive = false;
 
 	ret = pca9574_init(PCA9574_I2C_ADDRESS_0);
 
@@ -172,9 +193,7 @@ void ledFlashBrightness(uint8_t brightness) {
 	controlBits &= ~0x0f;	// clear the 4 LS bits
 	controlBits |= brBits;	// sets the 4 LS bits
 
-	// Don't send except in ledFlashEnable() and ledFlashDisable()
-	// Now send these bits to the PCA9574
-	//pca9574_write(PCA9574_I2C_ADDRESS_0, PCA9574_REG_OUT, controlBits);
+	// The control bits are only written to hardware by ledFlashEnable() and ledFlashDisable()
 
 	XP_LT_RED;
     xprintf("DEBUG: ledFlashBrightness(%d%%) [brbits = 0x%01x]\n", brightness, brBits);
@@ -185,6 +204,9 @@ void ledFlashBrightness(uint8_t brightness) {
  * Selects the LED(s) to use
  *
  * In some hardware implementations there is only one LED - this is VISLED
+ *
+ * This is the place at which we can enable or disable the LED based on the
+ * flashMode and other conditions.
  *
  * @param led - a bit mask, one for each LED
  */
@@ -210,7 +232,7 @@ void ledFlashSelectLED(FlashLeds_t led) {
 		controlBits |= LF_IRENABLE;
 	}
 
-	// Don't send except in ledFlashEnable() and ledFlashDisable()
+	// Don't write controlBits except in ledFlashEnable() and ledFlashDisable()
 	XP_LT_RED;
 	xprintf("DEBUG: ledFlashSelectLED(%d)\n", led);
 	XP_WHITE;
@@ -218,40 +240,36 @@ void ledFlashSelectLED(FlashLeds_t led) {
 
 /**
  * Turns on the Flash LED
+ *
+ * ledFlashEnable() and ledFlashDisable() are the only functions
+ * that writecontrolBits to the hardware.
+ *
+ * This is not (normally) used if the HM0360 is the main camera.
+ *
  * The LED will be turned off when the Frame Ready message arrives.
  * At present the LED will also be turned off later by a timer,
  * but this is redundant. Left in at present as a precaution.
  * Also turned off explicitly before entering DPD, again as a precaution.
  *
  * NOTE: this turns on the FLASHEN bit but does NOT affect the HM0360 whose STROBE pin might also flash the LED.
- *
- * @param duration - a period after which the flash is turned off
  */
-void ledFlashEnable(uint16_t duration) {
+void ledFlashEnable(void) {
+
 	if (!ledFlashInitialised) {
 		return;
 	}
 
 	XP_LT_RED;
-
-	if ((fatfs_getOperationalParameter(OP_PARAMETER_FLASH_LED) == 0) ||
-			(duration < LEDFLASHDURATIONMIN) ||
-			(duration > LEDFLASHDURATIONMAX))  {
-		// Neither LED is selected, or inappropriate duration
-		xprintf("DEBUG: not turning on flash\n");
-		ledFlashDisable();
-		return;
-	}
-	else {
-		xprintf("DEBUG: ledFlashEnable(%dms)\n", duration);
-	}
-	XP_WHITE;
+	xprintf("DEBUG: ledFlashEnable()\n");
 
 	controlBits |= LF_FLENABLE;
 	// Now send these bits to the PCA9574
 	pca9574_write(PCA9574_I2C_ADDRESS_0, PCA9574_REG_OUT, controlBits);
 
+    XP_WHITE;
+
 #ifdef TIMER_TURNS_OFF_FLASH
+    uint16_t duration = fatfs_getOperationalParameter(OP_PARAMETER_FLASH_DURATION);
 	// Start a timer that delays for the defined interval.
     if (flashOffTimer != NULL) {
         // Change the period and start the timer
@@ -263,6 +281,9 @@ void ledFlashEnable(uint16_t duration) {
 
 /**
  * Turns off the Flash LED
+ *
+ * ledFlashEnable() and ledFlashDisable() are the only functions
+ * that writecontrolBits to the hardware.
  *
  * NOTE: this turns off the FLASHEN bit but does NOT stop the HM0360 from flashing the LED
  */
@@ -280,4 +301,164 @@ void ledFlashDisable(void) {
 	pca9574_write(PCA9574_I2C_ADDRESS_0, PCA9574_REG_OUT, controlBits);
 
     XP_WHITE;
+}
+
+/**
+ * Turns on the Flash LED if conditions are right
+ *
+ * This calls ledFlashEnable() or ledFlashDisable() which are the only functions
+ * that write controlBits to the hardware.
+ */
+void ledFlashActivate(void) {
+
+	if (!ledFlashInitialised) {
+		return;
+	}
+
+	if (flashActive) {
+		ledFlashEnable();
+	}
+	else {
+		ledFlashDisable();
+	}
+}
+
+/**
+ * Returns whether the LED flash should be in use
+ *
+ * @return true if the LED is active
+ */
+bool ledFlashIsActive(void) {
+	return flashActive;
+}
+
+/**
+ * Setter for flashMode from operational parameter values
+ *
+ * Call when the Operational Parameters have been loaded from SD card
+ *
+ * There are 4 cases to determine whether the LED flash is on or off:
+
+1. Always off
+2. Always on
+3. Selected by HM0360 auto-exposure registers (on when it is dark)
+4. Selected by time of day
+
+| No. |  Case                    | OP_PARAMETER_FLASH_LED | Other Condition |
+|-----|--------------------------|------------------------|------------|
+| 1   | Always off               | 0      |                            |
+| 2   | Always on                | 1 or 2 | OP_PARAMETER_FLASH_LED_DURATION = 0  |
+| 3   | Selected by AE           | 1 or 2 | OP_PARAMETER_FLASH_LED_DURATION = 1  |
+| 4   | Selected by time of day  | 1 or 2 | OP_PARAMETER_FLASH_LED_DURATION > 1 && OP_PARAMETER_FLASH_LED_START_TIME |
+ *
+ *
+ */
+void ledFlashSetFlashModeFromOpParam(uint16_t ledInUse, uint16_t startTime, uint16_t duration) {
+
+	// ledFlashSelectLED
+	ledFlashSelectLED(ledInUse);
+
+	if (ledInUse == 0) {
+		// No LEDs
+		flashMode = FLASH_MODE_OFF;
+		flashActive = false;
+	}
+
+	else if (duration == 0) {
+		// Always on
+		flashMode = FLASH_MODE_ALWAYS_ON;
+		flashActive = true;
+	}
+	else if (duration == 1) {
+		// Determined by AE registers
+		flashMode = FLASH_MODE_AE;
+		flashActive = false; // off for now - turn on with the AE values
+	}
+	else {
+		// Determined by the time of day
+		flashMode = FLASH_MODE_TIME_OF_DAY;
+		// off for now - turn on when the correct UTC time arrives with ledFlashNewTime()
+		flashActive = false;
+		if (startTime >= MINUTES_PER_DAY) {
+			flashStartTime = MINUTES_PER_DAY - 1;
+		}
+		else {
+			flashStartTime = startTime;
+		}
+
+		// Note that flashStopTime can be greater than MINUTESINDAY
+		if (duration > MINUTES_PER_DAY) {
+			flashDuration = MINUTES_PER_DAY;
+		}
+		else {
+			flashDuration = duration;
+		}
+	}
+
+	// debug
+	xprintf("In ledFlashSetFlashModeFromOpParam with %d %d %d Mode %d\n",
+			ledInUse, startTime, duration, flashMode);
+}
+
+
+// Setter for flashMode
+void ledFlashSetFlashMode(FlashLedMode_t mode) {
+	flashMode = mode;
+}
+
+// Getter for flashMode
+FlashLedMode_t  ledFlashGetFlashMode(void) {
+	return flashMode;
+}
+
+/**
+ * The UTC has arrived from the BLE processor - this might determine LED Flash behaviour
+ *
+ * We just need to examine the hours and minutes.
+ *
+ * @param time - structure with hours, minutes etc
+ */
+void ledFlashNewTime(rtc_time time) {
+    uint16_t minutesAfterMidnight;
+
+    if (flashMode != FLASH_MODE_TIME_OF_DAY) {
+    	return;
+    }
+
+    minutesAfterMidnight = (time.tm_hour * 60) + time.tm_min;
+
+    // flashStartTime = minutes after midnight
+    // flashDuration = minutes
+
+    // Calculate whether we are in the time band for which the flash should be activated
+    flashActive =
+        ((minutesAfterMidnight - flashStartTime + MINUTES_PER_DAY) % MINUTES_PER_DAY)
+        < flashDuration;
+
+	xprintf("It is %d minutes after midnight UTC. Start time is %d and duration is %d. Flash is %soperating\n",
+			minutesAfterMidnight, flashStartTime, flashDuration,
+			flashActive ? " ": "not ");
+
+	ledFlashActivate();	// Turn on Flash LED (conditionally)
+}
+
+/**
+ * The HM0360 AE registers values have arrived - this might determine LED Flash behaviour
+ *
+ *
+ *
+ * @param gainRegs
+ */
+void ledFlashNewAEValues(HM0360_GAIN_T * gainRegs) {
+
+    if (flashMode != FLASH_MODE_AE) {
+    	return;
+    }
+
+    // Calculate whether the AE level is too low.
+    flashActive = 0;
+
+	xprintf("AE regs /n");
+
+	ledFlashActivate();	// Turn on Flash LED (conditionally)
 }

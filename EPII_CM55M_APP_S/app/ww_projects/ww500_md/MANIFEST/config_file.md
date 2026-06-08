@@ -51,11 +51,13 @@ Operational Parameters which are not present in CONFIG.TXT are given their defau
 |    13 | OP_PARAMETER_FLASH_LED                | 0             | LED bit mask: visible LED used = 1, infra-red LED used =2, none = 0              |
 |    14 | OP_PARAMETER_MODEL_PROJECT            | 0             | Model project ID used for the NN model (0 disables NN)|
 |    15 | OP_PARAMETER_MODEL_VERSION            | 0             | Model version number used for the NN model |
-|    16 | OP_PARAMETER_MODEL_THRESHOLD          | 18             | Logit threshold for detection (0-127) |
+|    16 | OP_PARAMETER_MODEL_THRESHOLD          | 18            | Logit threshold for detection (0-127) |
 |    17 | OP_PARAMETER_MD_SENSITIVITY           | 1             | Motion Detection Sensitivity: 0=off, 1=low, 2=medium, 3=high |
 |    18 | OP_PARAMETER_TEST_MODE_BITS           | 0             | To manage test configurations: bit or bits indicate a test function |
 |    19 | OP_PARAMETER_IMAGES_COUNT     		| 0             | Count of images in the current image folder. Use this to decide to create a new image folder. |
 |    20 | OP_PARAMETER_IMAGES_FILE_INDEX 		| 0             | Count of image folders |
+|    21 | OP_PARAMETER_FLASH_LED_START_TIME		| 0             | Time the LED flash should turn on (minutes after midnight UTC) |
+|    22 | OP_PARAMETER_FLASH_LED_DURATION		| 0             | Duration of LED flash activity (minutes) 0 disables timer. 1 = use AE values |
 
 ## More Details
 
@@ -97,5 +99,37 @@ with "I " with the string following. Example:
 ```
 I 12345678-0000-0000-0000-000000abc666
 ```
+
 The earlier OP_PARAMETER_DEPLOYMENT_ID_CHUNK_1 - OP_PARAMETER_DEPLOYMENT_ID_CHUNK_8
 block has been removed.
+
+
+## LED Flash timing
+
+There are 4 cases to determine whether the LED flash is on or off: 
+
+1. Always off 
+2. Always on 
+3. Selected by HM0360 auto-exposure registers (on when it is dark) 
+4. Selected by time of day
+
+| No. |  Case                    | OP_PARAMETER_FLASH_LED | Other Condition | 
+|-----|--------------------------|------------------------|------------|
+| 1   | Always off               | 0      |                            |
+| 2   | Always on                | 1 or 2 | OP_PARAMETER_FLASH_LED_DURATION = 0  |
+| 3   | Selected by AE           | 1 or 2 | OP_PARAMETER_FLASH_LED_DURATION = 1  |
+| 4   | Selected by time of day  | 1 or 2 | OP_PARAMETER_FLASH_LED_DURATION > 1 && OP_PARAMETER_FLASH_LED_START_TIME |
+
+* OP_PARAMETER_FLASH_LED - selects the visible or IR LED, or neither (no flashing)
+
+If OP_PARAMETER_FLASH_LED selects the visible or IR LED then:
+
+* OP_PARAMETER_FLASH_LED_START_TIME determines the time of day at which the flashing will start (minutes after midnight UTC)
+* OP_PARAMETER_FLASH_LED_DURATION determines the time of day at which the flashing will stop (minutes after the start time).
+
+__Special cases: time of day control is not used:__
+ 
+* OP_PARAMETER_FLASH_LED_DURATION = 0 means the LED flash is always on if selected by OP_PARAMETER_FLASH_LED
+* OP_PARAMETER_FLASH_LED_DURATION = 1 means the LED flash is determined by the HM0360 AE values (dark means flash on)
+
+

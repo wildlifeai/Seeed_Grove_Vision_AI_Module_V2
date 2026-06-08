@@ -81,6 +81,8 @@ typedef enum {
 	OP_PARAMETER_TEST_MODE_BITS,	// 18 To manage test configurations: bit or bits indicate a test function
 	OP_PARAMETER_IMAGES_COUNT,		// 19 Count of images in the current image folder. Use this to decide to create a new image folder.
 	OP_PARAMETER_IMAGES_FILE_INDEX,	// 20 Count of image folders
+	OP_PARAMETER_FLASH_LED_START_TIME,	// 21 Time the LED flash should turn on (minutes after midnight UTC)
+	OP_PARAMETER_FLASH_LED_DURATION,	// 22 Duration of LED flash activity (minutes) 0 disables timer. 1 = use AE values
 
 	OP_PARAMETER_NUM_ENTRIES		// Not an Operational Parameters - serves to define the size of the op_parameter[] array
 } OP_PARAMETERS_E;

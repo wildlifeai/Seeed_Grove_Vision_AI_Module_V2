@@ -103,7 +103,7 @@
  * 	set:	The HM0360 STROBE pin turns on just before taking an image and the LED comes on.
  * 	The LED is turned off by the HM0360 at the end of VSYNC
  *
- * 	not set:  The LED is turned on by ledFlashEnable() and turned off the the state machine
+ * 	not set:  The LED is turned on by ledFlashEnable() and turned off by the state machine
  * 	when APP_MSG_IMAGETASK_FRAME_READY arrives (as a safeguard also flashOffTimer in ledFlash.c).
  *
  * Results:
@@ -850,7 +850,7 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
 
 #ifdef USE_HM0360_CAPTURE_TIMER
         if (g_cur_jpegenc_frame == g_captures_to_take) {
-        	// Turn of the HM0360 ASAP to supress unwanted cycles, esp. of teh LED flash
+        	// Turn of the HM0360 ASAP to supress unwanted cycles, esp. of the LED flash
         	hm0360_md_setMode(CONTEXT_A, MODE_SLEEP, 0, 0);
         	//hm0360_md_setMode(CONTEXT_A, MODE_SW_NFRAMES_SLEEP, 1, 0);
         }
@@ -909,6 +909,8 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
 #if defined(USE_HM0360) || defined(USE_HM0360_MD)
         // This is a test to see if/how these change with illumination
         hm0360_md_getGainRegs(&gain);
+        // TODO - this is probably the wrong place... just a placeholder to test compilation
+        ledFlashNewAEValues(&gain);		// see if these values affect LED flash operation
 
         snprintf(msgToMaster, MSGTOMASTERLEN, "HM0360 AE regs:\n  Integration time = %d lines\n  Analog gain = %d\n  Digital gain = %d\n  AE Mean = %d\n  AEConverged?: %c",
         		gain.integration,
@@ -1145,7 +1147,6 @@ static APP_MSG_DEST_T handleEventForNNProcessing(APP_MSG_T img_recv_msg) {
         	configure_image_sensor(CAMERA_CONFIG_CONTINUE);
         	// Expect another frame ready event
         	image_task_state = APP_IMAGE_TASK_STATE_CAPTURING;
-
 #else
         	// Start a timer that delays for the defined interval.
         	// When it expires, switch to CAPTURUNG state and request another image
@@ -1266,10 +1267,11 @@ static APP_MSG_DEST_T handleEventForWaitForTimer(APP_MSG_T img_recv_msg) {
 #ifdef STROBE_CONTROLS_FLASH
 		// Do nothing as the STROBE has been set up
 #else
-    	ledFlashEnable(fatfs_getOperationalParameter(OP_PARAMETER_FLASH_DURATION));
+    	ledFlashActivate();	// Turn on Flash LED (conditionally)
 #endif //  STROBE_CONTROLS_FLASH
 #else
-    	ledFlashEnable(fatfs_getOperationalParameter(OP_PARAMETER_FLASH_DURATION));
+    	// RP3 only
+    	ledFlashActivate();	// Turn on Flash LED (conditionally)
 #endif // USE_HM0360
 
     	sensordplib_retrigger_capture();
@@ -1553,7 +1555,7 @@ static void vImageTask(void *pvParameters) {
 
     		// Turn off the LED flashes, controlled by the HM0360 STROBE output.
     		// If LED flash is required this will be controlled by code when the main camera takes a pic
-    		hm0360_md_configureStrobe(0);
+    		hm0360_md_configureStrobe(false);
     	}
     	else {
     		xprintf("HM0360 missing...\n");
@@ -1810,6 +1812,7 @@ static bool configure_image_sensor(CAMERA_CONFIG_E operation) {
         		return false;
         	}
             setupLEDFlash();
+
         }
         break;
 
@@ -1860,17 +1863,13 @@ static bool configure_image_sensor(CAMERA_CONFIG_E operation) {
     		XP_WHITE;
 #ifdef STROBE_CONTROLS_FLASH
     		// The HM0360 STROBE pin drives drive the LED
-
-    		if (fatfs_getOperationalParameter(OP_PARAMETER_FLASH_LED) != 0) {
-    			hm0360_md_configureStrobe(HM0360_SENSOR_STROBE_MODE);
-    		}
-    		// else no strobe
+    		hm0360_md_configureStrobe(ledFlashIsActive());
 #else
-    		ledFlashEnable(fatfs_getOperationalParameter(OP_PARAMETER_FLASH_DURATION));
+    		ledFlashActivate();	// Turn on Flash LED (conditionally)
 #endif //  STROBE_CONTROLS_FLASH
 #else
     		// turn on the LED for the RP camera
-    		ledFlashEnable(fatfs_getOperationalParameter(OP_PARAMETER_FLASH_DURATION));
+    		ledFlashActivate();	// Turn on Flash LED (conditionally)
 #endif // USE_HM0360
     		cisdp_sensor_start(); // Starts data path sensor control block
     	}
@@ -1897,7 +1896,7 @@ static bool configure_image_sensor(CAMERA_CONFIG_E operation) {
 #else
     		// We must do manual control, but this is unusable: the LED goes on now
     		// but the image is not captured for another g_timer_period
-    		ledFlashEnable(fatfs_getOperationalParameter(OP_PARAMETER_FLASH_DURATION));
+    		ledFlashActivate();	// Turn on Flash LED (conditionally)
 #endif //  STROBE_CONTROLS_FLASH
 
     		cisdp_sensor_start(); // Starts data path sensor control block
@@ -1936,16 +1935,22 @@ static bool configure_image_sensor(CAMERA_CONFIG_E operation) {
  */
 static void setupLEDFlash(void) {
 	uint8_t brightnessPercent;
-	FlashLeds_t ledInUse;
+	rtc_time time;
 
 	brightnessPercent = (uint8_t)fatfs_getOperationalParameter(OP_PARAMETER_LED_BRIGHTNESS_PERCENT);
 	ledFlashBrightness(brightnessPercent);
 
-	// Select the LED
-	ledInUse = fatfs_getOperationalParameter(OP_PARAMETER_FLASH_LED);
-	ledFlashSelectLED(ledInUse);
+	// Set the LED Flash mode
+	ledFlashSetFlashModeFromOpParam(
+			fatfs_getOperationalParameter(OP_PARAMETER_FLASH_LED),
+			fatfs_getOperationalParameter(OP_PARAMETER_FLASH_LED_START_TIME),
+			fatfs_getOperationalParameter(OP_PARAMETER_FLASH_LED_DURATION));
 
 	ledFlashDisable(); // This writes the control bits to the PCA9574
+
+    // AFTER calling ledFlashSetFlashModeFromOpParam(), send the ledFlash code the time
+	exif_utc_get_rtc_as_time(&time);
+	ledFlashNewTime(time);
 }
 
 /**
@@ -2948,9 +2953,7 @@ bool image_getEnabled(void) {
 void image_sleepNow(void) {
     uint32_t timelapseDelay;
     uint16_t mdInterval;
-    FlashLeds_t ledInUse;
 
-    ledInUse = fatfs_getOperationalParameter(OP_PARAMETER_FLASH_LED);
     mdInterval = fatfs_getOperationalParameter(OP_PARAMETER_MD_INTERVAL);
 
     // Should be off but let's be sure.
@@ -2960,20 +2963,17 @@ void image_sleepNow(void) {
     // HM0360 as main camera
     if (hm0360_md_isHM0360Present()) {
     	XP_LT_GREY;
-       	xprintf("Preparing HM0360 for MD\n");
+       	xprintf("Preparing HM0360 for MD:");
     	hm0360_md_prepare(cameraSystemEnabled, mdInterval); // select CONTEXT_B registers (if enabled)
 
-    	// Consider turning on the LED flashes, controlled by the HM0360 STROBE output
-    	if ((ledInUse == 0) || (mdInterval == 0))  {
-    		// No STROBE pulses because neither LED selected or MD is disabled
-    		xprintf("   No LED flashes.\n");
-    		hm0360_md_configureStrobe(0);
-    	}
-    	else {
-    		// Configure STROBE pulses
-    		xprintf("   LED flashes (Strobe mode 0x%02x)\n", HM0360_SENSOR_STROBE_MODE);
-    		hm0360_md_configureStrobe(HM0360_SENSOR_STROBE_MODE);
-    	}
+		if ((ledFlashIsActive() && (mdInterval > 0) )) {
+			xprintf(" LED flashes.\n");
+			hm0360_md_configureStrobe(true);
+		}
+		else {
+			xprintf(" No LED flashes.\n");
+			hm0360_md_configureStrobe(false);
+		}
     	XP_WHITE;
     }
     else {

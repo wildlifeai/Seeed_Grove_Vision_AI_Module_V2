@@ -825,6 +825,7 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 			snprintf(message, sizeof(message), "Wake ");
 			exif_utc_get_rtc_as_utc_string(&message[5], UTCSTRINGLENGTH );
 		}
+
 #endif // SENDMSGEARLY
 
 		sendI2CMessage((uint8_t *) message, AI_PROCESSOR_MSG_RX_STRING, strlen(message) );

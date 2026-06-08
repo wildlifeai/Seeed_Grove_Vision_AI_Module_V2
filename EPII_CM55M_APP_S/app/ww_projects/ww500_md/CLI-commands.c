@@ -129,9 +129,9 @@
 #include "cisdp_sensor.h"
 
 #include "inactivity.h"
-#ifdef WW500_C00
+
 #include "ledFlash.h"
-#endif // WW500_C00
+
 #include "cvapp.h"
 #include "common_config.h"
 #include "selfTest.h"
@@ -986,6 +986,11 @@ static BaseType_t prvLedFlash(char *pcWriteBuffer, size_t xWriteBufferLen, const
 	fatfs_setOperationalParameter(OP_PARAMETER_FLASH_DURATION, duration);
 	ledFlashEnable();
 
+#ifndef TIMER_TURNS_OFF_FLASH
+	// Stay here until it is time to turn it off.
+	vTaskDelay(pdMS_TO_TICKS(duration));
+	ledFlashDisable();
+#endif // TIMER_TURNS_OFF_FLASH
 	/* There is no more data to return after this single string, so return pdFALSE. */
 	return pdFALSE;
 }

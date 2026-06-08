@@ -1863,14 +1863,7 @@ static bool configure_image_sensor(CAMERA_CONFIG_E operation) {
     		XP_WHITE;
 #ifdef STROBE_CONTROLS_FLASH
     		// The HM0360 STROBE pin drives drive the LED
-
     		hm0360_md_configureStrobe(ledFlashIsActive());
-
-    		// old code:
-//    		if (fatfs_getOperationalParameter(OP_PARAMETER_FLASH_LED) != 0) {
-//    			hm0360_md_configureStrobe(HM0360_SENSOR_STROBE_MODE);
-//    		}
-//    		// else no strobe
 #else
     		ledFlashActivate();	// Turn on Flash LED (conditionally)
 #endif //  STROBE_CONTROLS_FLASH
@@ -1945,7 +1938,7 @@ static void setupLEDFlash(void) {
 	rtc_time time;
 
 	brightnessPercent = (uint8_t)fatfs_getOperationalParameter(OP_PARAMETER_LED_BRIGHTNESS_PERCENT);
-	ledFlashBrightness(brightnessPercent);;
+	ledFlashBrightness(brightnessPercent);
 
 	// Set the LED Flash mode
 	ledFlashSetFlashModeFromOpParam(
@@ -2981,19 +2974,6 @@ void image_sleepNow(void) {
 			xprintf(" No LED flashes.\n");
 			hm0360_md_configureStrobe(false);
 		}
-
-//		// old code
-//    	// Consider turning on the LED flashes, controlled by the HM0360 STROBE output
-//    	if ((ledInUse == 0) || (mdInterval == 0))  {
-//    		// No STROBE pulses because neither LED selected or MD is disabled
-//    		xprintf("   No LED flashes.\n");
-//    		hm0360_md_configureStrobe(0);
-//    	}
-//    	else {
-//    		// Configure STROBE pulses
-//    		xprintf("   LED flashes (Strobe mode 0x%02x)\n", HM0360_SENSOR_STROBE_MODE);
-//    		hm0360_md_configureStrobe(HM0360_SENSOR_STROBE_MODE);
-//    	}
     	XP_WHITE;
     }
     else {

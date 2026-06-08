@@ -40,9 +40,6 @@
 #define LF_RFU			(1 << 6)
 #define LF_FLENABLE		(1 << 7)
 
-// If uncommented, a timer is used to turn off the flash.
-// Probably not needed as the state machine should also turn it off.
-//#define TIMER_TURNS_OFF_FLASH
 
 // There are 1440 minutes in a day
 #define MINUTES_PER_DAY (24 * 60)
@@ -72,7 +69,7 @@ static bool flashActive = false;
 static uint16_t flashStartTime;
 
 // Minutes (stop time determined by this and the start time)
-uint16_t flashDuration;
+static uint16_t flashDuration;
 
 
 // Need to maintain a copy of bits sent to the control/status chip, so we can change individual bits
@@ -445,20 +442,20 @@ void ledFlashNewTime(rtc_time time) {
 /**
  * The HM0360 AE registers values have arrived - this might determine LED Flash behaviour
  *
- *
+ * TODO this functionality is not yet implemented. FIXME!
  *
  * @param gainRegs
  */
 void ledFlashNewAEValues(HM0360_GAIN_T * gainRegs) {
 
-    if (flashMode != FLASH_MODE_AE) {
+    if ((flashMode != FLASH_MODE_AE) || (gainRegs == NULL)) {
     	return;
     }
 
     // Calculate whether the AE level is too low.
     flashActive = 0;
 
-	xprintf("AE regs /n");
+	xprintf("AE regs \n");
 
 	ledFlashActivate();	// Turn on Flash LED (conditionally)
 }

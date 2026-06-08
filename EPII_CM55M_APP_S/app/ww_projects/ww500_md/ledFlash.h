@@ -18,6 +18,10 @@
 
 /*************************************** Definitions *******************************************/
 
+// If uncommented, a timer is used to turn off the flash.
+// Probably not needed as the state machine should also turn it off.
+//#define TIMER_TURNS_OFF_FLASH
+
 // Bit mask for which LED to enable
 typedef enum flashLeds {
     VIS_LED = 1,	 // 1 (bit 0)

@@ -1782,6 +1782,8 @@ static BaseType_t prvMd(char *pcWriteBuffer, size_t xWriteBufferLen, const char 
 /**
  * Reinitialise HM0360 registers
  *
+ * executes 'inithm0360' command
+ *
  */
 static BaseType_t prvReinitHM0360(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) {
 
@@ -1792,6 +1794,7 @@ static BaseType_t prvReinitHM0360(char *pcWriteBuffer, size_t xWriteBufferLen, c
 	configASSERT(pcWriteBuffer);
 
 	ret = hm0360_md_reInitialise();
+
 	if (ret == HX_CIS_NO_ERROR) {
 		cli_append(&pcWriteBuffer, &xWriteBufferLen, "OK");
 	}

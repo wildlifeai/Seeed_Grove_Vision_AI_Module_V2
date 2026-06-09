@@ -646,16 +646,20 @@ HX_CIS_ERROR_E hm0360_md_prepare(bool cameraSystemEnabled, uint16_t mdFrameInter
  */
 HX_CIS_ERROR_E hm0360_md_reInitialise(void) {
 	HX_CIS_ERROR_E ret;
+	uint16_t tableLength;
 
 	saveMainCameraConfig();
 
-	if(hx_drv_cis_setRegTable(HM0360_md_init_setting, HX_CIS_SIZE_N(HM0360_md_init_setting, HX_CIS_SensorSetting_t))!= HX_CIS_NO_ERROR) {
-		dbg_printf(DBG_LESS_INFO, "HM0360 Reinit fail \r\n");
+	tableLength = HX_CIS_SIZE_N(HM0360_md_init_setting, HX_CIS_SensorSetting_t);
+	dbg_printf(DBG_LESS_INFO, "HM0360 Reinit (%d entries) ", tableLength);
+
+	if(hx_drv_cis_setRegTable(HM0360_md_init_setting, tableLength)!= HX_CIS_NO_ERROR) {
+		dbg_printf(DBG_LESS_INFO, "fail\n");
 		hm0360_present = false;
 		ret = HX_CIS_UNKNOWN_ERROR;
 	}
 	else {
-		dbg_printf(DBG_LESS_INFO, "HM0360 registers reinitialised\n");
+		dbg_printf(DBG_LESS_INFO, "OK\n");
 		ret = HX_CIS_NO_ERROR;
 	}
 

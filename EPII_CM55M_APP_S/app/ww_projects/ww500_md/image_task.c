@@ -2776,7 +2776,7 @@ static uint16_t build_exif_segment(int8_t *outCategories, uint8_t categoriesCoun
         next_data_ptr = exif_buffer + EXIF_MAX_LEN;
     }
 
-    uint16_t len = (next_data_ptr - exif_buffer) - 2; // exclude 0xFFE1 marker
+    uint16_t len = (uint16_t)(next_data_ptr - len_ptr); // exclude SOI (0xFFD8) + APP1 marker (0xFFE1)
     write16_be(len_ptr, len);
 
     exif_len = next_data_ptr - exif_buffer;

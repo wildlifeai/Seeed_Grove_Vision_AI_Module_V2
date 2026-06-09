@@ -1,5 +1,12 @@
 # WW500 Apple JPEG Compatibility Fix
 #### CGP — 9 June 2026
+#### Fix implemented and verified — 10 June 2026
+
+## Status
+
+**Complete.** The one-line fix was applied to `image_task.c` on 10 June 2026 and verified
+against a new sample file `A2871E00.JPG` produced by the corrected firmware.  See
+[Verification of Fix](#verification-of-fix) below.
 
 ## Overview
 
@@ -183,14 +190,16 @@ the Apple rejection.  It is worth correcting as a follow-up for full standard co
 
 A single change in `build_exif_segment()` in `image_task.c`:
 
-### Current code (buggy) — around line 2779
+### Code change — `image_task.c` line 2779
+
+Before:
 
 ```c
 uint16_t len = (next_data_ptr - exif_buffer) - 2; // exclude 0xFFE1 marker
 write16_be(len_ptr, len);
 ```
 
-### Proposed fix
+After (applied 10 June 2026):
 
 ```c
 /* APP1 length = bytes from the length field itself to end of EXIF payload.
@@ -249,12 +258,50 @@ case TAG_USER_COMMENT:
 
 ---
 
+---
+
+## Verification of Fix
+
+Sample file `A2871E00.JPG` was produced by the corrected firmware on 10 June 2026 and
+analysed with `jpeg_segments.py` and `jpegdump_exif.py`.
+
+### Segment structure
+
+```
+SOI      0x00000    2 bytes
+APP1     0x00002  370 bytes   (EXIF, length field = 368)
+COM      0x00174  140 bytes   (sector-alignment padding)
+APP0     0x00200   18 bytes   (JFIF — sector-aligned as intended)
+DQT×2, SOF0, DHT×4, SOS, ECD (19760 bytes, entropy 7.83), EOI
+TRAILING 0x0519F   35 bytes   (encoder padding)
+```
+
+No GAP segment — the COM padding is now correctly parsed as a distinct segment. ✓
+
+### APP1 boundary check
+
+```
+APP1 length field : 368
+APP1 ends at byte : 372 = 0x0174
+Byte after APP1   : 0xFF  ← valid JPEG marker ✓
+Next 4 bytes      : FF FE 00 8A  (COM marker + length 138)
+COM ends at       : 0x0174 + 140 = 0x0200 = APP0 ✓
+```
+
+### EXIF content
+
+All 10 IFD entries parse without error, including the GPS sub-IFD (6 entries).
+MakerNote (AE registers) present and readable.
+
+---
+
 ## Files Referenced
 
 | File | Purpose |
 |------|---------|
-| `EPII_CM55M_APP_S/app/ww_projects/ww500_md/image_task.c` | EXIF construction (`build_exif_segment()`) |
+| `EPII_CM55M_APP_S/app/ww_projects/ww500_md/image_task.c` | EXIF construction (`build_exif_segment()`) — fix at line 2779 |
 | `EPII_CM55M_APP_S/app/ww_projects/ww500_md/claude/MD011869.JPG` | Working sample (old firmware) |
-| `EPII_CM55M_APP_S/app/ww_projects/ww500_md/claude/A27AE710.JPG` | Failing sample (new firmware) |
+| `EPII_CM55M_APP_S/app/ww_projects/ww500_md/claude/A27AE710.JPG` | Failing sample (new firmware, before fix) |
+| `EPII_CM55M_APP_S/app/ww_projects/ww500_md/claude/A2871E00.JPG` | Verified sample (new firmware, after fix) |
 | `_Tools/jpeg_segments.py` | JPEG structure analyser |
 | `_Tools/jpegdump_exif.py` | EXIF tag dumper |

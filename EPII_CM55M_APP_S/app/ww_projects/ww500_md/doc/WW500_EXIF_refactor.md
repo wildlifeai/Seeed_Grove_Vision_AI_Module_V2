@@ -320,5 +320,82 @@ assembly section.
 | `exif_builder.c` | New — EXIF construction logic |
 | `exif_utc.h` / `exif_utc.c` | Existing — RTC timestamp formatting (unchanged) |
 | `exif_gps.h` / `exif_gps.c` | Existing — GPS coordinate helpers (unchanged) |
-| `ww500_md.mk` | Build file — add `exif_builder.c` |
+| `ww500_md.mk` | Build file — `exif_builder.c` auto-discovered, no change required |
 | `doc/WW500_Apple_JPEG_fix.md` | Background on APP1 length bug and UserComment issue |
+
+---
+
+## Implementation Notes (June 2026)
+
+Implemented on branch `exifrefactor`, 12 June 2026. Deviations and additions
+relative to this specification:
+
+- **Build system**: `ww500_md.mk` required no change — `get_csrcs` in `ww.mk`
+  auto-discovers all `.c` files in the `ww500_md/` directory.
+- **`write16_le` / `write32_le` in `image_task.c`**: retained as static helpers
+  inside `#ifdef INVESTIGATE_BMP` for `bmp_create_gray8_header()`.  Duplication
+  is acceptable since BMP support is experimental.
+- **`ExifInput_t.timestamp`**: defined as `char[20]` (19 chars + NUL).  The `[22]`
+  size shown in this document was an over-estimate; 20 matches `EXIFSTRINGLENGTH`
+  from `exif_utc.h`.
+- **`MAKERDATALEN`**: increased from 32 to 48 after security review identified that
+  a signed 32-bit `integration` value could produce strings up to 30 characters,
+  leaving insufficient margin at 32.
+
+---
+
+## Security Review Findings (13 June 2026)
+
+An automated review identified the following issues in the initial implementation,
+all subsequently fixed.
+
+### Critical — buffer overflow in `addIFD()` (variable-length cases)
+
+`TAG_USER_COMMENT` and the ASCII tag group (`TAG_DATETIME_ORIGINAL`, `TAG_MAKE`,
+etc.) wrote to `next_data_ptr` via `memcpy` without first checking that the write
+would stay within `exif_buffer + EXIF_MAX_LEN`.
+
+**Fix**: Each `memcpy` is now guarded by a bounds check.  If the data would exceed
+`EXIF_MAX_LEN`, the write is skipped but `next_data_ptr` is still advanced (so the
+overflow is visible to the caller).  `exif_build_segment()` returns 0 if
+`next_data_ptr > exif_buffer + EXIF_MAX_LEN` after all writes.
+
+### Critical — post-write overflow clamp
+
+`exif_build_segment()` clamped `next_data_ptr` to `exif_buffer + EXIF_MAX_LEN`
+after all writes, but by then any out-of-bounds write had already occurred.
+
+**Fix**: The clamp is replaced with an overflow check that returns 0 immediately,
+relying on the per-write guards above to have prevented actual corruption.
+
+### High — GPS IFD pointer left dangling on buffer-full
+
+When the GPS IFD would not fit, the original code set `gps_size = 0` and skipped
+writing the GPS IFD, but still wrote `TAG_GPS_IFD_POINTER` to the main IFD.
+This produces a corrupt EXIF structure because the pointer refers to data that
+was never written.
+
+**Fix**: If the GPS IFD will not fit within `EXIF_MAX_LEN`, `exif_build_segment()`
+returns 0 immediately rather than producing a malformed segment.
+
+### Medium — dead stack allocation in `create_gps_ifd()`
+
+An 80-byte `gps_dbg` buffer was allocated and populated on every call but the
+`xprintf` that consumed it was commented out.
+
+**Fix**: The dead code block was deleted.
+
+### Medium — `user_comment` on stack in `#else` path
+
+In the `#ifdef ENABLE_EXIF_CONFIDENCE` branch, `user_comment` was declared
+`static` to avoid stack overflow risk (noted in the original code).  In the
+`#else` branch the same buffer was a plain stack variable.
+
+**Fix**: Made `static` in both branches for consistency.
+
+### Medium — `MAKERDATALEN` too small
+
+`MAKERDATALEN 32` left only 1 byte of margin for the worst-case AE register string
+with a large signed `integration` value.
+
+**Fix**: Increased to 48.

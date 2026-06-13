@@ -97,9 +97,11 @@ static void addIFD(ExifTagID tagID, uint8_t *entry_ptr, void *tagData) {
         write16_le(entry_ptr + 2, UNDEFINED);
         write32_le(entry_ptr + 4, total_len);
         write32_le(entry_ptr + 8, (uint32_t)(next_data_ptr - tiff_start));
-        memcpy(next_data_ptr,     "ASCII\0\0\0", 8);
-        memcpy(next_data_ptr + 8, text, text_len);
-        next_data_ptr += total_len;
+        if (next_data_ptr + total_len <= exif_buffer + EXIF_MAX_LEN) {
+            memcpy(next_data_ptr,     "ASCII\0\0\0", 8);
+            memcpy(next_data_ptr + 8, text, text_len);
+        }
+        next_data_ptr += total_len;  /* advance regardless; overflow caught by caller */
         break;
     }
     case TAG_DATETIME_ORIGINAL:
@@ -121,8 +123,10 @@ static void addIFD(ExifTagID tagID, uint8_t *entry_ptr, void *tagData) {
             memcpy(entry_ptr + 8, ascii, length);
         } else {
             write32_le(entry_ptr + 8, (uint32_t)(next_data_ptr - tiff_start));
-            memcpy(next_data_ptr, ascii, length);
-            next_data_ptr += length;
+            if (next_data_ptr + length <= exif_buffer + EXIF_MAX_LEN) {
+                memcpy(next_data_ptr, ascii, length);
+            }
+            next_data_ptr += length;  /* advance regardless; overflow caught by caller */
         }
         break;
     }
@@ -281,11 +285,6 @@ static void create_gps_ifd(uint8_t *gps_ifd_start) {
     addIFD(TAG_GPS_ALTITUDE_REF,  ifd + 4 * 12, &altRef);
     addIFD(TAG_GPS_ALTITUDE,      ifd + 5 * 12, alt);
 #endif
-
-    char gps_dbg[80];
-    exif_gps_create_full_string(&exif_gps_deviceLat, &exif_gps_deviceLon,
-                                &exif_gps_deviceAlt, gps_dbg, sizeof(gps_dbg));
-    /* xprintf("EXIF GPS: %s\n", gps_dbg); */
 }
 
 /*************************************** Public Functions ***********************************/
@@ -362,12 +361,14 @@ uint16_t exif_build_segment(const ExifInput_t *input) {
     /* next_data_ptr starts immediately after the IFD block. */
     next_data_ptr = p;
 
-    /* Reserve space for the GPS IFD before writing any variable-length data. */
+    /* Reserve space for the GPS IFD before writing any variable-length data.
+     * Failing silently would leave TAG_GPS_IFD_POINTER pointing at garbage;
+     * abort the whole segment if it won't fit. */
     gps_ifd_start  = next_data_ptr;
     gps_ifd_offset = (uint32_t)(gps_ifd_start - tiff_start);
     gps_size = get_gps_ifd_size();
-    if ((size_t)(next_data_ptr - exif_buffer) + gps_size > EXIF_MAX_LEN) {
-        gps_size = 0;
+    if (next_data_ptr + gps_size > exif_buffer + EXIF_MAX_LEN) {
+        return 0;
     }
     next_data_ptr += gps_size;
 
@@ -401,9 +402,11 @@ uint16_t exif_build_segment(const ExifInput_t *input) {
         create_gps_ifd(gps_ifd_start);
     }
 
-    /* Clamp to EXIF_MAX_LEN before computing length. */
-    if ((size_t)(next_data_ptr - exif_buffer) > EXIF_MAX_LEN) {
-        next_data_ptr = exif_buffer + EXIF_MAX_LEN;
+    /* If any variable-length write exceeded EXIF_MAX_LEN, the EXIF structure
+     * is incomplete (writes were skipped by addIFD bounds guards above).
+     * Return 0 so the caller discards this frame rather than saving corrupt data. */
+    if (next_data_ptr > exif_buffer + EXIF_MAX_LEN) {
+        return 0;
     }
 
     /* APP1 length field: bytes from len_ptr to end of payload (excludes SOI + marker). */

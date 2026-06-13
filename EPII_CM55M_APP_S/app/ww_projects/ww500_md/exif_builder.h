@@ -85,7 +85,7 @@ typedef enum {
 typedef struct {
     uint16_t       width;           /* image width in pixels */
     uint16_t       height;          /* image height in pixels */
-    char           timestamp[20];   /* "YYYY:MM:DD HH:MM:SS\0" from exif_utc */
+    char           timestamp[20];   /* "YYYY:MM:DD HH:MM:SS\0" — 19 chars + NUL */
     const char    *deployment_id;   /* UUID string, or NULL if no deployment active */
     const uint8_t *nn_data;         /* [total_bytes][count][score...], or NULL */
     const char    *user_comment;    /* NN label summary string, or NULL */

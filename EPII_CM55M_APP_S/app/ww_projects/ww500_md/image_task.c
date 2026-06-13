@@ -1985,7 +1985,7 @@ static void prepareJpegFile(int8_t * outCategories, uint8_t classCount, fileBuff
 	}
 	exif_input.user_comment = (has_confidence_data && user_comment[0] != '\0') ? user_comment : NULL;
 #else
-	char user_comment[EXIF_COMMENT_LENGTH];
+	static char user_comment[EXIF_COMMENT_LENGTH];
 	user_comment[0] = '\0';
 	if (cv_modelLoaded()) {
 		size_t uc_offset = 0;
@@ -2008,7 +2008,7 @@ static void prepareJpegFile(int8_t * outCategories, uint8_t classCount, fileBuff
 
 	/* MakerNote — AE register CSV (formatted here; exif_builder.c has no HM0360 types) */
 #ifdef EXIF_MAKER_NOTES
-#define MAKERDATALEN 32
+#define MAKERDATALEN 48
 	char maker_note[MAKERDATALEN];
 	snprintf(maker_note, sizeof(maker_note), "%d, %d, %d, %d, %c",
 	         gain.integration, gain.analogGain, gain.digitalGain, gain.aeMean,

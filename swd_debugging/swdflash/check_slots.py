@@ -1,18 +1,24 @@
 #!/usr/bin/env python
 """Analyse and cross-check two 1 MB firmware slot dumps for structural integrity.
 
-Usage: python check_slots.py [slot_a] [slot_b]
+Usage: python check_slots.py [slot_a] [slot_b] [reference_img]
   Defaults to dump_slot_a.bin and dump_slot_b.bin
+  Optional third argument: path to an output.img to compare descriptor CRCs against.
 
 Checks each slot independently:
   - File size (must be exactly 1 MB)
   - ckBS (BLP packet) magic at expected partition boundaries
   - Non-empty content in each partition region
   - Payload extent (last non-0xFF byte offset and section sizes)
+  - Descriptor CRC: 2-byte application fingerprint in hx_mem_descriptor_ota
 
 Cross-checks both slots:
-  - Preamble bytes (0x00000–0x27FFF, i.e. everything before the application)
-    should be identical; first divergence offset is reported.
+  - Descriptor CRCs compared — mismatch means slots carry different builds and
+    an OTA update using old firmware code (writes from 0x28000) will fail.
+  - Preamble bytes (0x00000–0x27FFF): reported but differences are normal between
+    distinct builds because BLP RSA signing is randomised on every build.
+  - If a reference image is provided, each slot's CRC is compared against it so
+    you can verify a pending OTA update will succeed before writing.
 
 Firmware partition layout within each 1 MB slot (we2_image_gen_local_dpd layout)
   0x00000  hx_memory_descriptor      4 KB  BLP packet, ckBS required
@@ -31,7 +37,6 @@ The selector sector lives outside the 1 MB slots, at physical 0x00FFF000.
 """
 
 import sys
-import struct
 import os
 
 SLOT_SIZE = 0x100000        # 1 MB
@@ -50,8 +55,18 @@ PARTITIONS = [
     (0x28000, 0x43000, 'cm55m_application',       True),   # size is a minimum; actual is larger
 ]
 
-PREAMBLE_END  = 0x28000     # bytes before the application — should match between slots
+PREAMBLE_END  = 0x28000     # everything before the application
 MIN_APP_BYTES = 0x10000     # minimum plausible application payload (64 KB)
+
+# Location of the 2-byte application CRC within hx_mem_descriptor_ota.
+# The descriptor payload starts at DESCRIPTOR_OFFSET + SECURITY_HDR_SIZE.
+# At payload byte APP_CRC_FIELD_OFFSET is a 16-bit LE CRC of the application
+# binary, followed immediately by APP_CRC_MARKER.  These were confirmed by
+# binary comparison across 23 git branches (June 2026).
+DESCRIPTOR_OFFSET    = 0x27000
+SECURITY_HDR_SIZE    = 1196                         # att_secheadersize for this partition
+APP_CRC_FIELD_OFFSET = 54                           # byte offset within the payload
+APP_CRC_MARKER       = bytes([0x11, 0x22, 0x33, 0x44])  # fixed 4-byte marker after CRC
 
 
 # ---------------------------------------------------------------------------
@@ -80,29 +95,28 @@ def find_ckbs(data, start=0, end=None):
     return hits
 
 
-def preamble_compare(a, b):
-    """Compare preamble bytes of two slot images; return (match, first_diff_offset)."""
-    length = min(PREAMBLE_END, len(a), len(b))
-    for i in range(length):
-        if a[i] != b[i]:
-            return False, i
-    # Also check that both have the same length up to PREAMBLE_END (both may be
-    # shorter if the data has been truncated by flash erase)
-    return True, None
-
-
 def section_has_data(data, start, end):
     """True if data[start:end] contains at least one non-0xFF byte."""
     chunk = data[start:min(end, len(data))]
     return any(b != 0xFF for b in chunk)
 
 
-def ff_run_length(data, start):
-    """Number of consecutive 0xFF bytes starting at data[start]."""
-    i = start
-    while i < len(data) and data[i] == 0xFF:
-        i += 1
-    return i - start
+def extract_descriptor_crc(data, slot_base=0):
+    """Extract the 2-byte application CRC from hx_mem_descriptor_ota.
+
+    The 2nd bootloader reads this CRC from the selected slot's descriptor and
+    verifies the application against it.  A mismatch causes boot failure.
+
+    Returns the CRC as an int, or None if the field cannot be read or the
+    fixed marker immediately after it is absent (indicating an unexpected
+    descriptor format or an erased/absent descriptor).
+    """
+    offset = slot_base + DESCRIPTOR_OFFSET + SECURITY_HDR_SIZE + APP_CRC_FIELD_OFFSET
+    if offset + 6 > len(data):
+        return None
+    if data[offset + 2:offset + 6] != APP_CRC_MARKER:
+        return None
+    return int.from_bytes(data[offset:offset + 2], 'little')
 
 
 # ---------------------------------------------------------------------------
@@ -166,6 +180,15 @@ def analyse_slot(path, label):
 
         print(f"    0x{p_off:05X}  {p_name:<27}  {magic_status};  {data_status}")
 
+    # --- descriptor CRC ---
+    desc_crc = extract_descriptor_crc(data)
+    if desc_crc is not None:
+        print(f"\n  Descriptor CRC : 0x{desc_crc:04x}"
+              f"  (2-byte application fingerprint in hx_mem_descriptor_ota)")
+    else:
+        print(f"\n  Descriptor CRC : unreadable"
+              f"  (descriptor absent, erased, or unexpected format)")
+
     # --- application sizing ---
     app_start = PARTITIONS[-1][0]   # 0x28000 (dpd layout)
     last_in_app = last_non_ff(data[app_start:])
@@ -173,11 +196,11 @@ def analyse_slot(path, label):
         app_bytes = last_in_app + 1
         app_ok = app_bytes >= MIN_APP_BYTES
         marker = 'OK' if app_ok else f'WARNING: very small (<0x{MIN_APP_BYTES:X})'
-        print(f"\n  Application  : {app_bytes} bytes (0x{app_bytes:X})  {marker}")
+        print(f"  Application    : {app_bytes} bytes (0x{app_bytes:X})  {marker}")
         if not app_ok:
             ok = False
     else:
-        print(f"\n  Application  : EMPTY (no data after 0x{app_start:05X})")
+        print(f"  Application    : EMPTY (no data after 0x{app_start:05X})")
         ok = False
 
     print()
@@ -193,19 +216,69 @@ def analyse_slot(path, label):
 # Cross-slot comparison
 # ---------------------------------------------------------------------------
 
-def cross_check(data_a, data_b):
+def cross_check(data_a, data_b, ref_data=None, ref_path=None):
     print(f"\n{'='*60}")
-    print("Cross-check: preamble comparison (0x00000–0x27FFF)")
+    print("Cross-check")
     print(f"{'='*60}")
 
-    match, diff_at = preamble_compare(data_a, data_b)
-    if match:
-        print(f"  Preamble bytes 0x00000–0x{PREAMBLE_END-1:05X}: IDENTICAL")
+    # --- descriptor CRC comparison (the critical field) ---
+    crc_a = extract_descriptor_crc(data_a)
+    crc_b = extract_descriptor_crc(data_b)
+
+    print(f"\n  hx_mem_descriptor_ota — application CRC (0x{DESCRIPTOR_OFFSET:05X}):")
+    print(f"    Slot A : {'0x{:04x}'.format(crc_a) if crc_a is not None else 'unreadable'}")
+    print(f"    Slot B : {'0x{:04x}'.format(crc_b) if crc_b is not None else 'unreadable'}")
+
+    if crc_a is not None and crc_b is not None:
+        if crc_a == crc_b:
+            print(f"    Result : MATCH — both slots carry the same application build")
+        else:
+            print(f"    Result : DIFFER — slots carry different application builds")
+            print(f"    WARNING: if the board runs from Slot B and a firmware OTA")
+            print(f"             targets Slot A, the old firmware code (writes from")
+            print(f"             0x28000) will leave Slot A's descriptor CRC")
+            print(f"             (0x{crc_a:04x}) mismatched to the new application.")
+            print(f"             The fixed firmware (writes from 0x27000) is required.")
+
+    # --- optional reference image comparison ---
+    if ref_data is not None:
+        crc_ref = extract_descriptor_crc(ref_data)
+        print(f"\n  Reference image: {ref_path}")
+        if crc_ref is not None:
+            print(f"    Descriptor CRC : 0x{crc_ref:04x}")
+            for slot_label, crc_slot in [('A', crc_a), ('B', crc_b)]:
+                crc_str = f'0x{crc_slot:04x}' if crc_slot is not None else 'unreadable'
+                if crc_slot is None:
+                    verdict = 'cannot compare'
+                elif crc_slot == crc_ref:
+                    verdict = 'MATCH  — OTA to this slot will update descriptor correctly'
+                else:
+                    verdict = ('MISMATCH — OTA with old code would leave stale descriptor;'
+                               ' fixed code required')
+                print(f"    Slot {slot_label} ({crc_str}) vs reference: {verdict}")
+        else:
+            print(f"    Descriptor CRC : unreadable in reference image")
+
+    # --- preamble byte comparison ---
+    print(f"\n  Preamble byte comparison (0x00000–0x{PREAMBLE_END-1:05X}):")
+    print(f"  NOTE: preamble bytes differ between distinct builds because BLP RSA")
+    print(f"  signing is randomised on every build.  Differences here are expected")
+    print(f"  when slots carry different builds.  The descriptor CRC above is the")
+    print(f"  field that matters for OTA boot compatibility.")
+
+    length = min(PREAMBLE_END, len(data_a), len(data_b))
+    diff_at = None
+    for i in range(length):
+        if data_a[i] != data_b[i]:
+            diff_at = i
+            break
+
+    if diff_at is None:
+        print(f"  Bytes 0x00000–0x{PREAMBLE_END-1:05X}: identical (same build in both slots)")
     else:
-        print(f"  Preamble bytes 0x00000–0x{PREAMBLE_END-1:05X}: DIFFER — "
-              f"first difference at 0x{diff_at:06X}")
-        # Show context around the first difference
-        ctx_start = max(0, diff_at - 8) & ~0x7   # align to 8
+        print(f"  Bytes 0x00000–0x{PREAMBLE_END-1:05X}: differ — first difference at"
+              f" 0x{diff_at:06X}")
+        ctx_start = max(0, diff_at - 8) & ~0x7
         ctx_end   = min(PREAMBLE_END, diff_at + 24)
         print(f"\n  Context (offset | slot A | slot B):")
         for off in range(ctx_start, ctx_end, 8):
@@ -214,10 +287,9 @@ def cross_check(data_a, data_b):
             flag = '<<<' if off <= diff_at < off + 8 else ''
             print(f"    0x{off:06X}  {ba}  |  {bb}  {flag}")
 
-    # Also report where each slot's preamble goes silent (all FF)
+    # --- preamble data extent per slot ---
     print()
     for slot_label, data in [('A', data_a), ('B', data_b)]:
-        # Walk preamble in 4KB blocks, note first all-FF block
         preamble_end_byte = -1
         for blk in range(0, PREAMBLE_END, 0x1000):
             if section_has_data(data, blk, blk + 0x1000):
@@ -233,12 +305,22 @@ def cross_check(data_a, data_b):
 # ---------------------------------------------------------------------------
 
 if __name__ == '__main__':
-    path_a = sys.argv[1] if len(sys.argv) > 1 else 'dump_slot_a.bin'
-    path_b = sys.argv[2] if len(sys.argv) > 2 else 'dump_slot_b.bin'
+    path_a   = sys.argv[1] if len(sys.argv) > 1 else 'dump_slot_a.bin'
+    path_b   = sys.argv[2] if len(sys.argv) > 2 else 'dump_slot_b.bin'
+    path_ref = sys.argv[3] if len(sys.argv) > 3 else None
 
     data_a = analyse_slot(path_a, 'A')
     print()
     data_b = analyse_slot(path_b, 'B')
 
+    ref_data = None
+    if path_ref:
+        try:
+            with open(path_ref, 'rb') as f:
+                ref_data = f.read()
+            print(f"\nReference image loaded: {path_ref} ({len(ref_data)} bytes)")
+        except OSError as e:
+            print(f"\nWARNING: cannot load reference image {path_ref}: {e}")
+
     if data_a is not None and data_b is not None:
-        cross_check(data_a, data_b)
+        cross_check(data_a, data_b, ref_data, path_ref)

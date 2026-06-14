@@ -71,8 +71,11 @@ static void addIFD(ExifTagID tagID, uint8_t *entry_ptr, void *tagData) {
         write16_le(entry_ptr + 2, TYPE_RATIONAL);
         write32_le(entry_ptr + 4, 1);
         write32_le(entry_ptr + 8, (uint32_t)(next_data_ptr - tiff_start));
-        write32_le(next_data_ptr, rational[0]); next_data_ptr += 4;
-        write32_le(next_data_ptr, rational[1]); next_data_ptr += 4;
+        if (next_data_ptr + 8 <= exif_buffer + EXIF_MAX_LEN) {
+            write32_le(next_data_ptr,     rational[0]);
+            write32_le(next_data_ptr + 4, rational[1]);
+        }
+        next_data_ptr += 8;
         break;
     }
     case TAG_RESOLUTION_UNIT:
@@ -138,10 +141,13 @@ static void addIFD(ExifTagID tagID, uint8_t *entry_ptr, void *tagData) {
         write16_le(entry_ptr + 2, TYPE_RATIONAL);
         write32_le(entry_ptr + 4, 3);
         write32_le(entry_ptr + 8, (uint32_t)(next_data_ptr - tiff_start));
-        for (int i = 0; i < 3; ++i) {
-            write32_le(next_data_ptr, dms[i * 2]);     next_data_ptr += 4;
-            write32_le(next_data_ptr, dms[i * 2 + 1]); next_data_ptr += 4;
+        if (next_data_ptr + 24 <= exif_buffer + EXIF_MAX_LEN) {
+            for (int i = 0; i < 3; ++i) {
+                write32_le(next_data_ptr + i * 8,     dms[i * 2]);
+                write32_le(next_data_ptr + i * 8 + 4, dms[i * 2 + 1]);
+            }
         }
+        next_data_ptr += 24;
         break;
     }
     case TAG_GPS_ALTITUDE:
@@ -151,8 +157,11 @@ static void addIFD(ExifTagID tagID, uint8_t *entry_ptr, void *tagData) {
         write16_le(entry_ptr + 2, TYPE_RATIONAL);
         write32_le(entry_ptr + 4, 1);
         write32_le(entry_ptr + 8, (uint32_t)(next_data_ptr - tiff_start));
-        write32_le(next_data_ptr, rational[0]); next_data_ptr += 4;
-        write32_le(next_data_ptr, rational[1]); next_data_ptr += 4;
+        if (next_data_ptr + 8 <= exif_buffer + EXIF_MAX_LEN) {
+            write32_le(next_data_ptr,     rational[0]);
+            write32_le(next_data_ptr + 4, rational[1]);
+        }
+        next_data_ptr += 8;
         break;
     }
     case TAG_GPS_ALTITUDE_REF:
@@ -177,7 +186,9 @@ static void addIFD(ExifTagID tagID, uint8_t *entry_ptr, void *tagData) {
             memcpy(entry_ptr + 8, &bytes[1], length);
         } else {
             write32_le(entry_ptr + 8, (uint32_t)(next_data_ptr - tiff_start));
-            memcpy(next_data_ptr, &bytes[1], length);
+            if (next_data_ptr + length <= exif_buffer + EXIF_MAX_LEN) {
+                memcpy(next_data_ptr, &bytes[1], length);
+            }
             next_data_ptr += length;
         }
         break;
@@ -217,7 +228,9 @@ static void addIFD(ExifTagID tagID, uint8_t *entry_ptr, void *tagData) {
                     memcpy(entry_ptr + 8, ascii, length);
                 } else {
                     write32_le(entry_ptr + 8, (uint32_t)(next_data_ptr - tiff_start));
-                    memcpy(next_data_ptr, ascii, length);
+                    if (next_data_ptr + length <= exif_buffer + EXIF_MAX_LEN) {
+                        memcpy(next_data_ptr, ascii, length);
+                    }
                     next_data_ptr += length;
                 }
             }

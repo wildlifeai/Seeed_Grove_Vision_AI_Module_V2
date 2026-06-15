@@ -94,25 +94,27 @@
 #define FLASH_SLOT_B_ADDR       0x00100000           // Physical base of firmware Slot B
 #define FLASH_SLOT_SIZE         (1024 * 1024)        // 1 MB per slot (16 × 64 KB blocks)
 
-// Offset within each slot at which the cm55m_application BLP packet begins (dpd layout).
-// Used as the erase/write/verify start offset ONLY when the target slot is Slot A.
+// Firmware slot layout (dpd layout — we2_image_gen_local_dpd):
 //
-// The ROM bootloader always loads the boot chain from Slot A regardless of the slot
-// selector.  Erasing 0x00000–0x27FFF in Slot A while the board runs from Slot B
-// bricks the board — there is no recovery without SWD.  This offset is therefore
-// used as the safe lower bound for all flash operations targeting Slot A.
+//   0x00000  hx_memory_descriptor      (ROM reads from Slot A only)
+//   0x01000  2nd_bootloader            (ROM RSA-verifies from Slot A only)
+//   0x13000  bootloader                (always from Slot A)
+//   0x27000  hx_mem_descriptor_ota     (2nd_bootloader reads from SELECTED slot)
+//   0x28000  cm55m_application         (from selected slot)
 //
-// When the target is Slot B, no such constraint applies: the ROM never uses Slot B's
-// boot chain for its own loading, and Slot B can be fully erased and rewritten.
-// However, the 2nd_bootloader (always loaded from Slot A) does read Slot B's
-// hx_mem_descriptor_ota (at Slot B base + 0x27000) to locate the application when
-// booting from Slot B.  Slot B must therefore receive a complete image — writing
-// only the application portion leaves the descriptor absent and the board will not
-// boot from Slot B.
+// FLASH_OTA_OFFSET (0x27000) — correct lower bound for Slot A OTA erase/write/verify.
+//   The descriptor at 0x27000 contains a 2-byte CRC of the application; it changes
+//   with every build.  Writing only from 0x28000 leaves a stale CRC → boot failure.
+//   The boot chain at 0x00000–0x26FFF is preserved — erasing it while the board
+//   runs from Slot B bricks the board (no software recovery path).
 //
-// Rule: erase/write/verify Slot A from FLASH_APP_OFFSET; erase/write/verify Slot B
-// from 0 (full 1 MB).
-#define FLASH_APP_OFFSET        0x28000              // 160 KB (dpd layout)
+// FLASH_APP_OFFSET (0x28000) — application start; kept for size-validation checks.
+//
+// Slot B: erase/write/verify from 0 (full 1 MB).  Slot B is never the ROM's boot
+//   source so it can be fully erased.  A complete image is required because the
+//   2nd_bootloader reads Slot B's hx_mem_descriptor_ota from Slot B base + 0x27000.
+#define FLASH_OTA_OFFSET        0x27000              // hx_mem_descriptor_ota start (dpd layout)
+#define FLASH_APP_OFFSET        0x28000              // cm55m_application start (dpd layout)
 
 // XIP virtual/physical address mapping
 #define FLASH_VIRTUAL_BASE      0x3A000000
@@ -950,8 +952,9 @@ static int verify_firmware_slot(uint8_t slot, const char *filepath) {
     FIL file;
     UINT bytes_read;
     uint32_t slot_base      = (slot == 0) ? FLASH_SLOT_A_ADDR : FLASH_SLOT_B_ADDR;
-    uint32_t file_offset    = (slot == 0) ? FLASH_APP_OFFSET : 0;
+    uint32_t file_offset    = (slot == 0) ? FLASH_OTA_OFFSET : 0;
     uint32_t flash_address  = slot_base + file_offset;
+    uint32_t start_address  = flash_address;
     uint32_t total_verified = 0;
     int ret = 0;
 
@@ -1040,8 +1043,8 @@ static int verify_firmware_slot(uint8_t slot, const char *filepath) {
     if (ret == 0) {
         xprintf("verify_firmware_slot: slot %d verify OK"
                 "  0x%08x–0x%08x  (%lu bytes)\n",
-                slot, (unsigned)flash_address,
-                (unsigned)(flash_address + total_verified - 1),
+                slot, (unsigned)start_address,
+                (unsigned)(start_address + total_verified - 1),
                 (unsigned long)total_verified);
     }
     return ret;
@@ -1053,10 +1056,11 @@ static int verify_firmware_slot(uint8_t slot, const char *filepath) {
 /**
  * Erase the writable portion of a firmware slot.
  *
- * Slot A: erases from FLASH_APP_OFFSET (0x28000) to end-of-slot only.
- *   The boot chain at 0x00000–0x27FFF is preserved — erasing it while the board
+ * Slot A: erases from FLASH_OTA_OFFSET (0x27000) to end-of-slot.
+ *   The boot chain at 0x00000–0x26FFF is preserved — erasing it while the board
  *   runs from Slot B bricks the board with no software recovery path.
- *   FLASH_APP_OFFSET is not 64 KB-aligned, so two phases are used:
+ *   Phase 0: 1 × 4 KB sector at FLASH_OTA_OFFSET (0x27000) — the descriptor sector.
+ *   FLASH_APP_OFFSET (0x28000) is not 64 KB-aligned, so two further phases:
  *     Phase 1: 8 × 4 KB sector erases  (0x28000–0x2FFFF)
  *     Phase 2: 13 × 64 KB block erases (0x30000–0xFFFFF)
  *
@@ -1088,19 +1092,33 @@ static int erase_firmware_slot(uint8_t slot) {
     }
 
     if (slot == 0) {
-        // Slot A: preserve boot chain — erase application area only
+        // Slot A: preserve boot chain — erase descriptor + application area.
+        // Phase 0: descriptor sector at FLASH_OTA_OFFSET (one 4 KB sector).
+        // Phases 1+2: application area from FLASH_APP_OFFSET to end of slot.
+        uint32_t desc_start     = slot_addr + FLASH_OTA_OFFSET;
         uint32_t app_start      = slot_addr + FLASH_APP_OFFSET;
         uint32_t block_boundary = ((app_start + FLASH_BLOCK_SIZE - 1) / FLASH_BLOCK_SIZE) * FLASH_BLOCK_SIZE;
         uint32_t n_sectors      = (block_boundary - app_start) / FLASH_SECTOR_SIZE;   // 8
         uint32_t n_blocks       = (slot_end - block_boundary)  / FLASH_BLOCK_SIZE;    // 13
 
         xprintf("erase_firmware_slot: slot 0 — boot chain preserved 0x%08x–0x%08x\n",
-                (unsigned)slot_addr, (unsigned)(app_start - 1));
+                (unsigned)slot_addr, (unsigned)(desc_start - 1));
+        xprintf("erase_firmware_slot: phase 0: 1 x 4KB sector   0x%08x  (descriptor)\n",
+                (unsigned)desc_start);
         xprintf("erase_firmware_slot: phase 1: %lu x 4KB sectors  0x%08x–0x%08x\n",
                 (unsigned long)n_sectors, (unsigned)app_start, (unsigned)(block_boundary - 1));
         xprintf("erase_firmware_slot: phase 2: %lu x 64KB blocks  0x%08x–0x%08x\n",
                 (unsigned long)n_blocks, (unsigned)block_boundary, (unsigned)(slot_end - 1));
 
+        // Phase 0: descriptor sector
+        if (hx_lib_spi_eeprom_erase_sector(spi_inst, desc_start, FLASH_SECTOR) != 0) {
+            xprintf("erase_firmware_slot: 4KB erase failed at 0x%08x\n", (unsigned)desc_start);
+            enable_xip();
+            return -1;
+        }
+        vTaskDelay(1);
+
+        // Phase 1: 4 KB sectors up to next 64 KB boundary
         uint32_t addr = app_start;
         for (uint32_t i = 0; i < n_sectors; i++) {
             int ret = hx_lib_spi_eeprom_erase_sector(spi_inst, addr, FLASH_SECTOR);
@@ -1113,6 +1131,7 @@ static int erase_firmware_slot(uint8_t slot) {
             vTaskDelay(1);
         }
 
+        // Phase 2: 64 KB blocks to end of slot
         addr = block_boundary;
         for (uint32_t i = 0; i < n_blocks; i++) {
             int ret = hx_lib_spi_eeprom_erase_sector(spi_inst, addr, FLASH_64KBLOCK);
@@ -1125,8 +1144,8 @@ static int erase_firmware_slot(uint8_t slot) {
             vTaskDelay(1);
         }
 
-        xprintf("erase_firmware_slot: slot 0 application erased OK  0x%08x–0x%08x\n",
-                (unsigned)app_start, (unsigned)(slot_end - 1));
+        xprintf("erase_firmware_slot: slot 0 erased OK  0x%08x–0x%08x\n",
+                (unsigned)desc_start, (unsigned)(slot_end - 1));
 
     } else {
         // Slot B: full 1 MB erase — safe, and required so the complete image is written
@@ -1225,7 +1244,8 @@ static int write_firmware_from_sd(uint8_t slot, const char *filepath) {
         return -1;
     }
 
-    // Slot A: write from FLASH_APP_OFFSET only — boot chain preserved in flash.
+    // Slot A: write from FLASH_OTA_OFFSET (0x27000) — includes descriptor + application.
+    //   Boot chain (0x00000–0x26FFF) preserved in flash.
     // Slot B: write full image from byte 0 — complete image required so the
     //         2nd_bootloader (loaded from Slot A) can locate Slot B's application.
     uint32_t file_offset;
@@ -1240,26 +1260,26 @@ static int write_firmware_from_sd(uint8_t slot, const char *filepath) {
                     (unsigned)FLASH_APP_OFFSET);
             return -1;
         }
-        file_offset = FLASH_APP_OFFSET;
-        app_bytes   = (uint32_t)file_size - FLASH_APP_OFFSET;
+        file_offset = FLASH_OTA_OFFSET;
+        app_bytes   = (uint32_t)file_size - FLASH_OTA_OFFSET;
 
-        res = f_lseek(&file, FLASH_APP_OFFSET);
+        res = f_lseek(&file, FLASH_OTA_OFFSET);
         if (res != FR_OK) {
             f_close(&file);
             vPortFree(write_buf);
             vPortFree(verify_buf);
             xprintf("write_firmware_from_sd: seek to 0x%08x failed (%d)\n",
-                    (unsigned)FLASH_APP_OFFSET, res);
+                    (unsigned)FLASH_OTA_OFFSET, res);
             return -1;
         }
-        xprintf("write_firmware_from_sd: slot 0 — application only\n");
+        xprintf("write_firmware_from_sd: slot 0 — descriptor + application\n");
         xprintf("  file  0x%08x–0x%08x  →  flash 0x%08x–0x%08x  (%lu bytes)\n",
                 (unsigned)file_offset, (unsigned)(file_size - 1),
                 (unsigned)(slot_base + file_offset),
                 (unsigned)(slot_base + (uint32_t)file_size - 1),
                 (unsigned long)app_bytes);
         xprintf("  boot chain (0x%08x–0x%08x) preserved in flash\n",
-                (unsigned)slot_base, (unsigned)(slot_base + FLASH_APP_OFFSET - 1));
+                (unsigned)slot_base, (unsigned)(slot_base + FLASH_OTA_OFFSET - 1));
     } else {
         file_offset = 0;
         app_bytes   = (uint32_t)file_size;
@@ -1354,10 +1374,10 @@ static int write_firmware_from_sd(uint8_t slot, const char *filepath) {
         return -1;
     }
 
-    xprintf("write_firmware_from_sd: slot %d application written and chunk-verified OK\n"
+    xprintf("write_firmware_from_sd: slot %d written and chunk-verified OK\n"
             "  flash 0x%08x–0x%08x  (%lu bytes)\n",
-            slot, (unsigned)(slot_base + FLASH_APP_OFFSET),
-            (unsigned)(slot_base + FLASH_APP_OFFSET + total_written - 1),
+            slot, (unsigned)(slot_base + file_offset),
+            (unsigned)(slot_base + file_offset + total_written - 1),
             (unsigned long)total_written);
     return 0;
 }

@@ -210,8 +210,11 @@ Same partitions but shifted one 4 KB sector later: bootloader at 0x14000,
 OTA descriptor at 0x28000, application at 0x29000, total ~670 KB.
 
 The "preamble" (0x00000–0x27FFF, i.e. everything before the application)
-should be identical between Slot A and Slot B when both carry the same
-firmware version.
+contains the boot chain blobs and the application descriptor.  Preamble bytes
+**differ between any two distinct builds** because BLP RSA signing is
+randomised on every build — raw block hashes always change even for identical
+source code.  The only semantically significant field that changes per build
+is the 2-byte application CRC in `hx_mem_descriptor_ota` at 0x27000.
 
 ### check_slots.py / check_slots.bat
 
@@ -220,11 +223,17 @@ Analyses dump_slot_a.bin and dump_slot_b.bin and reports:
 - `ckBS` magic presence at each partition boundary
 - Whether each partition region contains non-0xFF data
 - Payload extent (last non-0xFF byte) and application size
-- Byte-by-byte preamble comparison between the two slots
+- Descriptor CRC: the 2-byte application fingerprint in `hx_mem_descriptor_ota`
+- Preamble comparison (with note that differences are normal between distinct builds)
+
+An optional third argument is a reference `output.img`; each slot's descriptor
+CRC is compared against the reference so you can verify a pending OTA update
+will succeed before writing.
 
 ```
-check_slots.bat               # defaults to dump_slot_a.bin and dump_slot_b.bin
-python check_slots.py [slot_a.bin] [slot_b.bin]
+check_slots.bat                       # defaults to dump_slot_a.bin and dump_slot_b.bin
+check_slots.bat slot_a.bin slot_b.bin output.img   # compare against reference image
+python check_slots.py [slot_a.bin] [slot_b.bin] [output.img]
 ```
 
 ### BLP integrity checking
@@ -301,22 +310,15 @@ This was confirmed with `erase_app.bat 0` while booted from Slot 1:
 - `dump_flash.bat` + `check_slots.bat` verified the boot chain was preserved
 - Board booted normally after the erase
 
-**Fix implemented in `firmware` CLI command (May 2026):**
+**`firmware` CLI command — OTA behaviour and known bug (updated June 2026):**
 
-Key constant in `xip_manager.c`:
+Key constants in `xip_manager.c`:
 ```c
 #define FLASH_APP_OFFSET  0x28000   // cm55m_application start (dpd layout)
+#define FLASH_OTA_OFFSET  0x27000   // hx_mem_descriptor_ota start — correct write start for Slot A
 ```
 
 The erase/write/verify behaviour depends on which slot is the target:
-
-**Target = Slot A** (board running from Slot B):
-- Erase: from `FLASH_APP_OFFSET` only — boot chain at 0x00000–0x27FFF preserved
-- Erase uses two phases (0x28000 is not 64 KB-aligned):
-  - Phase 1: 8 × 4 KB sector erases  (0x28000–0x2FFFF)
-  - Phase 2: 13 × 64 KB block erases (0x30000–0xFFFFF)
-- Write: `f_lseek` to `FLASH_APP_OFFSET` in file, write to `0x00028000` in flash
-- Verify: `f_lseek` to `FLASH_APP_OFFSET` in file, read from `0x00028000` in flash
 
 **Target = Slot B** (board running from Slot A):
 - Erase: full 1 MB (16 × 64 KB blocks from 0x00100000)
@@ -324,15 +326,41 @@ The erase/write/verify behaviour depends on which slot is the target:
 - Verify: full image from file byte 0 vs flash `0x00100000`
 - Reason: the 2nd_bootloader (always from Slot A) reads Slot B's
   `hx_mem_descriptor_ota` at 0x00127000 to locate the application.
-  If this is absent (0xFF), the board will not boot from Slot B even
-  though Slot A and the selector are intact.
+  If this is absent (0xFF), the board will not boot from Slot B.
+- **Status: correct — no bug here.**
+
+**Target = Slot A** (board running from Slot B):
+
+*Current (buggy) behaviour:*
+- Erase: from `FLASH_APP_OFFSET` (0x28000) only — descriptor at 0x27000 preserved
+- Write: `f_lseek` to 0x28000 in file, write to `0x00028000` in flash
+- Verify: `f_lseek` to 0x28000 in file, read from `0x00028000` in flash
+
+*Bug:* every build encodes a 2-byte application CRC in `hx_mem_descriptor_ota`
+(at slot offset 0x274DE).  By preserving the descriptor sector, the OTA leaves
+a stale CRC pointing to the old application.  The 2nd_bootloader reads this
+descriptor from Slot A's 0x27000 and CRC-verifies the new application against
+the old CRC — mismatch → boot failure → Xmodem recovery menu.
+
+*Fix applied (14 June 2026):*
+- Phase 0 erase: 1 × 4 KB sector at `FLASH_OTA_OFFSET` (0x27000)
+- Phase 1/2 erase: unchanged (0x28000–0xFFFFF)
+- Write: `f_lseek` to `FLASH_OTA_OFFSET` (0x27000) in file, write to `0x00027000`
+- Verify: same offset change
+
+Boot chain (0x00000–0x26FFF) remains preserved.  If the 0x27000 sector write is
+interrupted, the board falls to Xmodem recovery (selector still on Slot B) —
+identical recovery profile to the existing application write path.
 
 The CRC check in `prvFirmwareCommand()` (CLI-FATFS-commands.c) covers the entire
 file before any flash operation — unchanged.
 
-The Himax-supplied boot chain blobs at 0x00000–0x27FFF appear invariant across
-application builds using the same SDK.  SDK updates that change the bootloader
-require SWD reprogramming via `burn.bat`.
+**⚠ Incorrect assumption (corrected June 2026):**
+An earlier version of this document stated "boot chain blobs appear invariant
+across application builds."  This was wrong.  BLP RSA signing is randomised on
+every build — raw block hashes always differ — and the 2-byte CRC in
+`hx_mem_descriptor_ota` also changes per build.  SDK updates that change the
+bootloader binaries still require SWD reprogramming via `burn.bat`.
 
 ### Diagnosis of the faulty board (May 2026)
 

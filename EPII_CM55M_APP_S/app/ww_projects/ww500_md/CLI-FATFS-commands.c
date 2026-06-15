@@ -834,7 +834,7 @@ static BaseType_t prvFirmwareCommand( char *pcWriteBuffer, size_t xWriteBufferLe
     result = xip_update_firmware_from_sd(filename);
     if (result == 0) {
         cli_append(&pcWriteBuffer, &xWriteBufferLen,
-                   "Firmware update OK. Type 'reset' to boot the new image.");
+                   "Firmware update OK. Executes at next reset.");
     } else {
         cli_append(&pcWriteBuffer, &xWriteBufferLen,
                    "Firmware update FAILED (error %d). Existing firmware unchanged.", result);
@@ -845,6 +845,7 @@ static BaseType_t prvFirmwareCommand( char *pcWriteBuffer, size_t xWriteBufferLe
 
 /**
  * Report the CRC16-CCITT and byte count of a file in the current directory.
+ * Executes 'crc <filename>'
  */
 static BaseType_t prvCrcCommand( char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString ) {
     const char *pcParameter;

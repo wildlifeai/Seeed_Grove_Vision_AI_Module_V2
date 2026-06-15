@@ -660,6 +660,7 @@ HX_CIS_ERROR_E hm0360_md_reInitialise(void) {
 	}
 	else {
 		dbg_printf(DBG_LESS_INFO, "OK\n");
+		hm0360_present = true;
 		ret = HX_CIS_NO_ERROR;
 	}
 

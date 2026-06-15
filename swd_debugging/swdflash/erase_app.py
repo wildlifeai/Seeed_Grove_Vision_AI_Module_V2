@@ -2,8 +2,16 @@
 """Erase only the application portion of a firmware slot.
 
 Erases from the cm55m_application offset (0x28000) to the end of the slot,
-leaving the boot chain components at 0x00000–0x27FFF intact:
-  hx_memory_descriptor, 2nd_bootloader, bootloader, hx_mem_descriptor_ota.
+leaving the following intact at 0x00000–0x27FFF:
+  - Boot chain: hx_memory_descriptor, 2nd_bootloader, bootloader
+  - Application descriptor: hx_mem_descriptor_ota (at 0x27000)
+
+Note: hx_mem_descriptor_ota is NOT a boot chain component — it is the
+descriptor the 2nd_bootloader uses to locate and CRC-verify the application.
+It changes with every build.  This tool preserves it to test whether the
+board remains bootable when only the application binary is absent.  The
+firmware OTA command must also rewrite the descriptor (from 0x27000, not
+0x28000) so the new application's CRC is recorded correctly.
 
 Usage: python erase_app.py <slot>
   slot  0 = Slot A  (erases 0x00028000 – 0x000FFFFF)

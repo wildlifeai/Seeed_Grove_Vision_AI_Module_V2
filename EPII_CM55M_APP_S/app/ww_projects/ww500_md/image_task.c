@@ -652,7 +652,7 @@ static APP_MSG_DEST_T handleEventForInit(APP_MSG_T img_recv_msg) {
 
             // Now start the image sensor.
             configure_image_sensor(CAMERA_CONFIG_RUN);
-            // Record image capture start time
+            // Record image capture start time.
             startTime = xTaskGetTickCount();
 
             // The next thing we expect is a frame ready message: APP_MSG_IMAGETASK_FRAME_READY
@@ -788,7 +788,12 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
         ledFlashDisable(); // finished with the LED flash. Turn it off.
 
         // measure time for the frame capture just completed
-        xprintf("Image capture %d/%d took %dms\n\n", g_cur_jpegenc_frame, g_captures_to_take, app_getElapsedMs(startTime));
+        // That is, the time since event APP_MSG_IMAGETASK_STARTCAPTURE in handleEventForInit()
+        // Note this number is meaningless if taking multiple images using the HM0360 internal timer
+        // for the second and subsequent images .
+        xprintf("Image capture %d/%d took %dms\n\n",
+        		g_cur_jpegenc_frame, g_captures_to_take,
+				app_getElapsedMs(startTime));
 
         // Now measure NN duration
         startTime = xTaskGetTickCount();
@@ -981,7 +986,8 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
         // Unfortunately I see this sometimes: APP_MSG_DPEVENT_EDM_WDT2_TIMEOUT (0x011c) followed by APP_MSG_DPEVENT_EDM_WDT3_TIMEOUT (0x011b)
         // APP_MSG_IMAGETASK_FRAME_READY does not arrive. timeout WDT_TIMEOUT_PERIOD seems to be 5s
     	XP_RED;
-        dbg_printf(DBG_LESS_INFO, ">>>> Received a timeout event 0x%04x after %dms <<<<\n", event, app_getElapsedMs(startTime));
+        dbg_printf(DBG_LESS_INFO, ">>>> Received a timeout event 0x%04x after %dms <<<<\n",
+        		event, app_getElapsedMs(startTime));
         dbg_printf(DBG_LESS_INFO, ">>>> TODO - re-initialise camera? <<<<\n", event);
         XP_WHITE;
 
@@ -1482,7 +1488,7 @@ static void vImageTask(void *pvParameters) {
 #endif // USE_HM0360_MD
 #endif // USE_HM0360
 
-	// Initialise NN but only of the camera system is enabled
+	// Initialise NN but only if the camera system is enabled
 	startTime = xTaskGetTickCount();
 
 	if (cameraSystemEnabled) {

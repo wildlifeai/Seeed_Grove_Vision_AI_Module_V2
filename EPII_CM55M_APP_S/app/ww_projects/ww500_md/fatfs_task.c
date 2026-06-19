@@ -35,7 +35,7 @@
  *
  * Notes on SD cards > 32G
  * -------------------------
- * These are probaly supporting exFAT. The above ChatGPT conversation suggested I install fat32format.exe
+ * These are probably supporting exFAT. The above ChatGPT conversation suggested I install fat32format.exe
  * from here: http://ridgecrop.co.uk/index.htm?fat32format.htm
  * This worked for me - formatted 64G cards as FAT32
  *
@@ -171,6 +171,11 @@ static bool transferFileOpen = false;
 
 static TickType_t xStartTime;
 static TickType_t accumulatedTime;
+
+/* Set non-zero while a fileWriteImage() call is in progress.
+ * CLI task polls this before calling hx_drv_rtc_set_time(), which suppresses
+ * ARM interrupts for ~1s and would otherwise starve the FatFS task mid-write. */
+volatile int g_sdWriteActive = 0;
 
 // Strings for each of these states. Values must match APP_TASK1_STATE_E in task1.h
 const char *fatFsTaskStateString[APP_FATFS_STATE_NUMSTATES] = {
@@ -558,7 +563,9 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 		else {
 			xStartTime = xTaskGetTickCount();
 
+			g_sdWriteActive = 1;
 			res = fileWriteImage(fileOp, extraBlock, &dirManager);
+			g_sdWriteActive = 0;
 			fatfs_incrementOperationalParameter(OP_PARAMETER_IMAGES_COUNT);
 
 			elapsedTime = app_getElapsedMs(xStartTime);
@@ -600,10 +607,14 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 
 		if (fileOp->senderQueue == xImageTaskQueue) {
 			// writes image
+			g_sdWriteActive = 1;
 			res = fileWriteImage(fileOp, NULL, &dirManager);
+			g_sdWriteActive = 0;
 		} else {
 			// writes file
+			g_sdWriteActive = 1;
 			res = fileWrite(fileOp);
+			g_sdWriteActive = 0;
 		}
 
 		xprintf("File write took %dms\n", app_getElapsedMs(xStartTime));
@@ -633,7 +644,8 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 		xStartTime = xTaskGetTickCount();
 		res = fileRead(fileOp);
 
-		xprintf("Elapsed time (fileRead) %dms. Result code %d\n", (xTaskGetTickCount() - xStartTime) * portTICK_PERIOD_MS, res);
+		xprintf("Elapsed time (fileRead) %dms. Result code %d\n",
+				app_getElapsedMs(xStartTime), res);
 
 		fatFs_task_state = APP_FATFS_STATE_IDLE;
 

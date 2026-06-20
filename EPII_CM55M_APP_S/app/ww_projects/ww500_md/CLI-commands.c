@@ -1014,6 +1014,8 @@ static BaseType_t prvSetUtc(char *pcWriteBuffer, size_t xWriteBufferLen, const c
 	TickType_t elapsedTime;
 	uint32_t elapsedMs;
 
+	extern volatile int g_sdWriteActive;
+
 	(void)pcCommandString;
 	(void)xWriteBufferLen;
 	configASSERT(pcWriteBuffer);
@@ -1027,8 +1029,21 @@ static BaseType_t prvSetUtc(char *pcWriteBuffer, size_t xWriteBufferLen, const c
 			snprintf(pcWriteBuffer, xWriteBufferLen, "Error %d\n", ret);
 			return pdFALSE;
 		}
+
 		startTime = xTaskGetTickCount();
-		ret = exif_utc_set_rtc_from_time(&tm);	// This takes 1-2s
+
+		/* hx_drv_rtc_set_time() suppresses ARM interrupts for ~1s, preventing FreeRTOS from
+		 * scheduling the FatFS task. Poll until any active SD write completes before calling it. */
+
+		while (g_sdWriteActive) {
+			if ((xTaskGetTickCount() - startTime) >= pdMS_TO_TICKS(2000)) {
+				xprintf("setutc: timed out waiting for SD write\n");
+				break;
+			}
+			vTaskDelay(pdMS_TO_TICKS(10));
+		}
+
+		ret = exif_utc_set_rtc_from_time(&tm);
 		elapsedTime = xTaskGetTickCount() - startTime;
 		elapsedMs = (elapsedTime * 1000) / configTICK_RATE_HZ;
 

@@ -15,12 +15,55 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 // FreeRTOS kernel includes.
 #include "FreeRTOS.h"
 
 #include "xprintf.h"
 #include "fatfs_task.h"
+
+// Register settings staged for the camera "extra settings" file. Loaded from the file
+// by cis_file_process() at sensor init, and edited by the 'camreg' CLI command, which
+// re-saves the table to the same file. Keeping the table here (rather than in the CLI)
+// means the CLI's view stays consistent with the SD card across DPD cycles and reboots.
+static HX_CIS_SensorSetting_t stagedSettings[CIS_FILE_MAX_STAGED];
+static uint16_t stagedCount = 0;
+
+uint16_t cis_file_getStagedCount(void) {
+	return stagedCount;
+}
+
+HX_CIS_SensorSetting_t * cis_file_getStagedTable(void) {
+	return stagedSettings;
+}
+
+bool cis_file_stageReg(uint16_t addr, uint8_t val) {
+	uint16_t i;
+
+	for (i = 0; i < stagedCount; i++) {
+		if (stagedSettings[i].RegAddree == addr) {
+			break;
+		}
+	}
+
+	if (i == stagedCount) {
+		if (stagedCount == CIS_FILE_MAX_STAGED) {
+			return false;
+		}
+		stagedCount++;
+	}
+
+	stagedSettings[i].I2C_ActionType = HX_CIS_I2C_Action_W;
+	stagedSettings[i].RegAddree = addr;
+	stagedSettings[i].Value = val;
+
+	return true;
+}
+
+void cis_file_clearStaged(void) {
+	stagedCount = 0;
+}
 
 /**
  * Read CIS register settings from a file and process them
@@ -92,6 +135,12 @@ HX_CIS_ERROR_E cis_file_process(const char *filename) {
         vPortFree(sensor_settings);
         return HX_CIS_UNKNOWN_ERROR;
     }
+
+    // Mirror the file contents into the staged table so the 'camreg' CLI command
+    // edits what is actually on the SD card. Entries beyond CIS_FILE_MAX_STAGED
+    // are still applied below but cannot be edited by 'camreg'.
+    stagedCount = (num_entries <= CIS_FILE_MAX_STAGED) ? num_entries : CIS_FILE_MAX_STAGED;
+    memcpy(stagedSettings, sensor_settings, stagedCount * sizeof(HX_CIS_SensorSetting_t));
 
     // Apply the settings
     result = hx_drv_cis_setRegTable(sensor_settings, num_entries);

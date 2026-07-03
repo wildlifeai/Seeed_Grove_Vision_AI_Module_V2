@@ -162,6 +162,8 @@ The "Reqd?" column indicates whether the command should be implemented by the ap
 | AI setop       | n m           | Sets the value of Operational Parameter n to m | Y, 1   |
 | AI capture     | n m           | Trigger capture of n images at m millisecond intervals  | Y     |
 | AI txfile      | filename, or '.' | File contents returned in several chunks   | Y, 2  |
+| AI camreg      | addr [val]    | Read or write a camera sensor register (hex). Writes are saved to the SD card and re-applied at every sensor init. Also `AI camreg list` and `AI camreg clear` | 3 |
+| AI vcm         | pos           | Set focus lens position 0-1023 (RP3 camera only). `AI vcm probe` checks the actuator is present | 3 |
 
 Note that there are addition commands that could be run on the AI processor, not documented here.
 These can be seen by typing "help" at the console. 
@@ -173,6 +175,8 @@ __Notes:__
      - Set value: `AI setop 19 2`
      - ❌ **Common mistake:** Omitting the `AI` prefix will result in "Unrecognised" error
 2. See separate document [txfile.md](txfile.md) for the details.
+3. Camera tuning commands added for bench/field validation of exposure, gain, white balance and focus.
+   See [camera-phase0-bench-runbook.md](camera-phase0-bench-runbook.md) and [camera-field-tuning-roadmap.md](camera-field-tuning-roadmap.md).
 
 __Other AI Processor Commands__
 

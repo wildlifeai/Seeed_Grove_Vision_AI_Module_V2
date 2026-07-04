@@ -29,12 +29,11 @@ typedef enum flashLeds {
 } FlashLeds_t;
 
 
-// Four options to determine if the LED flash occurs
+// The LED flash is either off or driven by the AE light sensor
+// (see _Documentation/AE_Light_Sensor_Roadmap.md)
 typedef enum flashLedMode {
     FLASH_MODE_OFF,			// Off all the time
-    FLASH_MODE_ALWAYS_ON,	// On all the time
     FLASH_MODE_AE,			// Determined by light levels
-    FLASH_MODE_TIME_OF_DAY	// Determined by time of day timer
 } FlashLedMode_t;
 
 // Add some limits for duration of flash
@@ -70,10 +69,8 @@ void ledFlashSetFlashMode(FlashLedMode_t mode);
 // Getter for flashMode
 FlashLedMode_t ledFlashGetFlashMode(void);
 
-void ledFlashSetFlashModeFromOpParam(uint16_t ledInUse, uint16_t startTime, uint16_t duration);
+void ledFlashSetFlashModeFromOpParam(uint16_t ledInUse);
 
-// Inform the code of the time (in case led is determined by time of day)
-void ledFlashNewTime(rtc_time tm);
 
 // Inform the code of the HM0360 AE registers (in case led is determined by brightness)
 void ledFlashNewAEValues(HM0360_GAIN_T * val);

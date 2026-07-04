@@ -242,10 +242,64 @@ python ae_threshold_analysis.py --csvs ae_data.csv --outdir <output>
 
 ---
 
-## 8. Open Items
+## 8. Flash Configuration (Simplified) and Motion-Detection Illumination
+
+### 8.1 Time-of-day mode removed
+
+To remove complexity, the flash no longer has a time-of-day mode (or an always-on mode).
+`OP_PARAMETER_FLASH_LED_START_TIME` (21) and `OP_PARAMETER_FLASH_LED_DURATION` (22) have been
+removed, along with `FLASH_MODE_TIME_OF_DAY`, `FLASH_MODE_ALWAYS_ON` and `ledFlashNewTime()`.
+The capture flash is now either **off** (`OP_PARAMETER_FLASH_LED` = 0) or **driven by the AE
+light sensor** (`OP_PARAMETER_FLASH_LED` = 1 or 2), tuned with `AE_DARK_THRESHOLD` /
+`AE_CHECK_INTERVAL`; `AE_FLASH_STATE` (default 0) carries the decision across sleep.
+
+### 8.2 How motion detection uses the flash (research findings)
+
+Yes - dark-scene motion detection depends on the flash. While the AI processor sleeps in DPD,
+the HM0360 keeps taking motion-detection frames, and its **STROBE pin hardware-gates the LED
+driver** during each frame's exposure (`hm0360_md_configureStrobe()`, STROBE_CFG mode 3).
+The LED selection (visible/IR) and brightness come from the **PCA9574 I/O expander**, which
+retains its settings while the processor sleeps:
+
+- Brightness is a **4-bit hardware setting** (BRSEL0-3 select PSU feedback resistors), i.e.
+  **16 discrete levels** (~6.7 % steps) - not CPU PWM, so it works in DPD.
+- VISENABLE / IRENABLE bits select the LED.
+- The strobe only fires if it was armed on the way into DPD, which happens when the AE light
+  sensor last judged the scene dark (`flashActive`) and motion detection is enabled.
+
+### 8.3 Separate settings for MD illumination and capture flash
+
+Because the PCA9574 settings can be rewritten at each sleep/wake transition, the motion
+detection illumination and the capture flash are independently configurable:
+
+| Purpose | When written | LED | Brightness |
+|---------|--------------|-----|------------|
+| Motion-detection illumination | On the way into DPD (`image_sleepNow()`) | `OP_PARAMETER_MD_FLASH_LED` (21, default 2 = IR) | `OP_PARAMETER_MD_FLASH_BRIGHTNESS_PERCENT` (22, default 5) |
+| Capture flash | At wake (`setupLEDFlash()`) | `OP_PARAMETER_FLASH_LED` (13) | `OP_PARAMETER_LED_BRIGHTNESS_PERCENT` (9) |
+
+Examples of user configurations:
+
+- IR for motion detection at 5 %, IR capture flash at the same 5 %: `21=2, 22=5, 13=2, 9=5`
+- IR for motion detection at 5 %, white capture flash at 50 %: `21=2, 22=5, 13=1, 9=50`
+- IR for motion detection at 10 %, white capture flash at 20 %: `21=2, 22=10, 13=1, 9=20`
+
+Both illumination paths only operate when the AE light sensor judged the scene dark, so no
+battery is spent on daytime flashes.
+
+### 8.4 Migration note
+
+Devices updating with an existing `CONFIG.TXT` will have 0 at indexes 21/22 (the old
+start-time/duration values), which now means "no MD illumination" - motion detection will not
+see in the dark until the app sets the new values. The app should push the new defaults
+(21=2, 22=5) as part of the firmware-update flow.
+
+---
+
+## 9. Open Items
 
 - [x] Agree on default threshold value - 65 (moderate) implemented as the default, tuneable via `setop 23`
 - [x] Decide periodic check mechanism - RTC-alarm DPD wake (see section 5.3)
 - [x] Sync BLE processor `aiProcessor.h` with new OP indices (also removes the never-implemented OP20-27 deployment-chunk entries)
 - [ ] Field test across multiple deployment environments
+- [ ] App: expose MD illumination (21/22) and capture flash (13/9) settings; push new defaults on firmware update (see 8.4)
 - [ ] Resolve OP index clash before merging: this branch and `feat/camera-day-night-switching` both claim index 23

@@ -1881,22 +1881,18 @@ static bool configure_image_sensor(CAMERA_CONFIG_E operation) {
  */
 static void setupLEDFlash(void) {
 	uint8_t brightnessPercent;
-	rtc_time time;
 
+	// The capture-flash settings: which LED and how bright.
+	// (The motion-detection illumination has its own settings, written to the
+	// PCA9574 on the way into DPD - see image_sleepNow().)
 	brightnessPercent = (uint8_t)fatfs_getOperationalParameter(OP_PARAMETER_LED_BRIGHTNESS_PERCENT);
 	ledFlashBrightness(brightnessPercent);
 
-	// Set the LED Flash mode
+	// Set the LED Flash mode (off, or driven by the AE light sensor)
 	ledFlashSetFlashModeFromOpParam(
-			fatfs_getOperationalParameter(OP_PARAMETER_FLASH_LED),
-			fatfs_getOperationalParameter(OP_PARAMETER_FLASH_LED_START_TIME),
-			fatfs_getOperationalParameter(OP_PARAMETER_FLASH_LED_DURATION));
+			fatfs_getOperationalParameter(OP_PARAMETER_FLASH_LED));
 
 	ledFlashDisable(); // This writes the control bits to the PCA9574
-
-    // AFTER calling ledFlashSetFlashModeFromOpParam(), send the ledFlash code the time
-	exif_utc_get_rtc_as_time(&time);
-	ledFlashNewTime(time);
 }
 
 /**
@@ -2412,8 +2408,18 @@ void image_sleepNow(void) {
        	xprintf("Preparing HM0360 for MD:");
     	hm0360_md_prepare(cameraSystemEnabled, mdInterval); // select CONTEXT_B registers (if enabled)
 
-		if ((ledFlashIsActive() && (mdInterval > 0) )) {
+		if (ledFlashIsActive() && (mdInterval > 0)
+				&& (fatfs_getOperationalParameter(OP_PARAMETER_MD_FLASH_LED) != 0)
+				&& (fatfs_getOperationalParameter(OP_PARAMETER_MD_FLASH_BRIGHTNESS_PERCENT) > 0)) {
 			xprintf(" LED flashes.\n");
+			// While the processor sleeps, the HM0360 STROBE pin gates the LED
+			// hardware directly, using whatever LED selection and brightness are
+			// in the PCA9574 (it retains its state through DPD). Write the
+			// motion-detection illumination settings now; the capture-flash
+			// settings are restored at the next wake by setupLEDFlash().
+			ledFlashBrightness((uint8_t) fatfs_getOperationalParameter(OP_PARAMETER_MD_FLASH_BRIGHTNESS_PERCENT));
+			ledFlashSelectLED((FlashLeds_t) fatfs_getOperationalParameter(OP_PARAMETER_MD_FLASH_LED));
+			ledFlashDisable();	// writes the control bits (flash-enable off - STROBE gates the LED)
 			hm0360_md_configureStrobe(true);
 		}
 		else {

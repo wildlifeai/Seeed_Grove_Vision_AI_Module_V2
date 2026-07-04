@@ -1432,6 +1432,13 @@ static void vImageTask(void *pvParameters) {
     xprintf("Starting Image Task\n");
     XP_WHITE;
 
+    // Record this image's camera variant against the active firmware slot, so
+    // the 'slots' command (and the app) can see what is in each slot. Done at
+    // boot (not at sleep) so the label is correct as soon as the device is
+    // queryable, and is written even if this session never reaches sleep.
+    // Cheap when already recorded (no flash write).
+    cameraSwitch_labelBootSlot();
+
     // Sanity check: these are defined in cisdp_cfg.h
     // The JPEG buffer seems much larger than necessary
     xprintf("Image %d x %d. Raw buffer %d. JPEG buffer %d. JPEG compression x%d\n",
@@ -2412,11 +2419,6 @@ void image_sleepNow(void) {
     else {
     	timelapseDelay = fatfs_getOperationalParameter(OP_PARAMETER_TIMELAPSE_INTERVAL);
     }
-
-	// Record this image's camera variant against the active firmware slot, so
-	// the 'slots' command (and the app) can see what is in each slot. Cheap
-	// when already recorded.
-	cameraSwitch_labelBootSlot();
 
 	// CLI command might have requested this after firmware update
 	if (app_getResetRequest()) {

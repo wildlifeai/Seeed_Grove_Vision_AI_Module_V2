@@ -155,11 +155,13 @@ typedef struct {
 #define SLOT_META_OFFSET    32          // byte offset within the selector sector (word-aligned)
 #define SLOT_META_MAGIC     "WWSM"
 
+// aligned(4): instances are cast to (uint32_t *) for the word-based SPI EEPROM
+// API, but the members alone would only guarantee byte alignment
 typedef struct {
     char    magic[4];       // "WWSM"
     uint8_t variant[2];     // XIP_SLOT_VARIANT_x for Slot A ([0]) and Slot B ([1])
     uint8_t reserved[2];    // keeps the record a whole number of words
-} SlotMetaRecord;
+} __attribute__((aligned(4))) SlotMetaRecord;
 
 /*
  * First word of a programmed firmware slot: the secure-boot container magic
@@ -1682,6 +1684,12 @@ int xip_switch_slot(void) {
     int target_slot;
     uint32_t slot_base;
     uint32_t magic = 0;
+
+    // get_active_slot() also initialises the flash, but be explicit so this
+    // function does not depend on that internal detail
+    if (init_flash() != 0) {
+        return -1;
+    }
 
     active_slot = get_active_slot();
     if (active_slot < 0) {

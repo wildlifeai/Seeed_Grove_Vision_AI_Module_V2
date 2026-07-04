@@ -1,0 +1,84 @@
+#ifndef APP_WW_PROJECTS_WW500_MD_IMAGE_TASK_H_
+#define APP_WW_PROJECTS_WW500_MD_IMAGE_TASK_H_
+
+#include <stdio.h>
+#include <stdlib.h>
+#include "WE2_device.h"
+#include "WE2_core.h"
+#include "board.h"
+#include "ww500_md.h"
+#include "ffconf.h"
+
+#include "c_api_types.h"	// Tensorflow errors
+
+// List of operations to set up camera subsystem
+typedef enum {
+	CAMERA_CONFIG_INIT_COLD,
+	CAMERA_CONFIG_INIT_WARM,
+	CAMERA_CONFIG_RUN,
+	CAMERA_CONFIG_CONTINUE,
+	CAMERA_CONFIG_STOP,
+} CAMERA_CONFIG_E;
+
+// Possible states. Values must match imageTaskStateString[] in image_task.c
+typedef enum {
+	APP_IMAGE_TASK_STATE_UNINIT 	= 0x0000,
+	APP_IMAGE_TASK_STATE_INIT 		= 0x0001,
+	APP_IMAGE_TASK_STATE_CAPTURING 	= 0x0002,
+	APP_IMAGE_TASK_STATE_NN_PROCESSING = 0x0003,
+	APP_IMAGE_TASK_STATE_WAIT_FOR_TIMER = 0x0004,
+	APP_IMAGE_TASK_STATE_SAVE_STATE = 0x0005,
+	APP_IMAGE_TASK_STATE_UPDATING_NN = 0x0006, // Not used at present
+	APP_IMAGE_TASK_STATE_NUMSTATES 	= 0x0007,
+} APP_IMAGE_TASK_STATE_E;
+
+// The number of neural network output categories
+// replaced with MAX_CLASSES
+//#define CATEGORIESCOUNT 2
+
+// Sets limits for the capture command
+#define MIN_IMAGE_CAPTURES 1
+#define MAX_IMAGE_CAPTURES 1000
+// Interval between photos (ms)
+#define MIN_IMAGE_INTERVAL 0
+// 15 minutes -
+#define MAX_IMAGE_INTERVAL 15 * 60 * 1000
+
+// file name: '12345678.jpg' = 12 characters, plus trailing '\0'
+#define IMAGEFILENAMELEN		13
+
+// default 5%
+#define FLASHLEDDUTY 5
+// Deafult values of Operational Parameters
+// todo THESE
+#define NUMPICTURESTOGRAB	1
+#define PICTUREINTERVAL		500
+//#define	TIMELAPSEINTERVAL	1 * 60	// time in seconds
+#define	TIMELAPSEINTERVAL	0	// 0 disables timelapse
+
+// for now, 1s
+#define INACTIVITYTIMEOUT 1000
+
+// Default interval in ms between frame grabs in motion detect mode
+// 0 disables MD
+//#define DPDINTERVAL 1000
+#define DPDINTERVAL 0
+
+// Default Duration (ms) that LED Flash is on. VSYNC ends <40ms after flash starts.
+#define FLASHDURATION 100
+
+TaskHandle_t image_createTask(int8_t priority, APP_WAKE_REASON_E wakeReason);
+
+uint16_t image_getState(void);
+
+const char * image_getStateString(void);
+
+const char * image_getLastImageFile(void);
+
+// Returns whether the camera system is enabled
+bool image_getEnabled(void);
+
+// Call to shut down cameras and enter DPD
+void image_sleepNow(void);
+
+#endif /* APP_WW_PROJECTS_WW500_MD_IMAGE_TASK_H_ */

@@ -1,4 +1,12 @@
 ## EPII application makefile template ##
+
+# CGP added this to select folder containing projects
+# Uncomment one of the following lines to define the project folder. There must be a corresponding entry in app.mk
+#PROJECT_FOLDER = scenario_app
+PROJECT_FOLDER = ww_projects
+
+$(info Choosing PROJECT_FOLDER='${PROJECT_FOLDER}' for our projects )
+
 ##
 # root dir of EPII_ROOT
 ##
@@ -42,11 +50,18 @@ CoreVolt ?= 0P9V
 TOOLCHAIN ?= gnu
 ##
 # Definition of Tool Paths
+# CGP 10/7/25: It looks like Himax has used GNU tools v10 at some point, and commented out the path.
+# I appear to have been using 10.3 from an old ST Micro installation - I have added its path.
+# I am downloading 14.2 Rel1 and will add its path also.
+# Alternatively, GNU_TOOLPATH could be added as an Eclipse environment variable.
 ##
 ARM_TOOLPATH ?=
 GNU_TOOLPATH ?=
 #ARM_TOOLPATH ?= C:/Program Files/Arm/Development Studio 2020.1/sw/ARMCompiler6.15/bin
 #GNU_TOOLPATH ?= D:/Project/WE-II/CMSIS/cmsis_tool/gcc-arm-none-eabi-10-2020-q4-major-win32/gcc-arm-none-eabi-10-2020-q4-major/bin
+GNU_TOOLPATH ?= C:/Program Files (x86)/Arm GNU Toolchain arm-none-eabi/14.3 rel1/bin
+#GNU_TOOLPATH ?= C:/ST/STM32CubeIDE_1.10.1/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.10.3-2021.10.win32_1.0.0.202111181127/tools/bin
+# CGP - Make location:  C:/ST/STM32CubeIDE_1.10.1/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.make.win32_2.0.100.202202231230/tools/bin
 
 ##
 # Selected OS
@@ -155,8 +170,24 @@ CUSTOMER ?= seeed
 # tflm_mb_cls
 # torch_mb_cls
 ##
-APP_TYPE = allon_sensor_tflm
+#APP_TYPE = allon_sensor_tflm
  
 ### Options above must be added before include options.mk ###
 override EPII_ROOT := $(strip $(subst \,/,$(EPII_ROOT)))
 include $(EPII_ROOT)/options/options.mk
+
+# touch ${APP_TYPE}.c so the __TIME__ and __DATE__ are updated	even if that file is not edited.
+# HOWEVER: this does not seem to be working... How can we do it?
+${APP_TYPE}.o: ${APP_TYPE}.c timestamp
+	$(CC) $(CFLAGS) -c $< -o $@
+	
+timestamp:
+	@touch timestamp
+	
+# CGP added for infrmation and checking
+$(info In makefile APP_TYPE='${APP_TYPE}' SCENARIO_APP_INCDIR='${SCENARIO_APP_INCDIR}')
+
+# Find all .mk files in the project directory and print their full path
+# SHELL := powershell.exe
+# list_mk_files:
+# 	@powershell -File "./list_mk_files.ps1"

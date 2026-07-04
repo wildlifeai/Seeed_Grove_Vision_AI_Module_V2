@@ -96,7 +96,7 @@ static uint8_t 	g_time;
 static uint8_t g_spi_master_initial_status;
 /*volatile*/ uint32_t jpeg_addr, jpeg_sz;
 
-void app_start_state(APP_STATE_E state);
+void app_start_state(CAMERA_CONFIG_E state);
 
 
 static void dp_var_int()
@@ -263,7 +263,7 @@ static void dp_app_cv_eventhdl_cb(EVT_INDEX_E event)
 
 }
 
-void app_start_state(APP_STATE_E state)
+void app_start_state(CAMERA_CONFIG_E state)
 {
 	if(state == APP_STATE_ALLON) {
         if(cisdp_sensor_init() < 0)
@@ -303,7 +303,7 @@ int app_main(void) {
 
 	hx_drv_pmu_get_ctrl(PMU_pmu_wakeup_EVT, &wakeup_event);
 	hx_drv_pmu_get_ctrl(PMU_pmu_wakeup_EVT1, &wakeup_event1);
-    xprintf("wakeup_event=0x%x,WakeupEvt1=0x%x\n", wakeup_event, wakeup_event1);
+    xprintf("Wakeup_event=0x%x, WakeupEvt1=0x%x\n", wakeup_event, wakeup_event1);
 
 #if (FLASH_XIP_MODEL == 1)
     hx_lib_spi_eeprom_open(USE_DW_SPI_MST_Q);

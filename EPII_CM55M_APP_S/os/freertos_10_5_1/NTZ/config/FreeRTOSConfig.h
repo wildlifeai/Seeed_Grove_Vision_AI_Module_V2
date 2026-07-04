@@ -84,7 +84,11 @@ extern uint32_t SystemCoreClock;
 #define configUSE_QUEUE_SETS                  1
 #define configUSE_TASK_NOTIFICATIONS          1
 #define configUSE_TRACE_FACILITY              1
+// CGP Added this so vTaskList is compiled:
+#define configUSE_STATS_FORMATTING_FUNCTIONS 1
+// CGP can make a chnage here to turn off tickless idle
 #define configUSE_TICKLESS_IDLE               1
+//#define configUSE_TICKLESS_IDLE               0
 #define configUSE_APPLICATION_TASK_TAG        0
 #ifdef __GNU__
 #define configUSE_NEWLIB_REENTRANT            1
@@ -94,15 +98,20 @@ extern uint32_t SystemCoreClock;
 #define configUSE_CO_ROUTINES                 0
 
 /* Constants provided for debugging and optimisation assistance. */
-#define configCHECK_FOR_STACK_OVERFLOW        0
+#define configCHECK_FOR_STACK_OVERFLOW        2
 #define configQUEUE_REGISTRY_SIZE             0
 #define configASSERT( x )                     if( ( x ) == 0 ) { taskDISABLE_INTERRUPTS(); for( ;; ); }
 
 /* Constants that define which hook (callback) functions should be used. */
-#define configUSE_IDLE_HOOK                   0
+#define configUSE_IDLE_HOOK                   1
 #define configUSE_TICK_HOOK                   0
 #define configUSE_DAEMON_TASK_STARTUP_HOOK    0
 #define configUSE_MALLOC_FAILED_HOOK          0
+
+// CGP - defines a function to call when tasks are switched, to determine inactivity
+// Uncomment both of these lines together:
+extern void vApplicationTaskSwitchedIn( void );
+#define traceTASK_SWITCHED_IN() vApplicationTaskSwitchedIn()
 
 /* Port specific configuration. */
 //#define configENABLE_MPU                      0

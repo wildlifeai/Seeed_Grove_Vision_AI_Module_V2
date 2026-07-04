@@ -1,0 +1,83 @@
+## How to install firmware images onto the WW130 using DFU - CGP 10/8/24
+
+(These instructions also apply to the MKL62BA on the WW500. See the end of this document for differences)
+
+The WW130 boards have a "Device Firmware Update " (DFU) mechanism which allows new frmware to be installed
+over-the-air using BLE. This document describes how to do this.
+
+Summary: the steps are:
+- Copy the new firmware to a phone. 
+- Run the Device Firmware Update app on your phone.
+- Place the WW130 in DFU mode (waiting for a new image).
+- On the app, select the WW130 device and make a BLE connection to it.
+- Send the new firmware and check the progress of the download.
+
+1 Select the right file.
+------------------------
+DFU files are .zip files. They have names such as this: 'twi_master_seeed_ww130_b00_000402.zip' 
+The file name is understood as follows:
+- twi_master_seeed - this is the name of the WW130 project in the WW130's SDK.
+- ww130_b00 - this identifies the board type (ww130) and revision (b00).
+- 000402 - firmware version - here 0.4.2
+
+The DFU process checks the firmware version and does not permit an earlier version to be loaded.
+Copy the .zip file to your phone - I place these in the Downloads folder of my Android phone.
+
+I do this using Bluetooth: right-click on the file and choose 
+Send to > Bluetooth Device > then select your phone. I had to do some preparation on the phone 
+and/or laptop for this to happen, but I don't recall what. For me the file ends up in the Downloads folder.
+
+2 Run the DFU app
+-----------------
+This is part of the nRFToolbox suite from Nordic Semiconductor (manufacturer of the BLE processor).
+Open this app and scroll down to the Device Firmware Update option.
+Select the correct file. (They are arranged in chronological order, so the top file is the latest download).
+
+3	Place the WW130 in DFU mode.
+---------------------------------
+There are potentially two ways to do this. The first should always work, and the second depends on whether
+I have included code for it in the app that is currently running on the WW130.
+- Press SW2 (on the small board labelled WWIF100) and apply power.
+- Press SW2 for > 1s while the current app is running. 
+- While connected to a phone using BLE, type 'dfu'. The devices enters DFU mode when the BLE connection terminates.
+
+In DFU mode the red LED (LED1) and the blue LED (LED2) come on together. The board stays in DFU mode for about 2 minutes.
+If a download does not start in that time the existing app is started.
+
+4	Select the DFU device
+----------------------------
+On the app press the Select button, then select the DFU device. At the time of writing this is called 'DfuTarg'
+but I am likely to change this, to include part of the BLE address.
+
+5 Send the new firmware
+-------------------------
+Press the Start button on the app. The Blue LED switches off and the third LED (LED3) turns on. 
+Watch the progress on the app. If successful all four status lines will have green ticks.
+
+On completion the new app starts executing.
+
+## Engineering Console Process (Manual Update)
+
+If debugging or manually updating via a BLE Console (e.g., nRF Connect), the process is:
+
+1.  **Connect** to the device using a BLE tool (e.g., nRF Connect on Android/iOS).
+2.  **Subscribe** to notifications on the UART TX characteristic to see responses.
+3.  **Send Command**: Write `dfu` (as text/UTF-8) to the UART RX characteristic.
+    *   *Note*: The device prepares to switch to DFU mode but waits for disconnection.
+4.  **Disconnect** from the BLE device.
+    *   *Observation*: The device LEDs will change (e.g., Red+Blue on WW130, or specific pattern on WW500) indicating DFU mode is active.
+5.  **Perform DFU**: Use the "Device Firmware Update" (DFU) feature in nRF Connect (or nRF Toolbox) to scan for the target (which now advertises as `DfuTarg` or `WW500_DFU`) and upload the `.zip` package.
+
+## Differences for WW500
+The process is the same except note the following differences:
+
+1 To enter DFU mode:
+ - press SW1 for >5s
+ - hold a magnet adjacent to IC4 and apply power
+ - While connected to a phone using BLE, type 'dfu'. The devices enters DFU mode when the BLE connection terminates.
+
+2 The WW500 appears as "WW500_DFU" to the DFU app.
+
+
+
+

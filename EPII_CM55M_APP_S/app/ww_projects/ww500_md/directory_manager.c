@@ -1,0 +1,240 @@
+/**
+ * @file directory_manager.c
+ *
+ *  Created: 31 Jul 2025
+ *      Author: TBP
+ *
+ * This file manages directories for the WW500 MD project.
+ * It initializes directories, creates capture folders,
+ * and handles directory-related operations.
+ * It primarily communicates with the FatFS task.
+ */
+
+/*************************************** Includes *******************************************/
+
+#include <stdint.h>
+#include <stdio.h>
+#include <string.h>
+#include "ff.h"
+#include "xprintf.h"
+#include "fatfs_task.h"
+#include "directory_manager.h"
+#include "image_task.h"
+#include "ffconf.h"
+
+#include "fatfs_task.h"
+#include "exif_utc.h"
+#include "printf_x.h"
+
+/*************************************** Definitions *******************************************/
+
+#define MAXIMAGEDIRECTORIES     999
+// Use a low number for testing
+#define MAXIMAGESPERDIRECTORY   100
+//#define MAXIMAGESPERDIRECTORY   4
+
+/*************************************** Global variables *******************************************/
+
+directoryManager_t dirManager;
+
+
+/*************************************** Local Function Declarations *****************************/
+
+// TODO - these are only used by directory_manager.c, so make them local
+static void generateImageDirName(char *imageDirName, uint8_t dirNameLen);
+static void createImageDir(char *path_buf, directoryManager_t *dirManager);
+
+
+/*************************************** Local Function Definitions *****************************/
+
+/**
+ * Generate a directory name for images.
+ *
+ * Must use 8.3 file name format: upper case alphanumeric.
+ *
+ * Checks whether the current image folder is full. If so, increments the
+ * folder index and resets the image count. The new index is persisted in
+ * op_parameter[] so it survives a warm boot.
+ *
+ * @param imageDirName  character array to contain the name
+ * @param dirNameLen    length of that array
+ */
+static void generateImageDirName(char *imageDirName, uint8_t dirNameLen) {
+	uint16_t imagesCount;
+	uint16_t imagesIndex;
+	// Fetch the entire UUID
+	char deployment_id[UUIDLENGTH];
+
+	imagesCount = fatfs_getOperationalParameter(OP_PARAMETER_IMAGES_COUNT);
+	imagesIndex = fatfs_getOperationalParameter(OP_PARAMETER_IMAGES_FILE_INDEX);
+
+	XP_GREEN;
+	if ((imagesCount > MAXIMAGESPERDIRECTORY) && (imagesIndex < MAXIMAGEDIRECTORIES)) {
+		xprintf("Creating a new images directory (%d > %d) ", imagesCount, MAXIMAGESPERDIRECTORY);
+		imagesIndex++;
+		fatfs_setOperationalParameter(OP_PARAMETER_IMAGES_FILE_INDEX, imagesIndex);
+		fatfs_setOperationalParameter(OP_PARAMETER_IMAGES_COUNT, 0);
+	}
+	else {
+		xprintf("Retaining existing images directory (%d <= %d) ",
+				imagesCount, MAXIMAGESPERDIRECTORY);
+	}
+
+	// Typically:
+	// /MEDIA/xxxxxxxx/IMAGES.000
+	fatfs_getDeploymentId(deployment_id, sizeof(deployment_id));
+	// terminate the ID after 8 characters
+	deployment_id[8] = '\0';
+
+	// DIRNAMELEN is 32 for /MEDIA/12345678/12345678.123 max size is (3 * 9) + 4 + 1 = 32
+	// so there won't be an overflow.
+	snprintf(imageDirName, dirNameLen, "%s/%s/%s.%03d",
+			MEDIA_DIR, deployment_id, CAPTURE_DIR, imagesIndex);
+
+	// print the directory name
+	xprintf("'%s'\n", imageDirName);
+	XP_WHITE;
+}
+
+/**
+ * Create the image directory if it does not already exist, and update
+ * dirManager->current_capture_dir to point to it.
+ *
+ * @param path_buf  Name of the directory to create.
+ * @param dirManager Pointer to the directory manager structure.
+ */
+static void createImageDir(char *path_buf, directoryManager_t *dirManager) {
+	FRESULT res;
+	FILINFO fno;
+
+	res = f_stat(path_buf, &fno);
+
+	if (res == FR_OK) {
+		xprintf("Directory '%s' exists\r\n", path_buf);
+	}
+	else {
+		xprintf("Creating directory '%s'\r\n", path_buf);
+		res = fatfs_mkdir_recursive(path_buf);
+
+		if (res != FR_OK) {
+			xprintf("f_mkdir(images) failed (%d)\r\n", res);
+			dirManager->imagesRes = res;
+			return;
+		}
+	}
+
+	dirManager->imagesRes = FR_OK;
+	strcpy(dirManager->current_capture_dir, path_buf);
+}
+
+
+/*************************************** Global Function Definitions *****************************/
+
+/**
+ * Phase 1 initialisation — called early, before CONFIG.TXT is loaded.
+ *
+ * Ensures the configuration directory (/MANIFEST) exists and initialises
+ * the dirManager state. Does NOT touch the image directory because the
+ * correct image folder index is not known until operational parameters
+ * have been read from CONFIG.TXT.
+ *
+ * Call dir_mgr_init_image_dir() after load_configuration() completes.
+ *
+ * @param dirManager Pointer to the directory manager structure.
+ * @return FRESULT indicating success or failure.
+ */
+FRESULT dir_mgr_init_config(directoryManager_t *dirManager) {
+	FRESULT res;
+	char path_buf[DIRNAMELEN];
+	FILINFO fno;
+
+	memset(dirManager, 0, sizeof(*dirManager));
+
+	xsprintf(path_buf, CONFIG_DIR);
+	res = f_stat(path_buf, &fno);
+	if (res == FR_OK) {
+		xprintf("Directory '%s' exists\r\n", path_buf);
+	}
+	else {
+		xprintf("Creating directory '%s'\r\n", path_buf);
+		res = f_mkdir(path_buf);
+		if (res != FR_OK) {
+			xprintf("f_mkdir(config) failed (%d)\r\n", res);
+			dirManager->configRes = res;
+			return res;
+		}
+	}
+
+	strcpy(dirManager->current_config_dir, path_buf);
+	dirManager->configOpen = false;
+	dirManager->imagesOpen = false;
+
+	return FR_OK;
+}
+
+/**
+ * Phase 2 initialisation — called after load_configuration(), once
+ * op_parameter[] values (OP_PARAMETER_IMAGES_COUNT and
+ * OP_PARAMETER_IMAGES_FILE_INDEX) and the deloyment ID have been read from CONFIG.TXT.
+ *
+ * Generates the correct image directory name and creates it if necessary.
+ *
+ * createImageDir() also saves the directory name in dirManager->current_capture_dir
+ *
+ * @param dirManager Pointer to the directory manager structure.
+ * @return FRESULT indicating success or failure.
+ */
+FRESULT dir_mgr_init_image_dir(directoryManager_t *dirManager) {
+	char path_buf[DIRNAMELEN];
+
+	generateImageDirName(path_buf, sizeof(path_buf));
+	createImageDir(path_buf, dirManager);
+
+	return dirManager->imagesRes;
+}
+
+/**
+ * Generate a filename for the image (jpeg) file.
+ *
+ * Must use 8.3 file name: upper case alphanumeric
+ *
+ * The name is 8 hex characters (which can be generated by a 32-bit integer).
+ * The name is generated as follows:
+ * - find the Unix epoch timestamp (seconds since 1/1/1970)
+ * - shift it left 4 bits (i.e. lose the first nibble)
+ * - make the LS nibble '0', but use successive values (up to 'F')
+ * 		if there are more than 1 file generated within the same second.
+ *
+ * 	This gives file names with these characteristics:
+ *	1    When sorted in alphanumeric order that is also chronological order.
+ *	2    Up to 16 files per second
+ *	3    The file name can be converted to Unix time (1s resolution) by shifting 4 bits right.
+ *
+ * @param imageFileName character array to contain the name
+ * @param filenameLen   length of that array
+ * @param type          character array to contain the extension (JPG or BMP)
+ */
+void dir_mgr_generateImageFilename(char *imageFileName, uint8_t filenameLen, char *type) {
+	uint32_t seconds;
+	static uint32_t old = 1;
+	static uint8_t subSecond = 0;	// increment by 1 if called several times in the same second
+
+	exif_utc_get_rtc_as_seconds(&seconds);
+
+	if (seconds == old) {
+		// Called more than once this second — increment LS digit
+		if (subSecond < 15) {
+			subSecond++;
+		}
+		// else: >= 16 images in the same second; the previous file will be overwritten
+	}
+	else {
+		subSecond = 0;
+	}
+
+	old = seconds;
+
+	// Create a value which is seconds * 16 + subSeconds
+	seconds = (seconds << 4) + subSecond;
+	snprintf(imageFileName, filenameLen, "%08X.%s", (int) seconds, type);
+}

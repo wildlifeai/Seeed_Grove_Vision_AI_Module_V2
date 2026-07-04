@@ -1,3 +1,9 @@
+# Ignore the .metadata directory
+.metadata/
+
+# These are descriptions of the chip
+*.svd
+
 # Prerequisites
 *.d
 
@@ -24,6 +30,7 @@
 *.lai
 *.la
 *.lib
+*.a
 
 # Executables
 *.exe
@@ -38,4 +45,43 @@ we2_image_gen_local/Images*.txt
 *.map
 *.img
 
+# ---------------------------
+# DPD generated files
+# ---------------------------
+
+# Ignore everything inside output_case1_sec_wlcsp
+we2_image_gen_local_dpd/output_case1_sec_wlcsp/**
+
+# But keep the folder itself
+!we2_image_gen_local_dpd/output_case1_sec_wlcsp/
+
+# Keep the golden reference image
+!we2_image_gen_local_dpd/output_case1_sec_wlcsp/output.img
+
+# Ignore files in secureboot_tool
+we2_image_gen_local_dpd/secureboot_tool/**/*.crt
+we2_image_gen_local_dpd/secureboot_tool/**/*.txt
+we2_image_gen_local_dpd/secureboot_tool/**/*.log
+
+# Track all other subfolders normally (do not ignore their contents)
+# No need to do anything else � they are tracked by default
+
+
+# Python bytecode
+*.pyc
+*.pyo
+__pycache__/
+
+# Editor config
 .vscode/
+
+# Node.js dependencies
+node_modules/
+
+# Agent and Editor settings
+.agents/
+.cursorrules
+.windsurfrules
+CLAUDE.md
+.claude/
+**/claude/

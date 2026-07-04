@@ -1,6 +1,13 @@
 # platform root declaration
 SCENARIO_APP_ROOT = $(EPII_ROOT)/app/scenario_app
 
+# CGP - I Moved the definition of APP_TYPE from makefile to ww.mk
+# Uncomment one project to compile:
+#APP_TYPE = i
+#APP_TYPE = 
+APP_TYPE = allon_sensor_tflm
+#APP_TYPE = allon_sensor_tflm_freertos
+
 SCENARIO_APP_MKS =
 SCENARIO_APP_MKS += $(foreach APP_TYPE_MK, $(APP_TYPE), $(wildcard $(SCENARIO_APP_ROOT)/$(APP_TYPE_MK)/*.mk))
 include $(wildcard $(SCENARIO_APP_MKS))
@@ -80,4 +87,6 @@ ifeq ($(USE_APP_MAIN_MK), y)
 endif
 endif
 
+# CGP added for information and checking
+$(info In scenario_app.mk CIS_SUPPORT_INAPP='${CIS_SUPPORT_INAPP}' SCENARIO_APP_INCDIR='${SCENARIO_APP_INCDIR}')
 

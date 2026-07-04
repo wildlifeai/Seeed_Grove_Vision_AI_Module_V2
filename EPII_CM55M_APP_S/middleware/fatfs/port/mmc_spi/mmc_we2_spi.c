@@ -3,9 +3,35 @@
 /*-----------------------------------------------------------------------*/
 /* If a working storage control module is available, it should be        */
 /* attached to the FatFs via a glue function rather than modifying it.   */
-/* This is an example of glue functions to attach various exsisting      */
+/* This is an example of glue functions to attach various existing      */
 /* storage control modules to the FatFs module with a defined API.       */
 /*-----------------------------------------------------------------------*/
+
+
+// Experimental code to speed disk accesses
+
+// With this, jpeg file writes take c.50ms
+// Without c. 210ms
+#define SPEEDIMPROVEMENTS
+
+#ifdef SPEEDIMPROVEMENTS
+#include "FreeRTOS.h"
+#include "task.h"
+/*
+ * MMC_GET_MS() must return a uint32_t millisecond counter that wraps at 2^32.
+ * Currently implemented via FreeRTOS xTaskGetTickCount() (1 kHz tick).
+ *
+ * If you are not using FreeRTOS: remove the #error below, remove the two
+ * includes above, and replace MMC_GET_MS() with your platform's ms counter.
+ */
+#ifndef configTICK_RATE_HZ
+#error "SPEEDIMPROVEMENTS requires FreeRTOS (configTICK_RATE_HZ not found). \
+Provide your own MMC_GET_MS() and remove this guard."
+#endif
+// In practise configTICK_RATE_HZ is 1000...
+//#define MMC_GET_MS()  ((uint32_t)xTaskGetTickCount())
+#define MMC_GET_MS() ((uint32_t)(xTaskGetTickCount() * portTICK_PERIOD_MS))
+#endif // SPEEDIMPROVEMENTS
 
 #include "WE2_device.h"
 #include "board.h"
@@ -19,9 +45,13 @@
 #endif
 #include "timer_interface.h"
 
+
 #include "ff.h"            /* Obtains integer types */
 #include "diskio.h"        /* Declarations of disk functions */
 #include "mmc_we2.h"
+
+#include "xprintf.h"
+
 
 //app need to implement GPIO_Output_Level/GPIO_Pinmux/GPIO_Dir for ARM_SPI_SS_MASTER_SW
 extern void SSPI_CS_GPIO_Output_Level(bool setLevelHigh);
@@ -45,13 +75,18 @@ FnPtr_GPIO_Pinmux getFnPtr_CMSIS_Driver_SPI0_SSPI_CS_GPIO_Pinmux(void) {
 }
 
 #define SPI_CLOCK_SLOW   (200000)
+#ifdef SPEEDIMPROVEMENTS
+// In SPI mode, all compliant SD cards are required to support 25 MHz
+#define SPI_CLOCK_FAST   (25000000)
+#else
 #define SPI_CLOCK_FAST   (12000000)
+#endif // SPEEDIMPROVEMENTS
 
 #define ASSERT_HIGH(X)  assert(X == ARM_DRIVER_OK)
 
-//#define TRACE_PRINTF(fmt, ...)  printf("%s:%s:%d " fmt, __FILE__, __func__, __LINE__, ##__VA_ARGS__)
-//#define TRACE_PRINTF(fmt, ...)  printf("%s " fmt, __func__, ##__VA_ARGS__)
-//#define TRACE_PRINTF(fmt, ...)  printf(fmt, ##__VA_ARGS__)
+//#define TRACE_PRINTF(fmt, ...)  xprintf("%s:%s:%d " fmt, __FILE__, __func__, __LINE__, ##__VA_ARGS__)
+//#define TRACE_PRINTF(fmt, ...)  xprintf("%s " fmt, __func__, ##__VA_ARGS__)
+//#define TRACE_PRINTF(fmt, ...)  xprintf(fmt, ##__VA_ARGS__)
 #define TRACE_PRINTF(fmt, ...)
 
 /* MMC/SD command */
@@ -109,6 +144,8 @@ static BYTE CardType;    /* Card type flags */
 static void power_off(void)
 {
     Driver_SPI0.PowerControl(ARM_POWER_OFF);
+
+    Driver_SPI0.Uninitialize();
 }
 
 static void wait_spi_completed(uint32_t data_count)
@@ -184,6 +221,23 @@ static int wait_ready (    /* 1:Ready, 0:Timeout */
 )
 {
     BYTE datain;
+
+#ifdef SPEEDIMPROVEMENTS
+    /* Poll as fast as the SPI allows; use MMC_GET_MS() for real ms timeout. */
+    uint32_t start = MMC_GET_MS();
+
+    datain = xchg_spi(0xFF);
+    while (datain != 0xFF) {
+        if ((MMC_GET_MS() - start) >= (uint32_t)wt) {
+            TRACE_PRINTF("wait_ready Timeout %d\r\n", wt);
+            return 0;
+        }
+        datain = xchg_spi(0xFF);
+    }
+    return 1;
+
+#else
+    /* Original implementation: wt polls with a 1 ms delay each, so wt == timeout in ms. */
     uint32_t cnt = 0;
 
     datain = xchg_spi(0xFF);
@@ -200,6 +254,7 @@ static int wait_ready (    /* 1:Ready, 0:Timeout */
         TRACE_PRINTF("wait_ready Timeout %d\r\n", wt);
 
     return (datain == 0xFF) ? 1 : 0;
+#endif // SPEEDIMPROVEMENTS
 }
 
 /*-----------------------------------------------------------------------*/
@@ -216,7 +271,9 @@ static void deselect (void)
 /*-----------------------------------------------------------------------*/
 /* Select card and wait for ready                                        */
 /*-----------------------------------------------------------------------*/
-static int select (void)    /* 1:OK, 0:Timeout */
+
+/* Renamed from select() to avoid clash with POSIX select() in sys/select.h */
+static int selectCard (void)    /* 1:OK, 0:Timeout */
 {
     TRACE_PRINTF("\r\n");
 
@@ -241,12 +298,24 @@ static int rcvr_datablock (    /* 1:OK, 0:Error */
     TRACE_PRINTF("0x%x 0x%x\r\n", (uint32_t)buff, btr);
 
     BYTE token;
+
+#ifdef SPEEDIMPROVEMENTS
+    uint32_t start = MMC_GET_MS();
+
+    token = xchg_spi(0xFF);
+    while (token == 0xFF) {                     /* Wait for DataStart token, timeout 200 ms */
+        if ((MMC_GET_MS() - start) >= 200U) {
+            TRACE_PRINTF("rcvr_datablock Timeout\r\n");
+            break;
+        }
+        token = xchg_spi(0xFF);
+    }
+#else
     uint32_t cnt = 0;
     uint32_t wt_ms = 200;
 
     token = xchg_spi(0xFF);
-
-    while ((token == 0xFF) && cnt <= wt_ms) {  /* Wait for DataStart token in timeout of 200ms */
+    while ((token == 0xFF) && cnt <= wt_ms) {   /* Wait for DataStart token in timeout of 200ms */
         token = xchg_spi(0xFF);
         DELAY(1);
         cnt++;
@@ -255,6 +324,7 @@ static int rcvr_datablock (    /* 1:OK, 0:Error */
 
     if (cnt > wt_ms)
         TRACE_PRINTF("rcvr_datablock Timeout %d\r\n", wt_ms);
+#endif // SPEEDIMPROVEMENTS
 
     if(token != 0xFE)
         return 0; /* Function fails if invalid DataStart token or timeout */
@@ -322,7 +392,7 @@ static BYTE send_cmd (    /* Return value: R1 resp (bit7==1:Failed to send) */
     if (cmd != CMD12) {
         deselect();
 
-        if (!select())
+        if (!selectCard())
             return 0xFF;
     }
 
@@ -351,6 +421,8 @@ static BYTE send_cmd (    /* Return value: R1 resp (bit7==1:Failed to send) */
     do {
         res = xchg_spi(0xFF);
     } while ((res & 0x80) && --n);
+
+    TRACE_PRINTF("send_cmd %d response 0x%02x\r\n", cmd, res);
 
     return res;                            /* Return received response */
 }
@@ -433,23 +505,23 @@ static void SD_powerUpSeq()
 void SD_printR1(uint8_t res)
 {
     if(res & 0b10000000)
-        { printf("\tError: MSB = 1\r\n"); return; }
+        { xprintf("\tError: MSB = 1\r\n"); return; }
     if(res == 0)
-        { printf("\tCard Ready\r\n"); return; }
+        { xprintf("\tCard Ready\r\n"); return; }
     if(PARAM_ERROR(res))
-        printf("\tParameter Error\r\n");
+        xprintf("\tParameter Error\r\n");
     if(ADDR_ERROR(res))
-        printf("\tAddress Error\r\n");
+        xprintf("\tAddress Error\r\n");
     if(ERASE_SEQ_ERROR(res))
-        printf("\tErase Sequence Error\r\n");
+        xprintf("\tErase Sequence Error\r\n");
     if(CRC_ERROR(res))
-        printf("\tCRC Error\r\n");
+        xprintf("\tCRC Error\r\n");
     if(ILLEGAL_CMD(res))
-        printf("\tIllegal Command\r\n");
+        xprintf("\tIllegal Command\r\n");
     if(ERASE_RESET(res))
-        printf("\tErase Reset Error\r\n");
+        xprintf("\tErase Reset Error\r\n");
     if(IN_IDLE(res))
-        printf("\tIn Idle State\r\n");
+        xprintf("\tIn Idle State\r\n");
 }
 
 /*--------------------------------------------------------------------------
@@ -524,6 +596,7 @@ DSTATUS mmc_disk_initialize (void)
             SD_printR1(res1);
             break;
         }
+        DELAY(5);   /* Allow card time to settle between retries */
     }
 #endif
 
@@ -537,9 +610,13 @@ DSTATUS mmc_disk_initialize (void)
             for (n = 0; n < 4; n++)
                 ocr[n] = xchg_spi(0xFF);    /* Get 32 bit return value of R7 resp */
 
-            if (ocr[2] == 0x01 && ocr[3] == 0xAA) {                /* Is the card supports vcc of 2.7-3.6V? */
+            if (ocr[2] == 0x01 && ocr[3] == 0xAA) {
+            	/* Is the card supports vcc of 2.7-3.6V? */
 
-                while (cnt <= wt_ms && send_cmd(ACMD41, 1UL << 30)) { /* Wait for end of initialization with ACMD41(HCS) */
+                while (cnt <= wt_ms && send_cmd(ACMD41, (1UL << 30) | 0x00FF8000)) {
+                	/* Wait for end of initialization with ACMD41(HCS) */
+                	/* SD spec requires CS high between commands; leaving it low during delay confuses some cards */
+                	deselect();
                     DELAY(1);
                     cnt++;
                 }
@@ -571,7 +648,7 @@ DSTATUS mmc_disk_initialize (void)
             TRACE_PRINTF("mmc_disk_initialize Timeout %d\r\n", wt_ms);
     }
     else {
-        printf("Put the card SPI/Idle state fail\r\n");
+        xprintf("Put the card SPI/Idle state fail\r\n");
     }
 
 
@@ -579,7 +656,6 @@ DSTATUS mmc_disk_initialize (void)
     deselect();
 
     if (ty) {            /* OK */
-        TRACE_PRINTF("SPI_CLOCK_FAST\r\n");
         /* Set fast clock for generic read/write */
         ret = Driver_SPI0.Control(ARM_SPI_SET_BUS_SPEED, SPI_CLOCK_FAST);
         ASSERT_HIGH(ret);
@@ -734,7 +810,7 @@ DRESULT mmc_disk_ioctl (
 
     switch (cmd) {
     case CTRL_SYNC :        /* Wait for end of internal write process of the drive */
-        if (select())
+        if (selectCard())
             res = RES_OK;
         break;
 

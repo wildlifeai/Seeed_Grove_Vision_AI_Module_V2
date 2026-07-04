@@ -120,6 +120,10 @@ void EPII_Get_Systemclock(uint32_t *val)
 #ifndef BOOT_USED
 #if !defined(ENABLE_OS) && !defined(RTE_CMSIS_RTOS2) && !defined(RTE_RTOS_FreeRTOS_CORE)
 #define EnablePrivilegedMode() __asm("SVC #0")
+
+// CGP
+#pragma message("In WE2_core.c about to define SVC_Handler")
+
 void SVC_Handler_Main_CORE( unsigned int *svc_args )
 {
   unsigned int svc_number;
@@ -152,12 +156,15 @@ void SVC_Handler(void)
   ) ;
 }
 #endif
+// CGP
+#pragma message("In WE2_core.c NOT about to define SVC_Handler")
 #endif//#ifndef BOOT_USED
 
 void EPII_QSPIXIP_MEM_Attribute_S(uint32_t start_addr, uint32_t end_addr,
 		SPIXIP_MEM_ATT_E mem_att) {
 #if defined (__MPU_PRESENT) && (__MPU_PRESENT == 1U)
-	uint32_t size = 0;
+	// CGP unused
+	//uint32_t size = 0;
 
 	MPU->CTRL = MPU->CTRL & 0xFFFFFFFE;
 
@@ -184,7 +191,8 @@ extern void EPII_OSPIXIP_MEM_Attribute_S(uint32_t start_addr, uint32_t end_addr,
 		SPIXIP_MEM_ATT_E mem_att)
 {
 #if defined (__MPU_PRESENT) && (__MPU_PRESENT == 1U)
-	uint32_t size = 0;
+	// CGP unused
+	//uint32_t size = 0;
 
 	MPU->CTRL = MPU->CTRL & 0xFFFFFFFE;
 
@@ -571,7 +579,9 @@ extern void EPII_Get_CPU_Mode(CPU_MODE_E *mode)
  */
 extern EPII_CORE_RET_E EPII_Set_Stack_Sel(STACK_MODE_E mode)
 {
-	uint32_t current_mode, val;
+	// CGP - current_mode is set but not used.
+	//uint32_t current_mode, val;
+	uint32_t val;
 	val = __get_CONTROL();
 #if 0
 	current_mode = val & CONTROL_nPRIV_Msk;
@@ -591,7 +601,7 @@ extern EPII_CORE_RET_E EPII_Set_Stack_Sel(STACK_MODE_E mode)
 		}
 	}
 #else
-	current_mode = val & (uint32_t)(~CONTROL_SPSEL_Msk);
+	// CGP Unused! current_mode = val & (uint32_t)(~CONTROL_SPSEL_Msk);
 	val = val | (mode << CONTROL_SPSEL_Pos);
 	__set_CONTROL(val);
 #endif
@@ -847,7 +857,8 @@ extern void hx_InvalidateICache_by_Addr(volatile void *addr, int32_t isize)
  */
 extern void hx_CleanInvalidateDCache_by_Addr(volatile void *addr, int32_t dsize)
 {
-	uint32_t mod_val;
+	// CGP unused
+	//uint32_t mod_val;
 	uint32_t dtcm_start;
 	uint32_t dtcm_end;
 	uint32_t itcm_start;

@@ -19,6 +19,7 @@
 
 // FreeRTOS kernel includes.
 #include "FreeRTOS.h"
+#include "task.h"
 
 #include "xprintf.h"
 #include "fatfs_task.h"
@@ -40,6 +41,11 @@ HX_CIS_SensorSetting_t * cis_file_getStagedTable(void) {
 
 bool cis_file_stageReg(uint16_t addr, uint8_t val) {
 	uint16_t i;
+	bool success = true;
+
+	// The staged table is written by the CLI task (here) and by the image task
+	// (cis_file_process() at sensor init) - guard against concurrent updates
+	taskENTER_CRITICAL();
 
 	for (i = 0; i < stagedCount; i++) {
 		if (stagedSettings[i].RegAddree == addr) {
@@ -49,20 +55,28 @@ bool cis_file_stageReg(uint16_t addr, uint8_t val) {
 
 	if (i == stagedCount) {
 		if (stagedCount == CIS_FILE_MAX_STAGED) {
-			return false;
+			success = false;
 		}
-		stagedCount++;
+		else {
+			stagedCount++;
+		}
 	}
 
-	stagedSettings[i].I2C_ActionType = HX_CIS_I2C_Action_W;
-	stagedSettings[i].RegAddree = addr;
-	stagedSettings[i].Value = val;
+	if (success) {
+		stagedSettings[i].I2C_ActionType = HX_CIS_I2C_Action_W;
+		stagedSettings[i].RegAddree = addr;
+		stagedSettings[i].Value = val;
+	}
 
-	return true;
+	taskEXIT_CRITICAL();
+
+	return success;
 }
 
 void cis_file_clearStaged(void) {
+	taskENTER_CRITICAL();
 	stagedCount = 0;
+	taskEXIT_CRITICAL();
 }
 
 /**
@@ -139,8 +153,14 @@ HX_CIS_ERROR_E cis_file_process(const char *filename) {
     // Mirror the file contents into the staged table so the 'camreg' CLI command
     // edits what is actually on the SD card. Entries beyond CIS_FILE_MAX_STAGED
     // are still applied below but cannot be edited by 'camreg'.
+    if (num_entries > CIS_FILE_MAX_STAGED) {
+        xprintf("Warning: '%s' has %d entries; only the first %d can be edited by 'camreg' (extras are lost if re-saved)\n",
+                filename, num_entries, CIS_FILE_MAX_STAGED);
+    }
+    taskENTER_CRITICAL();
     stagedCount = (num_entries <= CIS_FILE_MAX_STAGED) ? num_entries : CIS_FILE_MAX_STAGED;
     memcpy(stagedSettings, sensor_settings, stagedCount * sizeof(HX_CIS_SensorSetting_t));
+    taskEXIT_CRITICAL();
 
     // Apply the settings
     result = hx_drv_cis_setRegTable(sensor_settings, num_entries);

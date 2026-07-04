@@ -1205,6 +1205,11 @@ static BaseType_t prvI2C(char *pcWriteBuffer, size_t xWriteBufferLen, const char
 static char camRegFileName[] = CAMERA_EXTRA_FILE;
 static fileOperation_t camRegFileOp;
 
+// True while a camreg save is queued/being written by the fatfs_task. Guards
+// camRegFileOp against being overwritten before the previous write completes.
+// Cleared when APP_MSG_CLITASK_DISK_WRITE_COMPLETE arrives.
+static volatile bool camRegWritePending = false;
+
 /**
  * Ask the fatfs_task to (re)write CAMERA_EXTRA_FILE with the staged register table.
  * The result arrives later as a APP_MSG_CLITASK_DISK_WRITE_COMPLETE message.
@@ -1213,6 +1218,12 @@ static fileOperation_t camRegFileOp;
  */
 static bool camRegSaveTable(void) {
 	APP_MSG_T sendMsg;
+
+	if (camRegWritePending) {
+		// The fatfs_task is still writing the previous save; camRegFileOp
+		// must not be touched until that completes
+		return false;
+	}
 
 	camRegFileOp.fileName = camRegFileName;
 	camRegFileOp.buffer = (uint8_t *) cis_file_getStagedTable();
@@ -1224,7 +1235,14 @@ static bool camRegSaveTable(void) {
 	sendMsg.msg_event = APP_MSG_FATFSTASK_WRITE_FILE;
 	sendMsg.msg_data = (uint32_t) &camRegFileOp;
 
-	return (xQueueSend(xFatTaskQueue, (void *) &sendMsg, __QueueSendTicksToWait) == pdTRUE);
+	camRegWritePending = true;
+
+	if (xQueueSend(xFatTaskQueue, (void *) &sendMsg, __QueueSendTicksToWait) != pdTRUE) {
+		camRegWritePending = false;
+		return false;
+	}
+
+	return true;
 }
 
 /**
@@ -1353,6 +1371,13 @@ static BaseType_t prvVcm(char *pcWriteBuffer, size_t xWriteBufferLen, const char
 	IIC_ERR_CODE_E ret;
 
 	pcParameter = FreeRTOS_CLIGetParameter(pcCommandString, 1, &lParameterStringLength);
+
+	// FreeRTOS_CLI enforces the expected parameter count before dispatching,
+	// but be defensive in case that ever changes
+	if (pcParameter == NULL) {
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "Usage: vcm <position> (0-1023) | vcm probe");
+		return pdFALSE;
+	}
 
 	if ((lParameterStringLength == 5) && (strncmp(pcParameter, "probe", 5) == 0)) {
 		if (hm0360_md_isSensorPresent(VCM_I2C_ADDRESS)) {
@@ -2394,6 +2419,22 @@ static void vCmdLineTask(void *pvParameters) {
 
 			case APP_MSG_CLITASK_DISK_WRITE_COMPLETE:
 				// xprintf("Res code %d\n", data);	// This is the same as fileOp.res
+
+				// A camreg save uses its own fileOperation_t; report it and
+				// release the guard so the next 'camreg' write can proceed
+				if (camRegWritePending)
+				{
+					camRegWritePending = false;
+					if (camRegFileOp.res) {
+						xprintf("Error writing '%s'. Result code: %d\n",
+								camRegFileOp.fileName, camRegFileOp.res);
+					}
+					else {
+						xprintf("Saved %d bytes to '%s'\n",
+								(int)camRegFileOp.length, camRegFileOp.fileName);
+					}
+					break;
+				}
 				// The fileOp structure should have the results
 				if (fileOp.res)
 				{

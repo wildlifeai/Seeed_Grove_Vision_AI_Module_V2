@@ -83,6 +83,9 @@ typedef enum {
 	OP_PARAMETER_IMAGES_FILE_INDEX,	// 20 Count of image folders
 	OP_PARAMETER_FLASH_LED_START_TIME,	// 21 Time the LED flash should turn on (minutes after midnight UTC)
 	OP_PARAMETER_FLASH_LED_DURATION,	// 22 Duration of LED flash activity (minutes) 0 disables timer. 1 = use AE values
+	OP_PARAMETER_AE_DARK_THRESHOLD,		// 23 AE Mean (0-255) below this means the scene is dark and the flash is needed. See AE_Light_Sensor_Roadmap.md
+	OP_PARAMETER_AE_CHECK_INTERVAL,		// 24 Interval (minutes) between periodic AE light-level checks when the flash is in AE mode. 0 disables
+	OP_PARAMETER_AE_FLASH_STATE,		// 25 Last AE flash decision (0/1). Runtime state, persisted so it survives DPD - not user-set
 
 	OP_PARAMETER_NUM_ENTRIES		// Not an Operational Parameters - serves to define the size of the op_parameter[] array
 } OP_PARAMETERS_E;

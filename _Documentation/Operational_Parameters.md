@@ -159,6 +159,11 @@ Those comments preceding the first index/value pair are preserved when the file 
 |    18 | OP_PARAMETER_TEST_MODE_BITS           | 0             | To manage test configurations: bit or bits indicate a test function |
 |    19 | OP_PARAMETER_IMAGES_COUNT     		| 0             | Count of images in the current image folder. Use this to decide to create a new image folder. |
 |    20 | OP_PARAMETER_IMAGES_FILE_INDEX 		| 0             | Count of image folders |
+|    21 | OP_PARAMETER_FLASH_LED_START_TIME 	| 0             | Time the LED flash should turn on (minutes after midnight UTC) |
+|    22 | OP_PARAMETER_FLASH_LED_DURATION 		| 0             | Duration of LED flash activity (minutes). 0 = flash always on, 1 = use AE values, >1 = time-of-day window |
+|    23 | OP_PARAMETER_AE_DARK_THRESHOLD 		| 65            | AE Mean (0-255) below this means the scene is dark and the flash is needed. See [AE_Light_Sensor_Roadmap.md](AE_Light_Sensor_Roadmap.md) |
+|    24 | OP_PARAMETER_AE_CHECK_INTERVAL 		| 15            | Interval (minutes) between periodic AE light-level checks when the flash is in AE mode and timelapse is disabled. 0 disables |
+|    25 | OP_PARAMETER_AE_FLASH_STATE 			| 0             | Last AE flash decision (0/1). Runtime state persisted across DPD - not intended to be set by users |
 
 
 ## Syncronisation with BLE Processor Code

@@ -369,7 +369,10 @@ void ledFlashSetFlashModeFromOpParam(uint16_t ledInUse, uint16_t startTime, uint
 	else if (duration == 1) {
 		// Determined by AE registers
 		flashMode = FLASH_MODE_AE;
-		flashActive = false; // off for now - turn on with the AE values
+		// Restore the last AE light decision. It is persisted as an Operational
+		// Parameter because RAM is lost in DPD, and the first capture after a
+		// motion-detect wake happens before any fresh AE reading exists.
+		flashActive = (fatfs_getOperationalParameter(OP_PARAMETER_AE_FLASH_STATE) == 1);
 	}
 	else {
 		// Determined by the time of day
@@ -442,20 +445,31 @@ void ledFlashNewTime(rtc_time time) {
 /**
  * The HM0360 AE registers values have arrived - this might determine LED Flash behaviour
  *
- * TODO this functionality is not yet implemented. FIXME!
+ * Uses the AE Mean register (average scene brightness, 0-255) as a software
+ * light sensor: a value below OP_PARAMETER_AE_DARK_THRESHOLD means the scene
+ * is dark and the flash is needed. The thresholds were derived from a 303-image
+ * day/night dataset - see _Documentation/AE_Light_Sensor_Roadmap.md
  *
  * @param gainRegs
  */
 void ledFlashNewAEValues(HM0360_GAIN_T * gainRegs) {
+	uint16_t threshold;
 
     if ((flashMode != FLASH_MODE_AE) || (gainRegs == NULL)) {
     	return;
     }
 
-    // Calculate whether the AE level is too low.
-    flashActive = 0;
+    threshold = fatfs_getOperationalParameter(OP_PARAMETER_AE_DARK_THRESHOLD);
 
-	xprintf("AE regs \n");
+    // AE Mean below the threshold means the scene is dark - flash needed
+    flashActive = (gainRegs->aeMean < threshold);
+
+    // Persist the decision (written to CONFIG.TXT at DPD entry) so the first
+    // capture after the next wake uses it - RAM does not survive DPD
+    fatfs_setOperationalParameter(OP_PARAMETER_AE_FLASH_STATE, flashActive ? 1 : 0);
+
+	xprintf("AE light check: AE Mean = %d, threshold = %d -> flash %s\n",
+			gainRegs->aeMean, threshold, flashActive ? "ON" : "OFF");
 
 	ledFlashActivate();	// Turn on Flash LED (conditionally)
 }

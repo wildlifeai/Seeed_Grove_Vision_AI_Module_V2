@@ -251,6 +251,11 @@ static uint32_t g_frames_total;
 static uint32_t g_timer_period; // Interval between pictures in ms
 static bool g_wdt_event; 		// A watchdog timer event occurred while waiting for FRAME_READY
 
+// True when this wake exists only to sample the light level (AE registers) for
+// the flash decision: capture one frame, read the AE registers, save nothing.
+// Cleared on the way into DPD. See _Documentation/AE_Light_Sensor_Roadmap.md
+static bool aeCheckOnlyWake = false;
+
 static TimerHandle_t captureTimer;
 
 static fileOperation_t fileOp;
@@ -801,7 +806,13 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
         // run NN processing only if model is loaded
         // This gets the input image address and dimensions from:
         // app_get_raw_addr(), app_get_raw_width(), app_get_raw_height()
-        if (cv_modelLoaded())  {
+        if (aeCheckOnlyWake) {
+        	// AE light check only - the AE registers are all we need
+        	xprintf("Skipping NN processing (AE light check).\n");
+        	ret = kTfLiteOk;
+        	skip_nn = true;
+        }
+        else if (cv_modelLoaded())  {
         	ret = cv_run(outCategories, &classCount);
         	xprintf("DEBUG: cv_run says there are %d classes\n", classCount);
         }
@@ -904,7 +915,8 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
 #endif // 0
 #endif // #if defined(USE_HM0360) || defined(USE_HM0360_MD)
 
-        if (fatfs_getOperationalParameter(OP_PARAMETER_TEST_MODE_BITS) & TEST_BIT_SKIP_FILE_CREATION) {
+        if (aeCheckOnlyWake
+        		|| (fatfs_getOperationalParameter(OP_PARAMETER_TEST_MODE_BITS) & TEST_BIT_SKIP_FILE_CREATION)) {
         	// Don't save to a file. This allows faster streaming of MD and AE data to the app
         	fileOp.fileName = NULL; // skip file write!
         	fileOp.senderQueue = xImageTaskQueue; // necessary so the response comes to this task.
@@ -1560,8 +1572,19 @@ static void vImageTask(void *pvParameters) {
     // But only if nnSystemEnabled and cameraInitialised!
 
     if ((cameraSystemEnabled == 1)  && cameraInitialised && ((woken == APP_WAKE_REASON_MD) || (woken == APP_WAKE_REASON_TIMER))) {
+
+    	// A timer wake with timelapse disabled and the flash in AE mode is a
+    	// periodic light check (the RTC alarm was set for it on the way into
+    	// DPD): capture a single frame to refresh the AE registers, save nothing.
+    	aeCheckOnlyWake = ((woken == APP_WAKE_REASON_TIMER)
+    			&& (fatfs_getOperationalParameter(OP_PARAMETER_TIMELAPSE_INTERVAL) == 0)
+    			&& (ledFlashGetFlashMode() == FLASH_MODE_AE));
+    	if (aeCheckOnlyWake) {
+    		xprintf("Timer wake for AE light check\n");
+    	}
+
         // Pass the parameters in the ImageTask message queue
-        internal_msg.msg_data = fatfs_getOperationalParameter(OP_PARAMETER_NUM_PICTURES);
+        internal_msg.msg_data = aeCheckOnlyWake ? 1 : fatfs_getOperationalParameter(OP_PARAMETER_NUM_PICTURES);
         internal_msg.msg_parameter = fatfs_getOperationalParameter(OP_PARAMETER_PICTURE_INTERVAL);
         internal_msg.msg_event = APP_MSG_IMAGETASK_STARTCAPTURE;
 
@@ -2374,6 +2397,9 @@ void image_sleepNow(void) {
     uint32_t timelapseDelay;
     uint16_t mdInterval;
 
+    // This wake is over - the next one starts fresh
+    aeCheckOnlyWake = false;
+
     mdInterval = fatfs_getOperationalParameter(OP_PARAMETER_MD_INTERVAL);
 
     // Should be off but let's be sure.
@@ -2442,13 +2468,34 @@ void image_sleepNow(void) {
 	}
 
 	else if (timelapseDelay > 0) {
-        // Enable wakeup on WAKE pin and timer
+        // Enable wakeup on WAKE pin and timer.
+        // When the flash is in AE mode the AE registers are refreshed by every
+        // timelapse capture, so no separate light-check wake is needed.
         sleep_mode_enter_dpd(SLEEPMODE_WAKE_SOURCE_WAKE_PIN | SLEEPMODE_WAKE_SOURCE_RTC,
                              timelapseDelay, false); // Does not return
     }
     else  {
-        // If the OP_PARAMETER_TIMELAPSE_INTERVAL setting is 0 then we don't enable a timer wakeup
-        sleep_mode_enter_dpd(SLEEPMODE_WAKE_SOURCE_WAKE_PIN, 0, false); // Does not return
+    	// No timelapse. If the flash is in AE mode, wake periodically anyway to
+    	// sample the light level (one frame, AE registers only, nothing saved) so
+    	// the flash decision is fresh before the next motion-detect capture.
+    	// See _Documentation/AE_Light_Sensor_Roadmap.md
+    	uint32_t aeCheckDelay = 0;	// seconds
+
+    	if (cameraSystemEnabled && (ledFlashGetFlashMode() == FLASH_MODE_AE)) {
+    		aeCheckDelay = (uint32_t) fatfs_getOperationalParameter(OP_PARAMETER_AE_CHECK_INTERVAL) * 60;
+    		if (aeCheckDelay > 65535) {
+    			aeCheckDelay = 65535;	// the RTC alarm parameter is uint16_t seconds (~18h max)
+    		}
+    	}
+
+    	if (aeCheckDelay > 0) {
+    		sleep_mode_enter_dpd(SLEEPMODE_WAKE_SOURCE_WAKE_PIN | SLEEPMODE_WAKE_SOURCE_RTC,
+    				(uint16_t) aeCheckDelay, false); // Does not return
+    	}
+    	else {
+    		// No timer wakeup
+    		sleep_mode_enter_dpd(SLEEPMODE_WAKE_SOURCE_WAKE_PIN, 0, false); // Does not return
+    	}
     }
 }
 

@@ -2,7 +2,7 @@
 
 **Date:** 4 July 2026  
 **Authors:** Victor Anton, CGP  
-**Status:** Phase 1 Complete — Awaiting firmware implementation approval
+**Status:** Phase 2 Implemented (see notes added to sections 5.2/5.3)
 
 ---
 
@@ -179,6 +179,28 @@ triggers a single HM0360 frame capture, reads the AE registers, and calls
 > a DPD wake cycle is more power-efficient but requires coordination with the existing
 > timelapse and motion-detection wake mechanisms.
 
+> **As implemented:** the RTC-alarm DPD wake was chosen - a FreeRTOS software timer
+> cannot fire while the device is in DPD, where it spends nearly all its time. The rules:
+>
+> - **Timelapse enabled:** its captures already refresh the AE registers on every wake,
+>   so no extra wakes are added (no additional battery cost).
+> - **Timelapse disabled + flash in AE mode + interval > 0:** the DPD RTC alarm is set to
+>   `OP_PARAMETER_AE_CHECK_INTERVAL`. The resulting timer wake captures a single frame,
+>   reads the AE registers, and saves nothing (NN and file save are skipped).
+> - **Interval = 0:** no alarm is armed - the check is disabled (no timer object exists,
+>   so there is no zero-period timer hazard).
+> - The RTC alarm parameter is uint16_t seconds, so the interval is clamped to ~18 hours.
+>
+> Two details the original sketch missed, now implemented:
+>
+> 1. **The flash decision is persisted** in a third parameter, `OP_PARAMETER_AE_FLASH_STATE`
+>    (index 25, runtime state): RAM is lost in DPD and a motion-triggered capture happens
+>    before any fresh AE reading exists, so without persistence the first (usually only)
+>    photo of every wake would never use the flash. `FLASH_MODE_AE` setup restores it.
+> 2. `ledFlashActivate()` is intentionally called unconditionally after each AE evaluation:
+>    it already dispatches on `flashActive` internally, calling `ledFlashDisable()` when the
+>    scene is bright - this is what turns the flash off again at dawn.
+
 #### 5.4 Update Documentation
 
 **File:** `_Documentation/Operational_Parameters.md`
@@ -222,7 +244,8 @@ python ae_threshold_analysis.py --csvs ae_data.csv --outdir <output>
 
 ## 8. Open Items
 
-- [ ] Agree on default threshold value (60, 65, or 70)
-- [ ] Decide periodic check mechanism (FreeRTOS timer vs DPD wake)
-- [ ] Sync BLE processor `aiProcessor.h` with new OP indices
+- [x] Agree on default threshold value - 65 (moderate) implemented as the default, tuneable via `setop 23`
+- [x] Decide periodic check mechanism - RTC-alarm DPD wake (see section 5.3)
+- [x] Sync BLE processor `aiProcessor.h` with new OP indices (also removes the never-implemented OP20-27 deployment-chunk entries)
 - [ ] Field test across multiple deployment environments
+- [ ] Resolve OP index clash before merging: this branch and `feat/camera-day-night-switching` both claim index 23

@@ -67,6 +67,7 @@
 #include "semphr.h"
 
 #include "fatfs_task.h"
+#include "cis_file.h"
 #include "image_task.h"
 #include "app_msg.h"
 #include "CLI-commands.h"
@@ -1559,6 +1560,11 @@ static void vFatFsTask(void *pvParameters) {
 	if (xQueueSend(xIfTaskQueue, (void *)&sendMsg, __QueueSendTicksToWait) != pdTRUE) {
 		xprintf("sendMsg=0x%x fail\r\n", sendMsg.msg_event);
 	}
+
+	// Load the staged camera register table (camreg command) from the SD card
+	// while this task is still the only one doing disk I/O - FatFs is not
+	// re-entrant, so this cannot be done lazily from the CLI task
+	cis_file_loadStagedFromFile();
 
 	// The semaphore lets the Image Task proceed
 	// xprintf("DEBUG: giving semaphore so Image Task can proceed\n");

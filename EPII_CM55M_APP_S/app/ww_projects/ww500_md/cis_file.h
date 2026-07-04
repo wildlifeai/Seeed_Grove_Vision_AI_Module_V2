@@ -37,6 +37,23 @@
 HX_CIS_ERROR_E cis_file_process(const char *filename);
 
 /**
+ * @brief Load the staged register table from CAMERA_EXTRA_FILE.
+ *
+ * MUST be called from a context where no other task is using FatFs
+ * (FF_FS_REENTRANT is 0). The fatfs_task calls this once at boot, after the
+ * SD card is mounted and before other tasks start disk activity.
+ * A missing file counts as loaded (there really are no staged registers).
+ */
+void cis_file_loadStagedFromFile(void);
+
+/**
+ * @brief Whether the staged table has been loaded from (or reconciled with)
+ * the SD card. When false, staging and clearing are refused so an unloaded
+ * table can never overwrite the registers already saved on the card.
+ */
+bool cis_file_isStagedLoaded(void);
+
+/**
  * @brief Number of register settings currently staged.
  */
 uint16_t cis_file_getStagedCount(void);

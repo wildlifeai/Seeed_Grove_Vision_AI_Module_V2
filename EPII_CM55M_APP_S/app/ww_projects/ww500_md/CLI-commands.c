@@ -1279,7 +1279,10 @@ static BaseType_t prvCamReg(char *pcWriteBuffer, size_t xWriteBufferLen, const c
 		uint16_t stagedCount = cis_file_getStagedCount();
 		HX_CIS_SensorSetting_t *stagedTable = cis_file_getStagedTable();
 
-		if (stagedCount == 0) {
+		if (!cis_file_isStagedLoaded()) {
+			cli_append(&pcWriteBuffer, &xWriteBufferLen, "Register file not loaded (no SD card?)");
+		}
+		else if (stagedCount == 0) {
 			cli_append(&pcWriteBuffer, &xWriteBufferLen, "No registers staged");
 		}
 		else {
@@ -1293,6 +1296,15 @@ static BaseType_t prvCamReg(char *pcWriteBuffer, size_t xWriteBufferLen, const c
 	}
 
 	if ((lParam1Length == 5) && (strncmp(pcParam1, "clear", 5) == 0)) {
+		if (camRegWritePending) {
+			// fatfs_task is still reading the staged table for the previous save
+			cli_append(&pcWriteBuffer, &xWriteBufferLen, "Save in progress - try again shortly");
+			return pdFALSE;
+		}
+		if (!cis_file_isStagedLoaded()) {
+			cli_append(&pcWriteBuffer, &xWriteBufferLen, "Register file not loaded (no SD card?) - nothing to clear");
+			return pdFALSE;
+		}
 		cis_file_clearStaged();
 		if (camRegSaveTable()) {
 			cli_append(&pcWriteBuffer, &xWriteBufferLen, "Cleared. Emptying '%s'", camRegFileName);
@@ -1323,14 +1335,28 @@ static BaseType_t prvCamReg(char *pcWriteBuffer, size_t xWriteBufferLen, const c
 
 	value = (uint8_t) strtol(pcParam2, NULL, 16);
 
+	if (camRegWritePending) {
+		// fatfs_task is still reading the staged table for the previous save -
+		// modifying the table now could save a torn copy to the SD card
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "Save in progress - try again shortly");
+		return pdFALSE;
+	}
+
 	// Write now (best effort - fails harmlessly if the sensor is not powered;
 	// the staged copy is still applied at the next sensor init)
 	ret = hx_drv_cis_set_reg(address, value, 0);
 
 	// Stage: replace an existing entry for this address, or append
 	if (!cis_file_stageReg(address, value)) {
-		cli_append(&pcWriteBuffer, &xWriteBufferLen,
-				"Staging table full (%d entries). Use 'camreg clear'", CIS_FILE_MAX_STAGED);
+		if (!cis_file_isStagedLoaded()) {
+			cli_append(&pcWriteBuffer, &xWriteBufferLen,
+					"Register file not loaded (no SD card?) - not staged. Immediate write %s",
+					(ret == HX_CIS_NO_ERROR) ? "OK" : "failed");
+		}
+		else {
+			cli_append(&pcWriteBuffer, &xWriteBufferLen,
+					"Staging table full (%d entries). Use 'camreg clear'", CIS_FILE_MAX_STAGED);
+		}
 		return pdFALSE;
 	}
 

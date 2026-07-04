@@ -42,11 +42,13 @@ static bool stagedLoaded = false;
 /**
  * Load the staged table from CAMERA_EXTRA_FILE if that has not happened yet.
  *
- * Normally cis_file_process() does this at sensor init; this covers CLI use
- * before then. If the SD card is not mounted the load is retried on the next
- * call; a missing file counts as loaded (genuinely no staged registers).
+ * FatFs here is NOT re-entrant (FF_FS_REENTRANT = 0), so this must only run
+ * where no other task is using the disk: the fatfs_task calls it once at boot
+ * (after mounting, before other tasks start disk activity), and
+ * cis_file_process() covers it from the image task at sensor init.
+ * A missing file counts as loaded (genuinely no staged registers).
  */
-static void ensureStagedLoaded(void) {
+void cis_file_loadStagedFromFile(void) {
 	FIL file;
 	FRESULT res;
 	UINT bytesRead;
@@ -69,7 +71,7 @@ static void ensureStagedLoaded(void) {
 		return;
 	}
 	if (res != FR_OK) {
-		xprintf("ensureStagedLoaded: error %d opening '%s'\n", res, CAMERA_EXTRA_FILE);
+		xprintf("cis_file_loadStagedFromFile: error %d opening '%s'\n", res, CAMERA_EXTRA_FILE);
 		return;	// try again on the next call
 	}
 
@@ -90,7 +92,7 @@ static void ensureStagedLoaded(void) {
 	f_close(&file);
 
 	if ((res != FR_OK) || (bytesRead != numEntries * sizeof(HX_CIS_SensorSetting_t))) {
-		xprintf("ensureStagedLoaded: error %d reading '%s'\n", res, CAMERA_EXTRA_FILE);
+		xprintf("cis_file_loadStagedFromFile: error %d reading '%s'\n", res, CAMERA_EXTRA_FILE);
 		return;	// try again on the next call
 	}
 
@@ -103,13 +105,15 @@ static void ensureStagedLoaded(void) {
 	xprintf("Loaded %d staged register(s) from '%s'\n", numEntries, CAMERA_EXTRA_FILE);
 }
 
+bool cis_file_isStagedLoaded(void) {
+	return stagedLoaded;
+}
+
 uint16_t cis_file_getStagedCount(void) {
-	ensureStagedLoaded();
 	return stagedCount;
 }
 
 HX_CIS_SensorSetting_t * cis_file_getStagedTable(void) {
-	ensureStagedLoaded();
 	return stagedSettings;
 }
 
@@ -117,7 +121,11 @@ bool cis_file_stageReg(uint16_t addr, uint8_t val) {
 	uint16_t i;
 	bool success = true;
 
-	ensureStagedLoaded();
+	// Refuse until the table reflects the SD card, otherwise the first save
+	// could overwrite registers that are already staged in the file
+	if (!stagedLoaded) {
+		return false;
+	}
 
 	// The staged table is written by the CLI task (here) and by the image task
 	// (cis_file_process() at sensor init) - guard against concurrent updates

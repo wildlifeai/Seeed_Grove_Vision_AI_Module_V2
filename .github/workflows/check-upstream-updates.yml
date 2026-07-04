@@ -53,7 +53,6 @@ jobs:
               --head sync-upstream-to-dev \
               --title "Merge Upstream Updates into Dev" \
               --body "This is an automated PR to sync the latest changes from the original repository into our \`dev\` branch. Review for conflicts and merge." \
-              --label automated,upstream \
               --reviewer acutetech,Tobyntobyn,victor-wildlife
           else
             echo "PR already exists"

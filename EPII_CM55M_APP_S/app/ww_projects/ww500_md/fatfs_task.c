@@ -227,6 +227,7 @@ uint16_t op_parameter[OP_PARAMETER_NUM_ENTRIES] = {
 	0,	    	   		// 20 OP_PARAMETER_IMAGES_COUNT - increment as files are added. Start a new folder when this exceeds a threhsold
 	0,	    	   		// 21 OP_PARAMETER_FLASH_LED_START_TIME
 	0,	    	   		// 22 OP_PARAMETER_FLASH_LED_DURATION
+	0,	    	   		// 23 OP_PARAMETER_SLOT_SWITCH (0 = off/manual only; 1 = automatic light-based switching, PLANNED)
 };
 
 // Deployment ID UUID string — loaded from 'I ' line in CONFIG.TXT or set via setdid CLI command

@@ -83,6 +83,7 @@ typedef enum {
 	OP_PARAMETER_IMAGES_FILE_INDEX,	// 20 Count of image folders
 	OP_PARAMETER_FLASH_LED_START_TIME,	// 21 Time the LED flash should turn on (minutes after midnight UTC)
 	OP_PARAMETER_FLASH_LED_DURATION,	// 22 Duration of LED flash activity (minutes) 0 disables timer. 1 = use AE values
+	OP_PARAMETER_SLOT_SWITCH,		// 23 Automatic light-based camera image switching: 0 = off (manual 'switchslot' only), 1 = automatic (PLANNED - see camera_switch.c)
 
 	OP_PARAMETER_NUM_ENTRIES		// Not an Operational Parameters - serves to define the size of the op_parameter[] array
 } OP_PARAMETERS_E;
@@ -166,7 +167,9 @@ uint16_t fatfs_getImageSequenceNumber(void);
 // Increment one of the Operational Parameters
 void fatfs_incrementOperationalParameter(OP_PARAMETERS_E parameter);
 
-// Get deployment ID UUID string (prefers 'I ' line form; falls back to OP20-OP27 chunks)
+// Get deployment ID UUID string (from the 'I ' line in CONFIG.TXT / fatfs_setDeploymentId().
+// Note: the OP20-OP27 chunk scheme described in older documents was never implemented;
+// those indexes are ordinary Operational Parameters)
 void fatfs_getDeploymentId(char *deployment_id_buffer, size_t buffer_size);
 
 // Set deployment ID UUID string (persisted to CONFIG.TXT on next save_configuration())

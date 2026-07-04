@@ -159,6 +159,9 @@ Those comments preceding the first index/value pair are preserved when the file 
 |    18 | OP_PARAMETER_TEST_MODE_BITS           | 0             | To manage test configurations: bit or bits indicate a test function |
 |    19 | OP_PARAMETER_IMAGES_COUNT     		| 0             | Count of images in the current image folder. Use this to decide to create a new image folder. |
 |    20 | OP_PARAMETER_IMAGES_FILE_INDEX 		| 0             | Count of image folders |
+|    21 | OP_PARAMETER_FLASH_LED_START_TIME 	| 0             | Time the LED flash should turn on (minutes after midnight UTC) |
+|    22 | OP_PARAMETER_FLASH_LED_DURATION 		| 0             | Duration of LED flash activity (minutes). 0 disables timer |
+|    23 | OP_PARAMETER_SLOT_SWITCH 				| 0             | Automatic light-based camera image switching: 0 = off (manual `switchslot` only), 1 = automatic (PLANNED - will use camera AE registers to detect darkness; see `camera_switch.c`) |
 
 
 ## Syncronisation with BLE Processor Code

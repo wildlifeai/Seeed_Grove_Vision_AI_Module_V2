@@ -58,6 +58,7 @@
 #include "ww500_md.h"
 
 #include "cis_file.h"
+#include "camera_switch.h"
 #include "c_api_types.h" // Tensorflow errors
 #include "hx_drv_scu.h"
 
@@ -2411,6 +2412,11 @@ void image_sleepNow(void) {
     else {
     	timelapseDelay = fatfs_getOperationalParameter(OP_PARAMETER_TIMELAPSE_INTERVAL);
     }
+
+	// Record this image's camera variant against the active firmware slot, so
+	// the 'slots' command (and the app) can see what is in each slot. Cheap
+	// when already recorded.
+	cameraSwitch_labelBootSlot();
 
 	// CLI command might have requested this after firmware update
 	if (app_getResetRequest()) {

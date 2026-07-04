@@ -224,7 +224,7 @@ uint16_t op_parameter[OP_PARAMETER_NUM_ENTRIES] = {
 	1,      	   		// 17 Motion Detection Sensitivity: 0=off, 1=low, 2=medium, 3=high
 	0,	    	   		// 18 Test Mode Bits - one bit to enable each test function
 	0,	    	   		// 19 OP_PARAMETER_IMAGES_COUNT
-	0,	    	   		// 20 OP_PARAMETER_IMAGES_COUNT - increment as files are added. Start a new folder when this exceeds a threhsold
+	0,	    	   		// 20 OP_PARAMETER_IMAGES_FILE_INDEX - count of image folders
 	0,	    	   		// 21 OP_PARAMETER_FLASH_LED_START_TIME
 	0,	    	   		// 22 OP_PARAMETER_FLASH_LED_DURATION
 	0,	    	   		// 23 OP_PARAMETER_SLOT_SWITCH (0 = off/manual only; 1 = automatic light-based switching, PLANNED)

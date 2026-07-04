@@ -1298,7 +1298,8 @@ static BaseType_t prvCamReg(char *pcWriteBuffer, size_t xWriteBufferLen, const c
 			cli_append(&pcWriteBuffer, &xWriteBufferLen, "Cleared. Emptying '%s'", camRegFileName);
 		}
 		else {
-			cli_append(&pcWriteBuffer, &xWriteBufferLen, "Cleared, but failed to message FatFS task");
+			cli_append(&pcWriteBuffer, &xWriteBufferLen,
+					"Cleared in memory, but the file save was NOT queued (previous save still in progress?) - run 'camreg clear' again");
 		}
 		return pdFALSE;
 	}
@@ -1333,12 +1334,18 @@ static BaseType_t prvCamReg(char *pcWriteBuffer, size_t xWriteBufferLen, const c
 		return pdFALSE;
 	}
 
-	camRegSaveTable();
-
-	cli_append(&pcWriteBuffer, &xWriteBufferLen,
-			"Camera reg 0x%04x = 0x%02x (immediate write %s). %d staged, saving to '%s'",
-			address, value, (ret == HX_CIS_NO_ERROR) ? "OK" : "failed",
-			cis_file_getStagedCount(), camRegFileName);
+	if (camRegSaveTable()) {
+		cli_append(&pcWriteBuffer, &xWriteBufferLen,
+				"Camera reg 0x%04x = 0x%02x (immediate write %s). %d staged, saving to '%s'",
+				address, value, (ret == HX_CIS_NO_ERROR) ? "OK" : "failed",
+				cis_file_getStagedCount(), camRegFileName);
+	}
+	else {
+		cli_append(&pcWriteBuffer, &xWriteBufferLen,
+				"Camera reg 0x%04x = 0x%02x (immediate write %s). %d staged, but save NOT queued (previous save still in progress?) - retry with 'camreg %04x %02x'",
+				address, value, (ret == HX_CIS_NO_ERROR) ? "OK" : "failed",
+				cis_file_getStagedCount(), address, value);
+	}
 
 	return pdFALSE;
 }
@@ -2420,14 +2427,16 @@ static void vCmdLineTask(void *pvParameters) {
 			case APP_MSG_CLITASK_DISK_WRITE_COMPLETE:
 				// xprintf("Res code %d\n", data);	// This is the same as fileOp.res
 
-				// A camreg save uses its own fileOperation_t; report it and
-				// release the guard so the next 'camreg' write can proceed
-				if (camRegWritePending)
+				// A camreg save uses its own fileOperation_t. The fatfs_task echoes
+				// the fileOperation_t pointer in msg_parameter, so a camreg save
+				// completion can be told apart from a 'writefile' completion.
+				if (camRegWritePending && (rxMessage.msg_parameter == (uint32_t) &camRegFileOp))
 				{
 					camRegWritePending = false;
-					if (camRegFileOp.res) {
+					// rxData is the FRESULT (also valid when the SD was not mounted)
+					if (rxData) {
 						xprintf("Error writing '%s'. Result code: %d\n",
-								camRegFileOp.fileName, camRegFileOp.res);
+								camRegFileOp.fileName, (int) rxData);
 					}
 					else {
 						xprintf("Saved %d bytes to '%s'\n",

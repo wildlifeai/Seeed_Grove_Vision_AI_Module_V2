@@ -459,6 +459,7 @@ static APP_MSG_DEST_T handleEventForUninit(APP_MSG_T rxMessage) {
 
 		// Inform the if task that the disk operation is complete
 		sendMsg.message.msg_data = (uint32_t)FR_NO_FILESYSTEM;
+		sendMsg.message.msg_parameter = (uint32_t)fileOp;
 		sendMsg.destination = fileOp->senderQueue;
 
 		// The message to send depends on the destination! In retrospect it would have been better
@@ -619,8 +620,11 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 
 		xprintf("File write took %dms\n", app_getElapsedMs(xStartTime));
 
-		// Inform the if task that the disk operation is complete
+		// Inform the if task that the disk operation is complete.
+		// msg_parameter echoes the fileOperation_t pointer so a receiver with
+		// several outstanding operations can tell which one completed.
 		sendMsg.message.msg_data = (uint32_t)res;
+		sendMsg.message.msg_parameter = (uint32_t)fileOp;
 		sendMsg.destination = fileOp->senderQueue;
 
 		// The message to send depends on the destination! In retrospect it would have been better

@@ -1079,8 +1079,6 @@ static BaseType_t prvSetUtc(char *pcWriteBuffer, size_t xWriteBufferLen, const c
 		elapsedTime = xTaskGetTickCount() - startTime;
 		elapsedMs = (elapsedTime * 1000) / configTICK_RATE_HZ;
 
-		// We also need to tell the ledFlash code in case the timer is set by the time of day
-		ledFlashNewTime(tm);
 
 		if (ret == RTC_NO_ERROR) {
 			snprintf(pcWriteBuffer, xWriteBufferLen, "RTC set to %s (this took %dms)", pcParameter, (int) elapsedMs);

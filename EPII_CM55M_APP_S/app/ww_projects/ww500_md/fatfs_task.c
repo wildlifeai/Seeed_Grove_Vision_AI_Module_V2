@@ -226,8 +226,11 @@ uint16_t op_parameter[OP_PARAMETER_NUM_ENTRIES] = {
 	0,	    	   		// 18 Test Mode Bits - one bit to enable each test function
 	0,	    	   		// 19 OP_PARAMETER_IMAGES_COUNT
 	0,	    	   		// 20 OP_PARAMETER_IMAGES_COUNT - increment as files are added. Start a new folder when this exceeds a threhsold
-	0,	    	   		// 21 OP_PARAMETER_FLASH_LED_START_TIME
-	0,	    	   		// 22 OP_PARAMETER_FLASH_LED_DURATION
+	2,	    	   		// 21 OP_PARAMETER_MD_FLASH_LED (2 = IR)
+	5,	    	   		// 22 OP_PARAMETER_MD_FLASH_BRIGHTNESS_PERCENT
+	65,	    	   		// 23 OP_PARAMETER_AE_DARK_THRESHOLD ('moderate' setting - see AE_Light_Sensor_Roadmap.md)
+	15,	    	   		// 24 OP_PARAMETER_AE_CHECK_INTERVAL (minutes; 0 disables)
+	0,	    	   		// 25 OP_PARAMETER_AE_FLASH_STATE (runtime state)
 };
 
 // Deployment ID UUID string — loaded from 'I ' line in CONFIG.TXT or set via setdid CLI command

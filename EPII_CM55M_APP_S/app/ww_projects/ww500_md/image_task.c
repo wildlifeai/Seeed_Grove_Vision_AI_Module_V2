@@ -157,21 +157,8 @@
 // enable this to leave the PWM running so we can watch it on the scope.
 #define FLASHLEDTEST 1
 
-// Warning: if using 8.3 file names then this applies to directories also
-
-#ifdef USE_HM0360
-// Name of file containing extra HM0360 register settings
-#define CAMERA_EXTRA_FILE "HM0360EX.BIN"
-#elif defined(USE_RP2)
-// Name of file containing extra RP2 register settings
-#define CAMERA_EXTRA_FILE "RPV2_EX.BIN"
-#elif defined(USE_RP3)
-// Name of file containing extra RP3 register settings
-#define CAMERA_EXTRA_FILE "RPV3_EX.BIN"
-#else
-// Should not happen. Add something anyway
-#define CAMERA_EXTRA_FILE "CAMERA_EX.BIN"
-#endif // USE_HM0360
+// CAMERA_EXTRA_FILE (extra camera register settings) is defined in image_task.h
+// so that the 'camreg' CLI command can maintain the same file
 
 // Define this to add extra EXIF field (AE gain values)
 #define EXIF_MAKER_NOTES

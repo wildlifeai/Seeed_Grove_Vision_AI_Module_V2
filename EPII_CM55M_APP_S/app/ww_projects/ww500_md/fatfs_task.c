@@ -67,6 +67,7 @@
 #include "semphr.h"
 
 #include "fatfs_task.h"
+#include "cis_file.h"
 #include "image_task.h"
 #include "app_msg.h"
 #include "CLI-commands.h"
@@ -459,6 +460,7 @@ static APP_MSG_DEST_T handleEventForUninit(APP_MSG_T rxMessage) {
 
 		// Inform the if task that the disk operation is complete
 		sendMsg.message.msg_data = (uint32_t)FR_NO_FILESYSTEM;
+		sendMsg.message.msg_parameter = (uint32_t)fileOp;
 		sendMsg.destination = fileOp->senderQueue;
 
 		// The message to send depends on the destination! In retrospect it would have been better
@@ -619,8 +621,11 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 
 		xprintf("File write took %dms\n", app_getElapsedMs(xStartTime));
 
-		// Inform the if task that the disk operation is complete
+		// Inform the if task that the disk operation is complete.
+		// msg_parameter echoes the fileOperation_t pointer so a receiver with
+		// several outstanding operations can tell which one completed.
 		sendMsg.message.msg_data = (uint32_t)res;
+		sendMsg.message.msg_parameter = (uint32_t)fileOp;
 		sendMsg.destination = fileOp->senderQueue;
 
 		// The message to send depends on the destination! In retrospect it would have been better
@@ -1555,6 +1560,11 @@ static void vFatFsTask(void *pvParameters) {
 	if (xQueueSend(xIfTaskQueue, (void *)&sendMsg, __QueueSendTicksToWait) != pdTRUE) {
 		xprintf("sendMsg=0x%x fail\r\n", sendMsg.msg_event);
 	}
+
+	// Load the staged camera register table (camreg command) from the SD card
+	// while this task is still the only one doing disk I/O - FatFs is not
+	// re-entrant, so this cannot be done lazily from the CLI task
+	cis_file_loadStagedFromFile();
 
 	// The semaphore lets the Image Task proceed
 	// xprintf("DEBUG: giving semaphore so Image Task can proceed\n");

@@ -21,9 +21,11 @@ export PATH="$PWD/arm-gnu-toolchain-14.3.rel1-x86_64-arm-none-eabi/bin:$PATH"
 
 ```bash
 cd EPII_CM55M_APP_S
-make -j"$(nproc)"                                      # camera variant from ww500_md.mk
-make -j"$(nproc)" CIS_SUPPORT_INAPP_MODEL=cis_imx708   # or override: RP v3 camera
-make -j"$(nproc)" CIS_SUPPORT_INAPP_MODEL=cis_hm0360   # HM0360 as main camera
+# IMPORTANT: run 'make clean' when switching camera variants - object files do
+# not encode the -D flags, so an incremental build would link stale objects
+make clean && make -j"$(nproc)"                                      # camera variant from ww500_md.mk
+make clean && make -j"$(nproc)" CIS_SUPPORT_INAPP_MODEL=cis_imx708   # or override: RP v3 camera
+make clean && make -j"$(nproc)" CIS_SUPPORT_INAPP_MODEL=cis_hm0360   # HM0360 as main camera
 ```
 
 The camera variant defaults to whatever `CIS_SUPPORT_INAPP_MODEL` is set to in

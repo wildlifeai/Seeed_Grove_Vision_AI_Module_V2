@@ -1584,8 +1584,12 @@ int xip_update_firmware_from_sd(const char *filename) {
     }
 
     // Step 6: the new image's camera variant is unknown until it boots and
-    // labels itself (cameraSwitch_labelBootSlot()), so clear any stale label
-    xip_set_slot_variant((uint8_t)target_slot, XIP_SLOT_VARIANT_UNKNOWN);
+    // labels itself (cameraSwitch_labelBootSlot()), so clear any stale label.
+    // A failure is not fatal to the update, but a stale label could mislead
+    // the camera switching logic - make it visible.
+    if (xip_set_slot_variant((uint8_t)target_slot, XIP_SLOT_VARIANT_UNKNOWN) != 0) {
+        xprintf("firmware: warning: failed to clear the slot %d variant label\n", target_slot);
+    }
 
     xprintf("firmware: slot %d updated OK. Type 'reset' to boot the new image.\n",
             target_slot);

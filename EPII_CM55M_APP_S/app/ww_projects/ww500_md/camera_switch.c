@@ -22,10 +22,13 @@
  * The camera variant this firmware was built as.
  */
 uint8_t cameraSwitch_thisVariant(void) {
-#if defined(USE_HM0360)
-	return XIP_SLOT_VARIANT_HM0360;
-#elif defined(USE_RP3)
+// USE_RP3 and USE_HM0360 are mutually exclusive in ww500_md.mk (RP3 builds
+// get USE_HM0360_MD instead), but check USE_RP3 first as a defence in case
+// a future configuration defines both
+#if defined(USE_RP3)
 	return XIP_SLOT_VARIANT_RP3;
+#elif defined(USE_HM0360)
+	return XIP_SLOT_VARIANT_HM0360;
 #else
 	// Other camera builds (RP2 etc.) do not participate in camera switching yet
 	return XIP_SLOT_VARIANT_UNKNOWN;

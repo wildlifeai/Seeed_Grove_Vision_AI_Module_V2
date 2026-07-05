@@ -127,6 +127,8 @@
 #include "exif_utc.h"
 #include "hx_drv_rtc.h"
 #include "ww500_md.h"
+#include "xip_manager.h"
+#include "camera_switch.h"
 #include "hm0360_md.h"
 
 #include "barrier.h"
@@ -285,6 +287,10 @@ static BaseType_t prvCamReg(char *pcWriteBuffer, size_t xWriteBufferLen, const c
 static BaseType_t prvVcm(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 #endif // USE_RP3
 
+// Day/night dual-image camera switching (see camera_switch.c)
+static BaseType_t prvSlots(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
+static BaseType_t prvSwitchSlot(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
+
 #ifdef WW500_C00
 static BaseType_t prvLedFlash(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 #endif //  WW500_C00
@@ -356,6 +362,23 @@ static const CLI_Command_Definition_t xCamera = {
 	"camera", /* The command string to type. */
 	"camera:\r\n Report main camera type\r\n",
 	prvCamera, /* The function to run. */
+	0		   /* No parameters expected */
+};
+
+/* Structure that defines the "slots" command line command. */
+static const CLI_Command_Definition_t xSlots = {
+	"slots", /* The command string to type. */
+	"slots:\r\n Report the active firmware slot and the camera variant in each slot\r\n",
+	prvSlots, /* The function to run. */
+	0		   /* No parameters expected */
+};
+
+/* Structure that defines the "switchslot" command line command. */
+static const CLI_Command_Definition_t xSwitchSlot = {
+	"switchslot", /* The command string to type. */
+	"switchslot:\r\n Boot the firmware in the other slot (day/night camera change)."
+	"\r\n The device resets when it next sleeps\r\n",
+	prvSwitchSlot, /* The function to run. */
 	0		   /* No parameters expected */
 };
 
@@ -810,6 +833,77 @@ static BaseType_t prvCamera(char *pcWriteBuffer, size_t xWriteBufferLen, const c
 	configASSERT(pcWriteBuffer);
 
 	cli_append(&pcWriteBuffer, &xWriteBufferLen, "%s", app_get_camera_string());
+
+	return pdFALSE;
+}
+
+/**
+ * Report the active firmware slot and the camera variant recorded for each slot.
+ *
+ * Example response:
+ *   Active slot 0 running 'RP3 (day/colour)'. Slot A: 'RP3 (day/colour)', Slot B: 'HM0360 (night/IR)'. Auto-switch: on
+ */
+static BaseType_t prvSlots(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) {
+	(void)pcCommandString;
+	configASSERT(pcWriteBuffer);
+
+	int activeSlot = xip_get_active_slot();
+
+	if (activeSlot < 0) {
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "Slots error: cannot read slot selector");
+		return pdFALSE;
+	}
+
+	int variantA = xip_get_slot_variant(0);
+	int variantB = xip_get_slot_variant(1);
+
+	cli_append(&pcWriteBuffer, &xWriteBufferLen,
+			"Active slot %d running '%s'. Slot A: '%s', Slot B: '%s'. Auto-switch: %s",
+			activeSlot,
+			cameraSwitch_variantName(cameraSwitch_thisVariant()),
+			cameraSwitch_variantName((uint8_t) ((variantA < 0) ? 0 : variantA)),
+			cameraSwitch_variantName((uint8_t) ((variantB < 0) ? 0 : variantB)),
+			(fatfs_getOperationalParameter(OP_PARAMETER_SLOT_SWITCH) == 1) ? "on" : "off");
+
+	return pdFALSE;
+}
+
+/**
+ * Manually boot the firmware image in the other slot (day/night camera change).
+ *
+ * Unlike the automatic switch (camera_switch.c) this does not require the other
+ * slot to be labelled - only that it contains a programmed image. The reset
+ * happens when the device next sleeps, so the response reaches the app first.
+ */
+static BaseType_t prvSwitchSlot(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) {
+	(void)pcCommandString;
+	configASSERT(pcWriteBuffer);
+
+	int otherVariant;
+	int newSlot;
+
+	// Report what we believe is in the other slot before switching
+	int activeSlot = xip_get_active_slot();
+	if (activeSlot < 0) {
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "Slot switch failed: cannot read slot selector");
+		return pdFALSE;
+	}
+	otherVariant = xip_get_slot_variant((activeSlot == 0) ? 1 : 0);
+
+	newSlot = xip_switch_slot();
+
+	if (newSlot < 0) {
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "Slot switch failed (%d)%s",
+				newSlot, (newSlot == -2) ? ": other slot has no image" : "");
+		return pdFALSE;
+	}
+
+	// Reset (via watchdog) when the device next sleeps
+	app_setResetRequest(true);
+
+	cli_append(&pcWriteBuffer, &xWriteBufferLen,
+			"Switched to slot %d ('%s'). Reset scheduled.",
+			newSlot, cameraSwitch_variantName((uint8_t) ((otherVariant < 0) ? 0 : otherVariant)));
 
 	return pdFALSE;
 }
@@ -2554,6 +2648,8 @@ static void vRegisterCLICommands(void)
 	FreeRTOS_CLIRegisterCommand(&xStatus);
 	FreeRTOS_CLIRegisterCommand(&xVer);
 	FreeRTOS_CLIRegisterCommand(&xCamera);
+	FreeRTOS_CLIRegisterCommand(&xSlots);		// Report firmware slots and camera variants
+	FreeRTOS_CLIRegisterCommand(&xSwitchSlot);	// Boot the other slot (day/night camera change)
 	FreeRTOS_CLIRegisterCommand(&xEnable);
 	FreeRTOS_CLIRegisterCommand(&xDisable);
 

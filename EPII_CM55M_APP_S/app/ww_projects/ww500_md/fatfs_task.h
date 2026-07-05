@@ -86,6 +86,7 @@ typedef enum {
 	OP_PARAMETER_AE_DARK_THRESHOLD,		// 23 AE Mean (0-255) below this means the scene is dark and the flash is needed. See AE_Light_Sensor_Roadmap.md
 	OP_PARAMETER_AE_CHECK_INTERVAL,		// 24 Interval (minutes) between periodic AE light-level checks when the flash is in AE mode. 0 disables
 	OP_PARAMETER_AE_FLASH_STATE,		// 25 Last AE flash decision (0/1). Runtime state, persisted so it survives DPD - not user-set
+	OP_PARAMETER_SLOT_SWITCH,		// 26 Automatic light-based camera image switching: 0 = off (manual 'switchslot' only), 1 = automatic (PLANNED - see camera_switch.c)
 
 	OP_PARAMETER_NUM_ENTRIES		// Not an Operational Parameters - serves to define the size of the op_parameter[] array
 } OP_PARAMETERS_E;
@@ -169,7 +170,9 @@ uint16_t fatfs_getImageSequenceNumber(void);
 // Increment one of the Operational Parameters
 void fatfs_incrementOperationalParameter(OP_PARAMETERS_E parameter);
 
-// Get deployment ID UUID string (prefers 'I ' line form; falls back to OP20-OP27 chunks)
+// Get deployment ID UUID string (from the 'I ' line in CONFIG.TXT / fatfs_setDeploymentId().
+// Note: the OP20-OP27 chunk scheme described in older documents was never implemented;
+// those indexes are ordinary Operational Parameters)
 void fatfs_getDeploymentId(char *deployment_id_buffer, size_t buffer_size);
 
 // Set deployment ID UUID string (persisted to CONFIG.TXT on next save_configuration())

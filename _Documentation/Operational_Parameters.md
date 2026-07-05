@@ -164,6 +164,7 @@ Those comments preceding the first index/value pair are preserved when the file 
 |    23 | OP_PARAMETER_AE_DARK_THRESHOLD 		| 65            | AE Mean (0-255) below this means the scene is dark and the flash is needed. See [AE_Light_Sensor_Roadmap.md](AE_Light_Sensor_Roadmap.md) |
 |    24 | OP_PARAMETER_AE_CHECK_INTERVAL 		| 15            | Interval (minutes) between periodic AE light-level checks when the flash is in AE mode and timelapse is disabled. 0 disables |
 |    25 | OP_PARAMETER_AE_FLASH_STATE 			| 0             | Last AE flash decision (0/1). Runtime state persisted across DPD - not intended to be set by users |
+|    26 | OP_PARAMETER_SLOT_SWITCH 				| 0             | Automatic light-based camera image switching: 0 = off (manual `switchslot` only), 1 = automatic (PLANNED - see `camera_switch.c` and the `slots` / `switchslot` commands) |
 
 
 ## Syncronisation with BLE Processor Code

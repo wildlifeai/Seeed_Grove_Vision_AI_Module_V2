@@ -164,6 +164,8 @@ The "Reqd?" column indicates whether the command should be implemented by the ap
 | AI txfile      | filename, or '.' | File contents returned in several chunks   | Y, 2  |
 | AI camreg      | addr [val]    | Read or write a camera sensor register (hex). Writes are saved to the SD card and re-applied at every sensor init. Also `AI camreg list` and `AI camreg clear` | 3 |
 | AI vcm         | pos           | Set focus lens position 0-1023 (RP3 camera only). `AI vcm probe` checks the actuator is present | 3 |
+| AI slots       |               | Reports the active firmware slot and the camera variant in each slot, e.g. `Active slot 0 running 'RP3 (day/colour)'. Slot A: 'RP3 (day/colour)', Slot B: 'HM0360 (night/IR)'. Auto-switch: on` | Y, 4 |
+| AI switchslot  |               | Boots the firmware image in the other slot (day/night camera change). Response `Switched to slot n ('variant'). Reset scheduled.` — the device resets when it next sleeps | Y, 4 |
 
 Note that there are addition commands that could be run on the AI processor, not documented here.
 These can be seen by typing "help" at the console. 
@@ -177,6 +179,12 @@ __Notes:__
 2. See separate document [txfile.md](txfile.md) for the details.
 3. Camera tuning commands added for bench/field validation of exposure, gain, white balance and focus.
    See [camera-phase0-bench-runbook.md](camera-phase0-bench-runbook.md) and [camera-field-tuning-roadmap.md](camera-field-tuning-roadmap.md).
+4. Dual-image camera switching: the device holds two firmware images in A/B flash slots
+   (HM0360 night/IR variant and RP3 day/colour variant). Switching is currently manual, via
+   `AI switchslot` (the app offers a camera selector in the capture preview flow). Automatic
+   light-based switching (using the camera AE registers of periodic captures) is planned and
+   will be enabled with Operational Parameter 26 (SLOT_SWITCH) - see
+   [Operational_Parameters.md](Operational_Parameters.md).
 
 __Other AI Processor Commands__
 

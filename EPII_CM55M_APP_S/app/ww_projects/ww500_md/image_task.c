@@ -58,6 +58,7 @@
 #include "ww500_md.h"
 
 #include "cis_file.h"
+#include "camera_switch.h"
 #include "c_api_types.h" // Tensorflow errors
 #include "hx_drv_scu.h"
 
@@ -1429,6 +1430,13 @@ static void vImageTask(void *pvParameters) {
     // Observing these messages confirms the initialisation sequence
     xprintf("Starting Image Task\n");
     XP_WHITE;
+
+    // Record this image's camera variant against the active firmware slot, so
+    // the 'slots' command (and the app) can see what is in each slot. Done at
+    // boot (not at sleep) so the label is correct as soon as the device is
+    // queryable, and is written even if this session never reaches sleep.
+    // Cheap when already recorded (no flash write).
+    cameraSwitch_labelBootSlot();
 
     // Sanity check: these are defined in cisdp_cfg.h
     // The JPEG buffer seems much larger than necessary

@@ -231,6 +231,7 @@ uint16_t op_parameter[OP_PARAMETER_NUM_ENTRIES] = {
 	65,	    	   		// 23 OP_PARAMETER_AE_DARK_THRESHOLD ('moderate' setting - see AE_Light_Sensor_Roadmap.md)
 	15,	    	   		// 24 OP_PARAMETER_AE_CHECK_INTERVAL (minutes; 0 disables)
 	0,	    	   		// 25 OP_PARAMETER_AE_FLASH_STATE (runtime state)
+	0,	    	   		// 26 OP_PARAMETER_SLOT_SWITCH (0 = off/manual only; 1 = automatic light-based switching, PLANNED)
 };
 
 // Deployment ID UUID string — loaded from 'I ' line in CONFIG.TXT or set via setdid CLI command

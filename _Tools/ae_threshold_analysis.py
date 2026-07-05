@@ -548,6 +548,9 @@ def main():
     print('Parsing AE values...')
     data = parse_ae_values(rows)
     print(f'  Valid data points: {len(data)}')
+    if not data:
+        print("Error: No valid AE data points found. Exiting.")
+        return
 
     print('Classifying brightness...')
     data = classify_brightness(data)

@@ -1413,7 +1413,9 @@ static BaseType_t prvVcm(char *pcWriteBuffer, size_t xWriteBufferLen, const char
 	}
 
 	if ((lParameterStringLength == 5) && (strncmp(pcParameter, "probe", 5) == 0)) {
-		if (hm0360_md_isSensorPresent(VCM_I2C_ADDRESS)) {
+		// Generic 1-byte I2C read probe - avoids a dependency on the HM0360 driver
+		// for what is an RP v3 camera module part
+		if (hx_drv_i2cm_read_data(USE_DW_IIC_1, VCM_I2C_ADDRESS, &data, 1) == IIC_ERR_OK) {
 			cli_append(&pcWriteBuffer, &xWriteBufferLen, "VCM present at 0x%02x", VCM_I2C_ADDRESS);
 		}
 		else {

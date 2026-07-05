@@ -61,7 +61,7 @@ typedef enum {
 #define CAMERA_EXTRA_FILE "0:/RPV3_EX.BIN"
 #else
 // Should not happen. Add something anyway
-#define CAMERA_EXTRA_FILE "0:/CAMERA_EX.BIN"
+#define CAMERA_EXTRA_FILE "0:/CAM_EX.BIN"
 #endif // USE_HM0360
 
 // default 5%

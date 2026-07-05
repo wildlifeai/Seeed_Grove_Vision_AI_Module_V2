@@ -61,6 +61,7 @@ Operational Parameters which are not present in CONFIG.TXT are given their defau
 |    23 | OP_PARAMETER_AE_DARK_THRESHOLD 		| 65            | AE Mean (0-255) below this means the scene is dark and the flash is needed |
 |    24 | OP_PARAMETER_AE_CHECK_INTERVAL 		| 15            | Interval (minutes) between periodic AE light-level checks. 0 disables |
 |    25 | OP_PARAMETER_AE_FLASH_STATE 			| 0             | Last AE flash decision (0/1). Runtime state - leave as 0 |
+|    26 | OP_PARAMETER_SLOT_SWITCH 				| 0             | Automatic light-based camera image switching: 0 = off (manual `switchslot` only), 1 = automatic (planned) |
 |    21 | OP_PARAMETER_FLASH_LED_START_TIME		| 0             | Time the LED flash should turn on (minutes after midnight UTC) |
 |    22 | OP_PARAMETER_FLASH_LED_DURATION		| 0             | Duration of LED flash activity (minutes) 0 disables timer. 1 = use AE values |
 

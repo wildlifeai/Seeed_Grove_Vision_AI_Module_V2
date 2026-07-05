@@ -234,20 +234,13 @@ to further control the operation of the WW500. These might include:
 	OP_PARAMETER_NN_Y_RESOLUTION	// Camera image is scaled to this Y resolution to provide to the NN
 ```	
 
-## Deployment ID (OP20-OP27)
+## Deployment ID
 
-The deployment ID is a UUID identifying the project deployment. Due to Bluetooth MTU limitations on mobile devices (many Android devices cannot negotiate MTU >27 bytes), the 36-character UUID is split into 8 chunks (4 hex characters each) and transmitted as 16-bit integers via the existing `setop` command.
+The deployment ID is a UUID identifying the project deployment. It is set with the
+`AI setdid <uuid>` command, stored as the `I ` line in `CONFIG.TXT`, and embedded in
+EXIF metadata (tag 0xF200) when images are captured.
 
-**Reconstruction Algorithm (per FIRMWARE_DEPLOYMENT_ID_SPEC.md):**
-1. Read OP20-OP27
-2. If all are 0: deployment ID = `00000000-0000-0000-0000-000000000000` (no deployment)
-3. Otherwise: convert each to 4-char hex string (with leading zeros), concatenate, insert hyphens at positions 8, 12, 16, 20
-
-**Example:**
-- OP20=21774 (0x550E), OP21=33792 (0x8400), OP22=58011 (0xE29B), OP23=16852 (0x41D4)
-- OP24=42774 (0xA716), OP25=17510 (0x4466), OP26=21828 (0x5544), OP27=0 (0x0000)
-- **Result:** `550e8400-e29b-41d4-a716-446655440000`
-
-**Storage:** Deployment ID is embedded in EXIF metadata (tag 0xF200) when images are captured. The reconstruction function `fatfs_getDeploymentId()` is called during image capture to build the UUID string from the operational parameters.
-
-
+> **Historical note:** an earlier specification (FIRMWARE_DEPLOYMENT_ID_SPEC.md) proposed
+> transmitting the UUID as eight 16-bit chunks in Operational Parameters 20-27. That scheme
+> was **never implemented** - indexes 20-26 are ordinary Operational Parameters (see the
+> table above). Ignore any remaining references to "OP20-OP27 deployment ID chunks".

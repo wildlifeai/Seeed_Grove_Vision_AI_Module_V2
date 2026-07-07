@@ -1898,7 +1898,12 @@ static void sendMsgToMaster(char *str) {
     APP_MSG_T send_msg;
 
 	// Wait till previous I2C comms transmission is done.
-	xSemaphoreTake(xI2CTxSemaphore, portMAX_DELAY);
+	// Bounded wait: if the I2C pipeline is stuck the message is only telemetry,
+	// and blocking here forever would stop this task ever signalling sleep.
+	if (xSemaphoreTake(xI2CTxSemaphore, pdMS_TO_TICKS(3000)) != pdTRUE) {
+		xprintf("I2C busy - not sending message to master\n");
+		return;
+	}
 
     // Send back to MKL62BA - msg_data is the string
     send_msg.msg_data = (uint32_t)str;

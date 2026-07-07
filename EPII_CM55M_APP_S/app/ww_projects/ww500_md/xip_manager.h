@@ -184,6 +184,12 @@ int xip_update_firmware_from_sd(const char *filename);
 #define XIP_SLOT_VARIANT_RP3		2	// day/colour image: RP v3 (IMX708) is the main camera
 
 /**
+ * Create the SPI mutex before the scheduler starts (call from app_main()).
+ * Prevents two tasks racing the first-use flash initialisation.
+ */
+void xip_manager_preinit(void);
+
+/**
  * Report which firmware slot the bootloader will execute.
  *
  * @return 0 (Slot A), 1 (Slot B), or -1 on failure

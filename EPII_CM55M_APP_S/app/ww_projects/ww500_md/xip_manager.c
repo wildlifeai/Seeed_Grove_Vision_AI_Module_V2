@@ -300,17 +300,24 @@ static uint8_t load_labels_from_manifest(char *filename, char (*labels)[MAX_LABE
  * invariant (XIP always on except during a disable_xip/enable_xip window) holds
  * from the very first call.
  *
- * No mutex is taken here: init_flash() is called before any competing SPI
- * access can occur, so serialisation is not needed at this point.
+ * Serialised with xSPIMutex: two tasks CAN race to be the first flash user
+ * (seen in the field: a console 'slots' command arriving while the image task
+ * initialises the flash for model loading). Concurrent hx_lib_spi_eeprom_open()
+ * calls corrupt the SPI controller state and the loser spins forever inside
+ * the Himax driver, killing its task. The mutex is created before the
+ * scheduler starts (xip_manager_preinit()) so it is always valid here.
  */
 static int init_flash(void) {
     uint8_t id_info;
+    int ret = 0;
 
     if (flash_initialized) {
         return 0;
     }
 
     if (xSPIMutex == NULL) {
+        // xip_manager_preinit() was not called - fall back to lazy creation.
+        // This is only safe before the scheduler starts (single-threaded).
         xSPIMutex = xSemaphoreCreateMutex();
         if (xSPIMutex == NULL) {
             xprintf("init_flash: failed to create SPI mutex\n");
@@ -318,27 +325,61 @@ static int init_flash(void) {
         }
     }
 
-    if (hx_lib_spi_eeprom_open(spi_inst) != 0) {
-        xprintf("init_flash: failed to open SPI EEPROM\n");
+    if (xSemaphoreTake(xSPIMutex, portMAX_DELAY) != pdTRUE) {
+        xprintf("init_flash: failed to take SPI mutex\n");
         return -1;
     }
 
-    vTaskDelay(pdMS_TO_TICKS(10));
+    if (flash_initialized) {
+        // Another task initialised the flash while we waited for the mutex
+        xSemaphoreGive(xSPIMutex);
+        return 0;
+    }
 
-    if (hx_lib_spi_eeprom_read_ID(spi_inst, &id_info) != 0) {
-        xprintf("init_flash: failed to read flash ID\n");
-        return -1;
+    if (hx_lib_spi_eeprom_open(spi_inst) != 0) {
+        xprintf("init_flash: failed to open SPI EEPROM\n");
+        ret = -1;
+    }
+
+    if (ret == 0) {
+        vTaskDelay(pdMS_TO_TICKS(10));
+
+        if (hx_lib_spi_eeprom_read_ID(spi_inst, &id_info) != 0) {
+            xprintf("init_flash: failed to read flash ID\n");
+            ret = -1;
+        }
     }
 
     // Restore XIP: open() left the chip in SPI command mode.
-    if (hx_lib_spi_eeprom_enable_XIP(spi_inst, true, FLASH_QUAD, true) != 0) {
-        xprintf("init_flash: failed to enable XIP\n");
-        return -1;
+    if (ret == 0) {
+        if (hx_lib_spi_eeprom_enable_XIP(spi_inst, true, FLASH_QUAD, true) != 0) {
+            xprintf("init_flash: failed to enable XIP\n");
+            ret = -1;
+        }
     }
 
-    xprintf("Flash ID 0x%02X initialised\n", id_info);
-    flash_initialized = true;
-    return 0;
+    if (ret == 0) {
+        xprintf("Flash ID 0x%02X initialised\n", id_info);
+        flash_initialized = true;
+    }
+
+    xSemaphoreGive(xSPIMutex);
+    return ret;
+}
+
+/**
+ * Create the SPI mutex before the scheduler starts.
+ *
+ * Must be called from app_main() (single-threaded context) so that the
+ * lazy mutex creation in init_flash() can never race between two tasks.
+ */
+void xip_manager_preinit(void) {
+    if (xSPIMutex == NULL) {
+        xSPIMutex = xSemaphoreCreateMutex();
+        if (xSPIMutex == NULL) {
+            xprintf("xip_manager_preinit: failed to create SPI mutex\n");
+        }
+    }
 }
 
 /**

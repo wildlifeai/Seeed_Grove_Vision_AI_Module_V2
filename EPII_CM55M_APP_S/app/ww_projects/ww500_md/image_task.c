@@ -78,6 +78,7 @@
 #include "selfTest.h"
 #include "exif_gps.h"
 #include "exif_builder.h"
+#include "img_correct.h"
 
 /*************************************** Definitions *******************************************/
 
@@ -938,6 +939,17 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
         }
         else {
         	// Normal processing: create the jpg or bmp file
+
+#if defined(USE_RP2) || defined(USE_RP3)
+        	// The RP colour camera has no white balance anywhere in its hardware
+        	// pipeline (raw Bayer sensor + WE2 demosaic only), so images come out
+        	// green. Correct the YUV frame in software and re-encode it with the
+        	// hardware JPEG encoder; prepareJpegFile() then uses the corrected
+        	// JPEG. Gains are app-tunable Operational Parameters (0 disables).
+        	img_correct_process(
+        			(uint16_t)fatfs_getOperationalParameter(OP_PARAMETER_WB_RED_GAIN),
+        			(uint16_t)fatfs_getOperationalParameter(OP_PARAMETER_WB_BLUE_GAIN));
+#endif // USE_RP2 || USE_RP3
 
 #ifdef INVESTIGATE_BMP
         	if (fatfs_getOperationalParameter(OP_PARAMETER_TEST_MODE_BITS) & TEST_BIT_SAVE_BMP) {
@@ -2019,6 +2031,10 @@ static void prepareJpegFile(int8_t * outCategories, uint8_t classCount, fileBuff
 	xSemaphoreTake(xJpegBufferSemaphore, portMAX_DELAY);
 
 	cisdp_get_jpginfo(&jpegLength, &jpegBuffer);
+
+	// If this capture was colour-corrected and re-encoded (RP camera white
+	// balance - see img_correct.c), use the corrected JPEG instead
+	img_correct_get_jpeg(&jpegLength, &jpegBuffer);
 
 	// Gets JPEG buffer from hardware encoder
 	// Clearing cache between each capture

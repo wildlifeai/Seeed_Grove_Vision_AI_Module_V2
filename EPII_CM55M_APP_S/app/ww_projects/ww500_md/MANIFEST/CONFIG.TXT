@@ -34,3 +34,7 @@
 25 0
 # 26: automatic camera image switching (0 = off/manual only; automatic mode planned)
 26 0
+# 27: software white-balance RED gain, Q8.8 (256 = 1.0x, 0 = correction off). RP3 colour camera only.
+27 286
+# 28: software white-balance BLUE gain, Q8.8 (256 = 1.0x, 0 = correction off). RP3 colour camera only.
+28 326

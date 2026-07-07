@@ -232,6 +232,8 @@ uint16_t op_parameter[OP_PARAMETER_NUM_ENTRIES] = {
 	15,	    	   		// 24 OP_PARAMETER_AE_CHECK_INTERVAL (minutes; 0 disables)
 	0,	    	   		// 25 OP_PARAMETER_AE_FLASH_STATE (runtime state)
 	0,	    	   		// 26 OP_PARAMETER_SLOT_SWITCH (0 = off/manual only; 1 = automatic light-based switching, PLANNED)
+	286,	   			// 27 OP_PARAMETER_WB_RED_GAIN (Q8.8: 286 = x1.117, the bench-measured neutralising gain; 0 disables)
+	326,	   			// 28 OP_PARAMETER_WB_BLUE_GAIN (Q8.8: 326 = x1.273, the bench-measured neutralising gain; 0 disables)
 };
 
 // Deployment ID UUID string — loaded from 'I ' line in CONFIG.TXT or set via setdid CLI command

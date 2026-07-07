@@ -165,6 +165,8 @@ Those comments preceding the first index/value pair are preserved when the file 
 |    24 | OP_PARAMETER_AE_CHECK_INTERVAL 		| 15            | Interval (minutes) between periodic AE light-level checks when the flash is in AE mode and timelapse is disabled. 0 disables |
 |    25 | OP_PARAMETER_AE_FLASH_STATE 			| 0             | Last AE flash decision (0/1). Runtime state persisted across DPD - not intended to be set by users |
 |    26 | OP_PARAMETER_SLOT_SWITCH 				| 0             | Automatic light-based camera image switching: 0 = off (manual `switchslot` only), 1 = automatic (PLANNED - see `camera_switch.c` and the `slots` / `switchslot` commands) |
+|    27 | OP_PARAMETER_WB_RED_GAIN 				| 286           | Software white-balance RED gain, Q8.8 (256 = 1.0x, 0 = correction off). RP3 colour camera only - see `img_correct.c` and [RP3_white_balance_reencode_issue.md](RP3_white_balance_reencode_issue.md) |
+|    28 | OP_PARAMETER_WB_BLUE_GAIN 				| 326           | Software white-balance BLUE gain, Q8.8 (256 = 1.0x, 0 = correction off). RP3 colour camera only |
 
 
 ## Syncronisation with BLE Processor Code

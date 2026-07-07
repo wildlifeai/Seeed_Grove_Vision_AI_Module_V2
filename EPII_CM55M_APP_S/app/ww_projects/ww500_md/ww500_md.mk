@@ -52,7 +52,9 @@ APPL_DEFINES += -DDBG_MORE
 # The source code should be loacted in ~\library\{lib_name}\
 ##
 #LIB_SEL = pwrmgmt sensordp tflmtag2209_u55tag2205 spi_ptl spi_eeprom i2c_comm #hxevent
-LIB_SEL = pwrmgmt sensordp tflmtag2412_u55tag2411 spi_ptl spi_eeprom i2c_comm #hxevent
+# tpgdp: TPG datapath library (prebuilt libtpgdp.a) used by img_correct.c to
+# re-encode colour-corrected frames with the hardware JPEG encoder
+LIB_SEL = pwrmgmt sensordp tflmtag2412_u55tag2411 spi_ptl spi_eeprom i2c_comm tpgdp #hxevent
 
 # Add a compiler switch if we select the later TFLM library:
 ifeq ($(filter tflmtag2412_u55tag2411,$(LIB_SEL)),tflmtag2412_u55tag2411)

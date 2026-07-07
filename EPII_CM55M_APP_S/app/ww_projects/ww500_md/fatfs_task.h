@@ -87,6 +87,8 @@ typedef enum {
 	OP_PARAMETER_AE_CHECK_INTERVAL,		// 24 Interval (minutes) between periodic AE light-level checks when the flash is in AE mode. 0 disables
 	OP_PARAMETER_AE_FLASH_STATE,		// 25 Last AE flash decision (0/1). Runtime state, persisted so it survives DPD - not user-set
 	OP_PARAMETER_SLOT_SWITCH,		// 26 Automatic light-based camera image switching: 0 = off (manual 'switchslot' only), 1 = automatic (PLANNED - see camera_switch.c)
+	OP_PARAMETER_WB_RED_GAIN,		// 27 Software white-balance red gain, Q8.8 (256 = 1.0x, 0 = correction off). RP camera only - see img_correct.c
+	OP_PARAMETER_WB_BLUE_GAIN,		// 28 Software white-balance blue gain, Q8.8 (256 = 1.0x, 0 = correction off). RP camera only - see img_correct.c
 
 	OP_PARAMETER_NUM_ENTRIES		// Not an Operational Parameters - serves to define the size of the op_parameter[] array
 } OP_PARAMETERS_E;

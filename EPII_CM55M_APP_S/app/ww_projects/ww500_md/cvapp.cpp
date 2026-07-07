@@ -937,10 +937,13 @@ bool cv_get_confidence_data(ClassConfidenceData *data) {
     }
     return false;
 }
+#endif // USE_PERCENTAGE
 
-#else
 /**
  * Return pointer to the class label
+ *
+ * Used by the detection path (processNNOutput) regardless of percentage mode,
+ * so it is defined unconditionally.
  *
  * @param index index to the labels
  * @return pointer to the string
@@ -953,5 +956,3 @@ const char * cv_getLabel(uint8_t index) {
 		return "";
 	}
 }
-
-#endif // USE_PERCENTAGE

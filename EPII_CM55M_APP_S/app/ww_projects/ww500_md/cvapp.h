@@ -26,11 +26,14 @@ extern "C" {
 // Logit value (0-127)
 #define MODEL_THRESHOLD 18
 
-// Enable/disable transforming of tensor output to percentages
-// Uncomment this to use percentages
-// CGP 24/1/26 - Disable this. Use logits instead
-// When debugged, remove this code
-//#define USE_PERCENTAGE
+// Enable transforming of tensor output to percentages (softmax) for the EXIF
+// UserComment ("label: pct%; ..."). The DETECTION path is unaffected either
+// way: cv_run() always returns raw logits in outCategories and the threshold
+// (OP_PARAMETER_MODEL_THRESHOLD) stays a logit comparison. Without this define
+// the confidence data is never computed, so images carry no NN scores for the
+// website to ingest - see doc/NN_confidence_EXIF_not_written.md.
+// (image_task.c couples ENABLE_EXIF_CONFIDENCE to this define.)
+#define USE_PERCENTAGE
 
 #ifdef USE_PERCENTAGE
 
@@ -69,9 +72,11 @@ TfLiteStatus cv_run(int8_t *outCategories, uint8_t *categoriesCount) ;
 #ifdef USE_PERCENTAGE
 // Get the most recent confidence scores with labels
 bool cv_get_confidence_data(ClassConfidenceData *data);
-#else
-const char * cv_getLabel(uint8_t index);
 #endif // USE_PERCENTAGE
+
+// Label accessor - used by the detection path (processNNOutput) regardless of
+// percentage mode, so it is available unconditionally.
+const char * cv_getLabel(uint8_t index);
 
 // App seeks to erase the start of the model XIP flash area
 void cv_eraseModel(void);

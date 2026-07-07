@@ -943,8 +943,8 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
 #if defined(USE_RP2) || defined(USE_RP3)
         	// The RP colour camera has no white balance anywhere in its hardware
         	// pipeline (raw Bayer sensor + WE2 demosaic only), so images come out
-        	// green. Correct the YUV frame in software and re-encode it with the
-        	// hardware JPEG encoder; prepareJpegFile() then uses the corrected
+        	// green. Correct the YUV frame in software and re-encode it with a
+        	// software JPEG encoder (sw_jpeg.c); prepareJpegFile() then uses the corrected
         	// JPEG. Gains are app-tunable Operational Parameters (0 disables).
         	img_correct_process(
         			(uint16_t)fatfs_getOperationalParameter(OP_PARAMETER_WB_RED_GAIN),

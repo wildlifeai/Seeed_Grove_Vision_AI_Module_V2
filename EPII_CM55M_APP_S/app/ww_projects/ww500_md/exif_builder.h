@@ -25,8 +25,8 @@
 #define EXIF_MAX_DYNAMIC_CLASSES  4
 /* Maximum label length copied into EXIF. */
 #define EXIF_MAX_LABEL_LEN        20
-/* Fixed IFD0 mandatory tag count. */
-#define IFD0_ENTRY_COUNT          9
+/* Fixed IFD0 mandatory tag count (incl. TAG_FLASH; excl. optional entries). */
+#define IFD0_ENTRY_COUNT          10
 /* GPS sub-IFD entry count. */
 #define GPS_IFD_ENTRY_COUNT       6
 /* Complete GPS IFD block size: 2-byte count + entries + 4-byte next-IFD offset. */
@@ -45,6 +45,8 @@ typedef enum {
     TAG_CREATE_DATE        = 0x9004,
     TAG_MAKE               = 0x010F,
     TAG_MODEL              = 0x0110,
+    TAG_SOFTWARE           = 0x0131,
+    TAG_FLASH              = 0x9209,
     TAG_GPS_IFD_POINTER    = 0x8825,
     TAG_GPS_LATITUDE_REF   = 0x0001,
     TAG_GPS_LATITUDE       = 0x0002,
@@ -90,6 +92,9 @@ typedef struct {
     const uint8_t *nn_data;         /* [total_bytes][count][score...], or NULL */
     const char    *user_comment;    /* NN label summary string, or NULL */
     const char    *maker_note;      /* AE register CSV string, or NULL */
+    const char    *camera_model;    /* EXIF Model, e.g. "WW500 RP3"; NULL -> "WW500" */
+    const char    *software;        /* EXIF Software: firmware build string, or NULL to omit */
+    uint16_t       flash_fired;     /* EXIF Flash: 1 = flash/IR illumination used for this capture, 0 = not */
 } ExifInput_t;
 
 /*************************************** Public Functions *******************************************/

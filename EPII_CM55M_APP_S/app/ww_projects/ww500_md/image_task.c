@@ -2053,6 +2053,27 @@ static void prepareJpegFile(int8_t * outCategories, uint8_t classCount, fileBuff
 	exif_input.height = (uint16_t)app_get_raw_height();
 	exif_utc_get_rtc_as_exif_string(exif_input.timestamp, sizeof(exif_input.timestamp));
 
+	/* Camera identity, build provenance and flash state. The Model string names
+	 * the camera variant so a photo is self-describing (colour RP3 vs mono/IR
+	 * HM0360) - the website maps this to its camera_variant. Software matches
+	 * the firmware version recorded in the firmware database. */
+#if defined(USE_HM0360) || defined(USE_HM0360_MD)
+	exif_input.camera_model = "WW500 HM0360";
+#elif defined(USE_RP2)
+	exif_input.camera_model = "WW500 RP2";
+#elif defined(USE_RP3)
+	exif_input.camera_model = "WW500 RP3";
+#else
+	exif_input.camera_model = NULL;	/* exif_builder falls back to "WW500" */
+#endif
+	static char softwareString[64];
+	snprintf(softwareString, sizeof(softwareString), "%s %s",
+	         app_get_board_name_string(), app_get_version_string());
+	exif_input.software = softwareString;
+	/* ledFlash holds the illumination decision for the current capture (AE-driven
+	 * or forced); it is stable across the capture, so it reflects this frame. */
+	exif_input.flash_fired = ledFlashIsActive() ? 1u : 0u;
+
 	/* NN data: [total_bytes][count][score...] */
 	if (classCount > MAX_CLASSES) {
 		nnData[0] = 1;
@@ -2114,13 +2135,26 @@ static void prepareJpegFile(int8_t * outCategories, uint8_t classCount, fileBuff
 	exif_input.user_comment = (user_comment[0] != '\0') ? user_comment : NULL;
 #endif /* ENABLE_EXIF_CONFIDENCE */
 
-	/* MakerNote — AE register CSV (formatted here; exif_builder.c has no HM0360 types) */
+	/* MakerNote — capture-settings CSV (formatted here; exif_builder.c has no HM0360 types).
+	 * Fields: integration, analogGain, digitalGain, aeMean, aeConverged,
+	 *         wbRedGain, wbBlueGain, flashFired
+	 * The last three are appended (backward-compatible): the WB gains (Q8.8,
+	 * 0 = correction off) that produced this image, and whether the flash/IR
+	 * illumination fired - so field A/B tuning can be traced from the photo. */
 #ifdef EXIF_MAKER_NOTES
-#define MAKERDATALEN 48
+#define MAKERDATALEN 64
 	char maker_note[MAKERDATALEN];
-	snprintf(maker_note, sizeof(maker_note), "%d, %d, %d, %d, %c",
+#if defined(USE_RP2) || defined(USE_RP3)
+	uint16_t wbRedNote  = (uint16_t)fatfs_getOperationalParameter(OP_PARAMETER_WB_RED_GAIN);
+	uint16_t wbBlueNote = (uint16_t)fatfs_getOperationalParameter(OP_PARAMETER_WB_BLUE_GAIN);
+#else
+	uint16_t wbRedNote  = 0u;	/* no software WB on the mono/IR camera */
+	uint16_t wbBlueNote = 0u;
+#endif
+	snprintf(maker_note, sizeof(maker_note), "%d, %d, %d, %d, %c, %u, %u, %u",
 	         gain.integration, gain.analogGain, gain.digitalGain, gain.aeMean,
-	         (gain.aeConverged == 1) ? 'Y' : 'N');
+	         (gain.aeConverged == 1) ? 'Y' : 'N',
+	         wbRedNote, wbBlueNote, (unsigned)exif_input.flash_fired);
 	exif_input.maker_note = maker_note;
 #else
 	exif_input.maker_note = NULL;

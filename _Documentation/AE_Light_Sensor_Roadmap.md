@@ -295,6 +295,54 @@ see in the dark until the app sets the new values. The app should push the new d
 
 ---
 
+## 8.5 Bench finding: single-frame AE_MEAN is unreliable — use a multi-frame aggregate
+
+On-hardware bench testing (WW500_C02, RP3 firmware, device sealed in a fully
+dark box) showed that a **single** `AE_MEAN` reading is not a usable light
+sensor. `AE_MEAN` is the *output* of the HM0360's automatic-exposure control
+loop, not a raw brightness measurement, and that loop limit-cycles: in total
+darkness the value oscillated frame-to-frame between ~3 and ~66, straddling the
+dark threshold of 65. Sampling one frame per wake (as the original
+`ledFlashNewAEValues()` did) therefore misreported "bright → flash OFF" on
+**9 of 24 readings (~37%)** in a pitch-black box.
+
+Measured behaviour:
+
+| Condition        | AE_MEAN (single frames)      | Mean | Gain (analog / digital)          |
+|------------------|------------------------------|------|----------------------------------|
+| Dark box         | oscillates ~3 ↔ ~66          | ~35  | rails to max (4 / 192) on dark frames |
+| Normal room      | ~70–89, comparatively stable | ~80  | low (0–4 / 64–128)               |
+
+Integration time was pinned at 376 lines throughout (only gain moved), so it is
+not a useful discriminator on its own.
+
+What does *not* fix it:
+- **A settling / calibration delay** — the oscillation is a persistent limit
+  cycle, not a start-up transient. It was still swinging 3↔66 after 90 s awake.
+- **Reading gain or integration on a single frame** — gain oscillates in
+  lockstep with AE_MEAN, and integration barely moves.
+
+What does fix it (implemented):
+- **Average AE_MEAN over several successive frames** (`AE_SAMPLE_COUNT` = 8,
+  `AE_SAMPLE_GAP_MS` = 40). The mean collapses the oscillation: ~35 in the dark
+  box vs ~80 in room light — a clean separation. See `hm0360_md_getAEStats()`.
+- **Gain-railed override** — if analog *and* digital gain reach their configured
+  maxima (`MAX_AGAIN`/`MAX_DGAIN`) on the majority of sampled frames, the scene
+  is darker than the sensor can expose for; force flash ON regardless of the
+  (then meaningless) AE_MEAN. This is an independent, monotonic dark signal.
+- **Hysteresis** (`AE_HYSTERESIS` = 12) — turn the flash ON below the threshold
+  but only OFF again once well above it, so it does not chatter near dusk.
+
+Decision path now lives in `ledFlashNewAEStats()`; `image_task.c` calls
+`hm0360_md_getAEStats()` on each AE-check wake when the flash mode is AE.
+
+Other candidate light-sensor signals considered (for future work): a
+fixed-exposure metering frame (disable AE, set a known gain, read the raw mean —
+a true brightness measure with no loop to oscillate) would be the most rigorous
+option but requires reconfiguring the sensor on each wake; the averaged-AE +
+gain-railed approach was chosen as the lower-risk change that reuses the
+existing MD/AE path.
+
 ## 9. Open Items
 
 - [x] Agree on default threshold value - 65 (moderate) implemented as the default, tuneable via `setop 23`

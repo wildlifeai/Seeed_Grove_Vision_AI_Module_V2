@@ -372,31 +372,86 @@ FlashLedMode_t  ledFlashGetFlashMode(void) {
 /**
  * The HM0360 AE registers values have arrived - this might determine LED Flash behaviour
  *
- * Uses the AE Mean register (average scene brightness, 0-255) as a software
- * light sensor: a value below OP_PARAMETER_AE_DARK_THRESHOLD means the scene
- * is dark and the flash is needed. The thresholds were derived from a 303-image
- * day/night dataset - see _Documentation/AE_Light_Sensor_Roadmap.md
+ * Legacy single-frame entry point, kept for callers that only have one reading.
+ * Prefer ledFlashNewAEStats(), which is robust against the AE loop oscillation
+ * documented there. This wraps the single reading as a one-sample statistic.
  *
  * @param gainRegs
  */
 void ledFlashNewAEValues(HM0360_GAIN_T * gainRegs) {
-	uint16_t threshold;
+	HM0360_AE_STATS_T stats;
 
-    if ((flashMode != FLASH_MODE_AE) || (gainRegs == NULL)) {
+	if (gainRegs == NULL) {
+		return;
+	}
+
+	stats.samples = 1;
+	stats.meanAE = gainRegs->aeMean;
+	stats.minAE = gainRegs->aeMean;
+	stats.maxAE = gainRegs->aeMean;
+	stats.maxAnalogGain = gainRegs->analogGain;
+	stats.maxDigitalGain = gainRegs->digitalGain;
+	stats.railedCount = 0;
+	stats.gainRailed = false;
+
+	ledFlashNewAEStats(&stats);
+}
+
+/**
+ * Decide the flash state from aggregated AE statistics (the light sensor).
+ *
+ * A single AE_MEAN reading is unreliable: it is the output of the HM0360's AE
+ * control loop, which limit-cycles. Bench testing in a fully dark box showed
+ * AE_MEAN swinging between ~3 and ~66 (across the dark threshold), so ~37% of
+ * single-frame reads wrongly said "bright". This uses the mean over several
+ * frames plus two extra safeguards:
+ *
+ *   - Hysteresis: turn the flash ON below the dark threshold, but only turn it
+ *     OFF again once well above it (threshold + AE_HYSTERESIS). This stops the
+ *     flash chattering when the light sits near the boundary.
+ *   - Gain-railed override: if the AE has run its gain to maximum on most
+ *     frames it cannot expose any darker, so force the flash ON regardless of
+ *     the (then meaningless) AE_MEAN value.
+ *
+ * See _Documentation/AE_Light_Sensor_Roadmap.md
+ *
+ * @param stats  aggregated AE statistics from hm0360_md_getAEStats()
+ */
+void ledFlashNewAEStats(HM0360_AE_STATS_T * stats) {
+	uint16_t threshold;
+	bool wasActive;
+
+    if ((flashMode != FLASH_MODE_AE) || (stats == NULL) || (stats->samples == 0)) {
     	return;
     }
 
     threshold = fatfs_getOperationalParameter(OP_PARAMETER_AE_DARK_THRESHOLD);
+    wasActive = flashActive;
 
-    // AE Mean below the threshold means the scene is dark - flash needed
-    flashActive = (gainRegs->aeMean < threshold);
+    if (stats->gainRailed) {
+        // AE gain maxed out on most frames - unambiguously dark
+        flashActive = true;
+    }
+    else if (stats->meanAE < threshold) {
+        // Averaged scene brightness below the dark threshold - flash needed
+        flashActive = true;
+    }
+    else if (stats->meanAE > (uint16_t)(threshold + AE_HYSTERESIS)) {
+        // Comfortably bright - flash not needed
+        flashActive = false;
+    }
+    // else: within the hysteresis band - keep the previous decision (flashActive)
 
     // Persist the decision (written to CONFIG.TXT at DPD entry) so the first
     // capture after the next wake uses it - RAM does not survive DPD
     fatfs_setOperationalParameter(OP_PARAMETER_AE_FLASH_STATE, flashActive ? 1 : 0);
 
-	xprintf("AE light check: AE Mean = %d, threshold = %d -> flash %s\n",
-			gainRegs->aeMean, threshold, flashActive ? "ON" : "OFF");
+	xprintf("AE light check: mean AE = %d (min %d, max %d) over %d frames, "
+			"threshold = %d, gain railed = %s -> flash %s%s\n",
+			stats->meanAE, stats->minAE, stats->maxAE, stats->samples,
+			threshold, stats->gainRailed ? "yes" : "no",
+			flashActive ? "ON" : "OFF",
+			(flashActive == wasActive) ? "" : " (changed)");
 
 	ledFlashActivate();	// Turn on Flash LED (conditionally)
 }

@@ -839,10 +839,25 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
         } //   if (!skip_nn)
 
 #if defined(USE_HM0360) || defined(USE_HM0360_MD)
-        // This is a test to see if/how these change with illumination
+        // Read one set of AE registers for the telemetry dump below.
         hm0360_md_getGainRegs(&gain);
-        // TODO - this is probably the wrong place... just a placeholder to test compilation
-        ledFlashNewAEValues(&gain);		// see if these values affect LED flash operation
+
+        // The flash light-sensor decision must NOT be made from this single
+        // reading: AE_MEAN is the output of the HM0360's AE control loop and
+        // limit-cycles (bench testing in a dark box saw it swing 3..66 across
+        // the threshold). Average several frames and consider gain railing.
+        // Only pay the sampling cost when the flash is actually AE-driven.
+        if (ledFlashGetFlashMode() == FLASH_MODE_AE) {
+            HM0360_AE_STATS_T aeStats;
+            if (hm0360_md_getAEStats(AE_SAMPLE_COUNT, AE_SAMPLE_GAP_MS, &aeStats) == HX_CIS_NO_ERROR) {
+                ledFlashNewAEStats(&aeStats);
+            }
+            else {
+                // Sampling failed - fall back to the single reading rather than
+                // leaving the flash decision stale
+                ledFlashNewAEValues(&gain);
+            }
+        }
 
         snprintf(msgToMaster, MSGTOMASTERLEN, "HM0360 AE regs:\n  Integration time = %d lines\n  Analog gain = %d\n  Digital gain = %d\n  AE Mean = %d\n  AEConverged?: %c",
         		gain.integration,

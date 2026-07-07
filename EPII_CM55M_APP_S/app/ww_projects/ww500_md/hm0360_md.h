@@ -34,6 +34,25 @@ typedef struct {
 	uint8_t aeConverged;	// Value of AE_CONVERGED
 } HM0360_GAIN_T;
 
+// Aggregated AE statistics over several successive frames. A single AE_MEAN
+// reading is unreliable as a light sensor: bench testing in a fully dark box
+// showed AE_MEAN oscillating between ~3 and ~66 (across the dark threshold),
+// because it is the output of the sensor's own AE control loop, not a raw
+// brightness measure. Averaging several frames - and noting whether the AE has
+// railed its gain to maximum (an unambiguous "darker than the sensor can
+// expose for" signal) - gives a robust dark/bright decision.
+// See _Documentation/AE_Light_Sensor_Roadmap.md
+typedef struct {
+	uint8_t  samples;		// number of frames actually read
+	uint16_t meanAE;		// mean of AE_MEAN over the samples (0-255)
+	uint8_t  minAE;			// smallest AE_MEAN seen
+	uint8_t  maxAE;			// largest AE_MEAN seen
+	uint8_t  maxAnalogGain;	// largest ANALOG_GAIN index seen
+	uint16_t maxDigitalGain;// largest DIGITAL_GAIN seen
+	uint8_t  railedCount;	// frames where gain reached the configured maximum
+	bool     gainRailed;	// true if the majority of frames had gain at maximum
+} HM0360_AE_STATS_T;
+
 // Select streaming mode by writing to 0x0100.
 // See data sheet 6.1 & 10.2
 typedef enum {
@@ -71,6 +90,12 @@ HX_CIS_ERROR_E hm0360_md_disableInterrupt(void);
 // Prepare the MD
 HX_CIS_ERROR_E hm0360_md_prepare(bool cameraSystemEnabled, uint16_t mdFrameInterval);
 HX_CIS_ERROR_E hm0360_md_getGainRegs(HM0360_GAIN_T * val);
+
+// Sample AE_MEAN and the gain registers over 'nSamples' successive frames
+// (waiting 'gapMs' between reads) and return aggregated statistics. Use this
+// rather than a single hm0360_md_getGainRegs() reading for the light-sensor
+// dark/bright decision, because the raw AE loop output oscillates.
+HX_CIS_ERROR_E hm0360_md_getAEStats(uint8_t nSamples, uint16_t gapMs, HM0360_AE_STATS_T * stats);
 
 uint16_t hm0360_md_getMDOutput(uint8_t * regTable, uint8_t length);
 

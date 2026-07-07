@@ -709,6 +709,27 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 
 		break;
 
+	case APP_MSG_FATFSTASK_SAVE_CONFIG:
+		// Persist the Operational Parameters to CONFIG.TXT immediately, WITHOUT
+		// unmounting (unlike SAVE_STATE). Sent after a setop / BLE parameter
+		// change so the new value survives the next sleep even if no capture
+		// (which is what normally triggers SAVE_STATE) happens before DPD.
+		// Without this, a changed op param (e.g. a white-balance gain or the
+		// timelapse interval) is lost on the next wake.
+		if (fatfs_mounted()) {
+			res = save_configuration(STATE_FILE, &dirManager);
+			if (res) {
+				xprintf("Error %d saving config\n", res);
+			}
+			else {
+				xprintf("Config saved (op params persisted).\n");
+			}
+		}
+		else {
+			xprintf("Cannot save config - SD not mounted\n");
+		}
+		break;
+
 	case APP_MSG_FATFSTASK_OPEN_FILE:
 		// 1/3 commands for sending files from the app to the SD card
 

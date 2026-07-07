@@ -101,6 +101,18 @@ The corresponding commands issued by the app are:
 1. `AI getop <index>`
 2. `AI setop <index> <value>`
 
+**Persistence:** `setop` writes the value to the in-RAM `op_parameter[]` array and
+also **immediately saves CONFIG.TXT** (via an `APP_MSG_FATFSTASK_SAVE_CONFIG`
+message to the FatFS task, without unmounting). This guarantees the change
+survives the next Deep Power Down even if no capture happens before the device
+sleeps. (Before this was added, op parameters were only written to CONFIG.TXT on
+the capture/`SAVE_STATE` path, so a `setop` followed by a plain inactivity sleep
+- with no capture - was silently lost on the next wake. That also caused the
+timelapse interval, when set via `setop 7`, to appear to "drop" after a sleep.)
+Runtime state written directly (e.g. `OP_PARAMETER_AE_FLASH_STATE`, index 25, set
+on every AE check) does **not** trigger a save, to avoid thrashing the SD card;
+it is persisted on the next `SAVE_STATE`.
+
 ## File Format
 
 Entries in CONFIG.TXT are mainly lines with two numbers:

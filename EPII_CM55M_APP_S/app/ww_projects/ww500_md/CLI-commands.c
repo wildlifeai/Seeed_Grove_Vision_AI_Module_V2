@@ -1849,6 +1849,21 @@ static BaseType_t prvSetOpParam(char *pcWriteBuffer, size_t xWriteBufferLen, con
 	// Parameters are valid
 	fatfs_setOperationalParameter(index, value);
 
+	// Persist the change to CONFIG.TXT now, so it survives the next sleep even
+	// if no capture (which normally triggers the state save) happens first.
+	// This is a user/app-initiated change (setop over console or BLE); runtime
+	// state written directly via fatfs_setOperationalParameter (e.g. the AE
+	// flash decision) deliberately does NOT persist on every write.
+	{
+		APP_MSG_T saveMsg;
+		saveMsg.msg_event = APP_MSG_FATFSTASK_SAVE_CONFIG;
+		saveMsg.msg_data = 0;
+		saveMsg.msg_parameter = 0;
+		if (xQueueSend(xFatTaskQueue, (void *)&saveMsg, __QueueSendTicksToWait) != pdTRUE) {
+			xprintf("setop: failed to queue config save\n");
+		}
+	}
+
 	snprintf(pcWriteBuffer, xWriteBufferLen, "Set OpParam %d = %d", index, value);
 	return pdFALSE;
 }

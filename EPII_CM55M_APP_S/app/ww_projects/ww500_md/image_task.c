@@ -239,6 +239,14 @@ static uint32_t g_frames_total;
 static uint32_t g_timer_period; // Interval between pictures in ms
 static bool g_wdt_event; 		// A watchdog timer event occurred while waiting for FRAME_READY
 
+// The first frame after a fresh sensor start sometimes never arrives (a WDT
+// timeout instead of FRAME_READY - see the "Known problems" note above). Rather
+// than tear the camera down and give up (which loses the capture request and,
+// for a console 'capture', leaves the image task Uninitialised so every later
+// capture is dropped), restart the sensor in place and try again a few times.
+#define MAX_CAPTURE_RETRIES 3
+static uint8_t g_capture_retries;	// in-place retries used for the current capture
+
 // True when this wake exists only to sample the light level (AE registers) for
 // the flash decision: capture one frame, read the AE registers, save nothing.
 // Cleared on the way into DPD. See _Documentation/AE_Light_Sensor_Roadmap.md
@@ -618,6 +626,7 @@ static APP_MSG_DEST_T handleEventForInit(APP_MSG_T img_recv_msg) {
         else  {
             g_captures_to_take = requested_captures;
             g_timer_period = requested_period;
+            g_capture_retries = 0;	// fresh capture sequence
             XP_LT_GREEN
 			xprintf("Images to capture: %d\n", g_captures_to_take);
             xprintf("Interval: %dms\n", g_timer_period);
@@ -754,6 +763,8 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
 
     case APP_MSG_IMAGETASK_FRAME_READY:
         // Here when the image sub-system has captured an image - via os_app_dplib_cb() callback.
+
+        g_capture_retries = 0;	// a frame arrived: clear the in-place retry counter
 
         g_cur_jpegenc_frame++; // The number in this sequence
         g_frames_total++;      // The number since the start of time.
@@ -988,11 +999,52 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
     	XP_RED;
         dbg_printf(DBG_LESS_INFO, ">>>> Received a timeout event 0x%04x after %dms <<<<\n",
         		event, app_getElapsedMs(startTime));
-        dbg_printf(DBG_LESS_INFO, ">>>> TODO - re-initialise camera? <<<<\n", event);
         XP_WHITE;
 
-        // Fault detected. Prepare to enter DPD
+        // A single frame timeout fires two events in quick succession (WDT2 then
+        // WDT3). After a retry restart resets startTime, the trailing event
+        // arrives with a tiny elapsed time - ignore it so it does not consume a
+        // retry or restart the just-started sensor. A real timeout is ~5s.
+        if (app_getElapsedMs(startTime) < 1000) {
+            break;
+        }
+
+        // The first frame after a fresh sensor start sometimes never arrives.
+        // Restart the sensor in place and retry, up to MAX_CAPTURE_RETRIES,
+        // before giving up. This keeps the current capture request alive
+        // (important for console 'capture' and for not dropping a field capture
+        // on a transient MIPI hiccup) instead of tearing the camera down.
+        if (g_capture_retries < MAX_CAPTURE_RETRIES) {
+            g_capture_retries++;
+            XP_YELLOW;
+            xprintf(">>>> Frame timed out - restarting sensor, retry %d/%d\n",
+            		g_capture_retries, MAX_CAPTURE_RETRIES);
+            XP_WHITE;
+
+            // Stop then restart the datapath/sensor to re-arm the capture
+            configure_image_sensor(CAMERA_CONFIG_STOP);
+            if (configure_image_sensor(CAMERA_CONFIG_RUN)) {
+                // Restart the timeout clock and keep waiting for FRAME_READY
+                startTime = xTaskGetTickCount();
+                // stay in APP_IMAGE_TASK_STATE_CAPTURING
+                break;
+            }
+            // If the restart itself failed, fall through to the give-up path
+            XP_RED;
+            xprintf(">>>> Sensor restart failed - giving up on this capture\n");
+            XP_WHITE;
+        }
+        else {
+            XP_RED;
+            xprintf(">>>> Frame timed out after %d retries - giving up\n", MAX_CAPTURE_RETRIES);
+            XP_WHITE;
+        }
+
+        // Retries exhausted (or restart failed). Prepare to enter DPD.
+        // g_wdt_event asks the DPD path to schedule a quick 1s re-wake as a
+        // last-resort retry (see the g_wdt_event handling before sleep).
     	g_wdt_event = true;
+    	g_capture_retries = 0;
         configure_image_sensor(CAMERA_CONFIG_STOP); // run some sensordplib_stop functions then run HM0360_stream_off commands to the HM0360
 
         if (fatfs_mounted())  {

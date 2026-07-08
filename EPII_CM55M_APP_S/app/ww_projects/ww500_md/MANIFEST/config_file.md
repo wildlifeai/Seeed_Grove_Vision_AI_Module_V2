@@ -1,5 +1,5 @@
 # Description of the CONFIG.TXT File
-#### CGP - 25 April 2026
+#### CGP - 25 April 2026 (updated 8 July 2026: parameters 21-28, immediate persistence)
 
 The CONFIG.TXT file contains "Operational Parameters" for the WW500.
 
@@ -30,6 +30,10 @@ From the table below, 6 is the index for `OP_PARAMETER_PICTURE_INTERVAL` and the
 the pictured are taken at 500ms intervals.
 
 Operational Parameters which are not present in CONFIG.TXT are given their default values.
+
+Parameters changed from the mobile app or the console (`setop`) are written back to
+CONFIG.TXT immediately, so a change survives sleep and power-off even if no image is
+captured first.
 
 ## Operational Parameters Table
 
@@ -67,8 +71,7 @@ Operational Parameters which are not present in CONFIG.TXT are given their defau
 
 ## More Details
 
-For more details of how the Operational Parameters are used, see [Operational_Parameters.md](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/blob/ledflash2/_Documentation/Operational_Parameters.md)
-NOTE - correct the URL when the file is in the 'main' branch.
+For more details of how the Operational Parameters are used, see [Operational_Parameters.md](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/blob/dev/_Documentation/Operational_Parameters.md)
 
 ## GPS location
 

@@ -1,5 +1,11 @@
 ### Compiling and Flashing images - CGP 15/8/24
 
+> **SUPERSEDED (July 2026).** Kept for historical reference. For current
+> instructions see [building_firmware.md](building_firmware.md) (toolchain,
+> camera variants, image generation) and
+> [firmware_update_and_recovery.md](firmware_update_and_recovery.md)
+> (update paths and recovery).
+
 
 1	Instructions from Himax
 ------------------------

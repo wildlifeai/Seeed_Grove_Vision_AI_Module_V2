@@ -109,3 +109,8 @@ image). Each firmware image labels its own slot at boot (`cameraSwitch_labelBoot
 `write_slot_selector()` preserves the record across sector rewrites. The `slots` CLI command
 reports it; the automatic switching logic will only flip to a slot whose recorded variant
 matches what is wanted.
+
+Note: a bootloader X-Modem burn rewrites the whole selector sector and so RESETS the labels -
+`slots` reporting `'unknown'` after a recovery burn is normal, and self-heals the first time
+each slot boots. For the update paths and the recovery procedure see
+`_Documentation/firmware_update_and_recovery.md`.

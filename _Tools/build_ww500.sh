@@ -7,7 +7,8 @@
 set -e
 CIS_MODEL="${1:-}"
 export PATH="$HOME/arm-gnu-toolchain-14.3.rel1-x86_64-arm-none-eabi/bin:$PATH"
-cd /mnt/c/Users/ww/Seeed_Grove_Vision_AI_Module_V2/EPII_CM55M_APP_S
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR/../EPII_CM55M_APP_S"
 make clean > /dev/null 2>&1 || true
 if [ -n "$CIS_MODEL" ]; then
   echo "=== Building variant CIS_SUPPORT_INAPP_MODEL=$CIS_MODEL ==="

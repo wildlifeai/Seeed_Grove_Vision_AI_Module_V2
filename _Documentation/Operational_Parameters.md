@@ -163,7 +163,7 @@ Those comments preceding the first index/value pair are preserved when the file 
 |    10 | OP_PARAMETER_CAMERA_ENABLED           | 1             | Camera and NN system disabled, 1 = Camera and NN system enabled |
 |    11 | OP_PARAMETER_MD_INTERVAL              | 1000          | Interval (ms) between frames in motion detect mode (0 inhibits motion detection)|
 |    12 | OP_PARAMETER_FLASH_DURATION           | 100           | Duration (ms) that LED flash is on                  |
-|    13 | OP_PARAMETER_FLASH_LED                | 0             | LED used for the CAPTURE flash: 0 = none (flash off), 1 = visible, 2 = infra-red. Non-zero also enables the AE light-sensor flash mode |
+|    13 | OP_PARAMETER_FLASH_LED                | 0             | LED used for the CAPTURE flash: 0 = none (flash off), 1 = visible, 2 = infra-red. Non-zero also enables the AE light-sensor flash mode. NOTE: the AE light check only runs when op13 is 1 or 2, or op26 = 1 - with both off the op25 decision goes stale (a device can report BRIGHT forever inside a dark box) |
 |    14 | OP_PARAMETER_MODEL_PROJECT            | 0             |Model project ID used for the NN model|
 |    15 | OP_PARAMETER_MODEL_VERSION            | 0             | Model version number used for the NN model |
 |    16 | OP_PARAMETER_MODEL_THRESHOLD          | 0             | Logit threshold for detection (0-127) |

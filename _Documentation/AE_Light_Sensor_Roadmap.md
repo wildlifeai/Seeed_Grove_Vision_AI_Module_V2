@@ -352,6 +352,25 @@ option but requires reconfiguring the sensor on each wake; the averaged-AE +
 gain-railed approach was chosen as the lower-risk change that reuses the
 existing MD/AE path.
 
+### 8.5.1 Field-found fixes (July 2026 bench validation)
+
+Hardware validation surfaced two further defects, both fixed in
+`hm0360_md_getAEStats()` (`hm0360_md.c`):
+
+- **Gain-railed override was silently disabled by a decode bug.** `MAX_AGAIN`
+  (0x202b) holds the gain ceiling code in its LOW bits (the reference init
+  programs 0x04 = code 4), unlike the `ANALOG_GAIN` readout (0x0205) which
+  carries the code in bits [6:4]. The original `>> 4` decode turned 0x04 into
+  0, tripping the `maxAGain > 0` guard — so the railed test could never fire.
+  Now decoded with `& 0x07`; bench-validated in a dark box (gains railed at
+  4/192, correctly reported "gain railed = yes").
+- **A sleeping sensor reads AE_MEAN = 0.** On the RP3 (colour) image with
+  motion detection off, the HM0360 is parked in MODE_SLEEP and its AE
+  registers read zero — the light decision was permanently "dark" regardless
+  of the scene. The stats function now wakes the sensor to MODE_SW_CONTINUOUS
+  for the sampling window (500 ms settle first, ~5 frames at 10 fps, so the AE
+  loop starts adapting) and restores the prior mode afterwards.
+
 ## 9. Open Items
 
 - [x] Agree on default threshold value - 65 (moderate) implemented as the default, tuneable via `setop 23`

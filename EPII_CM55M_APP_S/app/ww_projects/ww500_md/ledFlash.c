@@ -419,39 +419,57 @@ void ledFlashNewAEValues(HM0360_GAIN_T * gainRegs) {
  */
 void ledFlashNewAEStats(HM0360_AE_STATS_T * stats) {
 	uint16_t threshold;
-	bool wasActive;
+	bool wasDark;
+	bool dark;
 
-    if ((flashMode != FLASH_MODE_AE) || (stats == NULL) || (stats->samples == 0)) {
+    if ((stats == NULL) || (stats->samples == 0)) {
+    	return;
+    }
+
+    // The dark/bright decision has two consumers: the AE-driven flash
+    // (FLASH_MODE_AE) and automatic camera switching (OP_PARAMETER_SLOT_SWITCH,
+    // see camera_switch.c). Compute and persist it when either is enabled -
+    // but only let it drive the flash LED in FLASH_MODE_AE, so op26 alone
+    // never fires the flash when the user has it off.
+    if ((flashMode != FLASH_MODE_AE)
+    		&& (fatfs_getOperationalParameter(OP_PARAMETER_SLOT_SWITCH) != 1)) {
     	return;
     }
 
     threshold = fatfs_getOperationalParameter(OP_PARAMETER_AE_DARK_THRESHOLD);
-    wasActive = flashActive;
+    // Hysteresis memory is the persisted decision. In FLASH_MODE_AE this is
+    // kept in lockstep with flashActive (restored from it at boot, written
+    // back below), and it is the only memory that survives DPD in any mode.
+    dark = (fatfs_getOperationalParameter(OP_PARAMETER_AE_FLASH_STATE) == 1);
+    wasDark = dark;
 
     if (stats->gainRailed) {
         // AE gain maxed out on most frames - unambiguously dark
-        flashActive = true;
+        dark = true;
     }
     else if (stats->meanAE < threshold) {
         // Averaged scene brightness below the dark threshold - flash needed
-        flashActive = true;
+        dark = true;
     }
     else if (stats->meanAE > (uint16_t)(threshold + AE_HYSTERESIS)) {
         // Comfortably bright - flash not needed
-        flashActive = false;
+        dark = false;
     }
-    // else: within the hysteresis band - keep the previous decision (flashActive)
+    // else: within the hysteresis band - keep the previous decision
 
     // Persist the decision (written to CONFIG.TXT at DPD entry) so the first
     // capture after the next wake uses it - RAM does not survive DPD
-    fatfs_setOperationalParameter(OP_PARAMETER_AE_FLASH_STATE, flashActive ? 1 : 0);
+    fatfs_setOperationalParameter(OP_PARAMETER_AE_FLASH_STATE, dark ? 1 : 0);
 
 	xprintf("AE light check: mean AE = %d (min %d, max %d) over %d frames, "
-			"threshold = %d, gain railed = %s -> flash %s%s\n",
+			"threshold = %d, gain railed = %s -> %s%s\n",
 			stats->meanAE, stats->minAE, stats->maxAE, stats->samples,
 			threshold, stats->gainRailed ? "yes" : "no",
-			flashActive ? "ON" : "OFF",
-			(flashActive == wasActive) ? "" : " (changed)");
+			dark ? "DARK (flash wanted)" : "BRIGHT (no flash)",
+			(dark == wasDark) ? "" : " (changed)");
 
-	ledFlashActivate();	// Turn on Flash LED (conditionally)
+	if (flashMode == FLASH_MODE_AE) {
+		flashActive = dark;
+		ledFlashActivate();	// Turn on Flash LED (conditionally)
+	}
 }

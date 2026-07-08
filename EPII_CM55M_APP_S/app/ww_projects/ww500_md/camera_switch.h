@@ -11,16 +11,19 @@
  * labels its own slot at boot, so the 'slots' CLI command (and the app) can see
  * which variant is in each slot, and 'switchslot' boots the other one.
  *
- * Switching is currently MANUAL: the app user selects a camera and the app
- * issues 'switchslot'.
+ * Switching modes:
+ *   - MANUAL (always available): the app user selects a camera and the app
+ *     issues 'switchslot'.
+ *   - AUTOMATIC (OP_PARAMETER_SLOT_SWITCH == 1): after each AE light check
+ *     (HM0360 AE registers, sampled around captures and every
+ *     OP_PARAMETER_AE_CHECK_INTERVAL minutes) the hysteresis-filtered
+ *     dark/bright decision (OP_PARAMETER_AE_FLASH_STATE) is compared with the
+ *     running variant; when they disagree - and the other slot is labelled
+ *     with the wanted variant - cameraSwitch_autoSwitchCheck() switches the
+ *     boot slot and schedules a reset at the next sleep.
  *
- * PLANNED: automatic light-based switching. The firmware will inspect the
- * camera AE registers (gain/exposure) of images captured every 15-30 minutes;
- * if the scene is too dark for the colour camera it will switch to the HM0360
- * image (and back when bright), with hysteresis. OP_PARAMETER_SLOT_SWITCH is
- * reserved to enable that mode (0 = off/manual only, 1 = automatic).
- *
- * See _Documentation/camera-field-tuning-roadmap.md
+ * See _Documentation/camera-field-tuning-roadmap.md and
+ * _Documentation/AE_Light_Sensor_Roadmap.md
  */
 
 #ifndef CAMERA_SWITCH_H_
@@ -44,5 +47,13 @@ const char * cameraSwitch_variantName(uint8_t variant);
  * Cheap when already recorded (no flash write). Call once per wake cycle.
  */
 void cameraSwitch_labelBootSlot(void);
+
+/**
+ * Automatic switching check - call after each AE light-level decision.
+ * When OP_PARAMETER_SLOT_SWITCH == 1 and the light wants the other camera
+ * variant, switches the boot slot and schedules a reset at the next sleep.
+ * Returns true if a switch was scheduled.
+ */
+bool cameraSwitch_autoSwitchCheck(void);
 
 #endif /* CAMERA_SWITCH_H_ */

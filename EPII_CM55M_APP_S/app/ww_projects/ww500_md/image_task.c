@@ -847,8 +847,11 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
         // reading: AE_MEAN is the output of the HM0360's AE control loop and
         // limit-cycles (bench testing in a dark box saw it swing 3..66 across
         // the threshold). Average several frames and consider gain railing.
-        // Only pay the sampling cost when the flash is actually AE-driven.
-        if (ledFlashGetFlashMode() == FLASH_MODE_AE) {
+        // Only pay the sampling cost when something consumes the decision:
+        // the AE-driven flash (op13) or automatic camera switching (op26).
+        bool cameraSwitchScheduled = false;
+        if ((ledFlashGetFlashMode() == FLASH_MODE_AE)
+        		|| (fatfs_getOperationalParameter(OP_PARAMETER_SLOT_SWITCH) == 1)) {
             HM0360_AE_STATS_T aeStats;
             if (hm0360_md_getAEStats(AE_SAMPLE_COUNT, AE_SAMPLE_GAP_MS, &aeStats) == HX_CIS_NO_ERROR) {
                 ledFlashNewAEStats(&aeStats);
@@ -858,6 +861,11 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
                 // leaving the flash decision stale
                 ledFlashNewAEValues(&gain);
             }
+
+            // Automatic day/night camera switching (op26): if the fresh
+            // decision wants the other camera variant, this switches the boot
+            // slot and schedules a reset at the next sleep. See camera_switch.c.
+            cameraSwitchScheduled = cameraSwitch_autoSwitchCheck();
         }
 
         snprintf(msgToMaster, MSGTOMASTERLEN, "HM0360 AE regs:\n  Integration time = %d lines\n  Analog gain = %d\n  Digital gain = %d\n  AE Mean = %d\n  AEConverged?: %c",
@@ -874,6 +882,15 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
 
         // and send to BLE
         sendMsgToMaster(msgToMaster);
+
+        if (cameraSwitchScheduled) {
+        	// Tell the app the device is about to change camera (and reboot)
+        	snprintf(msgToMaster, MSGTOMASTERLEN,
+        			"Auto camera switch: light level wants the %s camera - switching at next sleep",
+					(fatfs_getOperationalParameter(OP_PARAMETER_AE_FLASH_STATE) == 1) ?
+							"night (HM0360)" : "colour (RP3)");
+        	sendMsgToMaster(msgToMaster);
+        }
 
 #if 1
 		// This is a test of reading and printing the 32 MD registers
@@ -1647,12 +1664,14 @@ static void vImageTask(void *pvParameters) {
 
     if ((cameraSystemEnabled == 1)  && cameraInitialised && ((woken == APP_WAKE_REASON_MD) || (woken == APP_WAKE_REASON_TIMER))) {
 
-    	// A timer wake with timelapse disabled and the flash in AE mode is a
+    	// A timer wake with timelapse disabled and a light-decision consumer
+    	// enabled (AE-driven flash, or automatic camera switching op26) is a
     	// periodic light check (the RTC alarm was set for it on the way into
     	// DPD): capture a single frame to refresh the AE registers, save nothing.
     	aeCheckOnlyWake = ((woken == APP_WAKE_REASON_TIMER)
     			&& (fatfs_getOperationalParameter(OP_PARAMETER_TIMELAPSE_INTERVAL) == 0)
-    			&& (ledFlashGetFlashMode() == FLASH_MODE_AE));
+    			&& ((ledFlashGetFlashMode() == FLASH_MODE_AE)
+    					|| (fatfs_getOperationalParameter(OP_PARAMETER_SLOT_SWITCH) == 1)));
     	if (aeCheckOnlyWake) {
     		xprintf("Timer wake for AE light check\n");
     	}
@@ -2598,13 +2617,16 @@ void image_sleepNow(void) {
                              timelapseDelay, false); // Does not return
     }
     else  {
-    	// No timelapse. If the flash is in AE mode, wake periodically anyway to
-    	// sample the light level (one frame, AE registers only, nothing saved) so
-    	// the flash decision is fresh before the next motion-detect capture.
+    	// No timelapse. If the light decision has a consumer - AE-driven flash
+    	// (op13) or automatic camera switching (op26) - wake periodically anyway
+    	// to sample the light level (one frame, AE registers only, nothing
+    	// saved) so the decision is fresh before the next motion-detect capture,
+    	// and so the auto camera switch notices dawn/dusk without needing motion.
     	// See _Documentation/AE_Light_Sensor_Roadmap.md
     	uint32_t aeCheckDelay = 0;	// seconds
 
-    	if (cameraSystemEnabled && (ledFlashGetFlashMode() == FLASH_MODE_AE)) {
+    	if (cameraSystemEnabled && ((ledFlashGetFlashMode() == FLASH_MODE_AE)
+    			|| (fatfs_getOperationalParameter(OP_PARAMETER_SLOT_SWITCH) == 1))) {
     		aeCheckDelay = (uint32_t) fatfs_getOperationalParameter(OP_PARAMETER_AE_CHECK_INTERVAL) * 60;
     		if (aeCheckDelay > 65535) {
     			aeCheckDelay = 65535;	// the RTC alarm parameter is uint16_t seconds (~18h max)

@@ -181,10 +181,12 @@ __Notes:__
 3. Camera tuning commands added for bench/field validation of exposure, gain, white balance and focus.
    See [camera-phase0-bench-runbook.md](camera-phase0-bench-runbook.md) and [camera-field-tuning-roadmap.md](camera-field-tuning-roadmap.md).
 4. Dual-image camera switching: the device holds two firmware images in A/B flash slots
-   (HM0360 night/IR variant and RP3 day/colour variant). Switching is currently manual, via
-   `AI switchslot` (the app offers a camera selector in the capture preview flow). Automatic
-   light-based switching (using the camera AE registers of periodic captures) is planned and
-   will be enabled with Operational Parameter 26 (SLOT_SWITCH) - see
+   (HM0360 night/IR variant and RP3 day/colour variant). Switching is manual via
+   `AI switchslot` (the app offers a camera selector in the capture preview flow), or
+   automatic when Operational Parameter 26 (SLOT_SWITCH) is 1: the AE light-level checks
+   (around captures, and every op24 minutes) switch to the night image in the dark and back
+   to the colour image in daylight. The device announces `Auto camera switch: ...` and
+   reboots into the other image at the next sleep. See
    [Operational_Parameters.md](Operational_Parameters.md).
 
 __Other AI Processor Commands__

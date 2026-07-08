@@ -334,7 +334,16 @@ What does fix it (implemented):
   but only OFF again once well above it, so it does not chatter near dusk.
 
 Decision path now lives in `ledFlashNewAEStats()`; `image_task.c` calls
-`hm0360_md_getAEStats()` on each AE-check wake when the flash mode is AE.
+`hm0360_md_getAEStats()` on each AE-check wake.
+
+The dark/bright decision (persisted as op25) has two consumers, and the checks
+run when **either** is enabled:
+- **AE-driven flash** (op13 selects AE mode) — the original consumer.
+- **Automatic camera switching** (op26 = 1) — `cameraSwitch_autoSwitchCheck()`
+  in `camera_switch.c` compares the decision with the running camera variant
+  after each check; on a mismatch (dark on the colour image, or bright on the
+  night image) it points the bootloader at the other slot and reboots at the
+  next sleep. Only the decision is shared: op26 alone never fires the flash.
 
 Other candidate light-sensor signals considered (for future work): a
 fixed-exposure metering frame (disable AE, set a known gain, read the raw mean —

@@ -170,6 +170,15 @@ static bool mounted;
 static FIL transferFile;
 static bool transferFileOpen = false;
 
+// Flush FAT metadata with f_sync() every N appends. Without this a long
+// transfer accumulates unbounded dirty filesystem state (cluster chain and
+// directory updates), which is the suspected cause of the non-deterministic
+// f_write() failures ("ftx err 7") seen on transfers beyond ~3-7KB.
+// 16 x 241-byte chunks ≈ 3.9KB between syncs; each f_sync costs ~50-100ms,
+// amortised to a few ms per packet.
+#define TRANSFER_WRITES_PER_SYNC 16
+static uint16_t transferWritesSinceSync = 0;
+
 static TickType_t xStartTime;
 static TickType_t accumulatedTime;
 
@@ -752,6 +761,7 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 
 		if (res == FR_OK) {
 			transferFileOpen = true;
+			transferWritesSinceSync = 0;
 			xprintf("Opened '%s' for writing\n", fileOp->fileName);
 		}
 		else {
@@ -780,6 +790,16 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 			if (res == FR_OK && bw != fileOp->length) {
 				xprintf("Short write: %u of %lu bytes\n", bw, fileOp->length);
 				res = FR_DISK_ERR;
+			}
+
+			// Periodic metadata flush — see TRANSFER_WRITES_PER_SYNC above.
+			// A failed sync is reported like a failed write (ftx err 7).
+			if (res == FR_OK && ++transferWritesSinceSync >= TRANSFER_WRITES_PER_SYNC) {
+				res = f_sync(&transferFile);
+				transferWritesSinceSync = 0;
+				if (res != FR_OK) {
+					xprintf("f_sync failed (err %d)\n", res);
+				}
 			}
 		}
 

@@ -44,6 +44,7 @@
 
 #include "crc16_ccitt.h"
 #include "fileRx.h"
+#include "inactivity.h"
 #include "ww500_md.h"
 #include "exif_utc.h"
 #include "barrier.h"
@@ -237,6 +238,16 @@ static fileRx_result_t  fileRxPendingErr;
 static fileOperation_t  fileRxOp;
 static uint8_t          fileRxPacketNum;
 
+// Inactivity period used while a file receive session is active. The standard
+// period (1000ms) is shorter than a slow BLE round trip, so the idle hook
+// could put the system into DPD between packets, killing the SD subsystem
+// mid-transfer (ftx err 7). Saved/restored around each session; if a session
+// dies without a CLOSE (e.g. BLE dropped), the extended period simply delays
+// the next DPD entry once — the period resets on wake from DPD.
+#define FILERX_SESSION_INACTIVITY_MS 5000
+static uint32_t savedInactivityPeriod;
+static bool     inactivityExtended = false;
+
 // This is the final string sent before we enter DPD
 //const char * lastMessage = "Sleep";
 
@@ -248,6 +259,19 @@ bool sendWakeMsg = false;
 static TickType_t fileRxStartTime;
 
 /*********************************** I2C Local Function Definitions ************************************************/
+
+/**
+ * Restore the inactivity period saved when the file receive session started.
+ *
+ * Called at every session end point: file close (success or error) and
+ * open failure. Safe to call when no extension is in force.
+ */
+static void restoreInactivityPeriod(void) {
+	if (inactivityExtended) {
+		inactivity_setPeriod(savedInactivityPeriod);
+		inactivityExtended = false;
+	}
+}
 
 /**
  * I2C slave callback - called when the Master has read our I2C data.
@@ -461,6 +485,16 @@ static void i2cRxDataReady(void) {
 			if_task_state = APP_IF_STATE_I2C_TX;
 			rearmI2C = false;
 			break;
+		}
+
+		// Session accepted: hold off DPD between packets (restored when the
+		// session closes — see restoreInactivityPeriod())
+		if (!inactivityExtended) {
+			savedInactivityPeriod = inactivity_getPeriod();
+			inactivityExtended    = true;
+			if (savedInactivityPeriod < FILERX_SESSION_INACTIVITY_MS) {
+				inactivity_setPeriod(FILERX_SESSION_INACTIVITY_MS);
+			}
 		}
 
 		fileRxOp.fileName      = (char *)fileRx_getFileName();
@@ -1229,6 +1263,7 @@ static APP_MSG_DEST_T  handleEventForStateDiskOp(APP_MSG_T rxMessage) {
 		case DISK_PHASE_FILE_OPEN:
 			if (fileRxOp.res != FR_OK) {
 				fileRxPendingErr = FILERX_ERR_FILE_OPEN;
+				restoreInactivityPeriod();	// session ends here — no CLOSE follows
 				snprintf(ackStr, sizeof(ackStr), "ftx err %d", (int)fileRxPendingErr);
 				sendI2CMessage((uint8_t *)ackStr, AI_PROCESSOR_MSG_RX_STRING, strlen(ackStr));
 			}
@@ -1266,6 +1301,9 @@ static APP_MSG_DEST_T  handleEventForStateDiskOp(APP_MSG_T rxMessage) {
 			break;
 
 		case DISK_PHASE_FILE_CLOSE:
+			// File closed: the session is over however we got here
+			restoreInactivityPeriod();
+
 			if (fileRxPendingErr != FILERX_OK) {
 				snprintf(ackStr, sizeof(ackStr), "ftx err %d", (int)fileRxPendingErr);
 			}

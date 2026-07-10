@@ -128,17 +128,31 @@ bool cameraSwitch_autoSwitchCheck(void) {
  */
 void cameraSwitch_labelBootSlot(void) {
 	int activeSlot;
+	int result;
 	uint8_t variant;
 
 	variant = cameraSwitch_thisVariant();
 	if (variant == XIP_SLOT_VARIANT_UNKNOWN) {
-		return;
+		return;		// build variant does not participate in camera switching
 	}
 
+	// Failures below are LOUD and retried once: a missed label strands the
+	// app's camera switching on 'unknown' until this image happens to boot
+	// again. Seen once in the field: the label write was silently lost during
+	// the brief mid-update boot of a dual-image firmware update.
 	activeSlot = xip_get_active_slot();
 	if (activeSlot < 0) {
+		xprintf("labelBootSlot: cannot read active slot - variant label NOT written\n");
 		return;
 	}
 
-	xip_set_slot_variant((uint8_t) activeSlot, variant);
+	result = xip_set_slot_variant((uint8_t) activeSlot, variant);
+	if (result != 0) {
+		xprintf("labelBootSlot: slot %c label write failed (%d) - retrying once\n",
+				(activeSlot == 0) ? 'A' : 'B', result);
+		result = xip_set_slot_variant((uint8_t) activeSlot, variant);
+		if (result != 0) {
+			xprintf("labelBootSlot: retry failed (%d) - camera switching will see 'unknown'\n", result);
+		}
+	}
 }

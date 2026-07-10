@@ -802,8 +802,13 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 			for (int attempt = 0; ; attempt++) {
 				res = f_write(&transferFile, fileOp->buffer, fileOp->length, &bw);
 				if (res == FR_OK && bw != fileOp->length) {
-					xprintf("Short write: %u of %lu bytes\n", bw, fileOp->length);
+					// FR_OK with a short count means the volume is full. Do NOT
+					// retry: the file pointer has already advanced by bw, so a
+					// rewrite of the full buffer would duplicate those bytes and
+					// corrupt the file. Report it as a write error (ftx err 7).
+					xprintf("Short write: %u of %lu bytes (volume full?)\n", bw, fileOp->length);
 					res = FR_DISK_ERR;
+					break;
 				}
 				if (res == FR_OK || attempt >= 3) {
 					break;

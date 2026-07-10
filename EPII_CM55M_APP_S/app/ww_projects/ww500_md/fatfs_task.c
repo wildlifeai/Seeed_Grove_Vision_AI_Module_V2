@@ -141,6 +141,9 @@ extern GPS_Coordinate exif_gps_deviceLon;
 extern GPS_Altitude exif_gps_deviceAlt;
 
 extern directoryManager_t dirManager;
+// Defined in if_task.c: true while a file-receive session is active. Suppresses the
+// high-volume per-packet console logging that throttles the transfer at 921600 baud.
+extern volatile bool g_fileRxActive;
 extern QueueHandle_t xIfTaskQueue;
 extern QueueHandle_t xImageTaskQueue;
 
@@ -760,6 +763,12 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 		}
 
 		if (res == FR_OK) {
+			// FA_CREATE_ALWAYS truncated any existing file, freeing its cluster
+			// chain. Commit that (and let the card finish the internal
+			// housekeeping) BEFORE the first data write - otherwise re-sending a
+			// large file failed on packet 1 with FR_DISK_ERR (ftx err 7) because
+			// the card was still busy from freeing ~1000 clusters.
+			f_sync(&transferFile);
 			transferFileOpen = true;
 			transferWritesSinceSync = 0;
 			xprintf("Opened '%s' for writing\n", fileOp->fileName);
@@ -786,10 +795,21 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 			res = FR_INVALID_OBJECT;
 		}
 		else {
-			res = f_write(&transferFile, fileOp->buffer, fileOp->length, &bw);
-			if (res == FR_OK && bw != fileOp->length) {
-				xprintf("Short write: %u of %lu bytes\n", bw, fileOp->length);
-				res = FR_DISK_ERR;
+			// Retry transient SD write failures: the card can be briefly busy
+			// (internal garbage collection, or recovering after a large-file
+			// truncate), which returns FR_DISK_ERR. A short delay lets it
+			// recover; only a persistent failure becomes ftx err 7.
+			for (int attempt = 0; ; attempt++) {
+				res = f_write(&transferFile, fileOp->buffer, fileOp->length, &bw);
+				if (res == FR_OK && bw != fileOp->length) {
+					xprintf("Short write: %u of %lu bytes\n", bw, fileOp->length);
+					res = FR_DISK_ERR;
+				}
+				if (res == FR_OK || attempt >= 3) {
+					break;
+				}
+				xprintf("SD write err %d, retry %d/3\n", res, attempt + 1);
+				vTaskDelay(pdMS_TO_TICKS(15));
 			}
 
 			// Periodic metadata flush — see TRANSFER_WRITES_PER_SYNC above.
@@ -1632,10 +1652,12 @@ static void vFatFsTask(void *pvParameters) {
 				eventString = "Unexpected";
 			}
 
-			XP_LT_CYAN
-			xprintf("\nFatFS Task ");
-			XP_WHITE;
-			xprintf("received event '%s' (0x%04x). Rx data = 0x%08x\r\n", eventString, event, rxData);
+			if (!g_fileRxActive) {
+				XP_LT_CYAN
+				xprintf("\nFatFS Task ");
+				XP_WHITE;
+				xprintf("received event '%s' (0x%04x). Rx data = 0x%08x\r\n", eventString, event, rxData);
+			}
 
 			old_state = fatFs_task_state;
 
@@ -1660,7 +1682,7 @@ static void vFatFsTask(void *pvParameters) {
 				break;
 			}
 
-			if (old_state != fatFs_task_state) {
+			if ((old_state != fatFs_task_state) && !g_fileRxActive) {
 				// state has changed
 				XP_LT_CYAN;
 				xprintf("FatFS Task state changed ");
@@ -1677,7 +1699,7 @@ static void vFatFsTask(void *pvParameters) {
 
 				if (xQueueSend(targetQueue, (void *)&sendMsg, __QueueSendTicksToWait) != pdTRUE) {
 					xprintf("FatFS task sending event 0x%x failed\r\n", sendMsg.msg_event);
-				} else {
+				} else if (!g_fileRxActive) {
 					xprintf("FatFS task sending event 0x%04x. Tx data = 0x%08x\r\n", sendMsg.msg_event, sendMsg.msg_data);
 				}
 			}

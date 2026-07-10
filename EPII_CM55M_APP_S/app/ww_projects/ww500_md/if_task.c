@@ -64,11 +64,20 @@
 // This timer timed out, and the ML62BA saw two interprocessor interrupts and gave a 'busy' error.
 // See if this is resolved by increasing the timeout
 //#define MISSINGMASTERTIME	300
-#define MISSINGMASTERTIME	1000
+// Raised from 1000ms: while streaming a file, Android periodically re-requests
+// CONNECTION_PRIORITY_HIGH to stop the interval decaying (measured: it drops from
+// ~15ms to ~200ms ~24s in, collapsing throughput from ~8KB/s to ~1.3KB/s). Each
+// re-request renegotiates the link and stalls it ~950ms — right at the old 1000ms
+// timeout, so the HX declared "master did not read" and aborted the transfer. A
+// 4000ms window rides through the renegotiation while staying under the 5s file
+// session inactivity and the app's 15s silence timeout.
+#define MISSINGMASTERTIME	4000
 
 #define DBG_EVT_IICS_CMD_LOG 1
 #if DBG_EVT_IICS_CMD_LOG
-    #define dbg_evt_iics_cmd(fmt, ...)   xprintf(fmt, ##__VA_ARGS__)
+    // Suppressed during an active file-receive session (g_fileRxActive) — the
+    // per-packet I2C trace is high-volume and throttles the transfer at 921600 baud.
+    #define dbg_evt_iics_cmd(fmt, ...)   do { if (!g_fileRxActive) xprintf(fmt, ##__VA_ARGS__); } while (0)
 #else
     #define dbg_evt_iics_cmd(fmt, ...)
 #endif
@@ -255,6 +264,14 @@ bool lastMessageSent = false;
 
 bool sendWakeMsg = false;
 
+// True while a file-receive session is active (FILE_START..close). The per-packet
+// console logging (hex dumps, state changes, event traces, ACK sends) is very high
+// volume at 921600 baud and measurably throttles the transfer loop, so it is
+// suppressed while this is set. Cleared at every session end (restoreInactivityPeriod)
+// and — belt-and-braces — reset to false on the DPD reboot that follows an abandoned
+// transfer, so it can never stay stuck. Read from ISR/callback context too, so volatile.
+volatile bool g_fileRxActive = false;
+
 // Measure interval between events
 static TickType_t fileRxStartTime;
 
@@ -271,6 +288,8 @@ static void restoreInactivityPeriod(void) {
 		inactivity_setPeriod(savedInactivityPeriod);
 		inactivityExtended = false;
 	}
+	// Session over — re-enable the verbose per-packet console logging.
+	g_fileRxActive = false;
 }
 
 /**
@@ -289,6 +308,18 @@ static void i2csTxDoneEvent(void *param) {
 	if (xTimerStop(timerHndlMissingMaster, 0) != pdPASS) {
 		configASSERT(0);	// TODO add debug messages?
 	}
+
+	// Re-arm the slave receiver HERE, the instant the master finishes reading our
+	// ACK — not later in i2cTransmissionComplete() (which runs only after this
+	// event is dequeued by the ifTask). During a sliding-window file transfer the
+	// master (nRF) writes the next packet immediately after reading each ACK; the
+	// task-scheduling gap left the slave deaf, so the first bytes (the frame
+	// header + packet number) were lost. The malformed frame then failed CRC and
+	// was silently dropped, no ACK was sent, and the transfer stalled until the
+	// master's 10s "AI processor not responding" timeout. Arming in this callback
+	// closes that window. (Re-arm is removed from i2cTransmissionComplete() so a
+	// packet received in the meantime is not clobbered by a second enable_read.)
+	hx_lib_i2ccomm_enable_read(iic_id, (unsigned char *) gRead_buf, WW130_MAX_RBUF_SIZE);
 
 	//send_msg.msg_data = iic_info_ptr->slv_addr;
 	send_msg.msg_data = 0;
@@ -379,9 +410,11 @@ static void i2cTransmissionComplete(void) {
 	// further commands (including transfer of multiple chunks of JPEG file data).
 	xSemaphoreGive(xI2CTxSemaphore);
 
-    // Prepare for the next incoming message
-    clear_read_buf_header();
-    hx_lib_i2ccomm_enable_read(iic_id, (unsigned char *) gRead_buf, WW130_MAX_RBUF_SIZE);
+    // NOTE: the slave receiver is now re-armed in the i2csTxDoneEvent() callback the
+    // moment the master finishes reading our ACK, closing the task-scheduling window
+    // that was dropping the header of the next back-to-back packet during fast
+    // sliding-window transfers. Do NOT enable_read again here — a packet may already
+    // have been received into gRead_buf, and a second enable_read would discard it.
 }
 
 /**
@@ -411,7 +444,10 @@ static void i2cRxDataReady(void) {
 
 	XP_LT_GREY;
 	// Let's print the message: 4 bytes header, payload, 2 bytes CRC
-	printf_x_printBuffer(gRead_buf, (I2CCOMM_HEADER_SIZE + length + I2CCOMM_CHECKSUM_SIZE ));
+	// (suppressed during a file transfer — this hex dump is ~16 lines per packet)
+	if (!g_fileRxActive) {
+		printf_x_printBuffer(gRead_buf, (I2CCOMM_HEADER_SIZE + length + I2CCOMM_CHECKSUM_SIZE ));
+	}
 	XP_WHITE;
 
 	crcOK = crc16_ccitt_validate(gRead_buf, I2CCOMM_HEADER_SIZE + length + I2CCOMM_CHECKSUM_SIZE );
@@ -496,6 +532,11 @@ static void i2cRxDataReady(void) {
 				inactivity_setPeriod(FILERX_SESSION_INACTIVITY_MS);
 			}
 		}
+
+		// Suppress the high-volume per-packet console logging for the duration of
+		// the transfer (restored in restoreInactivityPeriod()). At 921600 baud the
+		// hex dumps + state/event traces measurably throttle the packet loop.
+		g_fileRxActive = true;
 
 		fileRxOp.fileName      = (char *)fileRx_getFileName();
 		fileRxOp.buffer        = NULL;
@@ -724,9 +765,11 @@ static void i2ccomm_write_enable(uint8_t * message, aiProcessor_msg_type_t messa
     // This is a wrapper around SCB_CleanDCache_by_Addr() - ensures that any data in the D-cache is committed to RAM
     hx_CleanDCache_by_Addr((void *) gWrite_buf, I2CCOMM_MAX_RBUF_SIZE);
 
-    // for debugging, print the buffer
+    // for debugging, print the buffer (suppressed during a file transfer)
     XP_LT_GREY;
-    printf_x_printBuffer((uint8_t *) gWrite_buf, I2CCOMM_HEADER_SIZE + length + I2CCOMM_CHECKSUM_SIZE);
+    if (!g_fileRxActive) {
+        printf_x_printBuffer((uint8_t *) gWrite_buf, I2CCOMM_HEADER_SIZE + length + I2CCOMM_CHECKSUM_SIZE);
+    }
     XP_WHITE;
 
     // non-blocking I2C transmit. Expect an interrupt in i2cs_cb_tx() soon.
@@ -1254,9 +1297,11 @@ static APP_MSG_DEST_T  handleEventForStateDiskOp(APP_MSG_T rxMessage) {
 
 		// How long did it take?
 		elapsedTime = app_getElapsedMs(fileRxStartTime);
-	    XP_LT_BLUE;	// colour for File TX operations
-	    xprintf("   FileTX: disk operation took %dms\n", elapsedTime);
-	    XP_WHITE;
+	    if (!g_fileRxActive) {
+	        XP_LT_BLUE;	// colour for File TX operations
+	        xprintf("   FileTX: disk operation took %dms\n", elapsedTime);
+	        XP_WHITE;
+	    }
 
 		switch (diskPhase) {
 
@@ -1431,10 +1476,12 @@ static void vIfTask(void *pvParameters) {
 				eventString = "Unexpected";
 			}
 
-			XP_LT_CYAN
-			xprintf("\nIF Task ");
-			XP_WHITE;
-			xprintf("received event '%s' (0x%04x). Rx data = 0x%08x\r\n", eventString, event, rxData);
+			if (!g_fileRxActive) {
+				XP_LT_CYAN
+				xprintf("\nIF Task ");
+				XP_WHITE;
+				xprintf("received event '%s' (0x%04x). Rx data = 0x%08x\r\n", eventString, event, rxData);
+			}
 
 			old_state = if_task_state;
 
@@ -1501,7 +1548,7 @@ static void vIfTask(void *pvParameters) {
 				break;
 			}
 
-			if (old_state != if_task_state) {
+			if ((old_state != if_task_state) && !g_fileRxActive) {
 				// state has changed
 				XP_LT_CYAN;
 				xprintf("IF Task state changed ");
@@ -1652,9 +1699,11 @@ static void interprocessor_interrupt_assert(void) {
 	xprintf("Set PB11 as an output, driven to 0 (GPIO2). Read back as %d\n", pinValue);
 	XP_WHITE;
 #else
-	XP_LT_GREEN;
-	xprintf("Assert inter-processor interrupt.\n");
-	XP_WHITE;
+	if (!g_fileRxActive) {
+		XP_LT_GREEN;
+		xprintf("Assert inter-processor interrupt.\n");
+		XP_WHITE;
+	}
 #endif
 }
 
@@ -1676,9 +1725,11 @@ static void interprocessor_interrupt_negate(void) {
 	xprintf("Set PB11 as an output, drive to 1 (GPIO2). Read back as %d\n", pinValue);
 	XP_WHITE;
 #else
-	XP_LT_GREEN;
-	xprintf("Negate inter-processor interrupt.\n");
-	XP_WHITE;
+	if (!g_fileRxActive) {
+		XP_LT_GREEN;
+		xprintf("Negate inter-processor interrupt.\n");
+		XP_WHITE;
+	}
 #endif
 
 	// Now set PB11 as an input and prepare it to respond to interrupts from the MKL62BA.

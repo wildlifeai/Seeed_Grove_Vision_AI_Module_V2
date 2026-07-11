@@ -21,9 +21,15 @@ cycle the device, or wave at the lens if MD is armed), then immediately types
 the keep-awake (the device DPDs ~4 s after an idle cold boot), turns preview
 on and starts a capture burst - every step echo-verified with retries.
 
+When the firmware includes the MD grid in each frame ("md"/"md_blocks" fields,
+preview.c), a translucent 16x16 motion heatmap is drawn over the live image and
+the moving-block count shown in the status panel - toggle with "MD motion
+overlay". Tune MD live with the sidebar buttons (camreg 35a9/35a6 ...) or the
+command box and watch the grid react.
+
 Usage:
-    py live_view.py                    # defaults: COM14, 921600
-    py live_view.py --port COM13
+    py live_view.py                    # defaults: COM13 (Himax), 921600
+    py live_view.py --port COM14
 
 NOTES
  - Close TeraTerm first: Windows COM ports are exclusive.
@@ -52,7 +58,7 @@ from datetime import datetime
 import serial
 import tkinter as tk
 from tkinter import scrolledtext
-from PIL import Image, ImageTk
+from PIL import Image, ImageTk, ImageDraw
 
 ANSI_RE = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
 
@@ -187,8 +193,16 @@ class SerialWorker(threading.Thread):
                     if count <= 3 or count % 20 == 0:
                         self.log_q.put(f"[frame] #{count} {len(jpeg)} bytes")
                     self._confirm_frame()
+                    # Optional HM0360 motion grid (firmware preview.c): 32 bytes
+                    # as hex = 16x16 bitmap; md_blocks = moving-block count.
+                    md_hex = data.get("md")
+                    try:
+                        md_bytes = bytes.fromhex(md_hex) if md_hex else None
+                    except ValueError:
+                        md_bytes = None
                     self.frame_q.put((data.get("count", 0),
-                                      data.get("resolution", [0, 0]), jpeg))
+                                      data.get("resolution", [0, 0]), jpeg,
+                                      md_bytes, data.get("md_blocks")))
                     # frame boundary = the quiet window: send any pending step
                     self._pump_seq(force=True)
                     return
@@ -267,6 +281,8 @@ class Viewer:
         self.last_rearm = time.monotonic()
         self.frame_times = deque(maxlen=10)
         self.photo = None  # keep a reference or tkinter drops the image
+        self.show_md = tk.BooleanVar(value=True)   # overlay the HM0360 motion grid
+        self.last_md_blocks = None
 
         root.title(f"WW500 Live View - {worker.ser.port} @ {worker.ser.baudrate}")
 
@@ -289,7 +305,9 @@ class Viewer:
 
         tk.Button(side, text="Start stream", command=self.start_stream).pack(fill=tk.X)
         tk.Button(side, text="Stop stream", command=self.stop_stream).pack(fill=tk.X, pady=(4, 0))
-        tk.Button(side, text="Save frame", command=self.save_frame).pack(fill=tk.X, pady=(4, 12))
+        tk.Button(side, text="Save frame", command=self.save_frame).pack(fill=tk.X, pady=(4, 4))
+        tk.Checkbutton(side, text="MD motion overlay", variable=self.show_md,
+                       anchor="w").pack(fill=tk.X, pady=(0, 12))
 
         tk.Label(side, text="Command:").pack(anchor="w")
         self.cmd_entry = tk.Entry(side, width=28, font=("Consolas", 10))
@@ -300,6 +318,14 @@ class Viewer:
         tk.Label(side, text="Quick commands:").pack(anchor="w", pady=(12, 0))
         for cmd in ("getop 27", "setop 27 286", "setop 28 326",
                     "vcm 512", "status", "setop 8 1000"):
+            tk.Button(side, text=cmd, font=("Consolas", 9),
+                      command=lambda c=cmd: self.worker.send(c)).pack(fill=tk.X, pady=1)
+
+        # MD tuning: write HM0360 registers live and watch the overlay change.
+        # (camreg <addr> <val>, hex; 35a9=MD_TH_STR_H_B, 35a6=MD_BLOCK_NUM_TH_B)
+        tk.Label(side, text="MD tuning (hex):").pack(anchor="w", pady=(12, 0))
+        for cmd in ("camreg 35a9 08", "camreg 35a9 20", "camreg 35a9 30",
+                    "camreg 35a6 01", "camreg 35a6 04"):
             tk.Button(side, text=cmd, font=("Consolas", 9),
                       command=lambda c=cmd: self.worker.send(c)).pack(fill=tk.X, pady=1)
 
@@ -315,12 +341,15 @@ class Viewer:
 
     def _set_status(self, info):
         if info is None:
-            self.status.config(text="frames    -\nsize      -\nfps       -\ndropped   0")
+            self.status.config(text="frames    -\nsize      -\nfps       -\n"
+                                    "MD blocks -\ndropped   0")
             return
         count, res, kbytes, fps = info
+        md = "-" if self.last_md_blocks is None else str(self.last_md_blocks)
         self.status.config(text=(f"frames    {count}\n"
                                  f"size      {kbytes:.1f} KB  {res[0]}x{res[1]}\n"
                                  f"fps       {fps:.2f}\n"
+                                 f"MD blocks {md}\n"
                                  f"dropped   {self.worker.dropped}"))
 
     def start_stream(self):
@@ -357,8 +386,9 @@ class Viewer:
         self.log.see(tk.END)
         self.log.config(state=tk.DISABLED)
 
-    def _show_frame(self, count, res, jpeg):
+    def _show_frame(self, count, res, jpeg, md_bytes=None, md_blocks=None):
         self.last_jpeg = jpeg
+        self.last_md_blocks = md_blocks
         now = time.monotonic()
         self.frame_times.append(now)
         fps = 0.0
@@ -375,9 +405,33 @@ class Viewer:
             return
         if img.width > DISPLAY_MAX[0] or img.height > DISPLAY_MAX[1]:
             img.thumbnail(DISPLAY_MAX)
+        if self.show_md.get() and md_bytes is not None and len(md_bytes) == 32:
+            img = self._overlay_md(img, md_bytes)
         self.photo = ImageTk.PhotoImage(img)
         self.image_label.config(image=self.photo, text="", width=img.width, height=img.height)
         self._set_status((count, res, len(jpeg) / 1024.0, fps))
+
+    @staticmethod
+    def _overlay_md(img, md_bytes):
+        """Draw the HM0360 16x16 motion grid as a translucent red heatmap.
+
+        Blocks are row-major: block = row*16 + col; within the 32-byte table
+        block b lives in byte b>>3, bit b&7 (matches hm0360_md_printGrid). The
+        HM0360 FOV is not pixel-aligned with the colour main camera, so treat
+        the overlay as a spatial guide, not a precise mask.
+        """
+        base = img.convert("RGBA")
+        overlay = Image.new("RGBA", base.size, (0, 0, 0, 0))
+        draw = ImageDraw.Draw(overlay)
+        cw = base.width / 16.0
+        ch = base.height / 16.0
+        for block in range(256):
+            if md_bytes[block >> 3] & (1 << (block & 7)):
+                col, row = block % 16, block // 16
+                x0, y0 = col * cw, row * ch
+                draw.rectangle([x0, y0, x0 + cw, y0 + ch],
+                               fill=(255, 40, 40, 90), outline=(255, 80, 80, 170))
+        return Image.alpha_composite(base, overlay).convert("RGB")
 
     def poll(self):
         try:
@@ -419,7 +473,9 @@ class Viewer:
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--port", default="COM14")
+    # The preview stream comes from the Himax HX6538 console = COM13 @ 921600
+    # (COM14 @ 115200 is the nRF52 BLE co-processor, no preview there).
+    ap.add_argument("--port", default="COM13")
     ap.add_argument("--baud", type=int, default=921600)
     args = ap.parse_args()
 

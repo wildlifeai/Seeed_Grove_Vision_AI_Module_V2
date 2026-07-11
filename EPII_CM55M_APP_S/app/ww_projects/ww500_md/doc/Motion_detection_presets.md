@@ -106,12 +106,21 @@ fix (see [`WW500_camera_operation.md`](./WW500_camera_operation.md) for mounting
 
 ## 5. Roadmap
 
-- **Phase 0 — Instrumentation (prereq).** CLI to read/write every MD register and dump the
-  live 256-block grid (`hm0360_md_printGrid()` already renders it) + log `motionCount` per
-  trigger; a register-sweep harness. *Everything downstream depends on this.*
-- **Phase 1 — Bench characterisation.** Run §6's rigs and **measure** detection vs each
-  register; replace §3's placeholders with data (detection-rate vs false-trigger-rate per
-  preset). This is the "fit for purpose" work that has never been done.
+- **Phase 0 — Instrumentation (prereq). _Done (2026-07-11)._** Read/write every MD register
+  on real hardware over the **stock `camreg`** command (no reflash needed) — the headless
+  sweep harness is `_Tools/md_sweep.py` (reconnect-pin, per-step re-pin, `MD_ROI_OUT`
+  popcount / `INT_INDIC` fired bit). The `md read/write/grid/dump` CLI + `hm0360_md_printGrid`
+  are the flashed-firmware equivalent. **Serial map:** Himax MD console = **COM13 @ 921600**
+  (COM14 = nRF). **Key finding:** the HM0360 MD engine only runs on the **sleep path** — a
+  register poll while the SoC is pinned awake reads 0 at every threshold.
+- **Phase 1 — Bench characterisation.** Two rigs now exist: (a) `md_sweep.py` for headless
+  register sweeps, and (b) the **live MD overlay in `live_view.py`** — preview arms MD
+  concurrently (`hm0360_md_prepare(true,…)` in `preview.c`) and streams the 16×16 grid, so
+  you watch which blocks light up over the live image while editing `camreg`/`setop`. Run
+  §6's rigs and **measure** detection vs each register; replace §3's placeholders with data
+  (detection-rate vs false-trigger-rate per preset). This is the "fit for purpose" work that
+  has never been done. (Note: the true field trigger is a sleep→motion→**wake**, so also
+  score via the sleep-wake path — watch the nRF's `AI processor sends stats` on COM14.)
 - **Phase 2 — Firmware presets.** Encode the 4 validated tables + `OP_PARAMETER_MD_PRESET`;
   wire block-num / ROI / latency / Δt into the bundle.
 - **Phase 3 — Config + BLE plumbing.** OP over BLE → CONFIG.TXT → manifest; backend

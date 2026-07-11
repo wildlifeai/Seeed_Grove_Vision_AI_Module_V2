@@ -7,7 +7,13 @@
  * Frame line format (one line per frame, CR ... LF):
  *
  *   {"type": 1, "name": "INVOKE", "code": 0, "data": {"count": N,
- *    "resolution": [W, H], "boxes": [], "image": "<base64 JPEG>"}}
+ *    "resolution": [W, H], "boxes": [], "md_blocks": M, "md": "<64 hex>",
+ *    "image": "<base64 JPEG>"}}
+ *
+ * "md" is the HM0360 16x16 motion grid (32 MD_ROI_OUT bytes as hex, LSB-first
+ * within each byte) and "md_blocks" the count of blocks flagged as moving, so a
+ * viewer can overlay a motion heatmap on the live image. Both are omitted-safe:
+ * older/other viewers ignore the extra fields.
  *
  * This is the same framing the Himax/SSCMA scenario apps use (see
  * app/scenario_app/tflm_fd_fm/send_result.cpp), so as well as
@@ -32,6 +38,9 @@
 #include "cisdp_sensor.h"	// cisdp_get_jpginfo(), app_get_raw_width/height()
 #include "img_correct.h"	// img_correct_get_jpeg()
 #include "preview.h"
+#include "hm0360_md.h"		// hm0360_md_getMDOutput(), hm0360_md_prepare()
+#include "hm0360_regs.h"	// ROIOUTENTRIES (the 32 MD_ROI_OUT registers)
+#include "fatfs_task.h"		// fatfs_getOperationalParameter(OP_PARAMETER_MD_INTERVAL)
 
 // A VGA JPEG is well under 200 KB and a 1280x960 hi-res JPEG (hires.c)
 // under ~400 KB; anything bigger means the JPEG info is implausible and
@@ -45,6 +54,18 @@
 static volatile PREVIEW_MODE_E previewMode = PREVIEW_OFF;
 static uint32_t frameCount = 0;
 
+// While previewing, the HM0360 MD engine is armed to run concurrently with the
+// main-camera stream (hm0360_md_prepare(true,...)), so each frame can carry a
+// fresh motion grid for the viewer to overlay. Armed lazily on the first
+// streamed frame - in preview_sendFrame(), which runs in the image-task context
+// where the HM0360 I2C slave-swap inside getMDOutput()/prepare() is safe - and
+// re-armed whenever preview is toggled off then on again.
+static bool mdArmedForPreview = false;
+
+// Fallback MD frame interval (ms) when OP_PARAMETER_MD_INTERVAL is 0 (i.e. field
+// motion detection is disabled but we still want a live grid while previewing).
+#define PREVIEW_MD_DEFAULT_INTERVAL_MS	100
+
 static const char BASE64_CHARS[] =
 		"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
@@ -52,6 +73,7 @@ void preview_setMode(PREVIEW_MODE_E mode) {
 	previewMode = mode;
 	if (mode == PREVIEW_OFF) {
 		frameCount = 0;
+		mdArmedForPreview = false;	// re-arm MD next time preview starts
 	}
 }
 
@@ -134,10 +156,41 @@ void preview_sendFrame(void) {
 
 	frameCount++;
 
+	// Arm the HM0360 MD engine to run alongside the preview stream (once per
+	// preview session). cameraSystemEnabled=true keeps MD running while the SoC
+	// is awake - the normal firmware only arms MD on the sleep path, which is
+	// why the grid reads empty during an ordinary awake capture.
+	if (!mdArmedForPreview) {
+		uint16_t mdInterval = fatfs_getOperationalParameter(OP_PARAMETER_MD_INTERVAL);
+		if (mdInterval == 0) {
+			mdInterval = PREVIEW_MD_DEFAULT_INTERVAL_MS;
+		}
+		hm0360_md_prepare(true, mdInterval);
+		mdArmedForPreview = true;
+	}
+
+	// Read the 16x16 motion grid (32 MD_ROI_OUT bytes) and render it as hex.
+	// getMDOutput() does its own main-camera I2C slave-swap, so it is safe to
+	// call here after the frame's own capture has completed.
+	uint8_t roiOut[ROIOUTENTRIES];
+	uint16_t mdBlocks = hm0360_md_getMDOutput(roiOut, ROIOUTENTRIES);
+	static const char HEXDIGIT[] = "0123456789abcdef";
+	char mdHex[(ROIOUTENTRIES * 2) + 1];
+	for (uint8_t i = 0; i < ROIOUTENTRIES; i++) {
+		mdHex[(i * 2)]     = HEXDIGIT[(roiOut[i] >> 4) & 0x0f];
+		mdHex[(i * 2) + 1] = HEXDIGIT[roiOut[i] & 0x0f];
+	}
+	mdHex[ROIOUTENTRIES * 2] = '\0';
+
+	// Frame line gains "md_blocks" (moving-block count) and "md" (64-hex-char
+	// 16x16 motion bitmap) beside the JPEG. Existing viewers (live_view.py, the
+	// Himax web toolkit) ignore the extra fields, so this stays compatible.
 	xprintf("\r{\"type\": 1, \"name\": \"INVOKE\", \"code\": 0, \"data\": {\"count\": %d, "
-			"\"resolution\": [%d, %d], \"boxes\": [], \"image\": \"",
+			"\"resolution\": [%d, %d], \"boxes\": [], \"md_blocks\": %d, \"md\": \"%s\", "
+			"\"image\": \"",
 			(int)frameCount,
-			(int)app_get_raw_width(), (int)app_get_raw_height());
+			(int)app_get_raw_width(), (int)app_get_raw_height(),
+			(int)mdBlocks, mdHex);
 
 	sendBase64((const uint8_t *)jpegBuffer, jpegLength);
 

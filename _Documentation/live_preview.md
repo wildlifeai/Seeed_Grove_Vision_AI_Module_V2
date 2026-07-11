@@ -38,8 +38,14 @@ streams Himax's own sensor init instead.
 ## The viewer: `_Tools/live_view.py`
 
 ```
-py _Tools\live_view.py            # defaults COM14, 921600
+py _Tools\live_view.py            # defaults COM13 (Himax), 921600
 ```
+
+> **Port:** the preview stream is emitted by the **Himax HX6538** console, which
+> is **COM13 @ 921600**. COM14 @ 115200 is the separate nRF52 BLE/LoRaWAN
+> co-processor (its console shows `Secure Bootloader`, `Initialising LoRaWAN`,
+> `AI processor sends stats: ...`) and carries no preview - don't point the
+> viewer there.
 
 Shows the live image plus a console log pane, a command box and quick-command
 buttons, so `setop 27 ...`, `setop 28 ...`, `vcm ...`, `camreg ...` can be
@@ -48,6 +54,28 @@ and automatically re-arms the capture burst when it runs out; "Stop stream"
 sends `preview 0`. "Save frame" writes the last JPEG to disk for A/B records.
 
 Close TeraTerm first - Windows COM ports are exclusive.
+
+## Motion-detection overlay (MD tuning)
+
+When the firmware is built with the MD-in-preview change (`preview.c` emits
+`"md"`/`"md_blocks"` in each frame), the viewer draws the HM0360 **16x16 motion
+grid** as a translucent red heatmap over the live image, and shows the
+moving-block count in the status panel. Toggle it with the **"MD motion
+overlay"** checkbox.
+
+This turns preview into a live MD-tuning bench: the sidebar has
+`camreg 35a9 ...` (MD_TH_STR_H_B, sensitivity) and `camreg 35a6 ...`
+(MD_BLOCK_NUM_TH_B, trigger block count) buttons - press one and watch which
+grid cells light up as you move a target, then read the effect straight off the
+image. This works because preview arms the HM0360 MD engine to run *concurrently*
+with the main-camera stream (`hm0360_md_prepare(true, interval)`); normally MD
+only runs on the sleep path, so the grid reads empty during an ordinary awake
+capture. See `_Tools/md_sweep.py` for the headless (no-preview) register sweep,
+and `doc/Motion_detection_presets.md` for the parameter map.
+
+Caveat: the grid comes from the HM0360 (its own FOV); on colour builds the
+preview image is the RP3/IMX708 (a different FOV), so the overlay is a spatial
+guide, not a pixel-aligned mask. On HM0360 (night) builds the two align.
 
 ## Bench session recipe
 
@@ -92,14 +120,18 @@ Notes:
 ## Files changed (this branch)
 
 * `EPII_CM55M_APP_S/app/ww_projects/ww500_md/preview.c` / `.h` - new: frame
-  emission (chunked base64, no frame-sized buffer) and mode state.
+  emission (chunked base64, no frame-sized buffer) and mode state. The MD
+  overlay adds: arm the HM0360 MD engine on the first previewed frame
+  (`hm0360_md_prepare(true, OP_PARAMETER_MD_INTERVAL)`) and append
+  `"md_blocks"` + the 32-byte `"md"` grid to each frame line.
 * `EPII_CM55M_APP_S/app/ww_projects/ww500_md/image_task.c` - hook in
   `APP_MSG_IMAGETASK_FRAME_READY`: runs the WB correction in the skip-save
   path when previewing, then `preview_sendFrame()`; `preview 1` joins the
   skip-file-save condition.
 * `EPII_CM55M_APP_S/app/ww_projects/ww500_md/CLI-commands.c` - the `preview`
   command.
-* `_Tools/live_view.py` - new: PC viewer + tuning console.
+* `_Tools/live_view.py` - PC viewer + tuning console; MD motion-grid overlay +
+  MD-tuning quick commands; default port COM13.
 
 Build as usual (`_Tools/build_ww500.sh`, or CI). Works for both camera
 variants; on HM0360 builds the WB correction is simply not compiled in.

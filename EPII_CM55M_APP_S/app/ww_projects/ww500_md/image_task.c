@@ -79,6 +79,8 @@
 #include "exif_gps.h"
 #include "exif_builder.h"
 #include "img_correct.h"
+#include "preview.h"
+#include "ae.h"
 
 /*************************************** Definitions *******************************************/
 
@@ -245,7 +247,7 @@ static bool g_wdt_event; 		// A watchdog timer event occurred while waiting for 
 // than tear the camera down and give up (which loses the capture request and,
 // for a console 'capture', leaves the image task Uninitialised so every later
 // capture is dropped), restart the sensor in place and try again a few times.
-#define MAX_CAPTURE_RETRIES 3
+#define MAX_CAPTURE_RETRIES 5
 static uint8_t g_capture_retries;	// in-place retries used for the current capture
 
 // True when this wake exists only to sample the light level (AE registers) for
@@ -947,12 +949,38 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
 #endif // 0
 #endif // #if defined(USE_HM0360) || defined(USE_HM0360_MD)
 
+#if defined(USE_RP2) || defined(USE_RP3)
+        // Auto-exposure for the RP camera (raw sensor, no on-sensor AE - see
+        // ae.c). Adjusts exposure/gain registers for the NEXT frame.
+        if (!aeCheckOnlyWake) {
+        	ae_process(app_get_raw_addr(),
+        			(uint16_t)app_get_raw_width(), (uint16_t)app_get_raw_height());
+        }
+#endif // USE_RP2 || USE_RP3
+
+        // Live preview (see preview.c): stream this frame over the console UART.
+        // AE-check wakes are not streamed - they are brief housekeeping captures.
+        bool previewFrame = preview_isActive() && !aeCheckOnlyWake;
+
         if (aeCheckOnlyWake
-        		|| (fatfs_getOperationalParameter(OP_PARAMETER_TEST_MODE_BITS) & TEST_BIT_SKIP_FILE_CREATION)) {
+        		|| (fatfs_getOperationalParameter(OP_PARAMETER_TEST_MODE_BITS) & TEST_BIT_SKIP_FILE_CREATION)
+        		|| (previewFrame && preview_skipsFileSave())) {
         	// Don't save to a file. This allows faster streaming of MD and AE data to the app
         	fileOp.fileName = NULL; // skip file write!
         	fileOp.senderQueue = xImageTaskQueue; // necessary so the response comes to this task.
         	xprintf("Skipping file save.\n");
+
+#if defined(USE_RP2) || defined(USE_RP3)
+        	if (previewFrame) {
+        		// The preview must show what a saved file would look like, so run
+        		// the same software white-balance correction the save path runs
+        		img_correct_process_mode(
+        				(uint8_t)fatfs_getOperationalParameter(OP_PARAMETER_CAM_WB_MODE),
+        				(uint16_t)fatfs_getOperationalParameter(OP_PARAMETER_WB_RED_GAIN),
+        				(uint16_t)fatfs_getOperationalParameter(OP_PARAMETER_WB_BLUE_GAIN),
+        				ledFlashIsActive());
+        	}
+#endif // USE_RP2 || USE_RP3
         }
         else {
         	// Normal processing: create the jpg or bmp file
@@ -962,10 +990,12 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
         	// pipeline (raw Bayer sensor + WE2 demosaic only), so images come out
         	// green. Correct the YUV frame in software and re-encode it with a
         	// software JPEG encoder (sw_jpeg.c); prepareJpegFile() then uses the corrected
-        	// JPEG. Gains are app-tunable Operational Parameters (0 disables).
-        	img_correct_process(
+        	// JPEG. Mode op31: 0 = off, 1 = auto grey-world, 2 = manual op27/op28.
+        	img_correct_process_mode(
+        			(uint8_t)fatfs_getOperationalParameter(OP_PARAMETER_CAM_WB_MODE),
         			(uint16_t)fatfs_getOperationalParameter(OP_PARAMETER_WB_RED_GAIN),
-        			(uint16_t)fatfs_getOperationalParameter(OP_PARAMETER_WB_BLUE_GAIN));
+        			(uint16_t)fatfs_getOperationalParameter(OP_PARAMETER_WB_BLUE_GAIN),
+        			ledFlashIsActive());
 #endif // USE_RP2 || USE_RP3
 
 #ifdef INVESTIGATE_BMP
@@ -1003,6 +1033,12 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
         	prepareJpegFile(outCategories, classCount, &extraBlock);
 #endif // INVESTIGATE_BMP
 
+        }
+
+        if (previewFrame) {
+        	// Stream the frame (blocks this task for the UART write; the fatfs
+        	// write below only starts afterwards, so the JPEG buffer is stable)
+        	preview_sendFrame();
         }
 
         // Proceed to write the jpeg file, even if there is no SD card
@@ -1065,8 +1101,14 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
             		g_capture_retries, MAX_CAPTURE_RETRIES);
             XP_WHITE;
 
-            // Stop then restart the datapath/sensor to re-arm the capture
+            // Stop then restart the datapath/sensor to re-arm the capture.
+            // Dwell progressively longer with the sensor powered down before
+            // each restart: the MIPI bring-up is timing-marginal and
+            // back-to-back restarts can fail identically (bench 10-11 Jul:
+            // 15 instant retries failed where a later boot succeeded first
+            // try). Varying the dwell samples different phase alignments.
             configure_image_sensor(CAMERA_CONFIG_STOP);
+            vTaskDelay(pdMS_TO_TICKS(100u * g_capture_retries));
             if (configure_image_sensor(CAMERA_CONFIG_RUN)) {
                 // Restart the timeout clock and keep waiting for FRAME_READY
                 startTime = xTaskGetTickCount();
@@ -1843,6 +1885,12 @@ static bool configure_image_sensor(CAMERA_CONFIG_E operation) {
 #endif // USE_HM0360
         	// Initialise extra registers from file
         	cis_file_process(CAMERA_EXTRA_FILE);
+
+#if defined(USE_RP2) || defined(USE_RP3)
+        	// Sensor registers just reverted to the tables (+ staged file):
+        	// restart the auto-exposure loop from the table values (ae.c)
+        	ae_notifySensorInit();
+#endif // USE_RP2 || USE_RP3
 
         	// if wdma variable is zero when not init yet, then this step is a must be to retrieve wdma address
         	//  Datapath events give callbacks to os_app_dplib_cb()

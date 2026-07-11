@@ -816,3 +816,115 @@ HX_CIS_ERROR_E hm0360_md_reInitialise(void) {
 
 	return ret;
 }
+
+/*
+ * ============================================================================
+ * Motion-detection instrumentation (Phase 0)
+ *
+ * Debug/characterisation helpers behind the `md` CLI command. They let a bench
+ * harness read and write any HM0360 register (with the main-camera I2C slave-ID
+ * swap) and snapshot the tunable MD registers, so the reference-init values can
+ * be characterised against real targets/noise before presets are chosen.
+ * See doc/Motion_detection_presets.md.
+ * ============================================================================
+ */
+
+/**
+ * Read one HM0360 register. Instrumentation only.
+ *
+ * @param addr - HM0360 register address
+ * @param val  - out; register value on success
+ * @return error code
+ */
+HX_CIS_ERROR_E hm0360_md_readReg(uint16_t addr, uint8_t *val) {
+	HX_CIS_ERROR_E ret;
+
+	if (!hm0360_present || (val == NULL)) {
+		return HX_CIS_UNKNOWN_ERROR;
+	}
+
+	saveMainCameraConfig();
+	ret = hx_drv_cis_get_reg(addr, val);
+	restoreMainCameraConfig();
+
+	return ret;
+}
+
+/**
+ * Write one HM0360 register. Instrumentation only.
+ *
+ * WARNING: writing MD registers while the sensor is streaming can disrupt the
+ * vision pipeline. A register sweep should quiesce the sensor first (see
+ * hm0360_md_setMode() / MODE_SLEEP). This raw writer does not, by design, so the
+ * caller controls sequencing.
+ *
+ * @param addr - HM0360 register address
+ * @param val  - value to write
+ * @return error code
+ */
+HX_CIS_ERROR_E hm0360_md_writeReg(uint16_t addr, uint8_t val) {
+	HX_CIS_ERROR_E ret;
+
+	if (!hm0360_present) {
+		return HX_CIS_UNKNOWN_ERROR;
+	}
+
+	saveMainCameraConfig();
+	ret = hx_drv_cis_set_reg(addr, val, 0);
+	restoreMainCameraConfig();
+
+	return ret;
+}
+
+/**
+ * Print the tunable motion-detection registers to the console for bench
+ * characterisation. Names + addresses per hm0360_regs.h; the WW500 MD path uses
+ * Context B. The semantics of MD_IIR_PARAM and the MD_LATENCY_TH nibbles are
+ * inferred from the reference init (no HM0360 datasheet exists) - confirm on the
+ * bench. See doc/Motion_detection_presets.md.
+ */
+void hm0360_md_dumpConfig(void) {
+	static const struct {
+		const char * name;
+		uint16_t     addr;
+	} mdRegs[] = {
+		{"MD_CTRL",           MD_CTRL},            // [0]=enable, [5:4]=latency select
+		{"MD_TH_MIN",         MD_TH_MIN},
+		{"MD_LIGHT_COEF",     MD_LIGHT_COEF},
+		{"MD_IIR_PARAM",      MD_IIR_PARAM},       // background-model IIR (semantics TBC)
+		{"MD_BLOCK_NUM_TH",   MD_BLOCK_NUM_TH},    // blocks-to-fire (cluster/target size)
+		{"MD_LATENCY",        MD_LATENCY},
+		{"MD_LATENCY_TH",     MD_LATENCY_TH},      // [7:4]=set, [3:0]=clear (persistence)
+		{"MD_CTRL1",          MD_CTRL1},
+		{"MD_TH_STR_L_B",     MD_TH_STR_L_B},      // per-block change threshold (Context B)
+		{"MD_TH_STR_H_B",     MD_TH_STR_H_B},
+		{"MD_CTRL_B",         MD_CTRL_B},
+		{"MD_BLOCK_NUM_TH_B", MD_BLOCK_NUM_TH_B},
+		{"ROI_V_B",           ROI_START_END_V_B},  // [7:4]=end, [3:0]=start (16-block grid)
+		{"ROI_H_B",           ROI_START_END_H_B},
+		{"PMU_CFG_7_nFrames", PMU_CFG_7},
+		{"PMU_CFG_8_dtHi",    PMU_CFG_8},          // sleep-count MSB = inter-sample interval
+		{"PMU_CFG_9_dtLo",    PMU_CFG_9},          // sleep-count LSB
+	};
+
+	uint8_t val;
+
+	if (!hm0360_present) {
+		xprintf("MD dump: HM0360 not present\n");
+		return;
+	}
+
+	saveMainCameraConfig();
+	xprintf("HM0360 MD registers (Context B = WW500 MD path):\n");
+	for (uint16_t i = 0; i < (sizeof(mdRegs) / sizeof(mdRegs[0])); i++) {
+		// Fixed-width addr/value columns (name trailing) - avoids %-Ns, which not
+		// all xprintf builds support; addr + value stay aligned regardless.
+		if (hx_drv_cis_get_reg(mdRegs[i].addr, &val) == HX_CIS_NO_ERROR) {
+			xprintf("  0x%04x = 0x%02x  %s\n", mdRegs[i].addr, val, mdRegs[i].name);
+		}
+		else {
+			xprintf("  0x%04x = ??    %s\n", mdRegs[i].addr, mdRegs[i].name);
+		}
+	}
+	restoreMainCameraConfig();
+}

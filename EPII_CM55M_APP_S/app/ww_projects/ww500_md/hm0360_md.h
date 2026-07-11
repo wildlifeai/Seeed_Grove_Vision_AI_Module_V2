@@ -110,4 +110,12 @@ HX_CIS_ERROR_E hm0360_md_reInitialise(void);
 // Replaced by hm0360_md_prepare()
 //HX_CIS_ERROR_E hm0360_md_enableMD(uint16_t mdFrameInterval);
 
+// Motion-detection instrumentation (Phase 0 - see doc/Motion_detection_presets.md).
+// Debug/characterisation helpers behind the `md` CLI command: read/write any
+// HM0360 register (with the main-camera I2C slave-ID swap) and dump the tunable
+// MD registers to the console for the register-sweep harness.
+HX_CIS_ERROR_E hm0360_md_readReg(uint16_t addr, uint8_t *val);
+HX_CIS_ERROR_E hm0360_md_writeReg(uint16_t addr, uint8_t val);
+void hm0360_md_dumpConfig(void);
+
 #endif /* HM0360_MD_H_ */

@@ -1,0 +1,337 @@
+name: Build and Upload Himax Firmware
+
+# This workflow builds the Himax (HX6538) firmware image and/or uploads it to
+# the Supabase firmware database. Four ways to run it:
+#
+#   1. Merge/push to 'dev'  -> BUILD from source, upload to the DEV database
+#   2. Merge/push to 'main' -> BUILD from source, upload to the PRODUCTION database
+#   3. Manual dispatch, source=prebuilt -> upload the committed
+#      we2_image_gen_local_dpd/output_case1_sec_wlcsp/output.img to the chosen
+#      database (dev or production) without building
+#   4. Manual dispatch, source=build (any branch) -> BUILD from source, upload
+#      to the DEV database
+#
+# Builds use the Arm GNU toolchain pinned below and the RC24M (DPD-capable)
+# image-generation profile, matching the developers' local build environment.
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  # Keep in step with the toolchain developers build with locally
+  ARM_TOOLCHAIN_VERSION: 14.3.rel1
+
+on:
+  push:
+    branches:
+      - dev
+      - main
+  workflow_dispatch:
+    inputs:
+      source:
+        description: 'Firmware source: build from this branch, or upload the committed pre-built image'
+        required: true
+        default: 'build'
+        type: choice
+        options:
+          - build
+          - prebuilt
+      environment:
+        description: 'Target Supabase database (prebuilt only - builds from a branch always go to dev; merge to main for production)'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - production
+
+# One upload at a time per branch - a run that is superseded is cancelled
+concurrency:
+  group: firmware-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      environment: ${{ steps.resolve.outputs.ENVIRONMENT }}
+      source: ${{ steps.resolve.outputs.SOURCE }}
+    steps:
+      - name: Resolve source and environment
+        id: resolve
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            SOURCE="${{ inputs.source }}"
+            if [ "$SOURCE" = "prebuilt" ]; then
+              # Capability 3: developer uploads the committed image to either database
+              ENVIRONMENT="${{ inputs.environment }}"
+            else
+              # Capability 4: developer builds from any branch - dev database only
+              ENVIRONMENT="dev"
+            fi
+          else
+            # Push events: build from source; main -> production, dev -> dev
+            SOURCE="build"
+            if [ "${{ github.ref_name }}" = "main" ]; then
+              ENVIRONMENT="production"
+            else
+              ENVIRONMENT="dev"
+            fi
+          fi
+
+          echo "SOURCE=$SOURCE" >> $GITHUB_OUTPUT
+          echo "ENVIRONMENT=$ENVIRONMENT" >> $GITHUB_OUTPUT
+          echo "Source: $SOURCE, target database: $ENVIRONMENT"
+
+  build-firmware:
+    needs: setup
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Fetch all history for semantic versioning
+
+      - name: Cache Arm GNU Toolchain
+        if: needs.setup.outputs.source == 'build'
+        id: cache-toolchain
+        uses: actions/cache@v4
+        with:
+          path: ~/arm-gnu-toolchain
+          key: arm-gnu-toolchain-${{ env.ARM_TOOLCHAIN_VERSION }}-x86_64
+
+      - name: Download Arm GNU Toolchain
+        if: needs.setup.outputs.source == 'build' && steps.cache-toolchain.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          mkdir -p ~/arm-gnu-toolchain
+          cd ~/arm-gnu-toolchain
+          wget -q "https://developer.arm.com/-/media/Files/downloads/gnu/${ARM_TOOLCHAIN_VERSION}/binrel/arm-gnu-toolchain-${ARM_TOOLCHAIN_VERSION}-x86_64-arm-none-eabi.tar.xz"
+          tar -xf "arm-gnu-toolchain-${ARM_TOOLCHAIN_VERSION}-x86_64-arm-none-eabi.tar.xz"
+          rm "arm-gnu-toolchain-${ARM_TOOLCHAIN_VERSION}-x86_64-arm-none-eabi.tar.xz"
+
+      - name: Build Firmware
+        if: needs.setup.outputs.source == 'build'
+        shell: bash
+        run: |
+          export PATH="$HOME/arm-gnu-toolchain/arm-gnu-toolchain-${ARM_TOOLCHAIN_VERSION}-x86_64-arm-none-eabi/bin:$PATH"
+          arm-none-eabi-gcc --version | head -n 1
+
+          cd EPII_CM55M_APP_S
+          # actions/checkout leaves a detached HEAD, so pass the branch name explicitly
+          make -j"$(nproc)" GIT_BRANCH="$GITHUB_REF_NAME"
+
+          ls -la obj_epii_evb_icv30_bdv10/gnu_epii_evb_WLCSP65/EPII_CM55M_gnu_epii_evb_WLCSP65_s.elf
+
+      - name: Generate Firmware Image
+        if: needs.setup.outputs.source == 'build'
+        shell: bash
+        run: |
+          cd we2_image_gen_local_dpd
+          cp ../EPII_CM55M_APP_S/obj_epii_evb_icv30_bdv10/gnu_epii_evb_WLCSP65/EPII_CM55M_gnu_epii_evb_WLCSP65_s.elf input_case1_secboot/
+
+          # Execute bits are not preserved on all checkouts
+          chmod +x we2_local_image_gen \
+                   arm_none_eabi/arm-none-eabi-objcopy \
+                   arm_none_eabi/arm-none-eabi-objdump \
+                   secureboot_tool/generate_secureboot_certificates
+
+          # RC24M profile: the bootloader set used on deployed WW500 units (DPD support)
+          ./we2_local_image_gen project_case1_blp_wlcsp_rc24m.json
+
+          ls -la output_case1_sec_wlcsp/output.img
+
+      - name: Check Pre-built Image Exists
+        if: needs.setup.outputs.source == 'prebuilt'
+        shell: bash
+        run: |
+          IMG_FILE="./we2_image_gen_local_dpd/output_case1_sec_wlcsp/output.img"
+          if [ ! -f "$IMG_FILE" ]; then
+            echo "Error: Pre-built .img file not found at $IMG_FILE!"
+            exit 1
+          fi
+          echo "Using pre-built image committed to the repository"
+          ls -la "$IMG_FILE"
+
+      - name: Rename Firmware Image
+        id: find_image
+        shell: bash
+        run: |
+          # Both paths (fresh build and prebuilt) leave the image here
+          IMG_FILE="./we2_image_gen_local_dpd/output_case1_sec_wlcsp/output.img"
+
+          if [ ! -f "$IMG_FILE" ]; then
+            echo "Error: .img file not found at $IMG_FILE!"
+            exit 1
+          fi
+
+          # Extract board name from ww.mk for the filename
+          BOARD_NAME=$(grep "^BOARD_NAME_STRING" EPII_CM55M_APP_S/app/ww_projects/ww.mk | awk -F'"' '{print $2}' | head -n 1)
+          if [ -z "$BOARD_NAME" ]; then
+            BOARD_NAME="WW500_C02"
+          fi
+
+          # Generate timestamped filename: BOARD_YYYYMMDDHHMMSS.img
+          TIMESTAMP=$(date -u +"%Y%m%d%H%M%S")
+          NEW_NAME="${BOARD_NAME}_${TIMESTAMP}.img"
+
+          # Rename the file so the artifact and storage path use the new name
+          NEW_PATH="$(dirname "$IMG_FILE")/$NEW_NAME"
+          cp "$IMG_FILE" "$NEW_PATH"
+
+          FULL_PATH=$(readlink -f "$NEW_PATH")
+          echo "Firmware image: $FULL_PATH"
+          echo "firmware_path=$FULL_PATH" >> $GITHUB_OUTPUT
+          echo "firmware_filename=$NEW_NAME" >> $GITHUB_OUTPUT
+
+      - name: Upload Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: firmware-image
+          path: ${{ steps.find_image.outputs.firmware_path }}
+          retention-days: 30
+
+  upload-to-supabase:
+    needs: [build-firmware, setup]
+    runs-on: ubuntu-latest
+    if: success()
+    environment: ${{ needs.setup.outputs.environment }}
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      SYSTEM_EMAIL: ${{ secrets.SYSTEM_EMAIL }}
+      FALLBACK_USER_ID: ${{ secrets.FALLBACK_USER_ID }}
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download Build Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: firmware-image
+          path: ./firmware
+
+      - name: Calculate Semantic Version
+        id: semver
+        uses: mathieudutour/github-tag-action@v6.2
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          default_bump: patch
+          release_branches: main
+          dry_run: true
+          tag_prefix: v
+
+      - name: Generate Release Notes
+        id: release_notes
+        shell: bash
+        run: |
+          # Get commits since last tag
+          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+
+          if [ -z "$LAST_TAG" ]; then
+            # No previous tags, get all commits
+            COMMITS=$(git log --pretty=format:"- %s (%h)" --no-merges)
+          else
+            # Get commits since last tag
+            COMMITS=$(git log "$LAST_TAG..HEAD" --pretty=format:"- %s (%h)" --no-merges)
+          fi
+
+          # Save to environment variable
+          echo "RELEASE_NOTES<<EOF" >> $GITHUB_ENV
+          echo "$COMMITS" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+
+          echo "Generated release notes:"
+          echo "$COMMITS"
+
+      - name: Extract Device Version
+        id: version
+        shell: bash
+        run: |
+          IMG_FILE=$(find ./firmware -name "*.img" | head -n 1)
+          if [ -z "$IMG_FILE" ]; then
+            echo "Error: no .img file in the artifact!"
+            exit 1
+          fi
+
+          # Extract the exact __TIME__ and __DATE__ embedded by the C compiler
+          BUILD_TIME=$(strings "$IMG_FILE" | grep -Eo "^[0-2][0-9]:[0-5][0-9]:[0-5][0-9]$" | tail -n 1)
+          BUILD_DATE=$(strings "$IMG_FILE" | grep -Eo "^[A-Z][a-z]{2} +[0-9]{1,2} 20[0-9]{2}$" | tail -n 1)
+
+          # Extract board name from ww.mk
+          BOARD_NAME=$(grep "^BOARD_NAME_STRING" EPII_CM55M_APP_S/app/ww_projects/ww.mk | awk -F'"' '{print $2}' | head -n 1)
+
+          if [ -z "$BOARD_NAME" ]; then
+            BOARD_NAME="WW500_C02"
+          fi
+
+          if [ -n "$BUILD_TIME" ] && [ -n "$BUILD_DATE" ]; then
+             UNIQUE_VERSION="${BOARD_NAME} ${BUILD_TIME} ${BUILD_DATE}"
+          else
+             # Fallback to Semantic version + build number
+             SEMVER="${{ steps.semver.outputs.new_tag }}"
+             UNIQUE_VERSION="${SEMVER}.${{ github.run_number }}"
+             BUILD_DATE=$(date "+%b %d %Y") # Fallback date
+          fi
+
+          echo "unique_version=${UNIQUE_VERSION}" >> $GITHUB_OUTPUT
+          echo "build_date=${BUILD_DATE}" >> $GITHUB_OUTPUT
+          echo "Extracted device version: ${UNIQUE_VERSION}"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install Node Dependencies
+        run: npm install @supabase/supabase-js
+        working-directory: ./scripts
+
+      - name: Set Firmware Path
+        shell: bash
+        run: |
+          FIRMWARE_FILE=$(find ./firmware -name "*.img" | head -n 1)
+
+          if [ -n "$FIRMWARE_FILE" ] && [ -f "$FIRMWARE_FILE" ]; then
+            FULL_PATH=$(readlink -f "$FIRMWARE_FILE")
+            echo "FIRMWARE_PATH=$FULL_PATH" >> "$GITHUB_ENV"
+            echo "Found firmware at: $FULL_PATH"
+          else
+            echo "Error: firmware file not found!"
+            ls -R ./firmware/
+            exit 1
+          fi
+
+      - name: Compute Firmware CRC
+        id: crc
+        run: |
+          node scripts/compute_firmware_crc.js "$FIRMWARE_PATH"
+
+      - name: Upload to Supabase
+        working-directory: ./scripts
+        env:
+          FIRMWARE_VERSION: ${{ steps.version.outputs.unique_version }}
+          FIRMWARE_BUILD_DATE: ${{ steps.version.outputs.build_date }}
+          FIRMWARE_CRC: ${{ steps.crc.outputs.crc }}
+          RELEASE_NOTES: |
+            Himax AI firmware ${{ steps.version.outputs.unique_version }}
+            Source: ${{ needs.setup.outputs.source }} (${{ github.event_name }})
+            Branch: ${{ github.ref_name }}
+            Commit: ${{ github.sha }}
+            Build: #${{ github.run_number }}
+
+            Changes since last tag:
+            ${{ steps.semver.outputs.changelog }}
+        run: node upload_firmware.js
+
+      - name: Create Git Tag
+        if: success() && (github.ref == 'refs/heads/main')
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a ${{ steps.semver.outputs.new_tag }} -m "Release ${{ steps.semver.outputs.new_tag }}"
+          git push origin ${{ steps.semver.outputs.new_tag }}

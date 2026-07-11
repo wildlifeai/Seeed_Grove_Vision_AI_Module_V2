@@ -84,6 +84,9 @@
 
 /*************************************** Definitions *******************************************/
 
+// Enable SWD functions on PB6, PB7, PB8
+//#define ENABLESWD
+
 // Flash time at reset
 #define LED_DELAY						50
 
@@ -173,8 +176,11 @@ static void pinmux_init(void) {
 
 	// PA0 configuration for inter-board communications
 
+
+#ifdef ENABLESWD
 	/* Init Arm SWD interface pin mux to PB6, PB7, PB8 (nR, CLK, DIO)*/
-	// swd_pinmux_cfg(&pinmux_cfg);
+	swd_pinmux_cfg(&pinmux_cfg);
+#endif // ENABLESWD
 
 	hx_drv_scu_set_all_pinmux_cfg(&pinmux_cfg, 1);
 
@@ -233,6 +239,7 @@ static void showResetOnLeds(uint8_t numFlashes) {
     	hx_drv_timer_cm55s_delay_ms(LED_DELAY, TIMER_STATE_DC);
     }
 }
+
 
 /**
  * See which I2C devices respond
@@ -309,8 +316,15 @@ static void checkForCameras(void) {
 	}
 
 	XP_WHITE;
-	// Disable even if not using RP camera so this pin is set to output, 0
+
+#if defined (USE_RP2) || defined (USE_RP3)
+	// Only needed if using a RP camera
  	rp_sensor_enable(false);	// Negate SENSOR_ENABLE
+#else
+ 	// TODO - we could disable even if not using RP camera so this pin is set to output, 0
+ 	// However enabling this means the SWD debugger won't work
+ 	//rp_sensor_enable(false);	// Negate SENSOR_ENABLE
+#endif
 }
 
 /**
@@ -627,6 +641,7 @@ int app_main(void){
 	// 		APPL_DEFINES += -DUSE_HM0360_MD
 	uint8_t hm0360_interrupt_status;
 #endif	// USE_HM0360
+
 
 	initVersionString();
 	pinmux_init();

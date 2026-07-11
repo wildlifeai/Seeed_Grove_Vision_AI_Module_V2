@@ -8,6 +8,9 @@ on:
 jobs:
   update-upstream:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -32,18 +35,29 @@ jobs:
             echo "needs_update=false" >> $GITHUB_OUTPUT
           fi
 
-      - name: Create Pull Request to Dev
+      - name: Sync upstream branch and Create PR
         if: steps.check_updates.outputs.needs_update == 'true'
-        uses: peter-evans/create-pull-request@v6
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          commit-message: "chore: sync upstream changes to dev"
-          title: "Merge Upstream Updates into Dev"
-          body: |
-            This is an automated PR to sync the latest changes from the original repository into our `dev` branch.
-            
-            **Action Required:** Review for conflicts and merge into `dev`.
-          branch: sync-upstream-to-dev # The temp branch created for the PR
-          base: dev                   # The branch we want to update
-          labels: automated, upstream
-          reviewers: acutetech, Tobyntobyn, victor-wildlife
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # Push upstream main to our remote as sync-upstream-to-dev
+          git checkout -B sync-upstream-to-dev upstream/main
+          git push origin sync-upstream-to-dev -f
+          
+          # Check if PR already exists in OUR repository (not upstream)
+          PR_EXISTS=$(gh pr list --repo ${{ github.repository }} --head sync-upstream-to-dev --base dev --json url --jq 'length')
+          
+          if [ "$PR_EXISTS" -eq 0 ]; then
+            gh pr create \
+              --repo ${{ github.repository }} \
+              --base dev \
+              --head sync-upstream-to-dev \
+              --title "Merge Upstream Updates into Dev" \
+              --body "This is an automated PR to sync the latest changes from the original repository into our \`dev\` branch. Review for conflicts and merge." \
+              --reviewer acutetech,Tobyntobyn,victor-wildlife
+          else
+            echo "PR already exists"
+          fi

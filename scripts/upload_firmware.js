@@ -80,7 +80,9 @@ async function uploadFirmware() {
       file_size_bytes: fileSize,
       release_notes: RELEASE_NOTES,
       is_active: true,
-      modified_by: systemUserId
+      modified_by: systemUserId,
+      crc_checksum: process.env.FIRMWARE_CRC || null,
+      build_date: process.env.FIRMWARE_BUILD_DATE || null
     };
 
     // Check if a record with this (type, version) already exists
@@ -107,6 +109,8 @@ async function uploadFirmware() {
           release_notes: record.release_notes,
           is_active: record.is_active,
           modified_by: record.modified_by,
+          crc_checksum: record.crc_checksum,
+          build_date: record.build_date,
           updated_at: new Date().toISOString()
         })
         .eq('id', existing.id)

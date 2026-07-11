@@ -129,9 +129,9 @@
 #include "cisdp_sensor.h"
 
 #include "inactivity.h"
-#ifdef WW500_C00
+
 #include "ledFlash.h"
-#endif // WW500_C00
+
 #include "cvapp.h"
 #include "common_config.h"
 #include "selfTest.h"
@@ -982,8 +982,15 @@ static BaseType_t prvLedFlash(char *pcWriteBuffer, size_t xWriteBufferLen, const
 	ledFlashInit();
 	ledFlashBrightness(brightness);	// Call before ledFlashSelectLED()
 	ledFlashSelectLED(VIS_LED);
-	ledFlashEnable(duration);
+	// set duration OP_PARAMETER_FLASH_DURATION
+	fatfs_setOperationalParameter(OP_PARAMETER_FLASH_DURATION, duration);
+	ledFlashEnable();
 
+#ifndef TIMER_TURNS_OFF_FLASH
+	// Stay here until it is time to turn it off.
+	vTaskDelay(pdMS_TO_TICKS(duration));
+	ledFlashDisable();
+#endif // TIMER_TURNS_OFF_FLASH
 	/* There is no more data to return after this single string, so return pdFALSE. */
 	return pdFALSE;
 }
@@ -1007,6 +1014,8 @@ static BaseType_t prvSetUtc(char *pcWriteBuffer, size_t xWriteBufferLen, const c
 	TickType_t elapsedTime;
 	uint32_t elapsedMs;
 
+	extern volatile int g_sdWriteActive;
+
 	(void)pcCommandString;
 	(void)xWriteBufferLen;
 	configASSERT(pcWriteBuffer);
@@ -1020,10 +1029,26 @@ static BaseType_t prvSetUtc(char *pcWriteBuffer, size_t xWriteBufferLen, const c
 			snprintf(pcWriteBuffer, xWriteBufferLen, "Error %d\n", ret);
 			return pdFALSE;
 		}
+
 		startTime = xTaskGetTickCount();
-		ret = exif_utc_set_rtc_from_time(&tm);	// This takes 1-2s
+
+		/* hx_drv_rtc_set_time() suppresses ARM interrupts for ~1s, preventing FreeRTOS from
+		 * scheduling the FatFS task. Poll until any active SD write completes before calling it. */
+
+		while (g_sdWriteActive) {
+			if ((xTaskGetTickCount() - startTime) >= pdMS_TO_TICKS(2000)) {
+				xprintf("setutc: timed out waiting for SD write\n");
+				break;
+			}
+			vTaskDelay(pdMS_TO_TICKS(10));
+		}
+
+		ret = exif_utc_set_rtc_from_time(&tm);
 		elapsedTime = xTaskGetTickCount() - startTime;
 		elapsedMs = (elapsedTime * 1000) / configTICK_RATE_HZ;
+
+		// We also need to tell the ledFlash code in case the timer is set by the time of day
+		ledFlashNewTime(tm);
 
 		if (ret == RTC_NO_ERROR) {
 			snprintf(pcWriteBuffer, xWriteBufferLen, "RTC set to %s (this took %dms)", pcParameter, (int) elapsedMs);
@@ -1772,6 +1797,8 @@ static BaseType_t prvMd(char *pcWriteBuffer, size_t xWriteBufferLen, const char 
 /**
  * Reinitialise HM0360 registers
  *
+ * executes 'inithm0360' command
+ *
  */
 static BaseType_t prvReinitHM0360(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) {
 
@@ -1782,6 +1809,7 @@ static BaseType_t prvReinitHM0360(char *pcWriteBuffer, size_t xWriteBufferLen, c
 	configASSERT(pcWriteBuffer);
 
 	ret = hm0360_md_reInitialise();
+
 	if (ret == HX_CIS_NO_ERROR) {
 		cli_append(&pcWriteBuffer, &xWriteBufferLen, "OK");
 	}

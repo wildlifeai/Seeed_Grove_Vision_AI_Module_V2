@@ -76,6 +76,7 @@
 
 #include "selfTest.h"
 #include "exif_gps.h"
+#include "exif_builder.h"
 
 /*************************************** Definitions *******************************************/
 
@@ -103,7 +104,7 @@
  * 	set:	The HM0360 STROBE pin turns on just before taking an image and the LED comes on.
  * 	The LED is turned off by the HM0360 at the end of VSYNC
  *
- * 	not set:  The LED is turned on by ledFlashEnable() and turned off the the state machine
+ * 	not set:  The LED is turned on by ledFlashEnable() and turned off by the state machine
  * 	when APP_MSG_IMAGETASK_FRAME_READY arrives (as a safeguard also flashOffTimer in ledFlash.c).
  *
  * Results:
@@ -172,65 +173,9 @@
 #define CAMERA_EXTRA_FILE "CAMERA_EX.BIN"
 #endif // USE_HM0360
 
-// Maximum bytes that build_exif_segment() may write into exif_buffer[].
-// Must be a multiple of 512 so that a full buffer never needs padding
-// (see sector-alignment padding below).  Increase in 512-byte steps if
-// the EXIF content grows beyond this limit.
-#define EXIF_MAX_LEN 1024
-// Limit how many dynamic class entries we will write to EXIF to avoid buffer growth
-// TODO - should this not be the same as the maximaum number of classes defined elsewhere? e.g. the max number of labels?
-#define EXIF_MAX_DYNAMIC_CLASSES 4
-// Limit label length copied into EXIF to keep data small
-#define EXIF_MAX_LABEL_LEN 20
-
-// The number of IFD entries in build_exif_segment()
-#define IFD0_ENTRY_COUNT 9
-// The number of IFD entries in create_gps_ifd()
-#define GPS_IFD_ENTRY_COUNT 6
-#define GPS_IFD_SIZE (2 + GPS_IFD_ENTRY_COUNT * 12 + 4)
-
-// Buffer for EXIF comment
-#define EXIF_COMMENT_LENGTH 256
-
 // Define this to add extra EXIF field (AE gain values)
 #define EXIF_MAKER_NOTES
 
-// Tag IDs enum
-typedef enum
-{
-    TAG_X_RESOLUTION 		= 0x011A,
-    TAG_Y_RESOLUTION 		= 0x011B,
-    TAG_RESOLUTION_UNIT 	= 0x0128,
-    TAG_DATETIME_ORIGINAL 	= 0x9003,
-    TAG_CREATE_DATE 		= 0x9004,
-    TAG_MAKE 				= 0x010F,
-    TAG_MODEL 				= 0x0110,
-    TAG_GPS_IFD_POINTER 	= 0x8825,
-    TAG_GPS_LATITUDE_REF 	= 0x0001,
-    TAG_GPS_LATITUDE 		= 0x0002,
-    TAG_GPS_LONGITUDE_REF 	= 0x0003,
-    TAG_GPS_LONGITUDE 		= 0x0004,
-    TAG_GPS_ALTITUDE_REF 	= 0x0005,
-    TAG_GPS_ALTITUDE 		= 0x0006,
-    TAG_NN_DATA 			= 0xC000,               // Neural network output array - arbitrary custom tag ID
-    TAG_USER_COMMENT 		= 0x9286,      // Standard EXIF UserComment tag for summary text
-	TAG_MAKER_NOTE			= 0x927c,		// maker defined binary
-    TAG_DEPLOYMENT_ID 		= 0xF200,		   // Deployment ID (matches ww130_cli convention)
-    TAG_WW_CONFIDENCE_BASE 	= 0xF300	   // Base for confidence tags (0xF300, 0xF301, ...)
-} ExifTagID;
-
-// EXIF data types
-typedef enum
-{
-    TYPE_BYTE = 1,
-    TYPE_ASCII = 2,
-    TYPE_SHORT = 3,
-    TYPE_LONG = 4,
-    TYPE_RATIONAL = 5,
-    UNDEFINED = 7,
-    SLONG = 9,
-    SRATIONAL = 10
-} ExifDataType;
 
 /*************************************** Local Function Declarations *****************************/
 
@@ -273,26 +218,8 @@ static void prepareBmpFile(fileBufferInfo_t * extraBlock);
 static uint32_t bmp_create_gray8_header(uint8_t *buf,  uint32_t width, uint32_t height);
 #endif // INVESTIGATE_BMP
 
-/*************************************** Local EXIF-related Declarations *****************************/
-
-// Insert the EXIF metadata into the jpeg buffer
-//static uint16_t insertExif(uint32_t jpeg_sz, uint32_t jpeg_addr, int8_t *outCategories, uint8_t categoriesCount);
-
-static void write16_le(uint8_t *ptr, uint16_t val);
-static void write32_le(uint8_t *ptr, uint32_t val);
-static void write16_be(uint8_t *ptr, uint16_t val);
-// static void write32_be(uint8_t *ptr, uint32_t val);
-static void addIFD(ExifTagID tagID, uint8_t *entry_ptr, void *tagData);
-static uint16_t build_exif_segment(int8_t *outCategories, uint8_t categoriesCount);
-static void create_gps_ifd(uint8_t *gps_ifd_start);
-static size_t get_gps_ifd_size(void);
 
 /*************************************** External variables *******************************************/
-
-// GPS location of device can be set from the app, then accessed when needed
-extern GPS_Coordinate exif_gps_deviceLat;
-extern GPS_Coordinate exif_gps_deviceLon;
-extern GPS_Altitude exif_gps_deviceAlt;
 
 extern QueueHandle_t xFatTaskQueue;
 extern QueueHandle_t xIfTaskQueue;
@@ -384,16 +311,6 @@ static char msgToMaster[MSGTOMASTERLEN];
 // True means we capture images and run NN processing and report results.
 // TODO - this is probably redundant. We are probably better to use op_parameter[OP_PARAMETER_CAMERA_ENABLED];
 static uint8_t cameraSystemEnabled = 0; // 0 = disabled 1 = enabled
-
-// Support for EXIF
-// Extra 512 bytes beyond EXIF_MAX_LEN absorbs the worst-case JPEG Comment
-// padding needed to reach the next sector boundary (see prepareJpegFile).
-static uint8_t exif_buffer[EXIF_MAX_LEN + 512];
-
-// Global cursor to where non-inline data will be appended
-static uint8_t *next_data_ptr;
-
-static uint8_t *tiff_start;
 
 // Measure interval between events
 static TickType_t startTime;
@@ -735,7 +652,7 @@ static APP_MSG_DEST_T handleEventForInit(APP_MSG_T img_recv_msg) {
 
             // Now start the image sensor.
             configure_image_sensor(CAMERA_CONFIG_RUN);
-            // Record image capture start time
+            // Record image capture start time.
             startTime = xTaskGetTickCount();
 
             // The next thing we expect is a frame ready message: APP_MSG_IMAGETASK_FRAME_READY
@@ -850,7 +767,7 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
 
 #ifdef USE_HM0360_CAPTURE_TIMER
         if (g_cur_jpegenc_frame == g_captures_to_take) {
-        	// Turn of the HM0360 ASAP to supress unwanted cycles, esp. of teh LED flash
+        	// Turn of the HM0360 ASAP to supress unwanted cycles, esp. of the LED flash
         	hm0360_md_setMode(CONTEXT_A, MODE_SLEEP, 0, 0);
         	//hm0360_md_setMode(CONTEXT_A, MODE_SW_NFRAMES_SLEEP, 1, 0);
         }
@@ -871,7 +788,12 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
         ledFlashDisable(); // finished with the LED flash. Turn it off.
 
         // measure time for the frame capture just completed
-        xprintf("Image capture %d/%d took %dms\n\n", g_cur_jpegenc_frame, g_captures_to_take, app_getElapsedMs(startTime));
+        // That is, the time since event APP_MSG_IMAGETASK_STARTCAPTURE in handleEventForInit()
+        // Note this number is meaningless if taking multiple images using the HM0360 internal timer
+        // for the second and subsequent images .
+        xprintf("Image capture %d/%d took %dms\n\n",
+        		g_cur_jpegenc_frame, g_captures_to_take,
+				app_getElapsedMs(startTime));
 
         // Now measure NN duration
         startTime = xTaskGetTickCount();
@@ -909,6 +831,8 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
 #if defined(USE_HM0360) || defined(USE_HM0360_MD)
         // This is a test to see if/how these change with illumination
         hm0360_md_getGainRegs(&gain);
+        // TODO - this is probably the wrong place... just a placeholder to test compilation
+        ledFlashNewAEValues(&gain);		// see if these values affect LED flash operation
 
         snprintf(msgToMaster, MSGTOMASTERLEN, "HM0360 AE regs:\n  Integration time = %d lines\n  Analog gain = %d\n  Digital gain = %d\n  AE Mean = %d\n  AEConverged?: %c",
         		gain.integration,
@@ -1062,7 +986,8 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
         // Unfortunately I see this sometimes: APP_MSG_DPEVENT_EDM_WDT2_TIMEOUT (0x011c) followed by APP_MSG_DPEVENT_EDM_WDT3_TIMEOUT (0x011b)
         // APP_MSG_IMAGETASK_FRAME_READY does not arrive. timeout WDT_TIMEOUT_PERIOD seems to be 5s
     	XP_RED;
-        dbg_printf(DBG_LESS_INFO, ">>>> Received a timeout event 0x%04x after %dms <<<<\n", event, app_getElapsedMs(startTime));
+        dbg_printf(DBG_LESS_INFO, ">>>> Received a timeout event 0x%04x after %dms <<<<\n",
+        		event, app_getElapsedMs(startTime));
         dbg_printf(DBG_LESS_INFO, ">>>> TODO - re-initialise camera? <<<<\n", event);
         XP_WHITE;
 
@@ -1145,7 +1070,6 @@ static APP_MSG_DEST_T handleEventForNNProcessing(APP_MSG_T img_recv_msg) {
         	configure_image_sensor(CAMERA_CONFIG_CONTINUE);
         	// Expect another frame ready event
         	image_task_state = APP_IMAGE_TASK_STATE_CAPTURING;
-
 #else
         	// Start a timer that delays for the defined interval.
         	// When it expires, switch to CAPTURUNG state and request another image
@@ -1266,10 +1190,11 @@ static APP_MSG_DEST_T handleEventForWaitForTimer(APP_MSG_T img_recv_msg) {
 #ifdef STROBE_CONTROLS_FLASH
 		// Do nothing as the STROBE has been set up
 #else
-    	ledFlashEnable(fatfs_getOperationalParameter(OP_PARAMETER_FLASH_DURATION));
+    	ledFlashActivate();	// Turn on Flash LED (conditionally)
 #endif //  STROBE_CONTROLS_FLASH
 #else
-    	ledFlashEnable(fatfs_getOperationalParameter(OP_PARAMETER_FLASH_DURATION));
+    	// RP3 only
+    	ledFlashActivate();	// Turn on Flash LED (conditionally)
 #endif // USE_HM0360
 
     	sensordplib_retrigger_capture();
@@ -1553,7 +1478,7 @@ static void vImageTask(void *pvParameters) {
 
     		// Turn off the LED flashes, controlled by the HM0360 STROBE output.
     		// If LED flash is required this will be controlled by code when the main camera takes a pic
-    		hm0360_md_configureStrobe(0);
+    		hm0360_md_configureStrobe(false);
     	}
     	else {
     		xprintf("HM0360 missing...\n");
@@ -1563,7 +1488,7 @@ static void vImageTask(void *pvParameters) {
 #endif // USE_HM0360_MD
 #endif // USE_HM0360
 
-	// Initialise NN but only of the camera system is enabled
+	// Initialise NN but only if the camera system is enabled
 	startTime = xTaskGetTickCount();
 
 	if (cameraSystemEnabled) {
@@ -1810,6 +1735,7 @@ static bool configure_image_sensor(CAMERA_CONFIG_E operation) {
         		return false;
         	}
             setupLEDFlash();
+
         }
         break;
 
@@ -1860,17 +1786,13 @@ static bool configure_image_sensor(CAMERA_CONFIG_E operation) {
     		XP_WHITE;
 #ifdef STROBE_CONTROLS_FLASH
     		// The HM0360 STROBE pin drives drive the LED
-
-    		if (fatfs_getOperationalParameter(OP_PARAMETER_FLASH_LED) != 0) {
-    			hm0360_md_configureStrobe(HM0360_SENSOR_STROBE_MODE);
-    		}
-    		// else no strobe
+    		hm0360_md_configureStrobe(ledFlashIsActive());
 #else
-    		ledFlashEnable(fatfs_getOperationalParameter(OP_PARAMETER_FLASH_DURATION));
+    		ledFlashActivate();	// Turn on Flash LED (conditionally)
 #endif //  STROBE_CONTROLS_FLASH
 #else
     		// turn on the LED for the RP camera
-    		ledFlashEnable(fatfs_getOperationalParameter(OP_PARAMETER_FLASH_DURATION));
+    		ledFlashActivate();	// Turn on Flash LED (conditionally)
 #endif // USE_HM0360
     		cisdp_sensor_start(); // Starts data path sensor control block
     	}
@@ -1897,7 +1819,7 @@ static bool configure_image_sensor(CAMERA_CONFIG_E operation) {
 #else
     		// We must do manual control, but this is unusable: the LED goes on now
     		// but the image is not captured for another g_timer_period
-    		ledFlashEnable(fatfs_getOperationalParameter(OP_PARAMETER_FLASH_DURATION));
+    		ledFlashActivate();	// Turn on Flash LED (conditionally)
 #endif //  STROBE_CONTROLS_FLASH
 
     		cisdp_sensor_start(); // Starts data path sensor control block
@@ -1936,16 +1858,22 @@ static bool configure_image_sensor(CAMERA_CONFIG_E operation) {
  */
 static void setupLEDFlash(void) {
 	uint8_t brightnessPercent;
-	FlashLeds_t ledInUse;
+	rtc_time time;
 
 	brightnessPercent = (uint8_t)fatfs_getOperationalParameter(OP_PARAMETER_LED_BRIGHTNESS_PERCENT);
 	ledFlashBrightness(brightnessPercent);
 
-	// Select the LED
-	ledInUse = fatfs_getOperationalParameter(OP_PARAMETER_FLASH_LED);
-	ledFlashSelectLED(ledInUse);
+	// Set the LED Flash mode
+	ledFlashSetFlashModeFromOpParam(
+			fatfs_getOperationalParameter(OP_PARAMETER_FLASH_LED),
+			fatfs_getOperationalParameter(OP_PARAMETER_FLASH_LED_START_TIME),
+			fatfs_getOperationalParameter(OP_PARAMETER_FLASH_LED_DURATION));
 
 	ledFlashDisable(); // This writes the control bits to the PCA9574
+
+    // AFTER calling ledFlashSetFlashModeFromOpParam(), send the ledFlash code the time
+	exif_utc_get_rtc_as_time(&time);
+	ledFlashNewTime(time);
 }
 
 /**
@@ -2014,37 +1942,97 @@ static void prepareJpegFile(int8_t * outCategories, uint8_t classCount, fileBuff
 	extraBlock->buffer = ((uint8_t *)jpegBuffer) + 2;
 	extraBlock->length = jpegLength - 2;
 
-	// Build EXIF segment - placed in exif_buffer[] and size in exif_len
-	exifLength = build_exif_segment(outCategories, classCount);
+	/* Assemble ExifInput_t from local state, then call exif_build_segment(). */
+	ExifInput_t exif_input;
+	static uint8_t nnData[MAX_CLASSES + 2];
+	char deployment_id[UUIDLENGTH];
 
-	// Pad exif_buffer to the next 512-byte sector boundary using a JPEG Comment
-	// segment (marker 0xFF 0xFE).  Without this, the non-sector-aligned EXIF size
-	// causes FatFS to split the write: one CMD24 flush for the partial first sector
-	// (EXIF + start of JPEG body), then a CMD25 batch for the remainder.  With the
-	// pad, fp->fptr lands on a sector boundary before the JPEG body, so FatFS writes
-	// the entire JPEG body as a single CMD25 transaction.
-	// JPEG Comment segments are valid anywhere between markers (ISO 10918-1 B.2.4.5)
-	// and are silently ignored by all conforming decoders.
-	// EXIF_MAX_LEN is a multiple of 512, so a full buffer never needs padding.
-	// exif_buffer is declared EXIF_MAX_LEN + 512 bytes to absorb the worst case.
-	if (exifLength > 0 && (exifLength % 512u) != 0) {
-		uint32_t pad = 512u - (exifLength % 512u);
-		if (pad < 4u) {
-			// A Comment segment needs at least 4 bytes (marker + 2-byte length).
-			// Skip to the following sector boundary if there is not enough room.
-			pad += 512u;
+	exif_input.width  = (uint16_t)app_get_raw_width();
+	exif_input.height = (uint16_t)app_get_raw_height();
+	exif_utc_get_rtc_as_exif_string(exif_input.timestamp, sizeof(exif_input.timestamp));
+
+	/* NN data: [total_bytes][count][score...] */
+	if (classCount > MAX_CLASSES) {
+		nnData[0] = 1;
+		nnData[1] = 0;
+	} else {
+		nnData[0] = classCount + 1u;
+		nnData[1] = classCount;
+		for (uint8_t i = 0; i < classCount; i++) {
+			nnData[i + 2] = (uint8_t)outCategories[i];
 		}
-		uint8_t *p = exif_buffer + exifLength;
-		*p++ = 0xFF;
-		*p++ = 0xFE;                             // JPEG Comment marker
-		uint16_t data_len = (uint16_t)(pad - 4u);
-		*p++ = (uint8_t)((data_len + 2u) >> 8);  // segment length MSB
-		*p++ = (uint8_t)((data_len + 2u) & 0xFF); // segment length LSB
-		memset(p, 0, data_len);
-		exifLength += pad;
 	}
+	exif_input.nn_data = nnData;
 
-	fileOp.buffer = (uint8_t *)exif_buffer;
+	/* UserComment — NN label summary */
+#ifdef ENABLE_EXIF_CONFIDENCE
+	static ClassConfidenceData confidence_data;
+	static char user_comment[EXIF_COMMENT_LENGTH];
+	bool has_confidence_data;
+	memset(&confidence_data, 0, sizeof(confidence_data));
+	memset(user_comment, 0, sizeof(user_comment));
+	cv_get_confidence_data(&confidence_data);
+	has_confidence_data = ((confidence_data.class_count > 0) &&
+	                       (confidence_data.class_count <= MAX_CLASSES));
+	if (has_confidence_data) {
+		char *uc_ptr   = user_comment;
+		int   uc_rem   = sizeof(user_comment) - 1;
+		for (uint8_t i = 0; i < confidence_data.class_count && i < EXIF_MAX_DYNAMIC_CLASSES; i++) {
+			const char *label = confidence_data.labels[i] ? confidence_data.labels[i] : "Unknown";
+			int written = snprintf(uc_ptr, uc_rem, "%s: %d%%; ", label,
+			                       confidence_data.confidence_percent[i]);
+			if (written > 0 && written < uc_rem) {
+				uc_ptr += written;
+				uc_rem -= written;
+			} else {
+				break;
+			}
+		}
+	}
+	exif_input.user_comment = (has_confidence_data && user_comment[0] != '\0') ? user_comment : NULL;
+#else
+	static char user_comment[EXIF_COMMENT_LENGTH];
+	user_comment[0] = '\0';
+	if (cv_modelLoaded()) {
+		size_t uc_offset = 0;
+		for (uint8_t i = 0; i < classCount; i++) {
+			int written = snprintf(user_comment + uc_offset,
+			                       EXIF_COMMENT_LENGTH - uc_offset,
+			                       "%s: %d; ", cv_getLabel(i), outCategories[i]);
+			if (written < 0) {
+				break;
+			}
+			if ((size_t)written >= EXIF_COMMENT_LENGTH - uc_offset) {
+				uc_offset = EXIF_COMMENT_LENGTH - 1u;
+				break;
+			}
+			uc_offset += (size_t)written;
+		}
+	}
+	exif_input.user_comment = (user_comment[0] != '\0') ? user_comment : NULL;
+#endif /* ENABLE_EXIF_CONFIDENCE */
+
+	/* MakerNote — AE register CSV (formatted here; exif_builder.c has no HM0360 types) */
+#ifdef EXIF_MAKER_NOTES
+#define MAKERDATALEN 48
+	char maker_note[MAKERDATALEN];
+	snprintf(maker_note, sizeof(maker_note), "%d, %d, %d, %d, %c",
+	         gain.integration, gain.analogGain, gain.digitalGain, gain.aeMean,
+	         (gain.aeConverged == 1) ? 'Y' : 'N');
+	exif_input.maker_note = maker_note;
+#else
+	exif_input.maker_note = NULL;
+#endif /* EXIF_MAKER_NOTES */
+
+	/* Deployment ID */
+	fatfs_getDeploymentId(deployment_id, sizeof(deployment_id));
+	exif_input.deployment_id =
+		(strcmp(deployment_id, DEPLOYMENT_ID_ZERO_UUID) != 0) ? deployment_id : NULL;
+
+	/* Sector-alignment COM padding is applied inside exif_build_segment(). */
+	exifLength = exif_build_segment(&exif_input);
+
+	fileOp.buffer = (uint8_t *)exif_get_buffer();
 	fileOp.length = exifLength;
 
 	if (exifLength > 0)  {
@@ -2060,7 +2048,7 @@ static void prepareJpegFile(int8_t * outCategories, uint8_t classCount, fileBuff
 
 	XP_LT_GREY;
 	xprintf("JPEG & EXIF buffer (%d bytes) begins:\n", exifLength + jpegLength);
-	printf_x_printBuffer((uint8_t *) exif_buffer, bytesToPrint);
+	printf_x_printBuffer((uint8_t *)exif_get_buffer(), bytesToPrint);
 
 	XP_WHITE;
 #endif
@@ -2150,6 +2138,19 @@ static void prepareBmpFile(fileBufferInfo_t * extraBlock) {
 }
 
 
+/* write helpers used by bmp_create_gray8_header (duplicated from exif_builder.c;
+ * acceptable since BMP support is experimental and kept under #ifdef INVESTIGATE_BMP) */
+static void write16_le(uint8_t *ptr, uint16_t val) {
+    ptr[0] = val & 0xFF;
+    ptr[1] = val >> 8;
+}
+static void write32_le(uint8_t *ptr, uint32_t val) {
+    ptr[0] =  val        & 0xFF;
+    ptr[1] = (val >>  8) & 0xFF;
+    ptr[2] = (val >> 16) & 0xFF;
+    ptr[3] = (val >> 24) & 0xFF;
+}
+
 /**
  * create a bmp header
  *
@@ -2204,582 +2205,6 @@ uint32_t bmp_create_gray8_header(uint8_t *buf,  uint32_t width, uint32_t height)
     return BMP_GRAY8_HEADER_SIZE;
 }
 #endif // INVESTIGATE_BMP
-
-/*************************************** Local EXIF-related Definitions *****************************/
-
-// Helper to write 2- and 4-byte little endian values
-static void write16_le(uint8_t *ptr, uint16_t val) {
-    ptr[0] = val & 0xFF;
-    ptr[1] = val >> 8;
-}
-
-static void write32_le(uint8_t *ptr, uint32_t val) {
-    ptr[0] = val & 0xFF;
-    ptr[1] = (val >> 8) & 0xFF;
-    ptr[2] = (val >> 16) & 0xFF;
-    ptr[3] = (val >> 24) & 0xFF;
-}
-
-// Helper to write 2- and 4-byte big endian values
-static void write16_be(uint8_t *ptr, uint16_t val) {
-    ptr[1] = val & 0xFF;
-    ptr[0] = val >> 8;
-}
-
-/*
-static void write32_be(uint8_t *ptr, uint32_t val) {
-    ptr[3] = val & 0xFF;
-    ptr[2] = (val >> 8) & 0xFF;
-    ptr[1] = (val >> 16) & 0xFF;
-    ptr[0] = (val >> 24) & 0xFF;
-}
-*/
-
-// Add an IFD entry
-static void addIFD(ExifTagID tagID, uint8_t *entry_ptr, void *tagData) {
-	//xprintf("   DEBUG: adding EXIF tag 0x%04x\n", tagID);
-
-	switch (tagID) {
-    case TAG_X_RESOLUTION:
-    case TAG_Y_RESOLUTION:
-    {
-        uint32_t *rational = (uint32_t *)tagData;
-        write16_le(entry_ptr, tagID);
-        write16_le(entry_ptr + 2, TYPE_RATIONAL);
-        write32_le(entry_ptr + 4, 1);
-        write32_le(entry_ptr + 8, (uint32_t)(next_data_ptr - tiff_start));
-        write32_le(next_data_ptr, rational[0]);
-        next_data_ptr += 4;
-        write32_le(next_data_ptr, rational[1]);
-        next_data_ptr += 4;
-        break;
-    }
-    case TAG_RESOLUTION_UNIT:
-    {
-        uint16_t value = *(uint16_t *)tagData;
-        write16_le(entry_ptr, tagID);
-        write16_le(entry_ptr + 2, TYPE_SHORT);
-        write32_le(entry_ptr + 4, 1);
-        write16_le(entry_ptr + 8, value);
-        write16_le(entry_ptr + 10, 0);
-        break;
-    }
-    case TAG_DATETIME_ORIGINAL:
-    case TAG_CREATE_DATE:
-    case TAG_MAKE:
-    case TAG_MODEL:
-    case TAG_USER_COMMENT:
-    case TAG_DEPLOYMENT_ID:
-    case TAG_GPS_LATITUDE_REF:
-    case TAG_GPS_LONGITUDE_REF:
-    case TAG_MAKER_NOTE:	// Although TAG_MAKER_NOTE is designed for binary I will send a string
-    {
-        char *ascii = (char *)tagData;
-        uint32_t length = strlen(ascii) + 1; // include null terminator
-        write16_le(entry_ptr, tagID);
-        write16_le(entry_ptr + 2, TYPE_ASCII);
-        write32_le(entry_ptr + 4, length);
-
-        if (length <= 4)
-        {
-            // Data will fit into the next 4 bytes
-            memset(entry_ptr + 8, 0, 4);
-            memcpy(entry_ptr + 8, ascii, length);
-        }
-        else
-        {
-            // Data needs to go elsewhere and we write the pointer to it here
-            write32_le(entry_ptr + 8, (uint32_t)(next_data_ptr - tiff_start));
-            memcpy(next_data_ptr, ascii, length);
-            next_data_ptr += length;
-        }
-        break;
-    }
-    case TAG_GPS_LATITUDE:
-    case TAG_GPS_LONGITUDE:
-    {
-        uint32_t *dms = (uint32_t *)tagData; // 3 pairs of (numerator, denominator)
-        write16_le(entry_ptr, tagID);
-        write16_le(entry_ptr + 2, TYPE_RATIONAL);
-        write32_le(entry_ptr + 4, 3);
-        write32_le(entry_ptr + 8, (uint32_t)(next_data_ptr - tiff_start));
-        for (int i = 0; i < 3; ++i)
-        {
-            write32_le(next_data_ptr, dms[i * 2]);
-            next_data_ptr += 4;
-            write32_le(next_data_ptr, dms[i * 2 + 1]);
-            next_data_ptr += 4;
-        }
-        break;
-    }
-    case TAG_GPS_ALTITUDE:
-    {
-        uint32_t *rational = (uint32_t *)tagData;
-        write16_le(entry_ptr, tagID);
-        write16_le(entry_ptr + 2, TYPE_RATIONAL);
-        write32_le(entry_ptr + 4, 1);
-        write32_le(entry_ptr + 8, (uint32_t)(next_data_ptr - tiff_start));
-        write32_le(next_data_ptr, rational[0]);
-        next_data_ptr += 4;
-        write32_le(next_data_ptr, rational[1]);
-        next_data_ptr += 4;
-        break;
-    }
-    case TAG_GPS_ALTITUDE_REF:
-    {
-        uint8_t value = *(uint8_t *)tagData;
-        write16_le(entry_ptr, tagID);
-        write16_le(entry_ptr + 2, TYPE_BYTE);
-        write32_le(entry_ptr + 4, 1);
-        memset(entry_ptr + 8, 0, 4);
-        entry_ptr[8] = value;
-        break;
-    }
-
-    case TAG_NN_DATA:
-    {
-        // For NN output we use a byte array, with the first entry being the number of bytes that follow
-        uint8_t *bytes = (uint8_t *)tagData;
-        uint32_t length = bytes[0]; // First byte is the length of the following data
-        write16_le(entry_ptr, tagID);
-        write16_le(entry_ptr + 2, TYPE_BYTE);
-        write32_le(entry_ptr + 4, length);
-        write32_le(entry_ptr + 8, (uint32_t)(next_data_ptr - tiff_start));
-
-        if (length <= 4)
-        {
-            // Data will fit into the next 4 bytes
-            memset(entry_ptr + 8, 0, 4); // pre-fill with zeros
-            memcpy(entry_ptr + 8, &bytes[1], length);
-        }
-        else
-        {
-            // Data needs to go elsewhere and we write the pointer to it here
-            write32_le(entry_ptr + 8, (uint32_t)(next_data_ptr - tiff_start));
-            memcpy(next_data_ptr, &bytes[1], length);
-            next_data_ptr += length;
-        }
-        break;
-    }
-    case TAG_GPS_IFD_POINTER:
-    {
-        uint32_t offset = *(uint32_t *)tagData;
-        write16_le(entry_ptr, tagID);
-        write16_le(entry_ptr + 2, TYPE_LONG);
-        write32_le(entry_ptr + 4, 1);
-        write32_le(entry_ptr + 8, offset);
-        break;
-    }
-    default:
-    {
-        // Handle dynamic confidence tags (private tag range 0xF300-0xF3FF)
-        // Even tags (0xF300, 0xF302, ...) are SHORT (confidence percentage)
-        // Odd tags (0xF301, 0xF303, ...) are ASCII (labels)
-        if (tagID >= TAG_WW_CONFIDENCE_BASE && tagID < (TAG_WW_CONFIDENCE_BASE + MAX_CLASSES * 2))
-        {
-            if ((tagID - TAG_WW_CONFIDENCE_BASE) % 2 == 0)
-            {
-                // Even offset: confidence value (SHORT)
-                uint16_t value = *(uint16_t *)tagData;
-                write16_le(entry_ptr, tagID);
-                write16_le(entry_ptr + 2, TYPE_SHORT);
-                write32_le(entry_ptr + 4, 1);
-                write16_le(entry_ptr + 8, value);
-                write16_le(entry_ptr + 10, 0);
-            }
-            else
-            {
-                // Odd offset: label string (ASCII)
-                char *ascii = (char *)tagData;
-                uint32_t length = strlen(ascii) + 1; // include null terminator
-                write16_le(entry_ptr, tagID);
-                write16_le(entry_ptr + 2, TYPE_ASCII);
-                write32_le(entry_ptr + 4, length);
-
-                if (length <= 4)
-                {
-                    // Data will fit into the next 4 bytes
-                    memset(entry_ptr + 8, 0, 4);
-                    memcpy(entry_ptr + 8, ascii, length);
-                }
-                else
-                {
-                    // Data needs to go elsewhere and we write the pointer to it here
-                    write32_le(entry_ptr + 8, (uint32_t)(next_data_ptr - tiff_start));
-                    memcpy(next_data_ptr, ascii, length);
-                    next_data_ptr += length;
-                }
-            }
-        }
-        // If tag is not in expected range, do nothing (could add error handling)
-        break;
-    }
-    } // switch
-}
-
-/**
- * Get the size of the GPS IFD -
- *
- * If the altitude is present it is 78 bytes
- */
-static size_t get_gps_ifd_size(void) {
-    return GPS_IFD_SIZE;
-}
-
-/**
- * Create a GPS IFD block.
- *
- * Places emulated data in the EXIF block when EMULATED_GPS is uncommented.
- * Otherwise, other code has placed the location into
- * exif_gps_deviceLat, exif_gps_deviceLon,exif_gps_deviceAlt (in exif_gps.c)
- *
- * @param gps_ifd_start - pointer to where the buffer should be
- */
-static void create_gps_ifd(uint8_t *gps_ifd_start) {
-    uint8_t *p = gps_ifd_start;
-
-    write16_le(p, GPS_IFD_ENTRY_COUNT);
-    p += 2;
-
-    uint8_t *ifd = p;
-    p += GPS_IFD_ENTRY_COUNT * 12;
-    write32_le(p, 0);
-    p += 4; // write terminating 4 x 0 (indicates the end of the IFDs
-
-//#define EMULATED_GPS
-#ifdef EMULATED_GPS
-    // fixed values to test
-    char latRef[] = "N";
-    char lonRef[] = "E";
-    uint32_t lat[6] = {37, 1, 48, 1, 3000, 100};  // 37°48'30.00"
-    uint32_t lon[6] = {122, 1, 25, 1, 1500, 100}; // 122°25'15.00"
-    uint8_t altRef = 0;                           // 0 = above sea level
-    uint32_t alt[2] = {5000, 100};                // 50.00 meters
-
-    // Now write 6 IFDs
-    addIFD(TAG_GPS_LATITUDE_REF, ifd + 0 * 12, latRef);
-    addIFD(TAG_GPS_LATITUDE, ifd + 1 * 12, lat);
-    addIFD(TAG_GPS_LONGITUDE_REF, ifd + 2 * 12, lonRef);
-    addIFD(TAG_GPS_LONGITUDE, ifd + 3 * 12, lon);
-    addIFD(TAG_GPS_ALTITUDE_REF, ifd + 4 * 12, &altRef);
-    addIFD(TAG_GPS_ALTITUDE, ifd + 5 * 12, alt);
-
-#else
-    // Use actual GPS location which has been placed in
-    // exif_gps_deviceLat, exif_gps_deviceLon, exif_gps_deviceAlt
-
-    uint8_t lat_buf[26];   // 2 bytes ref string + 6 x uint32_t big-endian
-    uint8_t lon_buf[26];
-    uint8_t alt_buf[9];    // 1 byte ref + 2 x uint32_t big-endian
-
-    // Fetch GPS data into byte arrays
-    exif_gps_generate_byte_array(&exif_gps_deviceLat, lat_buf);
-    exif_gps_generate_byte_array(&exif_gps_deviceLon, lon_buf);
-    exif_gps_generate_altitude_byte_array(&exif_gps_deviceAlt, alt_buf);
-
-    // Extract ref strings: byte_array[0] is the char, [1] is 0x00 — already a valid C string
-    char *latRef = (char *)&lat_buf[0];   // e.g. "N\0"
-    char *lonRef = (char *)&lon_buf[0];   // e.g. "E\0"
-
-    // Extract altitude ref byte
-    uint8_t altRef = alt_buf[0];          // 0 = above sea level, 1 = below
-
-    // Convert big-endian rationals back to native little-endian for addIFD()
-    uint32_t lat[6], lon[6], alt[2];
-    exif_gps_extract_rationals(lat_buf, lat);
-    exif_gps_extract_rationals(lon_buf, lon);
-    exif_gps_extract_alt_rationals(alt_buf, alt);
-
-    // Write the 6 IFDs
-    addIFD(TAG_GPS_LATITUDE_REF,  ifd + 0 * 12, latRef);
-    addIFD(TAG_GPS_LATITUDE,      ifd + 1 * 12, lat);
-    addIFD(TAG_GPS_LONGITUDE_REF, ifd + 2 * 12, lonRef);
-    addIFD(TAG_GPS_LONGITUDE,     ifd + 3 * 12, lon);
-    addIFD(TAG_GPS_ALTITUDE_REF,  ifd + 4 * 12, &altRef);
-    addIFD(TAG_GPS_ALTITUDE,      ifd + 5 * 12, alt);
-#endif
-
-    char gps_dbg[80];
-        exif_gps_create_full_string(&exif_gps_deviceLat, &exif_gps_deviceLon,
-                                    &exif_gps_deviceAlt, gps_dbg, sizeof(gps_dbg));
-
-        // Write this while testing:
-        //xprintf("EXIF GPS: %s\n", gps_dbg);
-}
-
-/**
- * Builds a valid EXIF data structure, including APP1 tag
- *
- * This particular example has some hard-coded tags to add, including the X&Y resolutions.
- *
- */
-static uint16_t build_exif_segment(int8_t *outCategories, uint8_t categoriesCount) {
-    char timestamp[EXIFSTRINGLENGTH] = {0}; // 22:20:36 2025:07:06 = 19 characters plus trailing \0
-    uint16_t exif_len;
-    uint8_t nnData[MAX_CLASSES + 2];
-	char deployment_id[UUIDLENGTH];
-
-    // IFD count: base entries (9) = 8 starting with TAG_MAKE plus TAG_GPS_IFD_POINTER later.
-    // dynamic_ifd_count might be incremented if we add UserComment and DeploymentID
-    uint16_t dynamic_ifd_count = IFD0_ENTRY_COUNT;	// 9
-
-    // Insert the NN data (raw scores for backwards compatibility)
-    if (categoriesCount > MAX_CLASSES)  {
-        // error
-        nnData[0] = 1;
-        nnData[1] = 0;
-    }
-    else  {
-        // First byte is the number of bytes following
-        nnData[0] = categoriesCount + 1;
-        // Second byte is the number of categories
-        nnData[1] = categoriesCount;
-        // Subsequent bytes are the NN outputs
-        for (uint8_t i = 0; i < categoriesCount; i++)  {
-            nnData[i + 2] = outCategories[i];
-        }
-    }
-
-#ifdef ENABLE_EXIF_CONFIDENCE
-
-    // Get confidence data from CV module (optional)
-    // Use static variables to avoid consuming ~164 bytes of stack space.
-    // This prevents stack overflow during memory-intensive operations like manifest unzip.
-    // TODO resolve the above cleanly
-    static ClassConfidenceData confidence_data;
-
-    static char user_comment[256]; // Buffer for UserComment string
-
-    bool has_confidence_data;
-
-    memset(&confidence_data, 0, sizeof(confidence_data));
-    memset(user_comment, 0, sizeof(user_comment));
-
-    cv_get_confidence_data(&confidence_data);
-    has_confidence_data = ((confidence_data.class_count > 0) && (confidence_data.class_count <= MAX_CLASSES));
-
-    // DEBUG message to check the difference between int and uint8_t
-    //xprintf("EXIF: sizeof(confidence_data) = %d\n", sizeof(confidence_data));
-
-    // Build UserComment string with model results
-    if (has_confidence_data)  {
-        char *ptr = user_comment;
-        int remaining = sizeof(user_comment) - 1;
-
-        //xprintf("EXIF: Building UserComment with %d classes\n", confidence_data.class_count);
-
-        for (uint8_t i = 0; i < confidence_data.class_count && i < EXIF_MAX_DYNAMIC_CLASSES; i++)  {
-            const char *label = confidence_data.labels[i] ? confidence_data.labels[i] : "Unknown";
-            int conf = confidence_data.confidence_percent[i];
-
-            // Format: "Class: label (conf%); "
-            int written = snprintf(ptr, remaining, "%s: %d%%; ", label, conf);
-
-            if (written > 0 && written < remaining) {
-                ptr += written;
-                remaining -= written;
-            }
-            else  {
-                break; // Buffer full
-            }
-        }
-
-        if (user_comment[0] != '\0')  {
-            dynamic_ifd_count++; // Add one entry for UserComment
-        }
-    }
-#endif //ENABLE_EXIF_CONFIDENCE
-
-	// Get deployment ID from operational parameters
-	fatfs_getDeploymentId(deployment_id, sizeof(deployment_id));
-	
-	// Only include in EXIF if not all zeros (i.e., a deployment is active)
-	bool has_deployment_id = (strcmp(deployment_id, DEPLOYMENT_ID_ZERO_UUID) != 0);
-
-	// dynamic_ifd_count must be incremented before it is written to the EXIF buffer,
-	// so here we look ahead to see how many extra tags might be added.
-	if (has_deployment_id) {
-		dynamic_ifd_count++; // Add one entry for DeploymentID
-	}
-
-	if (cv_modelLoaded()) {
-        dynamic_ifd_count++; // Add one entry for TAG_USER_COMMENT
-	}
-
-#ifdef EXIF_MAKER_NOTES
-	dynamic_ifd_count++; // Add one entry for Maker Notes
-#endif // EXIF_MAKER_NOTES
-
-    // Prepare the timestamp
-    exif_utc_get_rtc_as_exif_string(timestamp, sizeof(timestamp));
-
-    // Prepare the resolution entries
-    uint32_t xres_rational[2] = {app_get_raw_width(), 1};
-    uint32_t yres_rational[2] = {app_get_raw_height(), 1};
-    uint16_t res_unit = 2; // TODO check this
-
-    uint8_t *p = exif_buffer;
-
-    // Add SOE marker 0xffd8
-    *p++ = 0xFF;
-    *p++ = 0xD8;
-
-    // Add APP1 marker 0xffe1
-    *p++ = 0xFF;
-    *p++ = 0xE1;
-
-    // Write placeholder for segment length
-    uint8_t *len_ptr = p;
-    p += 2;
-
-    // "Exif\0\0"
-    memcpy(p, "Exif\0\0", 6);
-    p += 6;
-
-    // TIFF header: Intel (II), magic 0x002A, IFD0 offset = 8
-    tiff_start = p;
-    memcpy(p, "II", 2);
-    p += 2;
-    write16_le(p, 0x002A);
-    p += 2;
-    write32_le(p, 0x00000008);
-    p += 4;
-
-    // The number of IFD0 entries goes here
-    // IMPORTANT: we can't change dynamic_ifd_count again.
-    write16_le(p, dynamic_ifd_count);
-    p += 2;
-
-    // Keep a note of this location, which is where the IFD entries start
-    uint8_t *ifd_start = p;
-
-    p += dynamic_ifd_count * 12; // Skip past the IFD entries
-
-    // Next IFD offset (0)
-    // This is writing the offset to the next IFD (Image File Directory) after IFD0.
-    // EXIF's TIFF format can chain multiple IFDs.
-    // After the IFD0 entry list, there's a 4-byte field indicating the offset (from the TIFF header start) of the next IFD (like IFD1 or the EXIF SubIFD).
-    // If there is no next IFD, it must be 0.
-    write32_le(p, 0);
-    p += 4;
-
-    // Set pointer to first data location (after IFD)
-    next_data_ptr = p;
-
-    // Reserve space for the GPS IFD block before writing tag data
-    uint8_t *gps_ifd_start = next_data_ptr;
-    uint32_t gps_ifd_offset = (uint32_t)(gps_ifd_start - tiff_start);
-    // Ensure we don't exceed buffer when reserving GPS IFD
-    size_t gps_size = get_gps_ifd_size();
-    if ((size_t)(next_data_ptr - exif_buffer) + gps_size > EXIF_MAX_LEN) {
-        // If GPS won't fit, reduce gps_size to 0 (skip GPS)
-        gps_size = 0;
-    }
-    next_data_ptr += gps_size; // reserve
-
-    // Add IFD entries - 8 here plus TAG_GPS_IFD_POINTER later
-    uint8_t entry = 0;
-    addIFD(TAG_MAKE, ifd_start + (entry++ * 12), "Wildlife.ai");
-    addIFD(TAG_MODEL, ifd_start + (entry++ * 12), "WW500");
-    addIFD(TAG_RESOLUTION_UNIT, ifd_start + (entry++ * 12), &res_unit);
-    addIFD(TAG_X_RESOLUTION, ifd_start + (entry++ * 12), xres_rational);
-    addIFD(TAG_Y_RESOLUTION, ifd_start + (entry++ * 12), yres_rational);
-    addIFD(TAG_DATETIME_ORIGINAL, ifd_start + (entry++ * 12), timestamp);
-    addIFD(TAG_CREATE_DATE, ifd_start + (entry++ * 12), timestamp);
-    addIFD(TAG_NN_DATA, ifd_start + (entry++ * 12), nnData); // Neural network output (raw, for backwards compatibility)
-
-#ifdef EXIF_MAKER_NOTES
-    // say 1234, 2345, 123, 123, Y say 32
-#define MAKERDATALEN 32
-    char makerNoteData[MAKERDATALEN];
-    snprintf(makerNoteData, MAKERDATALEN, "%d, %d, %d, %d, %c",
-    		gain.integration,
-			gain.analogGain,
-			gain.digitalGain,
-			gain.aeMean,
-			(gain.aeConverged == 1)?'Y':'N');
-
-    addIFD(TAG_MAKER_NOTE, ifd_start + (entry++ * 12), makerNoteData); // Auto-exposure registers
-#endif // EXIF_MAKER_NOTES
-
-#ifdef ENABLE_EXIF_CONFIDENCE
-    // Add UserComment with model results if available
-    // TODO is it best to use TAG_USER_COMMENT or make a new tag?
-    if (has_confidence_data && user_comment[0] != '\0')  {
-        xprintf("EXIF: Adding UserComment (%d classes): '%s'\n", confidence_data.class_count, user_comment);
-        addIFD(TAG_USER_COMMENT, ifd_start + (entry++ * 12), user_comment);
-    }
-#else
-    // Create an IFD containing the NN output tensor plus class labels
-    // TODO is it best to use TAG_USER_COMMENT or make a new tag?
-
-    char user_comment[EXIF_COMMENT_LENGTH];
-	user_comment[0] = '\0';
-	size_t offset = 0;
-	int written = 0;
-
-    if (cv_modelLoaded())  {
-    	// We add the NN results as a TAG_USER_COMMENT
-    	for (uint8_t i = 0; i < categoriesCount; i++) {
-    	    written = snprintf(
-    	        user_comment + offset,
-    	        EXIF_COMMENT_LENGTH - offset,
-    	        "%s: %d; ",
-				cv_getLabel(i),
-    	        outCategories[i]
-    	    );
-
-    	    if (written < 0) {
-    	        // encoding error
-    	        break;
-    	    }
-
-    	    if ((size_t)written >= EXIF_COMMENT_LENGTH - offset) {
-    	        // buffer full, string truncated
-    	        offset = EXIF_COMMENT_LENGTH - 1;
-    	        break;
-    	    }
-
-    	    offset += written;
-    	} // for(;;)
-
-//        xprintf("EXIF: Adding UserComment (%d classes, %d bytes): '%s'\n",
-//        		categoriesCount, written, user_comment);
-        addIFD(TAG_USER_COMMENT, ifd_start + (entry++ * 12), user_comment);
-    }
-
-#endif // ENABLE_EXIF_CONFIDENCE
-
-	// Add deployment ID if present (not all zeros)
-	if (has_deployment_id) {
-		xprintf("EXIF: Adding DeploymentID: %s\n", deployment_id);
-		addIFD(TAG_DEPLOYMENT_ID, ifd_start + (entry++ * 12), deployment_id);
-	}
-
-    // GPS: this is always added
-    addIFD(TAG_GPS_IFD_POINTER, ifd_start + (entry++ * 12), &gps_ifd_offset);
-
-    // Now write the GPS IFD structure if we reserved space
-    if (gps_size > 0) {
-    	// This calls addIFD() 6 times
-        create_gps_ifd(gps_ifd_start);
-    }
-
-    // Fill in length field (BE!)
-    // Protect against exceeding EXIF_MAX_LEN
-    if ((size_t)(next_data_ptr - exif_buffer) > EXIF_MAX_LEN) {
-        next_data_ptr = exif_buffer + EXIF_MAX_LEN;
-    }
-
-    uint16_t len = (next_data_ptr - exif_buffer) - 2; // exclude 0xFFE1 marker
-    write16_be(len_ptr, len);
-
-    exif_len = next_data_ptr - exif_buffer;
-
-    xprintf("Added %d EXIF tags\n", entry);
-
-    return exif_len;
-}
 
 /**
  * Do something with the NN output
@@ -2948,9 +2373,7 @@ bool image_getEnabled(void) {
 void image_sleepNow(void) {
     uint32_t timelapseDelay;
     uint16_t mdInterval;
-    FlashLeds_t ledInUse;
 
-    ledInUse = fatfs_getOperationalParameter(OP_PARAMETER_FLASH_LED);
     mdInterval = fatfs_getOperationalParameter(OP_PARAMETER_MD_INTERVAL);
 
     // Should be off but let's be sure.
@@ -2960,57 +2383,23 @@ void image_sleepNow(void) {
     // HM0360 as main camera
     if (hm0360_md_isHM0360Present()) {
     	XP_LT_GREY;
-       	xprintf("Preparing HM0360 for MD\n");
+       	xprintf("Preparing HM0360 for MD:");
     	hm0360_md_prepare(cameraSystemEnabled, mdInterval); // select CONTEXT_B registers (if enabled)
 
-    	// Consider turning on the LED flashes, controlled by the HM0360 STROBE output
-    	if ((ledInUse == 0) || (mdInterval == 0))  {
-    		// No STROBE pulses because neither LED selected or MD is disabled
-    		xprintf("   No LED flashes.\n");
-    		hm0360_md_configureStrobe(0);
-    	}
-    	else {
-    		// Configure STROBE pulses
-    		xprintf("   LED flashes (Strobe mode 0x%02x)\n", HM0360_SENSOR_STROBE_MODE);
-    		hm0360_md_configureStrobe(HM0360_SENSOR_STROBE_MODE);
-    	}
+		if ((ledFlashIsActive() && (mdInterval > 0) )) {
+			xprintf(" LED flashes.\n");
+			hm0360_md_configureStrobe(true);
+		}
+		else {
+			xprintf(" No LED flashes.\n");
+			hm0360_md_configureStrobe(false);
+		}
     	XP_WHITE;
     }
     else {
     	xprintf("HM0360 missing...\n");
     }
 #endif // USE_HM0360
-
-// Now merged (above)
-//#ifdef USE_HM0360_MD
-//    // HM0360 for motion detection only.
-//    // If the camera system is disabled then ensure MD is off and flash LED is off
-//    if (hm0360_md_isHM0360Present()) {
-//    	hm0360_md_prepare(enabled, mdInterval); // select CONTEXT_B registers (if enabled)
-//
-//    	// Consider turning on the LED flashes, controlled by the HM0360 STROBE output
-//    	if (!enabled) {
-//    		// No STROBE pulses
-//    		xprintf("Camera disabled - no LED flashes\n");
-//    		hm0360_md_configureStrobe(0);
-//    	}
-//    	else if ((brightnessPercent == 0) || (ledInUse == 0))  {
-//    		// No STROBE pulses
-//    		xprintf("Preparing HM0360 for MD - no LED flashes\n");
-//    		hm0360_md_configureStrobe(0);
-//    	}
-//    	else   {
-//            // Configure STROBE pulses - NOTE: normal mode is 0x0b = 'dynamic 2'
-//            xprintf("Preparing HM0360 for MD - with LED flashes 0x%02x\n", fatfs_getOperationalParameter(OP_PARAMETER_STROBE_MODE));
-//            hm0360_md_configureStrobe(HM0360_SENSOR_STROBE_MODE);
-//    	}
-//    }
-//    else {
-//    	// HM0360 is missing
-//    	xprintf("HM0360 missing...\n");
-//    }
-//
-//#endif // USE_HM0360_MD
 
     // TODO - We could retry if we had a timeout?
     if (g_wdt_event) {

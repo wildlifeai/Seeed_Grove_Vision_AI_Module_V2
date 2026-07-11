@@ -38,3 +38,9 @@
 27 286
 # 28: software white-balance BLUE gain, Q8.8 (256 = 1.0x, 0 = correction off). RP3 colour camera only.
 28 326
+# 29: RP camera auto-exposure: 0 = off, 1 = on.
+29 1
+# 30: auto-exposure target (raw p75 luma, 0 = built-in default).
+30 0
+# 31: RP camera white balance: 0 = off, 1 = auto, 2 = manual (op27/28).
+31 1

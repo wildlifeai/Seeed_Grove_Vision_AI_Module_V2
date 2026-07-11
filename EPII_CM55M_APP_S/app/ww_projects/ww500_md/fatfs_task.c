@@ -246,6 +246,9 @@ uint16_t op_parameter[OP_PARAMETER_NUM_ENTRIES] = {
 	1,	    	   		// 26 OP_PARAMETER_SLOT_SWITCH (0 = off/manual only; 1 = automatic light-based switching)
 	286,	   			// 27 OP_PARAMETER_WB_RED_GAIN (Q8.8: 286 = x1.117, the bench-measured neutralising gain; 0 disables)
 	326,	   			// 28 OP_PARAMETER_WB_BLUE_GAIN (Q8.8: 326 = x1.273, the bench-measured neutralising gain; 0 disables)
+	1,	    	   		// 29 OP_PARAMETER_CAM_AE_ENABLE (RP camera auto-exposure on/off - see ae.c)
+	110,	   			// 30 OP_PARAMETER_CAM_AE_TARGET (target mean luma; 0 = built-in default)
+	1,	    	   		// 31 OP_PARAMETER_CAM_WB_MODE (1 = auto grey-world; 2 = manual op27/28; 0 = off)
 };
 
 // Deployment ID UUID string — loaded from 'I ' line in CONFIG.TXT or set via setdid CLI command

@@ -34,6 +34,48 @@
 // comparable to the hardware encoder's 4x table.
 #define IMG_CORRECT_JPEG_QUALITY  85
 
+/*
+ * Phase C colour pipeline (order mirrors the Raspberry Pi ISP for this
+ * sensor): black level -> WB gains -> colour correction matrix -> gamma.
+ * Reference data from libcamera's imx708.json tuning file - see
+ * _Documentation/rp3-image-quality-plan.md section 2.
+ */
+
+// Sensor black pedestal (imx708.json black_level 4096/65536 = 16/255) and the
+// x256 rescale that restores full range after subtraction: 256*255/(255-16)
+#define BLACK_LEVEL			16
+#define BLACK_RESCALE_Q8	273
+
+// 4640 K colour correction matrix, Q8.8, rows renormalised to sum 256.
+// (Daylight-ish; good general default. CCT-switched blending is Phase C3.)
+static const int32_t CCM_Q8[9] = {
+	392,  -90,  -46,
+	-72,  427,  -99,
+	  4, -146,  398,
+};
+
+// Gamma LUT from the imx708.json contrast curve (16-bit anchors 0->0,
+// 1024->5040, 4096->15312, 16384->40642, 65535->65535), resampled to 8-bit.
+// Strong shadow lift, gentle highlight shoulder.
+static const uint8_t GAMMA_LUT[256] = {
+	  0,   5,  10,  15,  20,  23,  26,  30,  33,  36,  40,  43,  46,  50,  53,  56,
+	 60,  62,  64,  66,  68,  70,  72,  74,  76,  78,  80,  82,  84,  87,  89,  91,
+	 93,  95,  97,  99, 101, 103, 105, 107, 109, 111, 113, 115, 117, 119, 122, 124,
+	126, 128, 130, 132, 134, 136, 138, 140, 142, 144, 146, 148, 150, 152, 155, 157,
+	158, 159, 159, 160, 160, 161, 161, 162, 162, 163, 163, 164, 164, 165, 165, 166,
+	166, 167, 167, 168, 168, 169, 169, 170, 170, 171, 171, 172, 172, 173, 173, 174,
+	174, 175, 175, 176, 176, 177, 178, 178, 179, 179, 180, 180, 181, 181, 182, 182,
+	183, 183, 184, 184, 185, 185, 186, 186, 187, 187, 188, 188, 189, 189, 190, 190,
+	191, 191, 192, 192, 193, 193, 194, 194, 195, 195, 196, 196, 197, 197, 198, 198,
+	199, 199, 200, 200, 201, 201, 202, 202, 203, 203, 204, 204, 205, 205, 206, 206,
+	207, 207, 208, 208, 209, 209, 210, 210, 211, 211, 212, 212, 213, 213, 214, 214,
+	215, 215, 216, 217, 217, 218, 218, 219, 219, 220, 220, 221, 221, 222, 222, 223,
+	223, 224, 224, 225, 225, 226, 226, 227, 227, 228, 228, 229, 229, 230, 230, 231,
+	231, 232, 232, 233, 233, 234, 234, 235, 235, 236, 236, 237, 237, 238, 238, 239,
+	239, 240, 240, 241, 241, 242, 242, 243, 243, 244, 244, 245, 245, 246, 246, 247,
+	247, 248, 248, 249, 249, 250, 250, 251, 251, 252, 252, 253, 253, 254, 254, 255,
+};
+
 /*************************************** Local variables *********************/
 
 // Valid when the last capture was corrected + re-encoded
@@ -104,11 +146,29 @@ static void wb_apply_yuv420(uint8_t *yuv, uint32_t w, uint32_t h,
 				if (G < 0) G = 0; else if (G > 255) G = 255;
 				if (B < 0) B = 0; else if (B > 255) B = 255;
 
+				// Black level: subtract the sensor pedestal, restore range
+				R = (R > BLACK_LEVEL) ? (((R - BLACK_LEVEL) * BLACK_RESCALE_Q8) >> 8) : 0;
+				G = (G > BLACK_LEVEL) ? (((G - BLACK_LEVEL) * BLACK_RESCALE_Q8) >> 8) : 0;
+				B = (B > BLACK_LEVEL) ? (((B - BLACK_LEVEL) * BLACK_RESCALE_Q8) >> 8) : 0;
+
 				// White balance: scale red and blue (green is the reference)
 				R = (R * rGain) >> 8;
 				B = (B * bGain) >> 8;
 				if (R > 255) R = 255;
 				if (B > 255) B = 255;
+
+				// Colour correction matrix (4640 K, Q8.8)
+				int32_t Rc = (CCM_Q8[0] * R + CCM_Q8[1] * G + CCM_Q8[2] * B) >> 8;
+				int32_t Gc = (CCM_Q8[3] * R + CCM_Q8[4] * G + CCM_Q8[5] * B) >> 8;
+				int32_t Bc = (CCM_Q8[6] * R + CCM_Q8[7] * G + CCM_Q8[8] * B) >> 8;
+				if (Rc < 0) Rc = 0; else if (Rc > 255) Rc = 255;
+				if (Gc < 0) Gc = 0; else if (Gc > 255) Gc = 255;
+				if (Bc < 0) Bc = 0; else if (Bc > 255) Bc = 255;
+
+				// Tone curve
+				R = GAMMA_LUT[Rc];
+				G = GAMMA_LUT[Gc];
+				B = GAMMA_LUT[Bc];
 
 				// Back to YCbCr (JPEG full range)
 				int32_t newY = (77 * R + 150 * G + 29 * B) >> 8;
@@ -129,7 +189,119 @@ static void wb_apply_yuv420(uint8_t *yuv, uint32_t w, uint32_t h,
 	}
 }
 
+/*************************************** Auto white balance ******************/
+
+// Warmth bias so "balanced" matches the phone reference rendering rather than
+// strict grey: measured target on the bright quartile is G/R ~ 0.94 (red a
+// touch above green) and G/B ~ 1.06 (blue a touch below). x256 fixed point.
+#define WB_AUTO_R_BIAS_Q8	271		// 1.06: red ends ~6% above grey-world
+#define WB_AUTO_B_BIAS_Q8	242		// 0.94: blue ends ~6% below grey-world
+#define WB_AUTO_GAIN_MIN	230		// 0.9x  - clamp band from the imx708.json
+#define WB_AUTO_GAIN_MAX	640		// 2.5x    CT-curve endpoints, with margin
+#define WB_AUTO_PEDESTAL	16		// sensor black pedestal, subtracted first
+
+/**
+ * Grey-world measurement: subsampled RGB means of the YUV420 frame.
+ * Samples every 4th chroma column of every 4th chroma row (1/16 of blocks).
+ */
+static void wb_measure_yuv420(const uint8_t *yuv, uint32_t w, uint32_t h,
+							  uint32_t *rMean, uint32_t *gMean, uint32_t *bMean) {
+	const uint8_t *yPlane = yuv;
+	const uint8_t *uPlane = yuv + (w * h);
+	const uint8_t *vPlane = uPlane + ((w * h) >> 2);
+	uint32_t cw = w >> 1;
+	uint32_t ch = h >> 1;
+	uint32_t rSum = 0, gSum = 0, bSum = 0, n = 0;
+
+	for (uint32_t cy = 0; cy < ch; cy += 4) {
+		const uint8_t *u = uPlane + cy * cw;
+		const uint8_t *v = vPlane + cy * cw;
+		const uint8_t *y0 = yPlane + (cy * 2) * w;
+
+		for (uint32_t cx = 0; cx < cw; cx += 4) {
+			int32_t Y = y0[cx * 2];
+			int32_t cb = (int32_t)u[cx] - 128;
+			int32_t cr = (int32_t)v[cx] - 128;
+
+			int32_t R = Y + ((359 * cr) >> 8);
+			int32_t G = Y - ((88 * cb + 183 * cr) >> 8);
+			int32_t B = Y + ((454 * cb) >> 8);
+			if (R < 0) R = 0; else if (R > 255) R = 255;
+			if (G < 0) G = 0; else if (G > 255) G = 255;
+			if (B < 0) B = 0; else if (B > 255) B = 255;
+
+			rSum += (uint32_t)R;
+			gSum += (uint32_t)G;
+			bSum += (uint32_t)B;
+			n++;
+		}
+	}
+	if (n == 0) n = 1;
+	*rMean = rSum / n;
+	*gMean = gSum / n;
+	*bMean = bSum / n;
+}
+
+/**
+ * Compute warmth-biased grey-world gains for the current frame.
+ * Returns false if the frame is too dark to measure reliably.
+ */
+static bool wb_auto_gains(const uint8_t *yuv, uint32_t w, uint32_t h,
+						  uint16_t *rGainQ8, uint16_t *bGainQ8) {
+	uint32_t rM, gM, bM;
+	wb_measure_yuv420(yuv, w, h, &rM, &gM, &bM);
+
+	// Pedestal-correct; if the scene is essentially black, don't guess
+	rM = (rM > WB_AUTO_PEDESTAL) ? (rM - WB_AUTO_PEDESTAL) : 0;
+	gM = (gM > WB_AUTO_PEDESTAL) ? (gM - WB_AUTO_PEDESTAL) : 0;
+	bM = (bM > WB_AUTO_PEDESTAL) ? (bM - WB_AUTO_PEDESTAL) : 0;
+	if ((gM < 4) || (rM < 2) || (bM < 2)) {
+		return false;
+	}
+
+	uint32_t rGain = (WB_AUTO_R_BIAS_Q8 * gM) / rM;
+	uint32_t bGain = (WB_AUTO_B_BIAS_Q8 * gM) / bM;
+	if (rGain < WB_AUTO_GAIN_MIN) rGain = WB_AUTO_GAIN_MIN;
+	if (rGain > WB_AUTO_GAIN_MAX) rGain = WB_AUTO_GAIN_MAX;
+	if (bGain < WB_AUTO_GAIN_MIN) bGain = WB_AUTO_GAIN_MIN;
+	if (bGain > WB_AUTO_GAIN_MAX) bGain = WB_AUTO_GAIN_MAX;
+
+	xprintf("WB auto: means R=%u G=%u B=%u -> gains R x%u/256, B x%u/256\n",
+			(unsigned)rM, (unsigned)gM, (unsigned)bM,
+			(unsigned)rGain, (unsigned)bGain);
+
+	*rGainQ8 = (uint16_t)rGain;
+	*bGainQ8 = (uint16_t)bGain;
+	return true;
+}
+
 /*************************************** Public API **************************/
+
+bool img_correct_process_mode(uint8_t mode, uint16_t rManualQ8, uint16_t bManualQ8,
+							  bool flashLit) {
+	if (mode == IMG_CORRECT_MODE_OFF) {
+		corrected_valid = false;
+		return false;
+	}
+	if (mode == IMG_CORRECT_MODE_AUTO && !flashLit) {
+		uint32_t yuvAddr = app_get_raw_addr();
+		uint32_t w = app_get_raw_width();
+		uint32_t h = app_get_raw_height();
+		uint16_t rAuto, bAuto;
+
+		if ((yuvAddr != 0) && (w != 0) && (h != 0)) {
+			// The frame is DMA-written; refresh the CPU's view before measuring
+			SCB_InvalidateDCache_by_Addr((void *)yuvAddr, (int32_t)((w * h * 3) / 2));
+			if (wb_auto_gains((const uint8_t *)yuvAddr, w, h, &rAuto, &bAuto)) {
+				return img_correct_process(rAuto, bAuto);
+			}
+		}
+		// Too dark / no buffer: fall through to the manual gains
+	}
+	// Manual mode, flash-lit frame (spectrum differs - keep it predictable),
+	// or auto measurement failed
+	return img_correct_process(rManualQ8, bManualQ8);
+}
 
 bool img_correct_process(uint16_t rGainQ8, uint16_t bGainQ8) {
 	corrected_valid = false;

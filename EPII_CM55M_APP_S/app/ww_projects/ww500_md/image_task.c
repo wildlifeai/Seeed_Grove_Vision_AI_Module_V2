@@ -81,6 +81,7 @@
 #include "img_correct.h"
 #include "preview.h"
 #include "ae.h"
+#include "hires.h"
 
 /*************************************** Definitions *******************************************/
 
@@ -951,8 +952,9 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
 
 #if defined(USE_RP2) || defined(USE_RP3)
         // Auto-exposure for the RP camera (raw sensor, no on-sensor AE - see
-        // ae.c). Adjusts exposure/gain registers for the NEXT frame.
-        if (!aeCheckOnlyWake) {
+        // ae.c). Adjusts exposure/gain registers for the NEXT frame. In
+        // hi-res mode hires.c measures the raw Bayer frame itself.
+        if (!aeCheckOnlyWake && !hires_isActive()) {
         	ae_process(app_get_raw_addr(),
         			(uint16_t)app_get_raw_width(), (uint16_t)app_get_raw_height());
         }
@@ -971,7 +973,11 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
         	xprintf("Skipping file save.\n");
 
 #if defined(USE_RP2) || defined(USE_RP3)
-        	if (previewFrame) {
+        	if (hires_isActive()) {
+        		// Hi-res: CPU demosaic + colour + JPEG from the raw frame
+        		hires_process_frame();
+        	}
+        	else if (previewFrame) {
         		// The preview must show what a saved file would look like, so run
         		// the same software white-balance correction the save path runs
         		img_correct_process_mode(
@@ -991,11 +997,17 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
         	// green. Correct the YUV frame in software and re-encode it with a
         	// software JPEG encoder (sw_jpeg.c); prepareJpegFile() then uses the corrected
         	// JPEG. Mode op31: 0 = off, 1 = auto grey-world, 2 = manual op27/op28.
-        	img_correct_process_mode(
-        			(uint8_t)fatfs_getOperationalParameter(OP_PARAMETER_CAM_WB_MODE),
-        			(uint16_t)fatfs_getOperationalParameter(OP_PARAMETER_WB_RED_GAIN),
-        			(uint16_t)fatfs_getOperationalParameter(OP_PARAMETER_WB_BLUE_GAIN),
-        			ledFlashIsActive());
+        	// In hi-res mode (op32) the whole pipeline runs in hires.c instead.
+        	if (hires_isActive()) {
+        		hires_process_frame();
+        	}
+        	else {
+        		img_correct_process_mode(
+        				(uint8_t)fatfs_getOperationalParameter(OP_PARAMETER_CAM_WB_MODE),
+        				(uint16_t)fatfs_getOperationalParameter(OP_PARAMETER_WB_RED_GAIN),
+        				(uint16_t)fatfs_getOperationalParameter(OP_PARAMETER_WB_BLUE_GAIN),
+        				ledFlashIsActive());
+        	}
 #endif // USE_RP2 || USE_RP3
 
 #ifdef INVESTIGATE_BMP
@@ -1890,14 +1902,35 @@ static bool configure_image_sensor(CAMERA_CONFIG_E operation) {
         	// Sensor registers just reverted to the tables (+ staged file):
         	// restart the auto-exposure loop from the table values (ae.c)
         	ae_notifySensorInit();
-#endif // USE_RP2 || USE_RP3
 
+        	// High-resolution single-JPEG capture (op32 = 1, NN off): the
+        	// datapath becomes INP centre-crop -> RAW -> WDMA2 and the CPU
+        	// does demosaic/colour/JPEG in strips (hires.c). Selected here,
+        	// before the sensor starts - the datapath cannot be switched
+        	// mid-stream (see RP3_white_balance_reencode_issue.md).
+        	if (hires_wanted()) {
+        		if (hires_datapath_init((void *)os_app_dplib_cb) < 0) {
+        			xprintf("\r\nDATAPATH Init fail (hi-res)\r\n");
+        			return false;
+        		}
+        	}
+        	else {
+        		hires_deactivate();
+        		// if wdma variable is zero when not init yet, then this step is a must be to retrieve wdma address
+        		//  Datapath events give callbacks to os_app_dplib_cb()
+        		if (cisdp_dp_init(true, SENSORDPLIB_PATH_INT_INP_HW5X5_JPEG, os_app_dplib_cb, g_jpg_ratio, APP_DP_RES_YUV640x480_INP_SUBSAMPLE_1X) < 0) {
+        			xprintf("\r\nDATAPATH Init fail\r\n");
+        			return false;
+        		}
+        	}
+#else
         	// if wdma variable is zero when not init yet, then this step is a must be to retrieve wdma address
         	//  Datapath events give callbacks to os_app_dplib_cb()
         	if (cisdp_dp_init(true, SENSORDPLIB_PATH_INT_INP_HW5X5_JPEG, os_app_dplib_cb, g_jpg_ratio, APP_DP_RES_YUV640x480_INP_SUBSAMPLE_1X) < 0) {
         		xprintf("\r\nDATAPATH Init fail\r\n");
         		return false;
         	}
+#endif // USE_RP2 || USE_RP3
             setupLEDFlash();
 
         }
@@ -2116,8 +2149,14 @@ static void prepareJpegFile(int8_t * outCategories, uint8_t classCount, fileBuff
 	static uint8_t nnData[MAX_CLASSES + 2];
 	char deployment_id[UUIDLENGTH];
 
-	exif_input.width  = (uint16_t)app_get_raw_width();
-	exif_input.height = (uint16_t)app_get_raw_height();
+	if (hires_isActive()) {
+		exif_input.width  = (uint16_t)HIRES_WIDTH;
+		exif_input.height = (uint16_t)HIRES_HEIGHT;
+	}
+	else {
+		exif_input.width  = (uint16_t)app_get_raw_width();
+		exif_input.height = (uint16_t)app_get_raw_height();
+	}
 	exif_utc_get_rtc_as_exif_string(exif_input.timestamp, sizeof(exif_input.timestamp));
 
 	/* Camera identity, build provenance and flash state. The Model string names

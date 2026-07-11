@@ -44,3 +44,5 @@
 30 0
 # 31: RP camera white balance: 0 = off, 1 = auto, 2 = manual (op27/28).
 31 1
+# 32: RP camera resolution: 0 = 640x480, 1 = 1280x960 single JPEG (needs op14 = 0).
+32 0

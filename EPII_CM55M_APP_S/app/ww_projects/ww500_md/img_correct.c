@@ -146,29 +146,8 @@ static void wb_apply_yuv420(uint8_t *yuv, uint32_t w, uint32_t h,
 				if (G < 0) G = 0; else if (G > 255) G = 255;
 				if (B < 0) B = 0; else if (B > 255) B = 255;
 
-				// Black level: subtract the sensor pedestal, restore range
-				R = (R > BLACK_LEVEL) ? (((R - BLACK_LEVEL) * BLACK_RESCALE_Q8) >> 8) : 0;
-				G = (G > BLACK_LEVEL) ? (((G - BLACK_LEVEL) * BLACK_RESCALE_Q8) >> 8) : 0;
-				B = (B > BLACK_LEVEL) ? (((B - BLACK_LEVEL) * BLACK_RESCALE_Q8) >> 8) : 0;
-
-				// White balance: scale red and blue (green is the reference)
-				R = (R * rGain) >> 8;
-				B = (B * bGain) >> 8;
-				if (R > 255) R = 255;
-				if (B > 255) B = 255;
-
-				// Colour correction matrix (4640 K, Q8.8)
-				int32_t Rc = (CCM_Q8[0] * R + CCM_Q8[1] * G + CCM_Q8[2] * B) >> 8;
-				int32_t Gc = (CCM_Q8[3] * R + CCM_Q8[4] * G + CCM_Q8[5] * B) >> 8;
-				int32_t Bc = (CCM_Q8[6] * R + CCM_Q8[7] * G + CCM_Q8[8] * B) >> 8;
-				if (Rc < 0) Rc = 0; else if (Rc > 255) Rc = 255;
-				if (Gc < 0) Gc = 0; else if (Gc > 255) Gc = 255;
-				if (Bc < 0) Bc = 0; else if (Bc > 255) Bc = 255;
-
-				// Tone curve
-				R = GAMMA_LUT[Rc];
-				G = GAMMA_LUT[Gc];
-				B = GAMMA_LUT[Bc];
+				// Black level -> WB gains -> CCM -> gamma (shared transform)
+				img_correct_transform_rgb(&R, &G, &B, rGain, bGain);
 
 				// Back to YCbCr (JPEG full range)
 				int32_t newY = (77 * R + 150 * G + 29 * B) >> 8;
@@ -187,6 +166,37 @@ static void wb_apply_yuv420(uint8_t *yuv, uint32_t w, uint32_t h,
 			v[cx] = (uint8_t)newCr;
 		}
 	}
+}
+
+/*************************************** Shared colour transform *************/
+
+void img_correct_transform_rgb(int32_t *r, int32_t *g, int32_t *b,
+							   uint16_t rGainQ8, uint16_t bGainQ8) {
+	int32_t R = *r, G = *g, B = *b;
+
+	// Black level: subtract the sensor pedestal, restore range
+	R = (R > BLACK_LEVEL) ? (((R - BLACK_LEVEL) * BLACK_RESCALE_Q8) >> 8) : 0;
+	G = (G > BLACK_LEVEL) ? (((G - BLACK_LEVEL) * BLACK_RESCALE_Q8) >> 8) : 0;
+	B = (B > BLACK_LEVEL) ? (((B - BLACK_LEVEL) * BLACK_RESCALE_Q8) >> 8) : 0;
+
+	// White balance: scale red and blue (green is the reference)
+	R = (R * rGainQ8) >> 8;
+	B = (B * bGainQ8) >> 8;
+	if (R > 255) R = 255;
+	if (B > 255) B = 255;
+
+	// Colour correction matrix (4640 K, Q8.8)
+	int32_t Rc = (CCM_Q8[0] * R + CCM_Q8[1] * G + CCM_Q8[2] * B) >> 8;
+	int32_t Gc = (CCM_Q8[3] * R + CCM_Q8[4] * G + CCM_Q8[5] * B) >> 8;
+	int32_t Bc = (CCM_Q8[6] * R + CCM_Q8[7] * G + CCM_Q8[8] * B) >> 8;
+	if (Rc < 0) Rc = 0; else if (Rc > 255) Rc = 255;
+	if (Gc < 0) Gc = 0; else if (Gc > 255) Gc = 255;
+	if (Bc < 0) Bc = 0; else if (Bc > 255) Bc = 255;
+
+	// Tone curve
+	*r = GAMMA_LUT[Rc];
+	*g = GAMMA_LUT[Gc];
+	*b = GAMMA_LUT[Bc];
 }
 
 /*************************************** Auto white balance ******************/
@@ -242,19 +252,12 @@ static void wb_measure_yuv420(const uint8_t *yuv, uint32_t w, uint32_t h,
 	*bMean = bSum / n;
 }
 
-/**
- * Compute warmth-biased grey-world gains for the current frame.
- * Returns false if the frame is too dark to measure reliably.
- */
-static bool wb_auto_gains(const uint8_t *yuv, uint32_t w, uint32_t h,
-						  uint16_t *rGainQ8, uint16_t *bGainQ8) {
-	uint32_t rM, gM, bM;
-	wb_measure_yuv420(yuv, w, h, &rM, &gM, &bM);
-
+bool img_correct_gains_from_means(uint32_t rMean, uint32_t gMean, uint32_t bMean,
+								  uint16_t *rGainQ8, uint16_t *bGainQ8) {
 	// Pedestal-correct; if the scene is essentially black, don't guess
-	rM = (rM > WB_AUTO_PEDESTAL) ? (rM - WB_AUTO_PEDESTAL) : 0;
-	gM = (gM > WB_AUTO_PEDESTAL) ? (gM - WB_AUTO_PEDESTAL) : 0;
-	bM = (bM > WB_AUTO_PEDESTAL) ? (bM - WB_AUTO_PEDESTAL) : 0;
+	uint32_t rM = (rMean > WB_AUTO_PEDESTAL) ? (rMean - WB_AUTO_PEDESTAL) : 0;
+	uint32_t gM = (gMean > WB_AUTO_PEDESTAL) ? (gMean - WB_AUTO_PEDESTAL) : 0;
+	uint32_t bM = (bMean > WB_AUTO_PEDESTAL) ? (bMean - WB_AUTO_PEDESTAL) : 0;
 	if ((gM < 4) || (rM < 2) || (bM < 2)) {
 		return false;
 	}
@@ -273,6 +276,17 @@ static bool wb_auto_gains(const uint8_t *yuv, uint32_t w, uint32_t h,
 	*rGainQ8 = (uint16_t)rGain;
 	*bGainQ8 = (uint16_t)bGain;
 	return true;
+}
+
+/**
+ * Compute warmth-biased grey-world gains for the current frame.
+ * Returns false if the frame is too dark to measure reliably.
+ */
+static bool wb_auto_gains(const uint8_t *yuv, uint32_t w, uint32_t h,
+						  uint16_t *rGainQ8, uint16_t *bGainQ8) {
+	uint32_t rM, gM, bM;
+	wb_measure_yuv420(yuv, w, h, &rM, &gM, &bM);
+	return img_correct_gains_from_means(rM, gM, bM, rGainQ8, bGainQ8);
 }
 
 /*************************************** Public API **************************/
@@ -365,4 +379,10 @@ void img_correct_get_jpeg(uint32_t *size, uint32_t *addr) {
 		*size = corrected_size;
 		*addr = corrected_addr;
 	}
+}
+
+void img_correct_set_external_jpeg(uint32_t size, uint32_t addr) {
+	corrected_valid = (size > 0) && (addr != 0);
+	corrected_size = size;
+	corrected_addr = addr;
 }

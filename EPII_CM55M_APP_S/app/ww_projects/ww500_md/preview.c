@@ -33,9 +33,10 @@
 #include "img_correct.h"	// img_correct_get_jpeg()
 #include "preview.h"
 
-// A VGA JPEG should be well under this; anything bigger means the JPEG
-// info is implausible and the frame is skipped rather than streamed.
-#define PREVIEW_MAX_JPEG_BYTES	(200 * 1024)
+// A VGA JPEG is well under 200 KB and a 1280x960 hi-res JPEG (hires.c)
+// under ~400 KB; anything bigger means the JPEG info is implausible and
+// the frame is skipped rather than streamed.
+#define PREVIEW_MAX_JPEG_BYTES	(420 * 1024)
 
 // Base64 input chunk. Must be a multiple of 3 so '=' padding can only
 // occur at the very end of the frame.

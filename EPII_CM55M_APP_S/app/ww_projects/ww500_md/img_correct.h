@@ -71,4 +71,26 @@ bool img_correct_process_mode(uint8_t mode, uint16_t rManualQ8, uint16_t bManual
  */
 void img_correct_get_jpeg(uint32_t *size, uint32_t *addr);
 
+/**
+ * Register an externally produced JPEG (e.g. the high-resolution capture in
+ * hires.c) so prepareJpegFile() picks it up exactly like a corrected frame.
+ */
+void img_correct_set_external_jpeg(uint32_t size, uint32_t addr);
+
+/**
+ * The shared per-pixel colour transform: black level -> WB gains -> CCM ->
+ * gamma. r/g/b are 0..255 in and out. Used by the VGA correction pass and
+ * the high-resolution demosaic (one definition so the two paths cannot
+ * drift apart).
+ */
+void img_correct_transform_rgb(int32_t *r, int32_t *g, int32_t *b,
+							   uint16_t rGainQ8, uint16_t bGainQ8);
+
+/**
+ * Warmth-biased grey-world gains from measured channel means (pedestal is
+ * subtracted here). Returns false if the scene is too dark to trust.
+ */
+bool img_correct_gains_from_means(uint32_t rMean, uint32_t gMean, uint32_t bMean,
+								  uint16_t *rGainQ8, uint16_t *bGainQ8);
+
 #endif /* IMG_CORRECT_H_ */

@@ -182,6 +182,7 @@ Those comments preceding the first index/value pair are preserved when the file 
 |    29 | OP_PARAMETER_CAM_AE_ENABLE 			| 1             | RP camera auto-exposure: 0 = off (init-table exposure), 1 = on. Highlight-metered loop steps sensor exposure (8-5000 lines) then analog gain (to 16x) toward the target - see `ae.c` |
 |    30 | OP_PARAMETER_CAM_AE_TARGET 			| 110           | Auto-exposure target: raw bright-quartile (p75) luma, 0-250 (0 = built-in default 95). Bright parts of the scene render just below white after the tone curve |
 |    31 | OP_PARAMETER_CAM_WB_MODE 				| 1             | RP camera white balance: 0 = off (hardware JPEG), 1 = auto (warmth-biased grey-world measured per frame), 2 = manual op27/op28. Auto falls back to manual for flash-lit or too-dark frames - see `img_correct.c` |
+|    32 | OP_PARAMETER_CAM_RESOLUTION 			| 0             | RP camera capture resolution: 0 = 640x480 (normal pipeline), 1 = 1280x960 single JPEG via the CPU pipeline - requires the NN off (op14 = 0); see [hires-capture.md](hires-capture.md) |
 
 
 ## Syncronisation with BLE Processor Code

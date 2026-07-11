@@ -44,4 +44,11 @@ void ae_notifySensorInit(void);
  */
 bool ae_process(uint32_t yAddr, uint16_t w, uint16_t h);
 
+/**
+ * As ae_process(), but with the bright-quartile luma already measured by the
+ * caller (used by the high-resolution capture, which measures the raw Bayer
+ * green channel instead of a demosaiced Y plane).
+ */
+bool ae_process_measured(uint32_t p75Raw);
+
 #endif /* AE_H_ */

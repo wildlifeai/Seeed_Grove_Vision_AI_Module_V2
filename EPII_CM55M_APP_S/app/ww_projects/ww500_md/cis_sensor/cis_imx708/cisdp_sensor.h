@@ -52,11 +52,22 @@ uint32_t app_get_raw_channels();
 
 /*
  * High-resolution RAW capture support (hires.c). Register a nonzero raw
- * buffer address BEFORE cisdp_dp_init() to switch the datapath to
- * INP centre-crop (1280x960) -> RAW Bayer -> WDMA2 at that address,
- * bypassing HW5x5/JPEG. Register 0 to restore the normal VGA flow.
+ * buffer address BEFORE cisdp_sensor_init() to make the sensor stream a
+ * centred 1280x960 window (digital crop) and switch the datapath to
+ * INP pass-through -> RAW Bayer -> WDMA2 at that address, bypassing
+ * HW5x5/JPEG. Register 0 to restore the normal VGA flow.
  */
 void cisdp_set_hires_raw(uint32_t rawAddr);
+
+/* Frame-timeout forensics: dump sensor / CSI-RX / INP state on the console
+ * (called from the image task's capture-retry path while everything is
+ * still powered). */
+void cisdp_dump_diag(void);
+
+/* Point the shared CIS I2C bus at the main camera (the HM0360 MD companion
+ * can leave the slave ID at itself). Call before writing sensor registers
+ * from outside the driver (e.g. the AE loop). */
+void cisdp_select_main_camera_i2c(void);
 
 /* CFA phase of the demosaic, as a demosaic_pattern_t value (demosaic.h) */
 uint8_t cisdp_get_demos_pattern(void);

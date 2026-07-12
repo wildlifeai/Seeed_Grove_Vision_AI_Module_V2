@@ -135,6 +135,8 @@
 #include "barrier.h"
 #include "cisdp_sensor.h"
 #include "preview.h"
+#include "hires.h"		// hires_get_raw() for the rawdump command
+#include "WE2_core.h"	// cache maintenance for the rawdump command
 
 #include "inactivity.h"
 
@@ -290,6 +292,9 @@ static BaseType_t prvCamReg(char *pcWriteBuffer, size_t xWriteBufferLen, const c
 // Focus lens (VCM) control - only the RP v3 camera module has a focus actuator
 static BaseType_t prvVcm(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 #endif // USE_RP3
+#if defined(USE_RP2) || defined(USE_RP3)
+static BaseType_t prvRawDump(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
+#endif // USE_RP2 || USE_RP3
 
 // Day/night dual-image camera switching (see camera_switch.c)
 static BaseType_t prvSlots(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
@@ -540,6 +545,16 @@ static const CLI_Command_Definition_t xVcm = {
 	1		/* One parameter expected */
 };
 #endif // USE_RP3
+
+#if defined(USE_RP2) || defined(USE_RP3)
+/* Structure that defines the "rawdump" command line command. */
+static const CLI_Command_Definition_t xRawDump = {
+	"rawdump", /* The command string to type. */
+	"rawdump <offsetKB> <lenKB>:\r\n Base64-dump part of the hi-res RAW buffer (diagnostics)\r\n",
+	prvRawDump, /* The function to run. */
+	2		/* Two parameters expected */
+};
+#endif // USE_RP2 || USE_RP3
 
 /* Structure that defines the "writefile" command line command. */
 static const CLI_Command_Definition_t xWriteFile = {
@@ -1564,6 +1579,75 @@ static BaseType_t prvVcm(char *pcWriteBuffer, size_t xWriteBufferLen, const char
 }
 
 #endif // USE_RP3
+
+#if defined(USE_RP2) || defined(USE_RP3)
+/**
+ * Base64-dump part of the hi-res RAW Bayer buffer for PC-side analysis
+ * (line stride / Bayer phase diagnostics). Output framing:
+ *   RAWDUMP <offset> <len>\n <base64...> \nRAWDUMP END
+ */
+static BaseType_t prvRawDump(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) {
+	static const char tbl[] =
+			"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+	const char *p1, *p2;
+	BaseType_t l1, l2;
+
+	p1 = FreeRTOS_CLIGetParameter(pcCommandString, 1, &l1);
+	p2 = FreeRTOS_CLIGetParameter(pcCommandString, 2, &l2);
+
+	uint32_t total = 0;
+	const uint8_t *raw = hires_get_raw(&total);
+	uint32_t off = (p1 != NULL) ? (uint32_t)strtol(p1, NULL, 10) * 1024u : 0;
+	uint32_t len = (p2 != NULL) ? (uint32_t)strtol(p2, NULL, 10) * 1024u : 16384u;
+
+	if (off >= total) {
+		off = 0;
+	}
+	if (len > total - off) {
+		len = total - off;
+	}
+	if (len > 131072u) {
+		len = 131072u;	// keep a dump under ~2s of UART time
+	}
+
+	SCB_InvalidateDCache_by_Addr((void *)(raw + off), (int32_t)len);
+
+	xprintf("\nRAWDUMP %u %u\n", (unsigned)off, (unsigned)len);
+	char chunk[132];
+	int ci = 0;
+	uint32_t i;
+	for (i = 0; i + 2 < len; i += 3) {
+		uint32_t v = ((uint32_t)raw[off + i] << 16) |
+					 ((uint32_t)raw[off + i + 1] << 8) | raw[off + i + 2];
+		chunk[ci++] = tbl[(v >> 18) & 63];
+		chunk[ci++] = tbl[(v >> 12) & 63];
+		chunk[ci++] = tbl[(v >> 6) & 63];
+		chunk[ci++] = tbl[v & 63];
+		if (ci >= 128) {
+			chunk[ci] = 0;
+			xprintf("%s", chunk);
+			ci = 0;
+		}
+	}
+	if (ci > 0) {
+		chunk[ci] = 0;
+		xprintf("%s", chunk);
+	}
+	uint32_t rem = len - i;
+	if (rem == 1u) {
+		uint32_t v = (uint32_t)raw[off + i] << 16;
+		xprintf("%c%c==", tbl[(v >> 18) & 63], tbl[(v >> 12) & 63]);
+	}
+	else if (rem == 2u) {
+		uint32_t v = ((uint32_t)raw[off + i] << 16) | ((uint32_t)raw[off + i + 1] << 8);
+		xprintf("%c%c%c=", tbl[(v >> 18) & 63], tbl[(v >> 12) & 63], tbl[(v >> 6) & 63]);
+	}
+	xprintf("\nRAWDUMP END\n");
+
+	pcWriteBuffer[0] = '\0';
+	return pdFALSE;
+}
+#endif // USE_RP2 || USE_RP3
 
 /**
  * Write a test file to the SD card.
@@ -2818,6 +2902,9 @@ static void vRegisterCLICommands(void)
 	FreeRTOS_CLIRegisterCommand(&xI2C);
 
 	FreeRTOS_CLIRegisterCommand(&xCamReg);	// Read/write camera sensor registers (staged writes persist)
+#if defined(USE_RP2) || defined(USE_RP3)
+	FreeRTOS_CLIRegisterCommand(&xRawDump);	// Base64-dump the hi-res RAW buffer (diagnostics)
+#endif // USE_RP2 || USE_RP3
 #ifdef USE_RP3
 	FreeRTOS_CLIRegisterCommand(&xVcm);	// Focus lens (VCM) position
 #endif // USE_RP3

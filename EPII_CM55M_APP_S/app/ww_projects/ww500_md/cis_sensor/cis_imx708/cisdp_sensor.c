@@ -24,6 +24,11 @@
 // FreeRTOS kernel includes.
 #include "FreeRTOS.h"
 #include "timers.h"
+#include "task.h"
+
+// Frame-timeout forensics (cisdp_dump_diag)
+#include "hx_drv_csirx.h"
+#include "hx_drv_inp.h"
 
 //#define GROVE_VISION_AI
 
@@ -101,15 +106,134 @@ static HX_CIS_SensorSetting_t  IMX708_mirror_setting[] = {
 };
 
 // High-resolution RAW capture override (see hires.c): when nonzero, the
-// datapath is configured as INP centre-crop -> RAW -> WDMA2 at this address
+// datapath is configured as sensor-windowed RAW -> WDMA2 at this address
 // instead of the integrated HW5x5+JPEG flow.
 #define HIRES_RAW_WIDTH		1280
 #define HIRES_RAW_HEIGHT	960
 static uint32_t g_hires_raw_addr = 0;
 
+// Hi-res sensor windowing selector. 0 = the sensor streams its stock
+// 2304x1296 and the INP does the 1280x960 centre crop (subsample disabled);
+// 1 = the sensor itself streams a 1280-wide window via the digital-crop
+// stage and the INP is a pure pass-through.
+//
+// Bench 12 Jul 2026, with the CIS slave-ID bug fixed (see
+// cisdp_stream_on()): INP crop mode (0) delivers frames but every one ends
+// in XDMA_WDMA2STATUS_ERR_FE_COUNT_NOT_REACH - the INP under-delivers a
+// 1280-wide crop, confirming the DS 5.6.3 cap (INP processed output max
+// 640x640). The sensor window (1) is therefore required.
+//
+// The window is TALLER than the image (HIRES_SENSOR_WINDOW_HEIGHT vs
+// HIRES_RAW_HEIGHT): the capture gate opens a fixed ~18.4 lines after
+// frame start (measured constant to 32 bytes across boots), so a 960-line
+// window only ever delivered ~941.6 lines and the WDMA2 byte count never
+// completed. With 992 sensor lines the gate window contains ~973 lines
+// and the DMA reaches its 1280x960 count mid-frame -> NORMAL_FINISH.
+#define HIRES_SENSOR_WINDOW		1
+
+#if HIRES_SENSOR_WINDOW
+// Sensor streams 992 lines; the gated capture keeps 960 (see above).
+// Offsets (512,152) are even, preserving the Bayer phase; the captured
+// content starts ~18 lines in (sensor row ~170), matching the VGA INP
+// crop's framing (row 168) almost exactly.
+#define HIRES_SENSOR_WINDOW_HEIGHT	992
+static HX_CIS_SensorSetting_t IMX708_hires_window_setting[] = {
+		{ HX_CIS_I2C_Action_W, 0x0408, 0x02},	// digital crop X offset = 512
+		{ HX_CIS_I2C_Action_W, 0x0409, 0x00},
+		{ HX_CIS_I2C_Action_W, 0x040A, 0x00},	// digital crop Y offset = 152
+		{ HX_CIS_I2C_Action_W, 0x040B, 0x98},
+		{ HX_CIS_I2C_Action_W, 0x040C, 0x05},	// digital crop width = 1280
+		{ HX_CIS_I2C_Action_W, 0x040D, 0x00},
+		{ HX_CIS_I2C_Action_W, 0x040E, 0x03},	// digital crop height = 992
+		{ HX_CIS_I2C_Action_W, 0x040F, 0xE0},
+		{ HX_CIS_I2C_Action_W, 0x034C, 0x05},	// X output size = 1280
+		{ HX_CIS_I2C_Action_W, 0x034D, 0x00},
+		{ HX_CIS_I2C_Action_W, 0x034E, 0x03},	// Y output size = 992
+		{ HX_CIS_I2C_Action_W, 0x034F, 0xE0},
+};
+#endif // HIRES_SENSOR_WINDOW
+
 void cisdp_set_hires_raw(uint32_t rawAddr)
 {
 	g_hires_raw_addr = rawAddr;
+}
+
+// Point the shared CIS I2C at the main camera. Callers that write sensor
+// registers outside this driver (e.g. the AE loop) must call this first -
+// the HM0360 MD companion shares the bus and can leave the slave ID
+// pointing at itself (see cisdp_stream_on()).
+void cisdp_select_main_camera_i2c(void)
+{
+	hx_drv_cis_set_slaveID(CIS_I2C_ID);
+}
+
+// Frame-timeout forensics (called from the image task's capture-retry path,
+// while the sensor rail and datapath are still up). One compact dump that
+// splits the fault between the sensor (FRM_CNT movement), the MIPI link
+// (CSI RX IRQ/lane state) and the INP configuration.
+void cisdp_dump_diag(void)
+{
+	static const uint16_t regs[] = {
+		0x0100, 0x0005, 0x0340, 0x0341, 0x0342, 0x0343,
+		0x0408, 0x0409, 0x040A, 0x040B, 0x040C, 0x040D, 0x040E, 0x040F,
+		0x034C, 0x034D, 0x034E, 0x034F,
+	};
+	uint8_t v8;
+	unsigned i;
+
+	// The HM0360 MD sensor shares this I2C bus and its polling leaves the
+	// slave ID pointing at itself - explicitly select the IMX708 (bench
+	// 11 Jul: a dump without this read the HM0360's register space)
+	uint8_t prevId = 0;
+	hx_drv_cis_get_slaveID(&prevId);
+	hx_drv_cis_set_slaveID(CIS_I2C_ID);
+
+	xprintf("DIAG sensor(id 0x%02x, was 0x%02x):", CIS_I2C_ID, prevId);
+	for (i = 0; i < sizeof(regs) / sizeof(regs[0]); i++) {
+		if (hx_drv_cis_get_reg(regs[i], &v8) == HX_CIS_NO_ERROR) {
+			xprintf(" %04x=%02x", regs[i], v8);
+		}
+		else {
+			xprintf(" %04x=ERR", regs[i]);
+		}
+	}
+	xprintf("\n");
+
+	uint8_t f1 = 0xEE, f2 = 0xEE;
+	hx_drv_cis_get_reg(0x0005, &f1);
+	vTaskDelay(pdMS_TO_TICKS(250));
+	hx_drv_cis_get_reg(0x0005, &f2);
+	xprintf("DIAG FRM_CNT 0x%02x -> 0x%02x over 250ms (%s)\n", f1, f2,
+			(f1 != f2) ? "sensor STREAMING" : "sensor NOT advancing");
+
+	uint32_t info = 0, err = 0, dphy = 0;
+	uint16_t fifo = 0;
+	uint8_t dpp = 0;
+	hx_drv_csirx_get_infoirq_state(&info);
+	hx_drv_csirx_get_errirq_state(&err);
+	hx_drv_csirx_get_dphyerrirq_state(&dphy);
+	hx_drv_csirx_get_fifo_fill(&fifo);
+	hx_drv_csirx_get_pixel_depth(&dpp);
+	xprintf("DIAG csirx info=0x%08x err=0x%08x dphy=0x%08x stop(clk,l0,l1)=%d,%d,%d fifo=%d dpp=%d\n",
+			(unsigned)info, (unsigned)err, (unsigned)dphy,
+			(int)hx_drv_csirx_get_clkln_stopstate(),
+			(int)hx_drv_csirx_get_ln0_stopstate(),
+			(int)hx_drv_csirx_get_ln1_stopstate(),
+			(int)fifo, (int)dpp);
+
+	uint8_t inp_en = 0xEE;
+	INP_SUBSAMPLE_E sub = INP_SUBSAMPLE_DISABLE;
+	uint16_t hsize = 0;
+	hx_drv_inp_get_enable(&inp_en);
+	hx_drv_inp_get_subsample(&sub);
+	hx_drv_inp_get_rxsub_hsize(&hsize);
+	xprintf("DIAG inp en=%d sub=0x%x hsize=%d hires_addr=0x%08x\n",
+			(int)inp_en, (unsigned)sub, (int)hsize, (unsigned)g_hires_raw_addr);
+
+	// (The WDMA2 delivery high-water mark is printed per retry by
+	// hires_dump_hwm_and_refill() - see the image task's retry path.)
+
+	hx_drv_cis_set_slaveID(prevId);
 }
 
 uint8_t cisdp_get_demos_pattern(void)
@@ -177,8 +301,16 @@ void set_mipi_csirx_enable()
 	uint32_t bitrate_1lane = IMX708_MIPI_CLOCK_FEQ*2;
 	uint32_t mipi_lnno = IMX708_MIPI_LANE_CNT;
 	uint32_t pixel_dpp = IMX708_MIPI_DPP;
+#if HIRES_SENSOR_WINDOW
+	// Hi-res: the sensor's digital crop narrows the stream on the wire, so
+	// the RX FIFO fill and CSI TX are computed from the windowed geometry
+	uint32_t line_length = (g_hires_raw_addr != 0) ? HIRES_RAW_WIDTH : IMX708_SENSOR_WIDTH;
+	uint32_t frame_length = (g_hires_raw_addr != 0) ? HIRES_SENSOR_WINDOW_HEIGHT : IMX708_SENSOR_HEIGHT;
+#else
+	// The sensor always streams its stock 2304x1296 (hi-res crops in the INP)
 	uint32_t line_length = IMX708_SENSOR_WIDTH;
 	uint32_t frame_length = IMX708_SENSOR_HEIGHT;
+#endif
 	uint32_t byte_clk = bitrate_1lane/8;
 	uint32_t continuousout = IMX708_MIPITX_CNTCLK_EN;
 	uint32_t deskew_en = 0;
@@ -216,6 +348,19 @@ void set_mipi_csirx_enable()
 		rx_fifo_fill = ceil(delta_t*byte_clk*mipi_lnno/4/(pixel_dpp/2))*(pixel_dpp/2);
 		tx_fifo_fill = 0;
 	}
+#if HIRES_SENSOR_WINDOW
+	if (g_hires_raw_addr != 0) {
+		// Empirical (bench 12 Jul 2026, rawdump stride analysis): with the
+		// computed fill (40) the INP drain outruns the shorter 1280-wide
+		// RAW10 line burst and every stored line loses ~25.5 bytes
+		// (stride 1254.5 instead of 1280 -> full-frame Bayer-phase tear).
+		// A larger fill delays the per-line drain start so the burst stays
+		// ahead; generous margin, still tiny versus the line period.
+		if (rx_fifo_fill < 100) {
+			rx_fifo_fill = 100;
+		}
+	}
+#endif // HIRES_SENSOR_WINDOW
 	dbg_printf(DBG_LESS_INFO, "MIPI RX FIFO FILL: %d\n", rx_fifo_fill);
 	dbg_printf(DBG_LESS_INFO, "MIPI TX FIFO FILL: %d\n", tx_fifo_fill);
 
@@ -403,6 +548,22 @@ int cisdp_sensor_init(bool sensor_init) {
     	dbg_printf(DBG_LESS_INFO, "IMX708 Init by app (IMX708_2304x1296_setting)\n");
     }
 
+#if HIRES_SENSOR_WINDOW
+    if (g_hires_raw_addr != 0)
+    {
+    	// Hi-res capture (op32, hires.c): the sensor streams the 1280x960
+    	// window itself. Staged before sensor init by image_task
+    	// (hires_stage()).
+    	if(hx_drv_cis_setRegTable(IMX708_hires_window_setting, HX_CIS_SIZE_N(IMX708_hires_window_setting, HX_CIS_SensorSetting_t))!= HX_CIS_NO_ERROR)
+    	{
+    		dbg_printf(DBG_LESS_INFO, "IMX708 hi-res window fail (IMX708_hires_window_setting)\n");
+    		return -1;
+    	}
+    	dbg_printf(DBG_LESS_INFO, "IMX708 hi-res window: %dx%d out (digital crop @512,168)\n",
+    			HIRES_RAW_WIDTH, HIRES_RAW_HEIGHT);
+    }
+#endif // HIRES_SENSOR_WINDOW
+
     if(hx_drv_cis_setRegTable(IMX708_exposure_setting, HX_CIS_SIZE_N(IMX708_exposure_setting, HX_CIS_SensorSetting_t))!= HX_CIS_NO_ERROR)
     {
         dbg_printf(DBG_LESS_INFO, "IMX708 Init by app fail (IMX708_exposure_setting)\n");
@@ -514,15 +675,44 @@ int cisdp_dp_init(bool inp_init, SENSORDPLIB_PATH_E dp_type, sensordplib_CBEvent
 	set_mipi_csirx_enable();
 
     INP_CROP_T crop;
+
     if (g_hires_raw_addr != 0) {
-    	// High-resolution RAW capture (hires.c): centre-crop the sensor's
-    	// 2304x1296 stream to 1280x960 in the INP block. The RAW Bayer frame
-    	// goes to WDMA2 at the address hires.c registered (the CPU demosaics
-    	// and JPEG-encodes it in strips - the HW5x5/JPEG blocks are bypassed).
-    	crop.start_x = (SENCTRL_SENSOR_WIDTH - HIRES_RAW_WIDTH) / 2;		// 512
-    	crop.start_y = (SENCTRL_SENSOR_HEIGHT - HIRES_RAW_HEIGHT) / 2;		// 168
-    	crop.last_x = crop.start_x + HIRES_RAW_WIDTH - 1;
-    	crop.last_y = crop.start_y + HIRES_RAW_HEIGHT - 1;
+#if HIRES_SENSOR_WINDOW
+    	// High-resolution RAW capture (hires.c): the sensor streams the
+    	// 1280-wide window itself (IMX708_hires_window_setting), and the INP
+    	// runs as a pure pass-through - full-frame crop, no subsample -
+    	// mirroring the proven allon_jpeg_encode shape. The WDMA2 byte
+    	// count (1280x960) selects the image out of the taller window.
+    	crop.start_x = 0;
+    	crop.start_y = 0;
+    	crop.last_x = HIRES_RAW_WIDTH - 1;
+    	crop.last_y = HIRES_SENSOR_WINDOW_HEIGHT - 1;
+    	sensordplib_set_sensorctrl_inp_wi_crop(SENCTRL_SENSOR_TYPE, SENCTRL_STREAM_TYPE,
+    			HIRES_RAW_WIDTH, HIRES_SENSOR_WINDOW_HEIGHT,
+    			INP_SUBSAMPLE_DISABLE,
+    			crop);
+#else
+    	// High-resolution RAW capture (hires.c): the sensor streams its
+    	// stock 2304x1296 and the INP takes the same 1280x960 centre crop
+    	// the VGA flow uses (identical field of view) - just without the
+    	// 2:1 subsample, so the full-resolution window reaches WDMA2.
+    	// This matches Himax's high-resolution capture diagram
+    	// (INP -> 1280x960 RAW image to memory).
+    	crop.start_x = DP_INP_CROP_START_X;
+    	crop.start_y = DP_INP_CROP_START_Y;
+    	crop.last_x = DP_INP_CROP_START_X + HIRES_RAW_WIDTH - 1;
+    	crop.last_y = DP_INP_CROP_START_Y + HIRES_RAW_HEIGHT - 1;
+    	sensordplib_set_sensorctrl_inp_wi_crop(SENCTRL_SENSOR_TYPE, SENCTRL_STREAM_TYPE,
+    			SENCTRL_SENSOR_WIDTH, SENCTRL_SENSOR_HEIGHT,
+    			INP_SUBSAMPLE_DISABLE,
+    			crop);
+#endif // HIRES_SENSOR_WINDOW
+
+    	// The datapath is pinned to RAW -> WDMA2 regardless of the
+    	// requested dp_type: CAMERA_CONFIG_RUN/CONTINUE re-init the datapath
+    	// with the VGA HW5x5+JPEG arguments before every capture start,
+    	// which would otherwise clobber the RAW configuration mid-mode.
+    	dp_type = SENSORDPLIB_PATH_INP_WDMA2;
     }
     else {
     	crop.start_x = DP_INP_CROP_START_X;
@@ -540,9 +730,12 @@ int cisdp_dp_init(bool inp_init, SENSORDPLIB_PATH_E dp_type, sensordplib_CBEvent
     	else {
     		crop.last_y = 0;
     	}
-    }
 
-    sensordplib_set_sensorctrl_inp_wi_crop(SENCTRL_SENSOR_TYPE, SENCTRL_STREAM_TYPE, SENCTRL_SENSOR_WIDTH, SENCTRL_SENSOR_HEIGHT, DP_INP_SUBSAMPLE, crop);
+    	sensordplib_set_sensorctrl_inp_wi_crop(SENCTRL_SENSOR_TYPE, SENCTRL_STREAM_TYPE,
+    			SENCTRL_SENSOR_WIDTH, SENCTRL_SENSOR_HEIGHT,
+    			DP_INP_SUBSAMPLE,
+    			crop);
+    }
 
 	uint8_t cyclic_buffer_cnt = 1;
 
@@ -551,6 +744,11 @@ int cisdp_dp_init(bool inp_init, SENSORDPLIB_PATH_E dp_type, sensordplib_CBEvent
 	{
 	case SENSORDPLIB_PATH_INP_WDMA2:
 		if (g_hires_raw_addr != 0) {
+			// Byte count = the image (1280x960). The sensor window is
+			// taller (HIRES_SENSOR_WINDOW_HEIGHT): the capture gate opens
+			// ~18.4 lines into the frame (constant, measured), so the count
+			// completes mid-frame with 960 contiguous lines ->
+			// NORMAL_FINISH -> FRAME_READY.
 			sensordplib_set_raw_wdma2(HIRES_RAW_WIDTH, HIRES_RAW_HEIGHT,
 					NULL);
 		}
@@ -647,6 +845,12 @@ int cisdp_dp_init(bool inp_init, SENSORDPLIB_PATH_E dp_type, sensordplib_CBEvent
 
 void cisdp_stream_on()
 {
+    // The HM0360 MD companion shares the CIS I2C bus; make sure the stream
+    // command reaches the IMX708 whatever the bus was last pointed at
+    // (bench 12 Jul 2026: a stale slave ID left the sensor in standby and
+    // every capture timed out)
+    hx_drv_cis_set_slaveID(CIS_I2C_ID);
+
     /*
      * Stream On
      */
@@ -664,6 +868,8 @@ void cisdp_stream_on()
 
 void cisdp_stream_off()
 {
+    hx_drv_cis_set_slaveID(CIS_I2C_ID);	// see cisdp_stream_on()
+
     /*
      * Stream Off
      */
@@ -680,6 +886,8 @@ void cisdp_stream_off()
 
 void cisdp_sensor_start()
 {
+    hx_drv_cis_set_slaveID(CIS_I2C_ID);	// see cisdp_stream_on()
+
     /*
      * Stream On
      */
@@ -703,6 +911,8 @@ void cisdp_sensor_stop() {
     sensordplib_stop_capture();
     sensordplib_start_swreset();
     sensordplib_stop_swreset_WoSensorCtrl();
+
+    hx_drv_cis_set_slaveID(CIS_I2C_ID);	// see cisdp_stream_on()
 
     /*
      * Stream Off

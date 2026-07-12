@@ -31,6 +31,29 @@ typedef enum {
 } demosaic_pattern_t;
 
 /**
+ * Build the per-line start-offset table for a freshly captured hi-res RAW
+ * frame. The datapath delivers slightly short lines with +/-1 byte jitter
+ * (a fixed 32 wire-bytes per line are lost - see hires-capture.md), so line
+ * starts are tracked against the same-parity line two above; on flat
+ * content a wrong pick is visually harmless. strideA/strideB are the two
+ * candidate per-line strides (e.g. 1254/1255); avail bounds the delivered
+ * bytes. The table applies to all demosaic_* calls until cleared.
+ */
+void demosaic_track_lines(const uint8_t *bayer, uint32_t h,
+						  uint32_t strideA, uint32_t strideB, uint32_t avail);
+
+/** Return to the dense row*w layout (e.g. when hi-res deactivates). */
+void demosaic_clear_line_table(void);
+
+/**
+ * Replace literal 0x00 bytes with the same-CFA neighbour two rows away.
+ * The IMX708 emits short zero runs at fixed (masked-PDAF) positions in the
+ * windowed mode; raw zero never occurs naturally (black level ~16), so
+ * this cannot touch real content. Call after demosaic_track_lines().
+ */
+void demosaic_repair_zeros(uint8_t *bayer, uint32_t w, uint32_t h);
+
+/**
  * Subsampled raw-domain scene measurement.
  * Means are per-channel (R/G/B taken only from their own CFA sites);
  * gP75 is the green-channel bright-quartile (32-bin histogram midpoint),

@@ -45,7 +45,7 @@
 // A VGA JPEG is well under 200 KB and a 1280x960 hi-res JPEG (hires.c)
 // under ~400 KB; anything bigger means the JPEG info is implausible and
 // the frame is skipped rather than streamed.
-#define PREVIEW_MAX_JPEG_BYTES	(420 * 1024)
+#define PREVIEW_MAX_JPEG_BYTES	(430080)	// = hires.c JPEG cap (its overflow guard binds first)
 
 // Base64 input chunk. Must be a multiple of 3 so '=' padding can only
 // occur at the very end of the frame.

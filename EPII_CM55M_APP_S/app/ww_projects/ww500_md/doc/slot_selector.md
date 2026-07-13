@@ -114,3 +114,11 @@ Note: a bootloader X-Modem burn rewrites the whole selector sector and so RESETS
 `slots` reporting `'unknown'` after a recovery burn is normal, and self-heals the first time
 each slot boots. For the update paths and the recovery procedure see
 `_Documentation/firmware_update_and_recovery.md`.
+
+A label write can also be lost silently: seen once in the field, the brief mid-update boot
+between the two flashes of a dual-image update failed to record its label, leaving the app's
+camera switching stuck on 'unknown' until that image booted again. `cameraSwitch_labelBootSlot()`
+now logs every failure path to the console and retries the flash write once
+(`labelBootSlot: ...` messages), and the mobile app allows an explicit-confirm switch into an
+unlabelled slot (safe: `xip_switch_slot()` refuses slots without a valid secure-boot image, and
+the switch itself re-labels the slot at boot).

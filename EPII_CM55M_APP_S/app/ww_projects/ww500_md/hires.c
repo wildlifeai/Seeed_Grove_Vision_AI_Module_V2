@@ -7,6 +7,32 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <stddef.h>
+
+#include "hires.h"
+
+#if !defined(USE_RP2) && !defined(USE_RP3)
+
+// The high-resolution capture path only exists for the RP colour cameras
+// (its cisdp hooks live in the IMX708/IMX219 drivers). These stubs keep
+// the other camera variants (e.g. the HM0360 build) compiling.
+bool hires_wanted(void) { return false; }
+bool hires_isActive(void) { return false; }
+bool hires_isStaged(void) { return false; }
+int hires_stage(void) { return -1; }
+int hires_datapath_init(void *cb_event) { (void)cb_event; return -1; }
+void hires_deactivate(void) {}
+uint32_t hires_process_frame(void) { return 0; }
+void hires_dump_hwm_and_refill(void) {}
+const uint8_t *hires_get_raw(uint32_t *lenOut) {
+	if (lenOut != NULL) {
+		*lenOut = 0;
+	}
+	return (const uint8_t *)0;
+}
+
+#else // USE_RP2 || USE_RP3
+
 #include <string.h>		// memset (diag sentinel fill)
 
 #include "WE2_core.h"		// SCB_InvalidateDCache_by_Addr
@@ -23,7 +49,6 @@
 #include "sw_jpeg.h"
 #include "ae.h"
 #include "cvapp.h"			// cv_modelLoaded()
-#include "hires.h"
 
 #define HIRES_JPEG_QUALITY	85
 
@@ -244,3 +269,5 @@ uint32_t hires_process_frame(void) {
 
 	return size;
 }
+
+#endif // USE_RP2 || USE_RP3

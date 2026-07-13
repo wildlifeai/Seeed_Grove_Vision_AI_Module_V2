@@ -62,10 +62,15 @@
 > green-diagonal equality (the two G planes of the Bayer quad must
 > match; in a wrong phase they are really R and B). Verified to
 > reproduce the reference solution 960/960 lines on the golden dump,
-> and clean images on-device. Encoded output is 1248x960 (the largest
-> 16-multiple inside the delivered lines); a ~10 px noise fringe at the
-> right edge (line-wrap region) remains - crop or future fix. AE and WB
-> operate on the tracked rows, so exposure/colour are unaffected.
+> and clean images on-device. Encoded output is **1216x960**: valid line
+> content ends at column ~1225 (each line's final DMA burst carries
+> corrupted alternating bytes), so the width is the largest 16-multiple
+> below that. Two sensor artifacts are also repaired in the pipeline:
+> fixed-position zero runs (masked-PDAF positions, rendered as coloured
+> dashes) are replaced from the same-CFA row two above
+> (demosaic_repair_zeros() - raw zero never occurs naturally, the black
+> level is ~16). AE and WB operate on the tracked rows, so
+> exposure/colour are unaffected.
 
 ## Why not the Himax 4-tile workaround
 

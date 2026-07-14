@@ -1,5 +1,5 @@
 # Description of the CONFIG.TXT File
-#### CGP - 25 April 2026 (updated 8 July 2026: parameters 21-28, immediate persistence)
+#### CGP - 25 April 2026 (updated 11 July 2026: parameters 29-31 - RP camera auto-exposure and white-balance mode)
 
 The CONFIG.TXT file contains "Operational Parameters" for the WW500.
 
@@ -68,6 +68,9 @@ captured first.
 |    26 | OP_PARAMETER_SLOT_SWITCH 				| 1             | Automatic light-based camera image switching: 0 = off (manual `switchslot` only), 1 = automatic (night image in the dark, colour image in daylight; reboots at the next sleep) |
 |    27 | OP_PARAMETER_WB_RED_GAIN 				| 286           | Software white-balance RED gain, Q8.8 (256 = 1.0x, 0 = correction off). RP3 colour camera only |
 |    28 | OP_PARAMETER_WB_BLUE_GAIN 				| 326           | Software white-balance BLUE gain, Q8.8 (256 = 1.0x, 0 = correction off). RP3 colour camera only |
+|    29 | OP_PARAMETER_CAM_AE_ENABLE 			| 1             | RP camera auto-exposure: 0 = off (init-table exposure), 1 = on. Highlight-metered loop steps sensor exposure (8-5000 lines) then analog gain (to 16x) toward the target - see `ae.c` |
+|    30 | OP_PARAMETER_CAM_AE_TARGET 			| 110           | Auto-exposure target: raw bright-quartile (p75) luma, 0-250 (0 = built-in default 95). Bright parts of the scene render just below white after the tone curve |
+|    31 | OP_PARAMETER_CAM_WB_MODE 				| 1             | RP camera white balance: 0 = off (hardware JPEG), 1 = auto (warmth-biased grey-world measured per frame), 2 = manual op27/op28. Auto falls back to manual for flash-lit or too-dark frames - see `img_correct.c` |
 
 ## More Details
 

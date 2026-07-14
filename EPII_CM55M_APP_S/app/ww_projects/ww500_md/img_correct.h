@@ -48,6 +48,22 @@
  */
 bool img_correct_process(uint16_t rGainQ8, uint16_t bGainQ8);
 
+// WB modes for img_correct_process_mode() (op-param OP_PARAMETER_CAM_WB_MODE)
+#define IMG_CORRECT_MODE_OFF	0	// no correction, hardware sensor-path JPEG
+#define IMG_CORRECT_MODE_AUTO	1	// warmth-biased grey-world, measured per frame
+#define IMG_CORRECT_MODE_MANUAL	2	// fixed gains from op27/op28
+
+/**
+ * Mode-dispatching wrapper around img_correct_process().
+ *
+ * AUTO measures the frame (subsampled grey-world with a warmth bias matched
+ * to the phone-reference rendering) and applies the computed gains; it falls
+ * back to the manual gains for flash-lit frames (different spectrum), frames
+ * too dark to measure, or if measurement is unavailable.
+ */
+bool img_correct_process_mode(uint8_t mode, uint16_t rManualQ8, uint16_t bManualQ8,
+							  bool flashLit);
+
 /**
  * If the last capture was corrected and re-encoded, overwrite *size and *addr
  * with the corrected JPEG's size and address; otherwise leave them untouched.

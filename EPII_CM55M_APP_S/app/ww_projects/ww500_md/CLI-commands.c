@@ -133,6 +133,7 @@
 
 #include "barrier.h"
 #include "cisdp_sensor.h"
+#include "preview.h"
 
 #include "inactivity.h"
 
@@ -255,6 +256,8 @@ static BaseType_t prvWriteFile(char *pcWriteBuffer, size_t xWriteBufferLen, cons
 static BaseType_t prvReadFile(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 static BaseType_t prvSend(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 static BaseType_t prvCapture(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
+// Live image preview streaming over the console UART (see preview.c)
+static BaseType_t prvPreview(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 static BaseType_t prvSetgps(char *pcWriteBuffer, size_t writeBufferLen, const char *pcCommandString);
 static BaseType_t prvGetgps(char *writeBuffer, size_t writeBufferLen, const char *commandString);
 static BaseType_t prvSetdid(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
@@ -567,6 +570,14 @@ static const CLI_Command_Definition_t xCapture = {
 	"capture <numCaptures> <timerDelay>:\r\n Capture <numCaptures> images at interval of <timerDelay> milliseconds\r\n",
 	prvCapture, /* The function to run. */
 	2			/* Two parameters expected */
+};
+
+/* Structure that defines the "preview" command line command. */
+static const CLI_Command_Definition_t xPreview = {
+	"preview", /* The command string to type. */
+	"preview <mode>:\r\n Live image preview on the console UART. 0=off, 1=stream (skip SD save), 2=stream+save.\r\n Then use 'capture <n> <ms>' to stream frames. View with _Tools/live_view.py\r\n",
+	prvPreview, /* The function to run. */
+	1			/* One parameter expected */
 };
 
 /* Structure that defines the "setop" command line command. */
@@ -1802,6 +1813,48 @@ static BaseType_t prvCapture(char *pcWriteBuffer, size_t xWriteBufferLen, const 
 }
 
 /**
+ * Turn live preview streaming on or off (see preview.c).
+ *
+ * Parameter: 0 = off, 1 = stream frames and skip the SD card save,
+ * 2 = stream frames and save to SD as normal.
+ *
+ * Streaming itself is driven by captures, e.g. 'capture 1000 0'.
+ */
+static BaseType_t prvPreview(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) {
+	const char *pcParameter;
+	BaseType_t xParameterStringLength;
+	int mode;
+
+	pcParameter = FreeRTOS_CLIGetParameter(pcCommandString, 1, &xParameterStringLength);
+	if (pcParameter == NULL) {
+		snprintf(pcWriteBuffer, xWriteBufferLen,
+				"Error: mode required. 0=off, 1=stream (skip SD save), 2=stream+save.\r\n");
+		return pdFALSE;
+	}
+
+	mode = atoi(pcParameter);
+	if ((mode < PREVIEW_OFF) || (mode > PREVIEW_STREAM_AND_SAVE)) {
+		snprintf(pcWriteBuffer, xWriteBufferLen,
+				"Error: mode must be 0, 1 or 2.\r\n");
+		return pdFALSE;
+	}
+
+	preview_setMode((PREVIEW_MODE_E)mode);
+
+	if (mode == PREVIEW_OFF) {
+		snprintf(pcWriteBuffer, xWriteBufferLen, "Preview off.\r\n");
+	}
+	else {
+		snprintf(pcWriteBuffer, xWriteBufferLen,
+				"Preview mode %d (%s). Start frames with e.g. 'capture 1000 0'.\r\n",
+				mode,
+				(mode == PREVIEW_STREAM) ? "SD save skipped" : "SD save kept");
+	}
+
+	return pdFALSE;
+}
+
+/**
  * Set Operational Parameter
  *
  * Parameters: <index> <value>
@@ -2680,6 +2733,7 @@ static void vRegisterCLICommands(void)
 	FreeRTOS_CLIRegisterCommand(&xReadFile);
 	FreeRTOS_CLIRegisterCommand(&xSend);
 	FreeRTOS_CLIRegisterCommand(&xCapture);
+	FreeRTOS_CLIRegisterCommand(&xPreview);	// Live image preview streaming on the console UART
 
 	FreeRTOS_CLIRegisterCommand(&xSetGps);
 	FreeRTOS_CLIRegisterCommand(&xGetGps);

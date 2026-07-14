@@ -179,6 +179,9 @@ Those comments preceding the first index/value pair are preserved when the file 
 |    26 | OP_PARAMETER_SLOT_SWITCH 				| 1             | Automatic light-based camera image switching: 0 = off (manual `switchslot` only), 1 = automatic - after each AE light check, if the dark/bright decision (op25) wants the other camera variant and the other slot holds it, the device switches boot slot and reboots at the next sleep. See `camera_switch.c`. Note: the light decision is computed when the flash is in AE mode (op13) **or** op26 = 1, so auto-switching works even with the flash off |
 |    27 | OP_PARAMETER_WB_RED_GAIN 				| 286           | Software white-balance RED gain, Q8.8 (256 = 1.0x, 0 = correction off). RP3 colour camera only - see `img_correct.c` and [RP3_white_balance_reencode_issue.md](RP3_white_balance_reencode_issue.md) |
 |    28 | OP_PARAMETER_WB_BLUE_GAIN 				| 326           | Software white-balance BLUE gain, Q8.8 (256 = 1.0x, 0 = correction off). RP3 colour camera only |
+|    29 | OP_PARAMETER_CAM_AE_ENABLE 			| 1             | RP camera auto-exposure: 0 = off (init-table exposure), 1 = on. Highlight-metered loop steps sensor exposure (8-5000 lines) then analog gain (to 16x) toward the target - see `ae.c` |
+|    30 | OP_PARAMETER_CAM_AE_TARGET 			| 110           | Auto-exposure target: raw bright-quartile (p75) luma, 0-250 (0 = built-in default 95). Bright parts of the scene render just below white after the tone curve |
+|    31 | OP_PARAMETER_CAM_WB_MODE 				| 1             | RP camera white balance: 0 = off (hardware JPEG), 1 = auto (warmth-biased grey-world measured per frame), 2 = manual op27/op28. Auto falls back to manual for flash-lit or too-dark frames - see `img_correct.c` |
 
 
 ## Syncronisation with BLE Processor Code

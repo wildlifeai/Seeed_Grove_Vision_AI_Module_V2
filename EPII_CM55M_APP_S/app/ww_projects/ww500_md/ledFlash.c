@@ -41,9 +41,6 @@
 #define LF_FLENABLE		(1 << 7)
 
 
-// There are 1440 minutes in a day
-#define MINUTES_PER_DAY (24 * 60)
-
 /*************************************** Local Function Declarations ******************/
 
 #ifdef TIMER_TURNS_OFF_FLASH
@@ -64,13 +61,6 @@ static bool ledFlashInitialised = false;
 
 // The flash should be operating as determined by OpParam settings, AE values and time of day
 static bool flashActive = false;
-
-// Minutes after midnight, UTC
-static uint16_t flashStartTime;
-
-// Minutes (stop time determined by this and the start time)
-static uint16_t flashDuration;
-
 
 // Need to maintain a copy of bits sent to the control/status chip, so we can change individual bits
 static uint8_t controlBits = 0;
@@ -334,23 +324,16 @@ bool ledFlashIsActive(void) {
  *
  * Call when the Operational Parameters have been loaded from SD card
  *
- * There are 4 cases to determine whether the LED flash is on or off:
+ * The flash for captures is either off, or driven by the AE light sensor
+ * (on when the scene is dark). See _Documentation/AE_Light_Sensor_Roadmap.md
 
-1. Always off
-2. Always on
-3. Selected by HM0360 auto-exposure registers (on when it is dark)
-4. Selected by time of day
-
-| No. |  Case                    | OP_PARAMETER_FLASH_LED | Other Condition |
-|-----|--------------------------|------------------------|------------|
-| 1   | Always off               | 0      |                            |
-| 2   | Always on                | 1 or 2 | OP_PARAMETER_FLASH_LED_DURATION = 0  |
-| 3   | Selected by AE           | 1 or 2 | OP_PARAMETER_FLASH_LED_DURATION = 1  |
-| 4   | Selected by time of day  | 1 or 2 | OP_PARAMETER_FLASH_LED_DURATION > 1 && OP_PARAMETER_FLASH_LED_START_TIME |
- *
+| No. |  Case                    | OP_PARAMETER_FLASH_LED |
+|-----|--------------------------|------------------------|
+| 1   | Always off               | 0                      |
+| 2   | Selected by AE           | 1 (visible) or 2 (IR)  |
  *
  */
-void ledFlashSetFlashModeFromOpParam(uint16_t ledInUse, uint16_t startTime, uint16_t duration) {
+void ledFlashSetFlashModeFromOpParam(uint16_t ledInUse) {
 
 	// ledFlashSelectLED
 	ledFlashSelectLED(ledInUse);
@@ -360,42 +343,20 @@ void ledFlashSetFlashModeFromOpParam(uint16_t ledInUse, uint16_t startTime, uint
 		flashMode = FLASH_MODE_OFF;
 		flashActive = false;
 	}
-
-	else if (duration == 0) {
-		// Always on
-		flashMode = FLASH_MODE_ALWAYS_ON;
-		flashActive = true;
-	}
-	else if (duration == 1) {
-		// Determined by AE registers
-		flashMode = FLASH_MODE_AE;
-		flashActive = false; // off for now - turn on with the AE values
-	}
 	else {
-		// Determined by the time of day
-		flashMode = FLASH_MODE_TIME_OF_DAY;
-		// off for now - turn on when the correct UTC time arrives with ledFlashNewTime()
-		flashActive = false;
-		if (startTime >= MINUTES_PER_DAY) {
-			flashStartTime = MINUTES_PER_DAY - 1;
-		}
-		else {
-			flashStartTime = startTime;
-		}
-
-		// Note that flashStopTime can be greater than MINUTESINDAY
-		if (duration > MINUTES_PER_DAY) {
-			flashDuration = MINUTES_PER_DAY;
-		}
-		else {
-			flashDuration = duration;
-		}
+		// Determined by AE registers (the AE light sensor)
+		flashMode = FLASH_MODE_AE;
+		// Restore the last AE light decision. It is persisted as an Operational
+		// Parameter because RAM is lost in DPD, and the first capture after a
+		// motion-detect wake happens before any fresh AE reading exists.
+		flashActive = (fatfs_getOperationalParameter(OP_PARAMETER_AE_FLASH_STATE) == 1);
 	}
 
 	// debug
-	xprintf("In ledFlashSetFlashModeFromOpParam with %d %d %d Mode %d\n",
-			ledInUse, startTime, duration, flashMode);
+	xprintf("In ledFlashSetFlashModeFromOpParam with %d Mode %d\n",
+			ledInUse, flashMode);
 }
+
 
 
 // Setter for flashMode
@@ -409,53 +370,106 @@ FlashLedMode_t  ledFlashGetFlashMode(void) {
 }
 
 /**
- * The UTC has arrived from the BLE processor - this might determine LED Flash behaviour
- *
- * We just need to examine the hours and minutes.
- *
- * @param time - structure with hours, minutes etc
- */
-void ledFlashNewTime(rtc_time time) {
-    uint16_t minutesAfterMidnight;
-
-    if (flashMode != FLASH_MODE_TIME_OF_DAY) {
-    	return;
-    }
-
-    minutesAfterMidnight = (time.tm_hour * 60) + time.tm_min;
-
-    // flashStartTime = minutes after midnight
-    // flashDuration = minutes
-
-    // Calculate whether we are in the time band for which the flash should be activated
-    flashActive =
-        ((minutesAfterMidnight - flashStartTime + MINUTES_PER_DAY) % MINUTES_PER_DAY)
-        < flashDuration;
-
-	xprintf("It is %d minutes after midnight UTC. Start time is %d and duration is %d. Flash is %soperating\n",
-			minutesAfterMidnight, flashStartTime, flashDuration,
-			flashActive ? " ": "not ");
-
-	ledFlashActivate();	// Turn on Flash LED (conditionally)
-}
-
-/**
  * The HM0360 AE registers values have arrived - this might determine LED Flash behaviour
  *
- * TODO this functionality is not yet implemented. FIXME!
+ * Legacy single-frame entry point, kept for callers that only have one reading.
+ * Prefer ledFlashNewAEStats(), which is robust against the AE loop oscillation
+ * documented there. This wraps the single reading as a one-sample statistic.
  *
  * @param gainRegs
  */
 void ledFlashNewAEValues(HM0360_GAIN_T * gainRegs) {
+	HM0360_AE_STATS_T stats;
 
-    if ((flashMode != FLASH_MODE_AE) || (gainRegs == NULL)) {
+	if (gainRegs == NULL) {
+		return;
+	}
+
+	stats.samples = 1;
+	stats.meanAE = gainRegs->aeMean;
+	stats.minAE = gainRegs->aeMean;
+	stats.maxAE = gainRegs->aeMean;
+	stats.maxAnalogGain = gainRegs->analogGain;
+	stats.maxDigitalGain = gainRegs->digitalGain;
+	stats.railedCount = 0;
+	stats.gainRailed = false;
+
+	ledFlashNewAEStats(&stats);
+}
+
+/**
+ * Decide the flash state from aggregated AE statistics (the light sensor).
+ *
+ * A single AE_MEAN reading is unreliable: it is the output of the HM0360's AE
+ * control loop, which limit-cycles. Bench testing in a fully dark box showed
+ * AE_MEAN swinging between ~3 and ~66 (across the dark threshold), so ~37% of
+ * single-frame reads wrongly said "bright". This uses the mean over several
+ * frames plus two extra safeguards:
+ *
+ *   - Hysteresis: turn the flash ON below the dark threshold, but only turn it
+ *     OFF again once well above it (threshold + AE_HYSTERESIS). This stops the
+ *     flash chattering when the light sits near the boundary.
+ *   - Gain-railed override: if the AE has run its gain to maximum on most
+ *     frames it cannot expose any darker, so force the flash ON regardless of
+ *     the (then meaningless) AE_MEAN value.
+ *
+ * See _Documentation/AE_Light_Sensor_Roadmap.md
+ *
+ * @param stats  aggregated AE statistics from hm0360_md_getAEStats()
+ */
+void ledFlashNewAEStats(HM0360_AE_STATS_T * stats) {
+	uint16_t threshold;
+	bool wasDark;
+	bool dark;
+
+    if ((stats == NULL) || (stats->samples == 0)) {
     	return;
     }
 
-    // Calculate whether the AE level is too low.
-    flashActive = 0;
+    // The dark/bright decision has two consumers: the AE-driven flash
+    // (FLASH_MODE_AE) and automatic camera switching (OP_PARAMETER_SLOT_SWITCH,
+    // see camera_switch.c). Compute and persist it when either is enabled -
+    // but only let it drive the flash LED in FLASH_MODE_AE, so op26 alone
+    // never fires the flash when the user has it off.
+    if ((flashMode != FLASH_MODE_AE)
+    		&& (fatfs_getOperationalParameter(OP_PARAMETER_SLOT_SWITCH) != 1)) {
+    	return;
+    }
 
-	xprintf("AE regs \n");
+    threshold = fatfs_getOperationalParameter(OP_PARAMETER_AE_DARK_THRESHOLD);
+    // Hysteresis memory is the persisted decision. In FLASH_MODE_AE this is
+    // kept in lockstep with flashActive (restored from it at boot, written
+    // back below), and it is the only memory that survives DPD in any mode.
+    dark = (fatfs_getOperationalParameter(OP_PARAMETER_AE_FLASH_STATE) == 1);
+    wasDark = dark;
 
-	ledFlashActivate();	// Turn on Flash LED (conditionally)
+    if (stats->gainRailed) {
+        // AE gain maxed out on most frames - unambiguously dark
+        dark = true;
+    }
+    else if (stats->meanAE < threshold) {
+        // Averaged scene brightness below the dark threshold - flash needed
+        dark = true;
+    }
+    else if (stats->meanAE > (uint16_t)(threshold + AE_HYSTERESIS)) {
+        // Comfortably bright - flash not needed
+        dark = false;
+    }
+    // else: within the hysteresis band - keep the previous decision
+
+    // Persist the decision (written to CONFIG.TXT at DPD entry) so the first
+    // capture after the next wake uses it - RAM does not survive DPD
+    fatfs_setOperationalParameter(OP_PARAMETER_AE_FLASH_STATE, dark ? 1 : 0);
+
+	xprintf("AE light check: mean AE = %d (min %d, max %d) over %d frames, "
+			"threshold = %d, gain railed = %s -> %s%s\n",
+			stats->meanAE, stats->minAE, stats->maxAE, stats->samples,
+			threshold, stats->gainRailed ? "yes" : "no",
+			dark ? "DARK (flash wanted)" : "BRIGHT (no flash)",
+			(dark == wasDark) ? "" : " (changed)");
+
+	if (flashMode == FLASH_MODE_AE) {
+		flashActive = dark;
+		ledFlashActivate();	// Turn on Flash LED (conditionally)
+	}
 }

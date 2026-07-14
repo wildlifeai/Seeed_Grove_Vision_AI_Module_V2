@@ -100,6 +100,10 @@
 #include "hx_drv_uart.h"
 
 #include "hx_drv_rtc.h"
+// I2C master driver - used by the vcm (focus lens) command
+#include "hx_drv_iic.h"
+// Staged camera register table - used by the camreg command
+#include "cis_file.h"
 
 // Other includes required by the individual CLI commands here:
 
@@ -123,6 +127,8 @@
 #include "exif_utc.h"
 #include "hx_drv_rtc.h"
 #include "ww500_md.h"
+#include "xip_manager.h"
+#include "camera_switch.h"
 #include "hm0360_md.h"
 
 #include "barrier.h"
@@ -274,6 +280,17 @@ static BaseType_t prvReinitHM0360(char *pcWriteBuffer, size_t xWriteBufferLen, c
 static BaseType_t prvVer(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 static BaseType_t prvCamera(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 
+// Camera sensor register access for field/bench tuning (exposure, gain, white balance etc.)
+static BaseType_t prvCamReg(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
+#ifdef USE_RP3
+// Focus lens (VCM) control - only the RP v3 camera module has a focus actuator
+static BaseType_t prvVcm(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
+#endif // USE_RP3
+
+// Day/night dual-image camera switching (see camera_switch.c)
+static BaseType_t prvSlots(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
+static BaseType_t prvSwitchSlot(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
+
 #ifdef WW500_C00
 static BaseType_t prvLedFlash(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 #endif //  WW500_C00
@@ -345,6 +362,23 @@ static const CLI_Command_Definition_t xCamera = {
 	"camera", /* The command string to type. */
 	"camera:\r\n Report main camera type\r\n",
 	prvCamera, /* The function to run. */
+	0		   /* No parameters expected */
+};
+
+/* Structure that defines the "slots" command line command. */
+static const CLI_Command_Definition_t xSlots = {
+	"slots", /* The command string to type. */
+	"slots:\r\n Report the active firmware slot and the camera variant in each slot\r\n",
+	prvSlots, /* The function to run. */
+	0		   /* No parameters expected */
+};
+
+/* Structure that defines the "switchslot" command line command. */
+static const CLI_Command_Definition_t xSwitchSlot = {
+	"switchslot", /* The command string to type. */
+	"switchslot:\r\n Boot the firmware in the other slot (day/night camera change)."
+	"\r\n The device resets when it next sleeps\r\n",
+	prvSwitchSlot, /* The function to run. */
 	0		   /* No parameters expected */
 };
 
@@ -481,6 +515,27 @@ static const CLI_Command_Definition_t xInt = {
 	prvInt, /* The function to run. */
 	1		/* One parameter expected */
 };
+
+/* Structure that defines the "camreg" command line command. */
+static const CLI_Command_Definition_t xCamReg = {
+	"camreg", /* The command string to type. */
+	"camreg <addr> [<val>]:\r\n Read or write a camera sensor register (hex values)."
+	"\r\n Writes are saved and re-applied at every sensor init."
+	"\r\n 'camreg list' shows saved writes. 'camreg clear' removes them\r\n",
+	prvCamReg, /* The function to run. */
+	-1		   /* Variable number of parameters */
+};
+
+#ifdef USE_RP3
+/* Structure that defines the "vcm" command line command. */
+static const CLI_Command_Definition_t xVcm = {
+	"vcm", /* The command string to type. */
+	"vcm <position>:\r\n Set focus lens position (0-1023, 0 = infinity)."
+	"\r\n 'vcm probe' checks the focus actuator is present. Camera must be powered\r\n",
+	prvVcm, /* The function to run. */
+	1		/* One parameter expected */
+};
+#endif // USE_RP3
 
 /* Structure that defines the "writefile" command line command. */
 static const CLI_Command_Definition_t xWriteFile = {
@@ -782,6 +837,77 @@ static BaseType_t prvCamera(char *pcWriteBuffer, size_t xWriteBufferLen, const c
 	return pdFALSE;
 }
 
+/**
+ * Report the active firmware slot and the camera variant recorded for each slot.
+ *
+ * Example response:
+ *   Active slot 0 running 'RP3 (day/colour)'. Slot A: 'RP3 (day/colour)', Slot B: 'HM0360 (night/IR)'. Auto-switch: on
+ */
+static BaseType_t prvSlots(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) {
+	(void)pcCommandString;
+	configASSERT(pcWriteBuffer);
+
+	int activeSlot = xip_get_active_slot();
+
+	if (activeSlot < 0) {
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "Slots error: cannot read slot selector");
+		return pdFALSE;
+	}
+
+	int variantA = xip_get_slot_variant(0);
+	int variantB = xip_get_slot_variant(1);
+
+	cli_append(&pcWriteBuffer, &xWriteBufferLen,
+			"Active slot %d running '%s'. Slot A: '%s', Slot B: '%s'. Auto-switch: %s",
+			activeSlot,
+			cameraSwitch_variantName(cameraSwitch_thisVariant()),
+			cameraSwitch_variantName((uint8_t) ((variantA < 0) ? 0 : variantA)),
+			cameraSwitch_variantName((uint8_t) ((variantB < 0) ? 0 : variantB)),
+			(fatfs_getOperationalParameter(OP_PARAMETER_SLOT_SWITCH) == 1) ? "on" : "off");
+
+	return pdFALSE;
+}
+
+/**
+ * Manually boot the firmware image in the other slot (day/night camera change).
+ *
+ * Unlike the automatic switch (camera_switch.c) this does not require the other
+ * slot to be labelled - only that it contains a programmed image. The reset
+ * happens when the device next sleeps, so the response reaches the app first.
+ */
+static BaseType_t prvSwitchSlot(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) {
+	(void)pcCommandString;
+	configASSERT(pcWriteBuffer);
+
+	int otherVariant;
+	int newSlot;
+
+	// Report what we believe is in the other slot before switching
+	int activeSlot = xip_get_active_slot();
+	if (activeSlot < 0) {
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "Slot switch failed: cannot read slot selector");
+		return pdFALSE;
+	}
+	otherVariant = xip_get_slot_variant((activeSlot == 0) ? 1 : 0);
+
+	newSlot = xip_switch_slot();
+
+	if (newSlot < 0) {
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "Slot switch failed (%d)%s",
+				newSlot, (newSlot == -2) ? ": other slot has no image" : "");
+		return pdFALSE;
+	}
+
+	// Reset (via watchdog) when the device next sleeps
+	app_setResetRequest(true);
+
+	cli_append(&pcWriteBuffer, &xWriteBufferLen,
+			"Switched to slot %d ('%s'). Reset scheduled.",
+			newSlot, cameraSwitch_variantName((uint8_t) ((otherVariant < 0) ? 0 : otherVariant)));
+
+	return pdFALSE;
+}
+
 // Sets some state
 static BaseType_t prvEnable(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) {
 	/* Remove compile time warnings about unused parameters, and check the
@@ -1047,8 +1173,6 @@ static BaseType_t prvSetUtc(char *pcWriteBuffer, size_t xWriteBufferLen, const c
 		elapsedTime = xTaskGetTickCount() - startTime;
 		elapsedMs = (elapsedTime * 1000) / configTICK_RATE_HZ;
 
-		// We also need to tell the ledFlash code in case the timer is set by the time of day
-		ledFlashNewTime(tm);
 
 		if (ret == RTC_NO_ERROR) {
 			snprintf(pcWriteBuffer, xWriteBufferLen, "RTC set to %s (this took %dms)", pcParameter, (int) elapsedMs);
@@ -1164,6 +1288,269 @@ static BaseType_t prvI2C(char *pcWriteBuffer, size_t xWriteBufferLen, const char
 
 	return pdFALSE;
 }
+
+/********************** camreg & vcm - camera tuning commands **********************/
+
+// Register writes staged by the 'camreg' command live in cis_file.c, which loads them
+// from CAMERA_EXTRA_FILE at every sensor init (so they survive DPD cycles and reboots).
+// This command edits that table and re-saves the file.
+static char camRegFileName[] = CAMERA_EXTRA_FILE;
+static fileOperation_t camRegFileOp;
+
+// True while a camreg save is queued/being written by the fatfs_task. Guards
+// camRegFileOp against being overwritten before the previous write completes.
+// Cleared when APP_MSG_CLITASK_DISK_WRITE_COMPLETE arrives.
+static volatile bool camRegWritePending = false;
+
+/**
+ * Ask the fatfs_task to (re)write CAMERA_EXTRA_FILE with the staged register table.
+ * The result arrives later as a APP_MSG_CLITASK_DISK_WRITE_COMPLETE message.
+ *
+ * @return true if the request was queued
+ */
+static bool camRegSaveTable(void) {
+	APP_MSG_T sendMsg;
+
+	if (camRegWritePending) {
+		// The fatfs_task is still writing the previous save; camRegFileOp
+		// must not be touched until that completes
+		return false;
+	}
+
+	camRegFileOp.fileName = camRegFileName;
+	camRegFileOp.buffer = (uint8_t *) cis_file_getStagedTable();
+	camRegFileOp.length = cis_file_getStagedCount() * sizeof(HX_CIS_SensorSetting_t);
+	camRegFileOp.closeWhenDone = true;
+	camRegFileOp.unmountWhenDone = false;
+	camRegFileOp.senderQueue = xCliTaskQueue;
+
+	sendMsg.msg_event = APP_MSG_FATFSTASK_WRITE_FILE;
+	sendMsg.msg_data = (uint32_t) &camRegFileOp;
+
+	camRegWritePending = true;
+
+	if (xQueueSend(xFatTaskQueue, (void *) &sendMsg, __QueueSendTicksToWait) != pdTRUE) {
+		camRegWritePending = false;
+		return false;
+	}
+
+	return true;
+}
+
+/**
+ * Read or write camera sensor registers, for bench/field tuning of exposure, gain,
+ * white balance etc. without rebuilding the firmware.
+ *
+ * camreg <addr>          read a register now (sensor must be powered)
+ * camreg <addr> <val>    write a register now (best effort) and stage it so it is
+ *                        re-applied at every sensor init
+ * camreg list            show the registers staged this session
+ * camreg clear           remove all staged registers
+ *
+ * <addr> and <val> are hex, e.g. 'camreg 0202 09'
+ */
+static BaseType_t prvCamReg(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) {
+	const char *pcParam1;
+	const char *pcParam2;
+	BaseType_t lParam1Length;
+	BaseType_t lParam2Length;
+	uint16_t address;
+	uint8_t value;
+	uint16_t i;
+	HX_CIS_ERROR_E ret;
+
+	pcParam1 = FreeRTOS_CLIGetParameter(pcCommandString, 1, &lParam1Length);
+
+	if (pcParam1 == NULL) {
+		cli_append(&pcWriteBuffer, &xWriteBufferLen,
+				"Usage: camreg <addr> [<val>] (hex) | camreg list | camreg clear");
+		return pdFALSE;
+	}
+
+	if ((lParam1Length == 4) && (strncmp(pcParam1, "list", 4) == 0)) {
+		uint16_t stagedCount = cis_file_getStagedCount();
+		HX_CIS_SensorSetting_t *stagedTable = cis_file_getStagedTable();
+
+		if (!cis_file_isStagedLoaded()) {
+			cli_append(&pcWriteBuffer, &xWriteBufferLen, "Register file not loaded (no SD card?)");
+		}
+		else if (stagedCount == 0) {
+			cli_append(&pcWriteBuffer, &xWriteBufferLen, "No registers staged");
+		}
+		else {
+			cli_append(&pcWriteBuffer, &xWriteBufferLen, "%d staged: ", stagedCount);
+			for (i = 0; i < stagedCount; i++) {
+				cli_append(&pcWriteBuffer, &xWriteBufferLen, "%04x=%02x ",
+						stagedTable[i].RegAddree, stagedTable[i].Value);
+			}
+		}
+		return pdFALSE;
+	}
+
+	if ((lParam1Length == 5) && (strncmp(pcParam1, "clear", 5) == 0)) {
+		if (camRegWritePending) {
+			// fatfs_task is still reading the staged table for the previous save
+			cli_append(&pcWriteBuffer, &xWriteBufferLen, "Save in progress - try again shortly");
+			return pdFALSE;
+		}
+		if (!cis_file_isStagedLoaded()) {
+			cli_append(&pcWriteBuffer, &xWriteBufferLen, "Register file not loaded (no SD card?) - nothing to clear");
+			return pdFALSE;
+		}
+		cis_file_clearStaged();
+		if (camRegSaveTable()) {
+			cli_append(&pcWriteBuffer, &xWriteBufferLen, "Cleared. Emptying '%s'", camRegFileName);
+		}
+		else {
+			cli_append(&pcWriteBuffer, &xWriteBufferLen,
+					"Cleared in memory, but the file save was NOT queued (previous save still in progress?) - run 'camreg clear' again");
+		}
+		return pdFALSE;
+	}
+
+	address = (uint16_t) strtol(pcParam1, NULL, 16);
+
+	pcParam2 = FreeRTOS_CLIGetParameter(pcCommandString, 2, &lParam2Length);
+
+	if (pcParam2 == NULL) {
+		// Read the register
+		ret = hx_drv_cis_get_reg(address, &value);
+		if (ret == HX_CIS_NO_ERROR) {
+			cli_append(&pcWriteBuffer, &xWriteBufferLen, "Camera reg 0x%04x = 0x%02x", address, value);
+		}
+		else {
+			cli_append(&pcWriteBuffer, &xWriteBufferLen,
+					"Camera reg 0x%04x read failed (%d). Is the sensor powered?", address, ret);
+		}
+		return pdFALSE;
+	}
+
+	value = (uint8_t) strtol(pcParam2, NULL, 16);
+
+	if (camRegWritePending) {
+		// fatfs_task is still reading the staged table for the previous save -
+		// modifying the table now could save a torn copy to the SD card
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "Save in progress - try again shortly");
+		return pdFALSE;
+	}
+
+	// Write now (best effort - fails harmlessly if the sensor is not powered;
+	// the staged copy is still applied at the next sensor init)
+	ret = hx_drv_cis_set_reg(address, value, 0);
+
+	// Stage: replace an existing entry for this address, or append
+	if (!cis_file_stageReg(address, value)) {
+		if (!cis_file_isStagedLoaded()) {
+			cli_append(&pcWriteBuffer, &xWriteBufferLen,
+					"Register file not loaded (no SD card?) - not staged. Immediate write %s",
+					(ret == HX_CIS_NO_ERROR) ? "OK" : "failed");
+		}
+		else {
+			cli_append(&pcWriteBuffer, &xWriteBufferLen,
+					"Staging table full (%d entries). Use 'camreg clear'", CIS_FILE_MAX_STAGED);
+		}
+		return pdFALSE;
+	}
+
+	if (camRegSaveTable()) {
+		cli_append(&pcWriteBuffer, &xWriteBufferLen,
+				"Camera reg 0x%04x = 0x%02x (immediate write %s). %d staged, saving to '%s'",
+				address, value, (ret == HX_CIS_NO_ERROR) ? "OK" : "failed",
+				cis_file_getStagedCount(), camRegFileName);
+	}
+	else {
+		cli_append(&pcWriteBuffer, &xWriteBufferLen,
+				"Camera reg 0x%04x = 0x%02x (immediate write %s). %d staged, but save NOT queued (previous save still in progress?) - retry with 'camreg %04x %02x'",
+				address, value, (ret == HX_CIS_NO_ERROR) ? "OK" : "failed",
+				cis_file_getStagedCount(), address, value);
+	}
+
+	return pdFALSE;
+}
+
+#ifdef USE_RP3
+
+// Focus lens actuator (VCM) on the RP v3 camera module: DW9817-type at I2C address 0x0c.
+// Register map (as the Linux dw9807-vcm driver): 0x02 control (0 = power on, bit 0 = power down),
+// 0x03 = DAC code bits [9:8], 0x04 = DAC code bits [7:0]
+#define VCM_I2C_ADDRESS 0x0c
+#define VCM_REG_CONTROL 0x02
+#define VCM_REG_MSB 	0x03
+#define VCM_REG_LSB 	0x04
+
+/**
+ * Set the focus lens position, for bench/field verification of manual focus.
+ *
+ * vcm <position>    move the lens: 0-1023 (0 = infinity, larger = closer focus)
+ * vcm probe         check the actuator responds at its I2C address
+ *
+ * The position is not retained through a camera power cycle; re-apply after each wake.
+ * (Making this persistent is a Phase 3 task - see the camera field-tuning roadmap.)
+ */
+static BaseType_t prvVcm(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) {
+	const char *pcParameter;
+	BaseType_t lParameterStringLength;
+	int32_t position;
+	uint8_t regAddr;
+	uint8_t data;
+	IIC_ERR_CODE_E ret;
+
+	pcParameter = FreeRTOS_CLIGetParameter(pcCommandString, 1, &lParameterStringLength);
+
+	// FreeRTOS_CLI enforces the expected parameter count before dispatching,
+	// but be defensive in case that ever changes
+	if (pcParameter == NULL) {
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "Usage: vcm <position> (0-1023) | vcm probe");
+		return pdFALSE;
+	}
+
+	if ((lParameterStringLength == 5) && (strncmp(pcParameter, "probe", 5) == 0)) {
+		// Generic 1-byte I2C read probe - avoids a dependency on the HM0360 driver
+		// for what is an RP v3 camera module part
+		if (hx_drv_i2cm_read_data(USE_DW_IIC_1, VCM_I2C_ADDRESS, &data, 1) == IIC_ERR_OK) {
+			cli_append(&pcWriteBuffer, &xWriteBufferLen, "VCM present at 0x%02x", VCM_I2C_ADDRESS);
+		}
+		else {
+			cli_append(&pcWriteBuffer, &xWriteBufferLen,
+					"VCM not detected at 0x%02x. Is the camera powered?", VCM_I2C_ADDRESS);
+		}
+		return pdFALSE;
+	}
+
+	position = atoi(pcParameter);
+	if ((position < 0) || (position > 1023)) {
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "Position must be 0-1023, or 'probe'");
+		return pdFALSE;
+	}
+
+	// Power on (clear the power-down bit), then write the 10-bit DAC code
+	regAddr = VCM_REG_CONTROL;
+	data = 0x00;
+	ret = hx_drv_i2cm_write_data(USE_DW_IIC_1, VCM_I2C_ADDRESS, &regAddr, 1, &data, 1);
+
+	if (ret == IIC_ERR_OK) {
+		regAddr = VCM_REG_MSB;
+		data = (uint8_t) ((position >> 8) & 0x03);
+		ret = hx_drv_i2cm_write_data(USE_DW_IIC_1, VCM_I2C_ADDRESS, &regAddr, 1, &data, 1);
+	}
+	if (ret == IIC_ERR_OK) {
+		regAddr = VCM_REG_LSB;
+		data = (uint8_t) (position & 0xff);
+		ret = hx_drv_i2cm_write_data(USE_DW_IIC_1, VCM_I2C_ADDRESS, &regAddr, 1, &data, 1);
+	}
+
+	if (ret == IIC_ERR_OK) {
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "VCM position set to %d", (int) position);
+	}
+	else {
+		cli_append(&pcWriteBuffer, &xWriteBufferLen,
+				"VCM write failed (%d). Is the camera powered?", ret);
+	}
+
+	return pdFALSE;
+}
+
+#endif // USE_RP3
 
 /**
  * Write a test file to the SD card.
@@ -1461,6 +1848,21 @@ static BaseType_t prvSetOpParam(char *pcWriteBuffer, size_t xWriteBufferLen, con
 
 	// Parameters are valid
 	fatfs_setOperationalParameter(index, value);
+
+	// Persist the change to CONFIG.TXT now, so it survives the next sleep even
+	// if no capture (which normally triggers the state save) happens first.
+	// This is a user/app-initiated change (setop over console or BLE); runtime
+	// state written directly via fatfs_setOperationalParameter (e.g. the AE
+	// flash decision) deliberately does NOT persist on every write.
+	{
+		APP_MSG_T saveMsg;
+		saveMsg.msg_event = APP_MSG_FATFSTASK_SAVE_CONFIG;
+		saveMsg.msg_data = 0;
+		saveMsg.msg_parameter = 0;
+		if (xQueueSend(xFatTaskQueue, (void *)&saveMsg, __QueueSendTicksToWait) != pdTRUE) {
+			xprintf("setop: failed to queue config save\n");
+		}
+	}
 
 	snprintf(pcWriteBuffer, xWriteBufferLen, "Set OpParam %d = %d", index, value);
 	return pdFALSE;
@@ -2159,6 +2561,24 @@ static void vCmdLineTask(void *pvParameters) {
 
 			case APP_MSG_CLITASK_DISK_WRITE_COMPLETE:
 				// xprintf("Res code %d\n", data);	// This is the same as fileOp.res
+
+				// A camreg save uses its own fileOperation_t. The fatfs_task echoes
+				// the fileOperation_t pointer in msg_parameter, so a camreg save
+				// completion can be told apart from a 'writefile' completion.
+				if (camRegWritePending && (rxMessage.msg_parameter == (uint32_t) &camRegFileOp))
+				{
+					camRegWritePending = false;
+					// rxData is the FRESULT (also valid when the SD was not mounted)
+					if (rxData) {
+						xprintf("Error writing '%s'. Result code: %d\n",
+								camRegFileOp.fileName, (int) rxData);
+					}
+					else {
+						xprintf("Saved %d bytes to '%s'\n",
+								(int)camRegFileOp.length, camRegFileOp.fileName);
+					}
+					break;
+				}
 				// The fileOp structure should have the results
 				if (fileOp.res)
 				{
@@ -2243,10 +2663,17 @@ static void vRegisterCLICommands(void)
 	FreeRTOS_CLIRegisterCommand(&xStatus);
 	FreeRTOS_CLIRegisterCommand(&xVer);
 	FreeRTOS_CLIRegisterCommand(&xCamera);
+	FreeRTOS_CLIRegisterCommand(&xSlots);		// Report firmware slots and camera variants
+	FreeRTOS_CLIRegisterCommand(&xSwitchSlot);	// Boot the other slot (day/night camera change)
 	FreeRTOS_CLIRegisterCommand(&xEnable);
 	FreeRTOS_CLIRegisterCommand(&xDisable);
 
 	FreeRTOS_CLIRegisterCommand(&xI2C);
+
+	FreeRTOS_CLIRegisterCommand(&xCamReg);	// Read/write camera sensor registers (staged writes persist)
+#ifdef USE_RP3
+	FreeRTOS_CLIRegisterCommand(&xVcm);	// Focus lens (VCM) position
+#endif // USE_RP3
 
 	FreeRTOS_CLIRegisterCommand(&xInt);
 	FreeRTOS_CLIRegisterCommand(&xWriteFile);

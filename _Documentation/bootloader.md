@@ -1,6 +1,12 @@
 # HX6538 Bootloader
 #### Notes emailed from Himax 17/1/25
 
+> Reference notes from Himax on the ROM/2nd bootloader and SWD programming.
+> For the WW500's slot architecture see
+> [slot_selector.md](../EPII_CM55M_APP_S/app/ww_projects/ww500_md/doc/slot_selector.md);
+> for update paths and X-Modem recovery see
+> [firmware_update_and_recovery.md](firmware_update_and_recovery.md).
+
 
 1. The HX6538 flash memory map is as follows. We support dual slots to store two firmware 
 images to avoid firmware upgrade failure via Xmodem.

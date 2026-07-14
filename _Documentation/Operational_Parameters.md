@@ -101,6 +101,18 @@ The corresponding commands issued by the app are:
 1. `AI getop <index>`
 2. `AI setop <index> <value>`
 
+**Persistence:** `setop` writes the value to the in-RAM `op_parameter[]` array and
+also **immediately saves CONFIG.TXT** (via an `APP_MSG_FATFSTASK_SAVE_CONFIG`
+message to the FatFS task, without unmounting). This guarantees the change
+survives the next Deep Power Down even if no capture happens before the device
+sleeps. (Before this was added, op parameters were only written to CONFIG.TXT on
+the capture/`SAVE_STATE` path, so a `setop` followed by a plain inactivity sleep
+- with no capture - was silently lost on the next wake. That also caused the
+timelapse interval, when set via `setop 7`, to appear to "drop" after a sleep.)
+Runtime state written directly (e.g. `OP_PARAMETER_AE_FLASH_STATE`, index 25, set
+on every AE check) does **not** trigger a save, to avoid thrashing the SD card;
+it is persisted on the next `SAVE_STATE`.
+
 ## File Format
 
 Entries in CONFIG.TXT are mainly lines with two numbers:
@@ -147,11 +159,11 @@ Those comments preceding the first index/value pair are preserved when the file 
 |     6 | OP_PARAMETER_PICTURE_INTERVAL         | 1500          | The interval (in ms) between each of the above images. Limited to about 2000 for HM0360 |
 |     7 | OP_PARAMETER_TIMELAPSE_INTERVAL       | 60            | The interval (in s) between entering DPD and waking again to take the next timelapse image (0 inhibits) |
 |     8 | OP_PARAMETER_INTERVAL_BEFORE_DPD      | 10000         | The interval (in ms) between when all FreeRTOS task activity ceases and the AI processor entering DPD.|
-|     9 | OP_PARAMETER_LED_BRIGHTNESS_PERCENT   | 5             | Flash LED duty cycle (brightness) in percent (0 inhibits LED flash) |
+|     9 | OP_PARAMETER_LED_BRIGHTNESS_PERCENT   | 5             | Brightness of the CAPTURE flash in percent (16 hardware levels; 0 inhibits). Motion-detection illumination has its own brightness (index 22) |
 |    10 | OP_PARAMETER_CAMERA_ENABLED           | 1             | Camera and NN system disabled, 1 = Camera and NN system enabled |
 |    11 | OP_PARAMETER_MD_INTERVAL              | 1000          | Interval (ms) between frames in motion detect mode (0 inhibits motion detection)|
 |    12 | OP_PARAMETER_FLASH_DURATION           | 100           | Duration (ms) that LED flash is on                  |
-|    13 | OP_PARAMETER_FLASH_LED                | 0             | LED bit mask: visible LED used = 1, infra-red LED used =2, none = 0              |
+|    13 | OP_PARAMETER_FLASH_LED                | 0             | LED used for the CAPTURE flash: 0 = none (flash off), 1 = visible, 2 = infra-red. Non-zero also enables the AE light-sensor flash mode. NOTE: the AE light check only runs when op13 is 1 or 2, or op26 = 1 - with both off the op25 decision goes stale (a device can report BRIGHT forever inside a dark box) |
 |    14 | OP_PARAMETER_MODEL_PROJECT            | 0             |Model project ID used for the NN model|
 |    15 | OP_PARAMETER_MODEL_VERSION            | 0             | Model version number used for the NN model |
 |    16 | OP_PARAMETER_MODEL_THRESHOLD          | 0             | Logit threshold for detection (0-127) |
@@ -159,6 +171,14 @@ Those comments preceding the first index/value pair are preserved when the file 
 |    18 | OP_PARAMETER_TEST_MODE_BITS           | 0             | To manage test configurations: bit or bits indicate a test function |
 |    19 | OP_PARAMETER_IMAGES_COUNT     		| 0             | Count of images in the current image folder. Use this to decide to create a new image folder. |
 |    20 | OP_PARAMETER_IMAGES_FILE_INDEX 		| 0             | Count of image folders |
+|    21 | OP_PARAMETER_MD_FLASH_LED 			| 2             | LED used to illuminate motion-detection frames while asleep: 0 = none, 1 = visible, 2 = IR |
+|    22 | OP_PARAMETER_MD_FLASH_BRIGHTNESS_PERCENT | 5          | Brightness of the motion-detection illumination (percent; 16 hardware levels) |
+|    23 | OP_PARAMETER_AE_DARK_THRESHOLD 		| 65            | AE Mean (0-255) below this means the scene is dark and the flash is needed. See [AE_Light_Sensor_Roadmap.md](AE_Light_Sensor_Roadmap.md) |
+|    24 | OP_PARAMETER_AE_CHECK_INTERVAL 		| 15            | Interval (minutes) between periodic AE light-level checks when the flash is in AE mode (op13) or auto camera switching is on (op26), and timelapse is disabled. 0 disables |
+|    25 | OP_PARAMETER_AE_FLASH_STATE 			| 0             | Last AE flash decision (0/1). Runtime state persisted across DPD - not intended to be set by users |
+|    26 | OP_PARAMETER_SLOT_SWITCH 				| 0             | Automatic light-based camera image switching: 0 = off (manual `switchslot` only), 1 = automatic - after each AE light check, if the dark/bright decision (op25) wants the other camera variant and the other slot holds it, the device switches boot slot and reboots at the next sleep. See `camera_switch.c`. Note: the light decision is computed when the flash is in AE mode (op13) **or** op26 = 1, so auto-switching works even with the flash off |
+|    27 | OP_PARAMETER_WB_RED_GAIN 				| 286           | Software white-balance RED gain, Q8.8 (256 = 1.0x, 0 = correction off). RP3 colour camera only - see `img_correct.c` and [RP3_white_balance_reencode_issue.md](RP3_white_balance_reencode_issue.md) |
+|    28 | OP_PARAMETER_WB_BLUE_GAIN 				| 326           | Software white-balance BLUE gain, Q8.8 (256 = 1.0x, 0 = correction off). RP3 colour camera only |
 
 
 ## Syncronisation with BLE Processor Code
@@ -229,20 +249,13 @@ to further control the operation of the WW500. These might include:
 	OP_PARAMETER_NN_Y_RESOLUTION	// Camera image is scaled to this Y resolution to provide to the NN
 ```	
 
-## Deployment ID (OP20-OP27)
+## Deployment ID
 
-The deployment ID is a UUID identifying the project deployment. Due to Bluetooth MTU limitations on mobile devices (many Android devices cannot negotiate MTU >27 bytes), the 36-character UUID is split into 8 chunks (4 hex characters each) and transmitted as 16-bit integers via the existing `setop` command.
+The deployment ID is a UUID identifying the project deployment. It is set with the
+`AI setdid <uuid>` command, stored as the `I ` line in `CONFIG.TXT`, and embedded in
+EXIF metadata (tag 0xF200) when images are captured.
 
-**Reconstruction Algorithm (per FIRMWARE_DEPLOYMENT_ID_SPEC.md):**
-1. Read OP20-OP27
-2. If all are 0: deployment ID = `00000000-0000-0000-0000-000000000000` (no deployment)
-3. Otherwise: convert each to 4-char hex string (with leading zeros), concatenate, insert hyphens at positions 8, 12, 16, 20
-
-**Example:**
-- OP20=21774 (0x550E), OP21=33792 (0x8400), OP22=58011 (0xE29B), OP23=16852 (0x41D4)
-- OP24=42774 (0xA716), OP25=17510 (0x4466), OP26=21828 (0x5544), OP27=0 (0x0000)
-- **Result:** `550e8400-e29b-41d4-a716-446655440000`
-
-**Storage:** Deployment ID is embedded in EXIF metadata (tag 0xF200) when images are captured. The reconstruction function `fatfs_getDeploymentId()` is called during image capture to build the UUID string from the operational parameters.
-
-
+> **Historical note:** an earlier specification (FIRMWARE_DEPLOYMENT_ID_SPEC.md) proposed
+> transmitting the UUID as eight 16-bit chunks in Operational Parameters 20-27. That scheme
+> was **never implemented** - indexes 20-26 are ordinary Operational Parameters (see the
+> table above). Ignore any remaining references to "OP20-OP27 deployment ID chunks".

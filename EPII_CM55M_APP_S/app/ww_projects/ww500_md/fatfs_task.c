@@ -67,6 +67,7 @@
 #include "semphr.h"
 
 #include "fatfs_task.h"
+#include "cis_file.h"
 #include "image_task.h"
 #include "app_msg.h"
 #include "CLI-commands.h"
@@ -225,8 +226,14 @@ uint16_t op_parameter[OP_PARAMETER_NUM_ENTRIES] = {
 	0,	    	   		// 18 Test Mode Bits - one bit to enable each test function
 	0,	    	   		// 19 OP_PARAMETER_IMAGES_COUNT
 	0,	    	   		// 20 OP_PARAMETER_IMAGES_COUNT - increment as files are added. Start a new folder when this exceeds a threhsold
-	0,	    	   		// 21 OP_PARAMETER_FLASH_LED_START_TIME
-	0,	    	   		// 22 OP_PARAMETER_FLASH_LED_DURATION
+	2,	    	   		// 21 OP_PARAMETER_MD_FLASH_LED (2 = IR)
+	5,	    	   		// 22 OP_PARAMETER_MD_FLASH_BRIGHTNESS_PERCENT
+	65,	    	   		// 23 OP_PARAMETER_AE_DARK_THRESHOLD ('moderate' setting - see AE_Light_Sensor_Roadmap.md)
+	15,	    	   		// 24 OP_PARAMETER_AE_CHECK_INTERVAL (minutes; 0 disables)
+	0,	    	   		// 25 OP_PARAMETER_AE_FLASH_STATE (runtime state)
+	0,	    	   		// 26 OP_PARAMETER_SLOT_SWITCH (0 = off/manual only; 1 = automatic light-based switching, PLANNED)
+	286,	   			// 27 OP_PARAMETER_WB_RED_GAIN (Q8.8: 286 = x1.117, the bench-measured neutralising gain; 0 disables)
+	326,	   			// 28 OP_PARAMETER_WB_BLUE_GAIN (Q8.8: 326 = x1.273, the bench-measured neutralising gain; 0 disables)
 };
 
 // Deployment ID UUID string — loaded from 'I ' line in CONFIG.TXT or set via setdid CLI command
@@ -459,6 +466,7 @@ static APP_MSG_DEST_T handleEventForUninit(APP_MSG_T rxMessage) {
 
 		// Inform the if task that the disk operation is complete
 		sendMsg.message.msg_data = (uint32_t)FR_NO_FILESYSTEM;
+		sendMsg.message.msg_parameter = (uint32_t)fileOp;
 		sendMsg.destination = fileOp->senderQueue;
 
 		// The message to send depends on the destination! In retrospect it would have been better
@@ -619,8 +627,11 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 
 		xprintf("File write took %dms\n", app_getElapsedMs(xStartTime));
 
-		// Inform the if task that the disk operation is complete
+		// Inform the if task that the disk operation is complete.
+		// msg_parameter echoes the fileOperation_t pointer so a receiver with
+		// several outstanding operations can tell which one completed.
 		sendMsg.message.msg_data = (uint32_t)res;
+		sendMsg.message.msg_parameter = (uint32_t)fileOp;
 		sendMsg.destination = fileOp->senderQueue;
 
 		// The message to send depends on the destination! In retrospect it would have been better
@@ -696,6 +707,27 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 		sendMsg.message.msg_event = APP_MSG_IMAGETASK_DISK_WRITE_COMPLETE;
 		sendMsg.message.msg_data = (uint32_t)res;
 
+		break;
+
+	case APP_MSG_FATFSTASK_SAVE_CONFIG:
+		// Persist the Operational Parameters to CONFIG.TXT immediately, WITHOUT
+		// unmounting (unlike SAVE_STATE). Sent after a setop / BLE parameter
+		// change so the new value survives the next sleep even if no capture
+		// (which is what normally triggers SAVE_STATE) happens before DPD.
+		// Without this, a changed op param (e.g. a white-balance gain or the
+		// timelapse interval) is lost on the next wake.
+		if (fatfs_mounted()) {
+			res = save_configuration(STATE_FILE, &dirManager);
+			if (res) {
+				xprintf("Error %d saving config\n", res);
+			}
+			else {
+				xprintf("Config saved (op params persisted).\n");
+			}
+		}
+		else {
+			xprintf("Cannot save config - SD not mounted\n");
+		}
 		break;
 
 	case APP_MSG_FATFSTASK_OPEN_FILE:
@@ -1555,6 +1587,11 @@ static void vFatFsTask(void *pvParameters) {
 	if (xQueueSend(xIfTaskQueue, (void *)&sendMsg, __QueueSendTicksToWait) != pdTRUE) {
 		xprintf("sendMsg=0x%x fail\r\n", sendMsg.msg_event);
 	}
+
+	// Load the staged camera register table (camreg command) from the SD card
+	// while this task is still the only one doing disk I/O - FatFs is not
+	// re-entrant, so this cannot be done lazily from the CLI task
+	cis_file_loadStagedFromFile();
 
 	// The semaphore lets the Image Task proceed
 	// xprintf("DEBUG: giving semaphore so Image Task can proceed\n");

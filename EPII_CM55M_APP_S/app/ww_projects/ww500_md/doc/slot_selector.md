@@ -90,3 +90,27 @@ Subsequent values are possibly (in LE format):
 * some value 0x00000002
 * HX_DSP_FLAG 1 (0x0001)
 * Checksum 0x167C
+
+## Wildlife Watcher slot metadata record (added with camera switching)
+
+The dual-image camera switching feature (`camera_switch.c`, `xip_manager.c`) stores a small
+metadata record in the spare (0xFF) bytes of this same sector, at byte offset 32 - after the
+bootloader's 20-byte header, which the bootloader ignores:
+
+```
+offset 32:  'W' 'W' 'S' 'M'   magic
+offset 36:  variant of Slot A (1 byte)
+offset 37:  variant of Slot B (1 byte)
+offset 38:  reserved (2 bytes, 0xFF)
+```
+
+Variant values: 0 = unknown / just rewritten, 1 = HM0360 (night/IR image), 2 = RP3 (day/colour
+image). Each firmware image labels its own slot at boot (`cameraSwitch_labelBootSlot()`), and
+`write_slot_selector()` preserves the record across sector rewrites. The `slots` CLI command
+reports it; the automatic switching logic will only flip to a slot whose recorded variant
+matches what is wanted.
+
+Note: a bootloader X-Modem burn rewrites the whole selector sector and so RESETS the labels -
+`slots` reporting `'unknown'` after a recovery burn is normal, and self-heals the first time
+each slot boots. For the update paths and the recovery procedure see
+`_Documentation/firmware_update_and_recovery.md`.

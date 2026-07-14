@@ -79,6 +79,7 @@
 // defined in ww.mk
 #include "pca9574.h"
 #include "ledFlash.h"
+#include "xip_manager.h"
 #endif // WW500_C00
 
 
@@ -792,6 +793,11 @@ int app_main(void){
 		XP_WHITE;
 #endif	// USE_HM0360
 	}
+
+	// Create the flash SPI mutex while still single-threaded, so the first
+	// two flash users (e.g. image task model load vs a console 'slots'
+	// command) cannot race the SPI controller initialisation.
+	xip_manager_preinit();
 
 	xprintf("Initialising FreeRTOS tasks\n");
 

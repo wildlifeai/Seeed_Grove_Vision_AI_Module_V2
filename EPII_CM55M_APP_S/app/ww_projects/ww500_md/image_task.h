@@ -47,6 +47,23 @@ typedef enum {
 // file name: '12345678.jpg' = 12 characters, plus trailing '\0'
 #define IMAGEFILENAMELEN		13
 
+// Name of the file containing extra camera register settings, applied by
+// cis_file_process() after the sensor init tables at CAMERA_CONFIG_INIT_COLD,
+// and maintained by the 'camreg' CLI command.
+// Absolute path ("0:/") so reads and writes are independent of the current directory,
+// which moves between the image capture and configuration directories.
+// Warning: 8.3 file names apply
+#ifdef USE_HM0360
+#define CAMERA_EXTRA_FILE "0:/HM0360EX.BIN"
+#elif defined(USE_RP2)
+#define CAMERA_EXTRA_FILE "0:/RPV2_EX.BIN"
+#elif defined(USE_RP3)
+#define CAMERA_EXTRA_FILE "0:/RPV3_EX.BIN"
+#else
+// Should not happen. Add something anyway
+#define CAMERA_EXTRA_FILE "0:/CAM_EX.BIN"
+#endif // USE_HM0360
+
 // default 5%
 #define FLASHLEDDUTY 5
 // Deafult values of Operational Parameters

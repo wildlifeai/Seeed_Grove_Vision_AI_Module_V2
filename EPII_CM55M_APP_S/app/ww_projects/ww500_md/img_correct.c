@@ -95,9 +95,14 @@ static void wb_apply_yuv420(uint8_t *yuv, uint32_t w, uint32_t h,
 				int32_t G = Y - gOfs;
 				int32_t B = Y + bOfs;
 
-				if (R < 0) R = 0;
+				// Clamp BEFORE the gains: out-of-gamut YUV combinations push R/B
+				// past 255, and scaling those artifacts gives them more post-gain
+				// weight than genuinely saturated pixels - clipped highlights then
+				// come out unevenly tinted. Clamping first makes every saturated
+				// pixel respond to the gain identically (and matches G's handling).
+				if (R < 0) R = 0; else if (R > 255) R = 255;
 				if (G < 0) G = 0; else if (G > 255) G = 255;
-				if (B < 0) B = 0;
+				if (B < 0) B = 0; else if (B > 255) B = 255;
 
 				// White balance: scale red and blue (green is the reference)
 				R = (R * rGain) >> 8;

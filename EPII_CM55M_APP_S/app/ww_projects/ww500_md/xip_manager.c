@@ -336,9 +336,13 @@ static int init_flash(void) {
         return 0;
     }
 
+    bool opened = false;
+
     if (hx_lib_spi_eeprom_open(spi_inst) != 0) {
         xprintf("init_flash: failed to open SPI EEPROM\n");
         ret = -1;
+    } else {
+        opened = true;
     }
 
     if (ret == 0) {
@@ -350,8 +354,10 @@ static int init_flash(void) {
         }
     }
 
-    // Restore XIP: open() left the chip in SPI command mode.
-    if (ret == 0) {
+    // Restore XIP whenever open() succeeded - even if read_ID failed above.
+    // open() leaves the chip in SPI command mode; returning without
+    // re-enabling XIP hard-faults the next code/model fetch from flash.
+    if (opened) {
         if (hx_lib_spi_eeprom_enable_XIP(spi_inst, true, FLASH_QUAD, true) != 0) {
             xprintf("init_flash: failed to enable XIP\n");
             ret = -1;

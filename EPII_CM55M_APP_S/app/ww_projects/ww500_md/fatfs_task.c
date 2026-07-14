@@ -141,6 +141,9 @@ extern GPS_Coordinate exif_gps_deviceLon;
 extern GPS_Altitude exif_gps_deviceAlt;
 
 extern directoryManager_t dirManager;
+// Defined in if_task.c: true while a file-receive session is active. Suppresses the
+// high-volume per-packet console logging that throttles the transfer at 921600 baud.
+extern volatile bool g_fileRxActive;
 extern QueueHandle_t xIfTaskQueue;
 extern QueueHandle_t xImageTaskQueue;
 
@@ -169,6 +172,15 @@ static bool mounted;
 // Persistent file handle for incremental file writes (OPEN_FILE / APPEND_FILE / CLOSE_FILE)
 static FIL transferFile;
 static bool transferFileOpen = false;
+
+// Flush FAT metadata with f_sync() every N appends. Without this a long
+// transfer accumulates unbounded dirty filesystem state (cluster chain and
+// directory updates), which is the suspected cause of the non-deterministic
+// f_write() failures ("ftx err 7") seen on transfers beyond ~3-7KB.
+// 16 x 241-byte chunks ≈ 3.9KB between syncs; each f_sync costs ~50-100ms,
+// amortised to a few ms per packet.
+#define TRANSFER_WRITES_PER_SYNC 16
+static uint16_t transferWritesSinceSync = 0;
 
 static TickType_t xStartTime;
 static TickType_t accumulatedTime;
@@ -227,11 +239,11 @@ uint16_t op_parameter[OP_PARAMETER_NUM_ENTRIES] = {
 	0,	    	   		// 19 OP_PARAMETER_IMAGES_COUNT
 	0,	    	   		// 20 OP_PARAMETER_IMAGES_COUNT - increment as files are added. Start a new folder when this exceeds a threhsold
 	2,	    	   		// 21 OP_PARAMETER_MD_FLASH_LED (2 = IR)
-	5,	    	   		// 22 OP_PARAMETER_MD_FLASH_BRIGHTNESS_PERCENT
+	50,	    	   		// 22 OP_PARAMETER_MD_FLASH_BRIGHTNESS_PERCENT (STROBE-gated ~15ms pulses; 5% too dim in the field)
 	65,	    	   		// 23 OP_PARAMETER_AE_DARK_THRESHOLD ('moderate' setting - see AE_Light_Sensor_Roadmap.md)
 	15,	    	   		// 24 OP_PARAMETER_AE_CHECK_INTERVAL (minutes; 0 disables)
 	0,	    	   		// 25 OP_PARAMETER_AE_FLASH_STATE (runtime state)
-	0,	    	   		// 26 OP_PARAMETER_SLOT_SWITCH (0 = off/manual only; 1 = automatic light-based switching, PLANNED)
+	1,	    	   		// 26 OP_PARAMETER_SLOT_SWITCH (0 = off/manual only; 1 = automatic light-based switching)
 	286,	   			// 27 OP_PARAMETER_WB_RED_GAIN (Q8.8: 286 = x1.117, the bench-measured neutralising gain; 0 disables)
 	326,	   			// 28 OP_PARAMETER_WB_BLUE_GAIN (Q8.8: 326 = x1.273, the bench-measured neutralising gain; 0 disables)
 };
@@ -751,7 +763,14 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 		}
 
 		if (res == FR_OK) {
+			// FA_CREATE_ALWAYS truncated any existing file, freeing its cluster
+			// chain. Commit that (and let the card finish the internal
+			// housekeeping) BEFORE the first data write - otherwise re-sending a
+			// large file failed on packet 1 with FR_DISK_ERR (ftx err 7) because
+			// the card was still busy from freeing ~1000 clusters.
+			f_sync(&transferFile);
 			transferFileOpen = true;
+			transferWritesSinceSync = 0;
 			xprintf("Opened '%s' for writing\n", fileOp->fileName);
 		}
 		else {
@@ -776,10 +795,36 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 			res = FR_INVALID_OBJECT;
 		}
 		else {
-			res = f_write(&transferFile, fileOp->buffer, fileOp->length, &bw);
-			if (res == FR_OK && bw != fileOp->length) {
-				xprintf("Short write: %u of %lu bytes\n", bw, fileOp->length);
-				res = FR_DISK_ERR;
+			// Retry transient SD write failures: the card can be briefly busy
+			// (internal garbage collection, or recovering after a large-file
+			// truncate), which returns FR_DISK_ERR. A short delay lets it
+			// recover; only a persistent failure becomes ftx err 7.
+			for (int attempt = 0; ; attempt++) {
+				res = f_write(&transferFile, fileOp->buffer, fileOp->length, &bw);
+				if (res == FR_OK && bw != fileOp->length) {
+					// FR_OK with a short count means the volume is full. Do NOT
+					// retry: the file pointer has already advanced by bw, so a
+					// rewrite of the full buffer would duplicate those bytes and
+					// corrupt the file. Report it as a write error (ftx err 7).
+					xprintf("Short write: %u of %lu bytes (volume full?)\n", bw, fileOp->length);
+					res = FR_DISK_ERR;
+					break;
+				}
+				if (res == FR_OK || attempt >= 3) {
+					break;
+				}
+				xprintf("SD write err %d, retry %d/3\n", res, attempt + 1);
+				vTaskDelay(pdMS_TO_TICKS(15));
+			}
+
+			// Periodic metadata flush — see TRANSFER_WRITES_PER_SYNC above.
+			// A failed sync is reported like a failed write (ftx err 7).
+			if (res == FR_OK && ++transferWritesSinceSync >= TRANSFER_WRITES_PER_SYNC) {
+				res = f_sync(&transferFile);
+				transferWritesSinceSync = 0;
+				if (res != FR_OK) {
+					xprintf("f_sync failed (err %d)\n", res);
+				}
 			}
 		}
 
@@ -1612,10 +1657,12 @@ static void vFatFsTask(void *pvParameters) {
 				eventString = "Unexpected";
 			}
 
-			XP_LT_CYAN
-			xprintf("\nFatFS Task ");
-			XP_WHITE;
-			xprintf("received event '%s' (0x%04x). Rx data = 0x%08x\r\n", eventString, event, rxData);
+			if (!g_fileRxActive) {
+				XP_LT_CYAN
+				xprintf("\nFatFS Task ");
+				XP_WHITE;
+				xprintf("received event '%s' (0x%04x). Rx data = 0x%08x\r\n", eventString, event, rxData);
+			}
 
 			old_state = fatFs_task_state;
 
@@ -1640,7 +1687,7 @@ static void vFatFsTask(void *pvParameters) {
 				break;
 			}
 
-			if (old_state != fatFs_task_state) {
+			if ((old_state != fatFs_task_state) && !g_fileRxActive) {
 				// state has changed
 				XP_LT_CYAN;
 				xprintf("FatFS Task state changed ");
@@ -1657,7 +1704,7 @@ static void vFatFsTask(void *pvParameters) {
 
 				if (xQueueSend(targetQueue, (void *)&sendMsg, __QueueSendTicksToWait) != pdTRUE) {
 					xprintf("FatFS task sending event 0x%x failed\r\n", sendMsg.msg_event);
-				} else {
+				} else if (!g_fileRxActive) {
 					xprintf("FatFS task sending event 0x%04x. Tx data = 0x%08x\r\n", sendMsg.msg_event, sendMsg.msg_data);
 				}
 			}

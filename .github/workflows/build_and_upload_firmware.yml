@@ -1,0 +1,401 @@
+name: Build and Upload Himax Firmware
+
+# This workflow builds the Himax (HX6538) firmware image(s) and/or uploads them
+# to the Supabase firmware database. Four ways to run it:
+#
+#   1. Merge/push to 'dev'  -> BUILD BOTH camera variants from source, upload to the DEV database
+#   2. Merge/push to 'main' -> BUILD BOTH camera variants from source, upload to the PRODUCTION database
+#   3. Manual dispatch, source=prebuilt -> upload the committed
+#      we2_image_gen_local_dpd/output_case1_sec_wlcsp/output.img (single image;
+#      its camera variant is detected from the image content) to the chosen
+#      database (dev or production) without building
+#   4. Manual dispatch, source=build (any branch) -> BUILD BOTH variants, upload
+#      to the DEV database
+#
+# Camera variants: the WW500 holds two firmware images in A/B flash slots -
+#   RP3    = RP v3 colour camera (IMX708) as main camera  (CIS_SUPPORT_INAPP_MODEL=cis_imx708)
+#   HM0360 = HM0360 night/IR camera as main camera        (CIS_SUPPORT_INAPP_MODEL=cis_hm0360)
+# Each upload carries a camera_variant so the website manifest generator and the
+# mobile app can select the matching pair.
+#
+# Builds use the Arm GNU toolchain pinned below and the RC24M (DPD-capable)
+# image-generation profile, matching the developers' local build environment.
+# See _Documentation/building_firmware.md
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  # Keep in step with the toolchain developers build with locally
+  ARM_TOOLCHAIN_VERSION: 14.3.rel1
+
+# NOTE - main-branch copy: this file exists on main so the "Run workflow"
+# button appears in the Actions UI (GitHub only offers manual runs for
+# workflows present on the default branch). It is dispatch-only: pick a branch
+# in the Run workflow dropdown and GitHub executes THAT branch's version of
+# this file against that branch's source. The push triggers (dev/main ->
+# automatic build+upload) live in the dev/feature copies of this file and
+# will take effect here when dev is merged into main.
+on:
+  workflow_dispatch:
+    inputs:
+      source:
+        description: 'Firmware source: build from this branch, or upload the committed pre-built image'
+        required: true
+        default: 'build'
+        type: choice
+        options:
+          - build
+          - prebuilt
+      environment:
+        description: 'Target Supabase database (prebuilt only - builds from a branch always go to dev; merge to main for production)'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - production
+
+# One upload at a time per branch - a run that is superseded is cancelled
+concurrency:
+  group: firmware-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      environment: ${{ steps.resolve.outputs.ENVIRONMENT }}
+      source: ${{ steps.resolve.outputs.SOURCE }}
+      matrix: ${{ steps.resolve.outputs.MATRIX }}
+    steps:
+      - name: Resolve source, environment and build matrix
+        id: resolve
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            SOURCE="${{ inputs.source }}"
+            if [ "$SOURCE" = "prebuilt" ]; then
+              # Capability 3: developer uploads the committed image to either database
+              ENVIRONMENT="${{ inputs.environment }}"
+            else
+              # Capability 4: developer builds from any branch - dev database only
+              ENVIRONMENT="dev"
+            fi
+          else
+            # Push events: build from source; main -> production, dev -> dev
+            SOURCE="build"
+            if [ "${{ github.ref_name }}" = "main" ]; then
+              ENVIRONMENT="production"
+            else
+              ENVIRONMENT="dev"
+            fi
+          fi
+
+          # Builds produce both camera variants; the prebuilt path is a single
+          # committed image whose variant is detected from its content
+          if [ "$SOURCE" = "build" ]; then
+            MATRIX='{"include":[{"variant":"RP3","cis_model":"cis_imx708"},{"variant":"HM0360","cis_model":"cis_hm0360"}]}'
+          else
+            MATRIX='{"include":[{"variant":"PREBUILT","cis_model":"none"}]}'
+          fi
+
+          echo "SOURCE=$SOURCE" >> $GITHUB_OUTPUT
+          echo "ENVIRONMENT=$ENVIRONMENT" >> $GITHUB_OUTPUT
+          echo "MATRIX=$MATRIX" >> $GITHUB_OUTPUT
+          echo "Source: $SOURCE, target database: $ENVIRONMENT"
+
+  build-firmware:
+    needs: setup
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.setup.outputs.matrix) }}
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Fetch all history for semantic versioning
+
+      - name: Cache Arm GNU Toolchain
+        if: needs.setup.outputs.source == 'build'
+        id: cache-toolchain
+        uses: actions/cache@v4
+        with:
+          path: ~/arm-gnu-toolchain
+          key: arm-gnu-toolchain-${{ env.ARM_TOOLCHAIN_VERSION }}-x86_64
+
+      - name: Download Arm GNU Toolchain
+        if: needs.setup.outputs.source == 'build' && steps.cache-toolchain.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          mkdir -p ~/arm-gnu-toolchain
+          cd ~/arm-gnu-toolchain
+          wget -q "https://developer.arm.com/-/media/Files/downloads/gnu/${ARM_TOOLCHAIN_VERSION}/binrel/arm-gnu-toolchain-${ARM_TOOLCHAIN_VERSION}-x86_64-arm-none-eabi.tar.xz"
+          tar -xf "arm-gnu-toolchain-${ARM_TOOLCHAIN_VERSION}-x86_64-arm-none-eabi.tar.xz"
+          rm "arm-gnu-toolchain-${ARM_TOOLCHAIN_VERSION}-x86_64-arm-none-eabi.tar.xz"
+
+      - name: Build Firmware (${{ matrix.variant }})
+        if: needs.setup.outputs.source == 'build'
+        shell: bash
+        run: |
+          export PATH="$HOME/arm-gnu-toolchain/arm-gnu-toolchain-${ARM_TOOLCHAIN_VERSION}-x86_64-arm-none-eabi/bin:$PATH"
+          arm-none-eabi-gcc --version | head -n 1
+
+          cd EPII_CM55M_APP_S
+          # actions/checkout leaves a detached HEAD, so pass the branch name explicitly.
+          # CIS_SUPPORT_INAPP_MODEL selects the camera variant for this matrix leg.
+          make -j"$(nproc)" GIT_BRANCH="$GITHUB_REF_NAME" CIS_SUPPORT_INAPP_MODEL="${{ matrix.cis_model }}"
+
+          ls -la obj_epii_evb_icv30_bdv10/gnu_epii_evb_WLCSP65/EPII_CM55M_gnu_epii_evb_WLCSP65_s.elf
+
+      - name: Generate Firmware Image (${{ matrix.variant }})
+        if: needs.setup.outputs.source == 'build'
+        shell: bash
+        run: |
+          cd we2_image_gen_local_dpd
+          cp ../EPII_CM55M_APP_S/obj_epii_evb_icv30_bdv10/gnu_epii_evb_WLCSP65/EPII_CM55M_gnu_epii_evb_WLCSP65_s.elf input_case1_secboot/
+
+          # Execute bits are not preserved on all checkouts
+          chmod +x we2_local_image_gen \
+                   arm_none_eabi/arm-none-eabi-objcopy \
+                   arm_none_eabi/arm-none-eabi-objdump \
+                   secureboot_tool/generate_secureboot_certificates
+
+          # RC24M profile: the bootloader set used on deployed WW500 units (DPD support)
+          ./we2_local_image_gen project_case1_blp_wlcsp_rc24m.json
+
+          ls -la output_case1_sec_wlcsp/output.img
+
+      - name: Check Pre-built Image Exists
+        if: needs.setup.outputs.source == 'prebuilt'
+        shell: bash
+        run: |
+          IMG_FILE="./we2_image_gen_local_dpd/output_case1_sec_wlcsp/output.img"
+          if [ ! -f "$IMG_FILE" ]; then
+            echo "Error: Pre-built .img file not found at $IMG_FILE!"
+            exit 1
+          fi
+          echo "Using pre-built image committed to the repository"
+          ls -la "$IMG_FILE"
+
+      - name: Detect Camera Variant and Rename Image
+        id: find_image
+        shell: bash
+        run: |
+          # Both paths (fresh build and prebuilt) leave the image here
+          IMG_FILE="./we2_image_gen_local_dpd/output_case1_sec_wlcsp/output.img"
+
+          if [ ! -f "$IMG_FILE" ]; then
+            echo "Error: .img file not found at $IMG_FILE!"
+            exit 1
+          fi
+
+          # The camera variant is derived from the image content itself
+          # (the firmware embeds a "Camera: ..." identification string), so it
+          # can never disagree with the binary - this also classifies the
+          # committed image on the prebuilt path.
+          CAMERA_LINE=$(strings "$IMG_FILE" | grep -m1 -E "^Camera: " || true)
+          if echo "$CAMERA_LINE" | grep -q "RP v3"; then
+            VARIANT="RP3"
+          elif echo "$CAMERA_LINE" | grep -q "HM0360"; then
+            VARIANT="HM0360"
+          else
+            VARIANT=""
+            echo "Warning: could not detect camera variant ('$CAMERA_LINE')"
+          fi
+          echo "Detected camera variant: '$VARIANT'"
+
+          # Sanity check: a built leg must match its matrix variant
+          if [ "${{ needs.setup.outputs.source }}" = "build" ] && [ "$VARIANT" != "${{ matrix.variant }}" ]; then
+            echo "Error: built image variant '$VARIANT' does not match matrix leg '${{ matrix.variant }}'"
+            exit 1
+          fi
+
+          # Extract board name from ww.mk for the filename
+          BOARD_NAME=$(grep "^BOARD_NAME_STRING" EPII_CM55M_APP_S/app/ww_projects/ww.mk | awk -F'"' '{print $2}' | head -n 1)
+          if [ -z "$BOARD_NAME" ]; then
+            BOARD_NAME="WW500_C02"
+          fi
+
+          # Generate timestamped filename: BOARD_VARIANT_YYYYMMDDHHMMSS.img
+          TIMESTAMP=$(date -u +"%Y%m%d%H%M%S")
+          NEW_NAME="${BOARD_NAME}_${VARIANT:-UNKNOWN}_${TIMESTAMP}.img"
+
+          # Rename the file so the artifact and storage path use the new name
+          NEW_PATH="$(dirname "$IMG_FILE")/$NEW_NAME"
+          cp "$IMG_FILE" "$NEW_PATH"
+
+          FULL_PATH=$(readlink -f "$NEW_PATH")
+          echo "Firmware image: $FULL_PATH"
+          echo "firmware_path=$FULL_PATH" >> $GITHUB_OUTPUT
+          echo "firmware_filename=$NEW_NAME" >> $GITHUB_OUTPUT
+          echo "firmware_variant=$VARIANT" >> $GITHUB_OUTPUT
+
+      - name: Upload Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: firmware-image-${{ matrix.variant }}
+          path: ${{ steps.find_image.outputs.firmware_path }}
+          retention-days: 30
+
+  upload-to-supabase:
+    needs: [build-firmware, setup]
+    runs-on: ubuntu-latest
+    if: success()
+    environment: ${{ needs.setup.outputs.environment }}
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.setup.outputs.matrix) }}
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      SYSTEM_EMAIL: ${{ secrets.SYSTEM_EMAIL }}
+      FALLBACK_USER_ID: ${{ secrets.FALLBACK_USER_ID }}
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download Build Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: firmware-image-${{ matrix.variant }}
+          path: ./firmware
+
+      - name: Calculate Semantic Version
+        id: semver
+        uses: mathieudutour/github-tag-action@v6.2
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          default_bump: patch
+          release_branches: main
+          dry_run: true
+          tag_prefix: v
+
+      - name: Generate Release Notes
+        id: release_notes
+        shell: bash
+        run: |
+          # Get commits since last tag
+          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+
+          if [ -z "$LAST_TAG" ]; then
+            # No previous tags, get all commits
+            COMMITS=$(git log --pretty=format:"- %s (%h)" --no-merges)
+          else
+            # Get commits since last tag
+            COMMITS=$(git log "$LAST_TAG..HEAD" --pretty=format:"- %s (%h)" --no-merges)
+          fi
+
+          # Save to environment variable
+          echo "RELEASE_NOTES<<EOF" >> $GITHUB_ENV
+          echo "$COMMITS" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+
+          echo "Generated release notes:"
+          echo "$COMMITS"
+
+      - name: Extract Device Version and Variant
+        id: version
+        shell: bash
+        run: |
+          IMG_FILE=$(find ./firmware -name "*.img" | head -n 1)
+          if [ -z "$IMG_FILE" ]; then
+            echo "Error: no .img file in the artifact!"
+            exit 1
+          fi
+
+          # Extract the exact __TIME__ and __DATE__ embedded by the C compiler
+          BUILD_TIME=$(strings "$IMG_FILE" | grep -Eo "^[0-2][0-9]:[0-5][0-9]:[0-5][0-9]$" | tail -n 1)
+          BUILD_DATE=$(strings "$IMG_FILE" | grep -Eo "^[A-Z][a-z]{2} +[0-9]{1,2} 20[0-9]{2}$" | tail -n 1)
+
+          # Camera variant from the image content (see Detect Camera Variant step)
+          CAMERA_LINE=$(strings "$IMG_FILE" | grep -m1 -E "^Camera: " || true)
+          if echo "$CAMERA_LINE" | grep -q "RP v3"; then
+            VARIANT="RP3"
+          elif echo "$CAMERA_LINE" | grep -q "HM0360"; then
+            VARIANT="HM0360"
+          else
+            VARIANT=""
+          fi
+
+          # Extract board name from ww.mk
+          BOARD_NAME=$(grep "^BOARD_NAME_STRING" EPII_CM55M_APP_S/app/ww_projects/ww.mk | awk -F'"' '{print $2}' | head -n 1)
+
+          if [ -z "$BOARD_NAME" ]; then
+            BOARD_NAME="WW500_C02"
+          fi
+
+          if [ -n "$BUILD_TIME" ] && [ -n "$BUILD_DATE" ]; then
+             UNIQUE_VERSION="${BOARD_NAME} ${BUILD_TIME} ${BUILD_DATE}"
+          else
+             # Fallback to Semantic version + build number
+             SEMVER="${{ steps.semver.outputs.new_tag }}"
+             UNIQUE_VERSION="${SEMVER}.${{ github.run_number }}"
+             BUILD_DATE=$(date "+%b %d %Y") # Fallback date
+          fi
+
+          echo "unique_version=${UNIQUE_VERSION}" >> $GITHUB_OUTPUT
+          echo "build_date=${BUILD_DATE}" >> $GITHUB_OUTPUT
+          echo "camera_variant=${VARIANT}" >> $GITHUB_OUTPUT
+          echo "Extracted device version: ${UNIQUE_VERSION} (variant: ${VARIANT:-unknown})"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install Node Dependencies
+        run: npm install @supabase/supabase-js
+        working-directory: ./scripts
+
+      - name: Set Firmware Path
+        shell: bash
+        run: |
+          FIRMWARE_FILE=$(find ./firmware -name "*.img" | head -n 1)
+
+          if [ -n "$FIRMWARE_FILE" ] && [ -f "$FIRMWARE_FILE" ]; then
+            FULL_PATH=$(readlink -f "$FIRMWARE_FILE")
+            echo "FIRMWARE_PATH=$FULL_PATH" >> "$GITHUB_ENV"
+            echo "Found firmware at: $FULL_PATH"
+          else
+            echo "Error: firmware file not found!"
+            ls -R ./firmware/
+            exit 1
+          fi
+
+      - name: Compute Firmware CRC
+        id: crc
+        run: |
+          node scripts/compute_firmware_crc.js "$FIRMWARE_PATH"
+
+      - name: Upload to Supabase
+        working-directory: ./scripts
+        env:
+          FIRMWARE_VERSION: ${{ steps.version.outputs.unique_version }}
+          FIRMWARE_BUILD_DATE: ${{ steps.version.outputs.build_date }}
+          FIRMWARE_CRC: ${{ steps.crc.outputs.crc }}
+          FIRMWARE_VARIANT: ${{ steps.version.outputs.camera_variant }}
+          RELEASE_NOTES: |
+            Himax AI firmware ${{ steps.version.outputs.unique_version }}
+            Camera variant: ${{ steps.version.outputs.camera_variant || 'unknown' }}
+            Source: ${{ needs.setup.outputs.source }} (${{ github.event_name }})
+            Branch: ${{ github.ref_name }}
+            Commit: ${{ github.sha }}
+            Build: #${{ github.run_number }}
+
+            Changes since last tag:
+            ${{ steps.semver.outputs.changelog }}
+        run: node upload_firmware.js
+
+      - name: Create Git Tag
+        # Only one matrix leg creates the tag (RP3 for builds, PREBUILT for prebuilt uploads)
+        if: success() && (github.ref == 'refs/heads/main') && (matrix.variant == 'RP3' || matrix.variant == 'PREBUILT')
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a ${{ steps.semver.outputs.new_tag }} -m "Release ${{ steps.semver.outputs.new_tag }}"
+          git push origin ${{ steps.semver.outputs.new_tag }}

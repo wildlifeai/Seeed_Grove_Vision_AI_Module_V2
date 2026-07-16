@@ -55,6 +55,18 @@ meaning. `MD_IIR_PARAM` and the `MD_LATENCY_TH` nibble semantics are **inferred 
 the reference init comments** (no HM0360 datasheet exists) and must be characterised
 before being trusted (Section 5, Phase 1).
 
+**Software companion knob — global-motion rejection (`OP_PARAMETER_MD_BLOCK_NUM_MAX`,
+op 33, added 2026-07-13).** The sensor only has a *minimum* trigger (`MD_BLOCK_NUM_TH`:
+"at least N blocks moved"); there is no hardware *maximum*, so a whole-scene shift
+(camera knock/pan, cloud/lighting flip) fires like any animal — but lights **most of
+the 256 blocks** instead of a small cluster. The firmware now reads the triggering
+bitmap at MD wake (before the interrupt clear / capture start, `image_task.c`) and
+**skips the capture when the count exceeds op 33** (0 = disabled; try 100–180). The
+wake itself cannot be prevented — this saves the false capture/save/upload, not the
+wake power. Rejections are reported to the BLE master ("MD wake rejected: motion in
+N blocks > max M"). A future refinement is a *spread/cluster* check on the same
+bitmap (animal = compact cluster; global motion = edge-to-edge smear).
+
 ## 3. The four presets
 
 Starting hypotheses — the backbone knobs are directionally sound; IIR/latency are to

@@ -1,5 +1,5 @@
 # Description of the CONFIG.TXT File
-#### CGP - 25 April 2026 (updated 11 July 2026: parameters 29-32 - RP camera auto-exposure, white-balance mode and resolution)
+#### CGP - 25 April 2026 (updated 13 July 2026: parameter 33 - MD global-motion rejection; 11 July 2026: parameters 29-32 - RP camera auto-exposure, white-balance mode and resolution)
 
 The CONFIG.TXT file contains "Operational Parameters" for the WW500.
 
@@ -72,6 +72,7 @@ captured first.
 |    30 | OP_PARAMETER_CAM_AE_TARGET 			| 110           | Auto-exposure target: raw bright-quartile (p75) luma, 0-250 (0 = built-in default 95). Bright parts of the scene render just below white after the tone curve |
 |    31 | OP_PARAMETER_CAM_WB_MODE 				| 1             | RP camera white balance: 0 = off (hardware JPEG), 1 = auto (warmth-biased grey-world measured per frame), 2 = manual op27/op28. Auto falls back to manual for flash-lit or too-dark frames - see `img_correct.c` |
 |    32 | OP_PARAMETER_CAM_RESOLUTION 			| 0             | RP camera capture resolution: 0 = 640x480 (normal pipeline), 1 = 1280x960 single JPEG via the CPU pipeline - requires the NN off (op14 = 0); see [hires-capture.md](hires-capture.md) |
+|    33 | OP_PARAMETER_MD_BLOCK_NUM_MAX 		| 0             | Global-motion rejection: skip the capture when an MD wake shows motion in MORE than this many of the 256 grid blocks. A whole-scene shift (camera knock/pan, lighting change) lights most of the grid; an animal lights a small local cluster. 0 disables; try 100-180. Complements the sensor's MD_BLOCK_NUM_TH, which is the *minimum* blocks needed to trigger. Checked at wake, before the capture starts - the wake itself cannot be prevented, but the false capture/save/upload is |
 
 ## More Details
 

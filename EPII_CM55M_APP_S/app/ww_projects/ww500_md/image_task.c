@@ -1697,6 +1697,10 @@ static void vImageTask(void *pvParameters) {
 
     if (interval > 0) {
     	xprintf("  MD sampling: %dms.\n", interval);
+    	if (fatfs_getOperationalParameter(OP_PARAMETER_MD_BLOCK_NUM_MAX) > 0) {
+    		xprintf("  MD global-motion limit: %d blocks (op33).\n",
+    				fatfs_getOperationalParameter(OP_PARAMETER_MD_BLOCK_NUM_MAX));
+    	}
     }
     else {
     	xprintf("  MD disabled.\n");
@@ -1711,12 +1715,47 @@ static void vImageTask(void *pvParameters) {
 
     XP_WHITE;
 
+    // ── Global-motion rejection (false-trigger filter) ──────────────────────
+    // A knocked/panned camera or a scene-wide lighting change moves MOST of the
+    // 16x16 MD grid at once; an animal moves a small local cluster. On an MD
+    // wake, when OP_PARAMETER_MD_BLOCK_NUM_MAX > 0, read the motion bitmap that
+    // caused the wake (still held in the HM0360 MD_ROI_OUT registers - the
+    // interrupt clear is deferred to first FRAME_READY) and skip the capture
+    // when more blocks moved than the limit. The wake itself cannot be
+    // prevented (the sensor has a minimum-blocks trigger, MD_BLOCK_NUM_TH, but
+    // no maximum); this stops the false capture/save/upload that would follow.
+    bool mdWakeRejected = false;
+    if ((woken == APP_WAKE_REASON_MD) && cameraInitialised) {
+        uint16_t mdBlocksMax = fatfs_getOperationalParameter(OP_PARAMETER_MD_BLOCK_NUM_MAX);
+        if (mdBlocksMax > 0) {
+            uint8_t roiOut[ROIOUTENTRIES];
+            uint16_t mdBlocks = hm0360_md_getMDOutput(roiOut, ROIOUTENTRIES);
+            if (mdBlocks > mdBlocksMax) {
+                mdWakeRejected = true;
+                // The deferred clear at FRAME_READY will not run - clear here so
+                // the stale trigger cannot re-fire (the sleep path clears again).
+                hm0360_md_clearInterrupt(0xff);
+                snprintf(msgToMaster, MSGTOMASTERLEN,
+                        "MD wake rejected: motion in %d blocks > max %d (global motion)",
+                        mdBlocks, mdBlocksMax);
+                XP_YELLOW;
+                xprintf("%s\n", msgToMaster);
+                XP_WHITE;
+                sendMsgToMaster(msgToMaster);   // let the BLE app show the rejection
+            }
+            else {
+                xprintf("MD wake accepted: motion in %d blocks (max %d)\n", mdBlocks, mdBlocksMax);
+            }
+        }
+    }
+
     // If we woke because of motion detection or timer then let's send ourselves an initial
     // message to take some photos.
 
     // But only if nnSystemEnabled and cameraInitialised!
 
-    if ((cameraSystemEnabled == 1)  && cameraInitialised && ((woken == APP_WAKE_REASON_MD) || (woken == APP_WAKE_REASON_TIMER))) {
+    if ((cameraSystemEnabled == 1)  && cameraInitialised && !mdWakeRejected
+    		&& ((woken == APP_WAKE_REASON_MD) || (woken == APP_WAKE_REASON_TIMER))) {
 
     	// A timer wake with timelapse disabled and a light-decision consumer
     	// enabled (AE-driven flash, or automatic camera switching op26) is a

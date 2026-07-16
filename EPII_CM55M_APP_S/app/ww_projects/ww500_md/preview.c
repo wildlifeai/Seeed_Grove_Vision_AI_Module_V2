@@ -161,7 +161,22 @@ void preview_sendFrame(void) {
 	// preview session). cameraSystemEnabled=true keeps MD running while the SoC
 	// is awake - the normal firmware only arms MD on the sleep path, which is
 	// why the grid reads empty during an ordinary awake capture.
-	if (!mdArmedForPreview) {
+	//
+	// NOT while hi-res (op32) is active: the HM0360 self-cycles frames through
+	// the shared camera fabric to compute motion, and that concurrent activity
+	// corrupts IMX708 RAW captures - regional colour casts + partial-width
+	// banding from frame 2 of a burst onward (frame 1 is clean because this
+	// arming is lazy; bench 16 Jul 2026, see the PR #143 thread). VGA preview
+	// takes a different hardware path and ran the overlay clean on the bench.
+	// The heatmap is for MD tuning (VGA); hi-res preview is for image quality -
+	// nothing is lost by keeping them exclusive.
+	if (hires_isActive()) {
+		if (mdArmedForPreview) {
+			hm0360_md_prepare(false, 0);	// op32 flipped mid-session: disarm
+			mdArmedForPreview = false;
+		}
+	}
+	else if (!mdArmedForPreview) {
 		uint16_t mdInterval = fatfs_getOperationalParameter(OP_PARAMETER_MD_INTERVAL);
 		if (mdInterval == 0) {
 			mdInterval = PREVIEW_MD_DEFAULT_INTERVAL_MS;
@@ -172,16 +187,21 @@ void preview_sendFrame(void) {
 
 	// Read the 16x16 motion grid (32 MD_ROI_OUT bytes) and render it as hex.
 	// getMDOutput() does its own main-camera I2C slave-swap, so it is safe to
-	// call here after the frame's own capture has completed.
-	uint8_t roiOut[ROIOUTENTRIES];
-	uint16_t mdBlocks = hm0360_md_getMDOutput(roiOut, ROIOUTENTRIES);
+	// call here after the frame's own capture has completed. Skipped when the
+	// engine is not armed (hi-res): the viewer treats an empty "md" as no grid.
 	static const char HEXDIGIT[] = "0123456789abcdef";
 	char mdHex[(ROIOUTENTRIES * 2) + 1];
-	for (uint8_t i = 0; i < ROIOUTENTRIES; i++) {
-		mdHex[(i * 2)]     = HEXDIGIT[(roiOut[i] >> 4) & 0x0f];
-		mdHex[(i * 2) + 1] = HEXDIGIT[roiOut[i] & 0x0f];
+	uint16_t mdBlocks = 0;
+	mdHex[0] = '\0';
+	if (mdArmedForPreview) {
+		uint8_t roiOut[ROIOUTENTRIES];
+		mdBlocks = hm0360_md_getMDOutput(roiOut, ROIOUTENTRIES);
+		for (uint8_t i = 0; i < ROIOUTENTRIES; i++) {
+			mdHex[(i * 2)]     = HEXDIGIT[(roiOut[i] >> 4) & 0x0f];
+			mdHex[(i * 2) + 1] = HEXDIGIT[roiOut[i] & 0x0f];
+		}
+		mdHex[ROIOUTENTRIES * 2] = '\0';
 	}
-	mdHex[ROIOUTENTRIES * 2] = '\0';
 
 	// Hi-res mode (op32) streams the CPU-pipeline JPEG, whose size differs from
 	// the VGA datapath default that app_get_raw_width/height() report.

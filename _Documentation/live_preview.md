@@ -77,6 +77,14 @@ Caveat: the grid comes from the HM0360 (its own FOV); on colour builds the
 preview image is the RP3/IMX708 (a different FOV), so the overlay is a spatial
 guide, not a pixel-aligned mask. On HM0360 (night) builds the two align.
 
+**Hi-res exclusion:** the overlay is disabled while hi-res capture (op32) is
+active. Running the HM0360's MD frames concurrently with an IMX708 RAW capture
+corrupts the image through the shared camera fabric (regional colour casts +
+partial-width banding from frame 2 of a burst - frame 1 escapes because the MD
+arming is lazy; bench 16 Jul 2026). VGA preview ran the overlay clean on the
+bench and keeps it. The two uses don't overlap in practice: the heatmap serves
+MD tuning (VGA), hi-res preview serves image-quality checks.
+
 ## Bench session recipe
 
 ```

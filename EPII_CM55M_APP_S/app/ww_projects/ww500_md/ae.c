@@ -103,17 +103,24 @@ static void writeReg16(uint16_t regH, uint16_t value) {
 }
 
 bool ae_process(uint32_t yAddr, uint16_t w, uint16_t h) {
+	if ((yAddr == 0) || (w == 0) || (h == 0)) {
+		return false;
+	}
+	if (fatfs_getOperationalParameter(OP_PARAMETER_CAM_AE_ENABLE) == 0) {
+		return false;	// skip the measurement cost when AE is off
+	}
+	return ae_process_measured(brightLuma(yAddr, w, h));
+}
+
+bool ae_process_measured(uint32_t p75Raw) {
+	uint32_t measured = p75Raw;
+
 	if (fatfs_getOperationalParameter(OP_PARAMETER_CAM_AE_ENABLE) == 0) {
 		return false;
 	}
 	if ((stepsThisWake >= AE_MAX_STEPS_PER_WAKE) && !preview_isActive()) {
 		return false;
 	}
-	if ((yAddr == 0) || (w == 0) || (h == 0)) {
-		return false;
-	}
-
-	uint32_t measured = brightLuma(yAddr, w, h);
 
 	uint32_t target = fatfs_getOperationalParameter(OP_PARAMETER_CAM_AE_TARGET);
 	if ((target == 0) || (target > 250)) {

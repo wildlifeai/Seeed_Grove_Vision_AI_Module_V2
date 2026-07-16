@@ -92,6 +92,8 @@ typedef enum {
 	OP_PARAMETER_CAM_AE_ENABLE,		// 29 RP camera auto-exposure: 0 = off (init-table exposure), 1 = on. See ae.c
 	OP_PARAMETER_CAM_AE_TARGET,		// 30 RP camera auto-exposure target mean luma (0-250; 0 = built-in default 110). See ae.c
 	OP_PARAMETER_CAM_WB_MODE,		// 31 RP camera white balance: 0 = off, 1 = auto (grey-world per frame), 2 = manual op27/op28. See img_correct.c
+	OP_PARAMETER_CAM_RESOLUTION,	// 32 RP camera capture resolution: 0 = 640x480, 1 = 1280x960 single JPEG (requires NN off, op14 = 0). See hires.c
+	OP_PARAMETER_MD_BLOCK_NUM_MAX,	// 33 Global-motion rejection: skip the capture when an MD wake shows motion in MORE than this many of the 256 grid blocks (whole-scene shift = camera knock/pan/lighting, not an animal). 0 disables. See image_task.c
 
 	OP_PARAMETER_NUM_ENTRIES		// Not an Operational Parameters - serves to define the size of the op_parameter[] array
 } OP_PARAMETERS_E;

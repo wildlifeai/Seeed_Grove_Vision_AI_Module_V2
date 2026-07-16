@@ -99,7 +99,7 @@
 // Length of lines in configuration.txt
 #define MAXCOMMENTLENGTH 80
 // Max number of comment lines in configuration.txt
-#define MAXNUMCOMMENTS OP_PARAMETER_NUM_ENTRIES + 5
+#define MAXNUMCOMMENTS (OP_PARAMETER_NUM_ENTRIES + 5)
 
 /*************************************** Local Function Declarations *****************************/
 
@@ -249,6 +249,8 @@ uint16_t op_parameter[OP_PARAMETER_NUM_ENTRIES] = {
 	1,	    	   		// 29 OP_PARAMETER_CAM_AE_ENABLE (RP camera auto-exposure on/off - see ae.c)
 	110,	   			// 30 OP_PARAMETER_CAM_AE_TARGET (target mean luma; 0 = built-in default)
 	1,	    	   		// 31 OP_PARAMETER_CAM_WB_MODE (1 = auto grey-world; 2 = manual op27/28; 0 = off)
+	0,	    	   		// 32 OP_PARAMETER_CAM_RESOLUTION (0 = 640x480; 1 = 1280x960, needs op14 = 0)
+	0,	    	   		// 33 OP_PARAMETER_MD_BLOCK_NUM_MAX (global-motion rejection; 0 = disabled)
 };
 
 // Deployment ID UUID string — loaded from 'I ' line in CONFIG.TXT or set via setdid CLI command
@@ -1149,7 +1151,13 @@ FRESULT save_configuration(const char *filename, directoryManager_t *dirManager)
 	FRESULT res;
 	UINT bytesWritten;
 	char line[MAXCOMMENTLENGTH];
-	char comment_lines[MAXNUMCOMMENTS][MAXCOMMENTLENGTH];
+	// Static, NOT a stack local: this array is MAXNUMCOMMENTS * 80 bytes
+	// (over 3 KB and growing with every op parameter added), which
+	// overflowed the FatFS task stack and corrupted a return address the
+	// moment op_parameter[] reached 33 entries (UsageFault on every boot's
+	// first config save). Only the FatFS task calls this, so a single
+	// static buffer is safe.
+	static char comment_lines[MAXNUMCOMMENTS][MAXCOMMENTLENGTH];
 	uint16_t comment_count = 0;
 
     if (!fatfs_mounted()) {

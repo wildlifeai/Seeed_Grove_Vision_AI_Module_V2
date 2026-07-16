@@ -302,6 +302,8 @@ static void get_block(const uint8_t *plane, int stride, int W, int H,
     }
 }
 
+static void write_headers(bitwriter_t *bwp, uint32_t w, uint32_t h);
+
 uint32_t sw_jpeg_encode_yuv420(const uint8_t *yuv, uint32_t w, uint32_t h,
                                uint8_t *out, uint32_t outCap, uint8_t quality) {
     if (!yuv || !out || w == 0 || h == 0 || (w & 1) || (h & 1)) {
@@ -320,7 +322,40 @@ uint32_t sw_jpeg_encode_yuv420(const uint8_t *yuv, uint32_t w, uint32_t h,
     bitwriter_t bw = {0};
     bw.buf = out; bw.cap = outCap;
 
-    // ---- headers ----
+    write_headers(&bw, w, h);
+
+    // ---- scan: 16x16 MCUs, each 4 Y + 1 Cb + 1 Cr ----
+    int dcY = 0, dcCb = 0, dcCr = 0;
+    int mcuX = ((int)w + 15) / 16, mcuY = ((int)h + 15) / 16;
+    float blk[64];
+
+    for (int my = 0; my < mcuY && !bw.overflow; my++) {
+        for (int mx = 0; mx < mcuX; mx++) {
+            int bx = mx * 16, by = my * 16;
+            // 4 luma blocks: TL, TR, BL, BR
+            get_block(yP, (int)w, (int)w, (int)h, bx,     by,     blk); encode_block(&bw, blk, qLuma, &hDcLuma, &hAcLuma, &dcY);
+            get_block(yP, (int)w, (int)w, (int)h, bx + 8, by,     blk); encode_block(&bw, blk, qLuma, &hDcLuma, &hAcLuma, &dcY);
+            get_block(yP, (int)w, (int)w, (int)h, bx,     by + 8, blk); encode_block(&bw, blk, qLuma, &hDcLuma, &hAcLuma, &dcY);
+            get_block(yP, (int)w, (int)w, (int)h, bx + 8, by + 8, blk); encode_block(&bw, blk, qLuma, &hDcLuma, &hAcLuma, &dcY);
+            // chroma (downsampled): one 8x8 each at (mx*8, my*8)
+            get_block(cbP, cw, cw, ch, mx * 8, my * 8, blk); encode_block(&bw, blk, qChroma, &hDcChroma, &hAcChroma, &dcCb);
+            get_block(crP, cw, cw, ch, mx * 8, my * 8, blk); encode_block(&bw, blk, qChroma, &hDcChroma, &hAcChroma, &dcCr);
+        }
+    }
+
+    bw_flush(&bw);
+    bw_marker(&bw, 0xD9);                            // EOI
+
+    if (bw.overflow) return 0;
+    return bw.len;
+}
+
+/*
+ * Shared JFIF header writer (SOI .. SOS) used by both the whole-frame and
+ * streamed encoders. Tables must already be initialised for the quality.
+ */
+static void write_headers(bitwriter_t *bwp, uint32_t w, uint32_t h) {
+#define bw (*bwp)
     bw_marker(&bw, 0xD8);                          // SOI
 
     bw_marker(&bw, 0xE0);                           // APP0 / JFIF
@@ -359,29 +394,85 @@ uint32_t sw_jpeg_encode_yuv420(const uint8_t *yuv, uint32_t w, uint32_t h,
     bw_byte(&bw, 0x02); bw_byte(&bw, 0x11);         // Cb : DC1 AC1
     bw_byte(&bw, 0x03); bw_byte(&bw, 0x11);         // Cr : DC1 AC1
     bw_byte(&bw, 0x00); bw_byte(&bw, 0x3F); bw_byte(&bw, 0x00);  // Ss Se Ah/Al
+#undef bw
+}
 
-    // ---- scan: 16x16 MCUs, each 4 Y + 1 Cb + 1 Cr ----
-    int dcY = 0, dcCb = 0, dcCr = 0;
-    int mcuX = ((int)w + 15) / 16, mcuY = ((int)h + 15) / 16;
-    float blk[64];
+/*************************************** Streaming API **********************/
 
-    for (int my = 0; my < mcuY && !bw.overflow; my++) {
-        for (int mx = 0; mx < mcuX; mx++) {
-            int bx = mx * 16, by = my * 16;
-            // 4 luma blocks: TL, TR, BL, BR
-            get_block(yP, (int)w, (int)w, (int)h, bx,     by,     blk); encode_block(&bw, blk, qLuma, &hDcLuma, &hAcLuma, &dcY);
-            get_block(yP, (int)w, (int)w, (int)h, bx + 8, by,     blk); encode_block(&bw, blk, qLuma, &hDcLuma, &hAcLuma, &dcY);
-            get_block(yP, (int)w, (int)w, (int)h, bx,     by + 8, blk); encode_block(&bw, blk, qLuma, &hDcLuma, &hAcLuma, &dcY);
-            get_block(yP, (int)w, (int)w, (int)h, bx + 8, by + 8, blk); encode_block(&bw, blk, qLuma, &hDcLuma, &hAcLuma, &dcY);
-            // chroma (downsampled): one 8x8 each at (mx*8, my*8)
-            get_block(cbP, cw, cw, ch, mx * 8, my * 8, blk); encode_block(&bw, blk, qChroma, &hDcChroma, &hAcChroma, &dcCb);
-            get_block(crP, cw, cw, ch, mx * 8, my * 8, blk); encode_block(&bw, blk, qChroma, &hDcChroma, &hAcChroma, &dcCr);
-        }
+// Copy bitwriter state between the public stream struct and the internal
+// bitwriter (kept separate so the header stays free of internals).
+static void st_load(const sw_jpeg_stream_t *s, bitwriter_t *bw) {
+    bw->buf = s->buf;  bw->cap = s->cap;  bw->len = s->len;
+    bw->bitBuf = s->bits;  bw->bitCnt = s->nbits;  bw->overflow = s->overflow;
+}
+
+static void st_store(const bitwriter_t *bw, sw_jpeg_stream_t *s) {
+    s->len = bw->len;  s->bits = bw->bitBuf;
+    s->nbits = bw->bitCnt;  s->overflow = (uint8_t)bw->overflow;
+}
+
+int sw_jpeg_stream_begin(sw_jpeg_stream_t *s, uint32_t w, uint32_t h,
+                         uint8_t *out, uint32_t outCap, uint8_t quality) {
+    if (!s || !out || w == 0 || h == 0 || (w & 1)) {
+        return -1;
+    }
+    if (tablesReadyQuality != (int)quality) {
+        init_tables(quality);
+    }
+    memset(s, 0, sizeof(*s));
+    s->buf = out;
+    s->cap = outCap;
+    s->w = w;
+    s->h = h;
+
+    bitwriter_t bw = {0};
+    st_load(s, &bw);
+    write_headers(&bw, w, h);
+    st_store(&bw, s);
+    return 0;
+}
+
+int sw_jpeg_stream_strip(sw_jpeg_stream_t *s, const uint8_t *stripYuv) {
+    if (!s || !stripYuv || s->overflow || (s->rowsDone >= s->h)) {
+        return -1;
     }
 
+    const uint8_t *yP  = stripYuv;
+    const uint8_t *cbP = stripYuv + (s->w * 16u);
+    const uint8_t *crP = cbP + ((s->w / 2u) * 8u);
+    int w = (int)s->w;
+    int cw = w / 2;
+    int mcuX = (w + 15) / 16;
+    float blk[64];
+
+    bitwriter_t bw;
+    st_load(s, &bw);
+
+    for (int mx = 0; mx < mcuX && !bw.overflow; mx++) {
+        int bx = mx * 16;
+        // 4 luma blocks: TL, TR, BL, BR (strip-local coordinates, 16 rows)
+        get_block(yP, w, w, 16, bx,     0, blk); encode_block(&bw, blk, qLuma, &hDcLuma, &hAcLuma, &s->dcY);
+        get_block(yP, w, w, 16, bx + 8, 0, blk); encode_block(&bw, blk, qLuma, &hDcLuma, &hAcLuma, &s->dcY);
+        get_block(yP, w, w, 16, bx,     8, blk); encode_block(&bw, blk, qLuma, &hDcLuma, &hAcLuma, &s->dcY);
+        get_block(yP, w, w, 16, bx + 8, 8, blk); encode_block(&bw, blk, qLuma, &hDcLuma, &hAcLuma, &s->dcY);
+        // chroma (downsampled): one 8x8 each
+        get_block(cbP, cw, cw, 8, mx * 8, 0, blk); encode_block(&bw, blk, qChroma, &hDcChroma, &hAcChroma, &s->dcCb);
+        get_block(crP, cw, cw, 8, mx * 8, 0, blk); encode_block(&bw, blk, qChroma, &hDcChroma, &hAcChroma, &s->dcCr);
+    }
+
+    st_store(&bw, s);
+    s->rowsDone += 16;
+    return s->overflow ? -1 : 0;
+}
+
+uint32_t sw_jpeg_stream_end(sw_jpeg_stream_t *s) {
+    if (!s || s->overflow || (s->rowsDone < s->h)) {
+        return 0;
+    }
+    bitwriter_t bw;
+    st_load(s, &bw);
     bw_flush(&bw);
     bw_marker(&bw, 0xD9);                            // EOI
-
-    if (bw.overflow) return 0;
-    return bw.len;
+    st_store(&bw, s);
+    return s->overflow ? 0 : s->len;
 }

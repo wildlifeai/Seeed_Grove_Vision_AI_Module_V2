@@ -123,7 +123,11 @@ void BusFault_Handler(void) {
 	}
 }
 void UsageFault_Handler(void) {
+	// CFSR's UsageFault byte says WHY (bit16 UNDEFINSTR, 17 INVSTATE,
+	// 18 INVPC, 19 NOCP, 24 UNALIGNED, 25 DIVBYZERO)
 	xprintf("\r\nEntering UsageFault_Handler interrupt!\r\n");
+	xprintf("SCB->CFSR:0x%08x\n", (int) SCB->CFSR);
+	xprintf("SCB->HFSR:0x%08x\n", (int) SCB->HFSR);
 	for (;;) {
 	}
 }

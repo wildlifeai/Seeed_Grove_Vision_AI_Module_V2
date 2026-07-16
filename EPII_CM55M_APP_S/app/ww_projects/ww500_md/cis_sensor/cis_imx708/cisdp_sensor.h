@@ -50,6 +50,17 @@ uint32_t app_get_raw_width();
 uint32_t app_get_raw_height();
 uint32_t app_get_raw_channels();
 
+/*
+ * High-resolution RAW capture support (hires.c). Register a nonzero raw
+ * buffer address BEFORE cisdp_dp_init() to switch the datapath to
+ * INP centre-crop (1280x960) -> RAW Bayer -> WDMA2 at that address,
+ * bypassing HW5x5/JPEG. Register 0 to restore the normal VGA flow.
+ */
+void cisdp_set_hires_raw(uint32_t rawAddr);
+
+/* CFA phase of the demosaic, as a demosaic_pattern_t value (demosaic.h) */
+uint8_t cisdp_get_demos_pattern(void);
+
 #ifdef __cplusplus
 }
 #endif

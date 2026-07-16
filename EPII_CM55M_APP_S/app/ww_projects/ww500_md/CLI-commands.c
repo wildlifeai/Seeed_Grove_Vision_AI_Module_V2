@@ -130,6 +130,7 @@
 #include "xip_manager.h"
 #include "camera_switch.h"
 #include "hm0360_md.h"
+#include "hm0360_regs.h"	// ROIOUTENTRIES + MD register names for the `md` instrumentation subcommands
 
 #include "barrier.h"
 #include "cisdp_sensor.h"
@@ -663,9 +664,10 @@ static BaseType_t prvFormatCommand( char * pcWriteBuffer,
 /* Structure that defines the "md" command line command. */
 static const CLI_Command_Definition_t xMd = {
 	"md", /* The command string to type. */
-	"md <sensitivity>:\r\n Set sensitivity (values 1, 2, 3 = low, med, high; 0 = off)\r\n",
+	"md <sensitivity>:\r\n Set sensitivity (1,2,3 = low,med,high; 0 = off).\r\n"
+	" md dump | grid | read <addr> | write <addr> <val>  (MD register instrumentation, hex addr/val)\r\n",
 	prvMd, /* The function to run. */
-	1		 /* One parameter expected */
+	-1		 /* Variable parameters: 1 for sensitivity/dump/grid, 2 for read, 3 for write */
 };
 
 /* Structure that defines the "inithm0360" command line command. */
@@ -2214,36 +2216,128 @@ static BaseType_t prvEraseModel(char *pcWriteBuffer, size_t xWriteBufferLen, con
 // TODO - if we need this command while using RP camera then we need to move cisdp_sensor_set_md_sensitivity()
 #if defined(USE_HM0360)
 /**
- * Sets motion detection sensitivity:
+ * `md` command. Two roles:
  *
- * 0 = off
- * 1 = low
- * 2 = medium
- * 3 = high
+ *   md <0-3>                     set MD sensitivity (0=off,1=low,2=med,3=high)
+ *
+ *   md dump                      print the tunable MD registers to the console
+ *   md grid                      print the 16x16 motion-block grid + block count
+ *   md read  <addr>              read one HM0360 register (hex addr)
+ *   md write <addr> <val>        write one HM0360 register (hex addr + val)
+ *
+ * The subcommands are the Phase-0 register-sweep instrumentation for
+ * characterising motion presets - see doc/Motion_detection_presets.md. Writing
+ * MD registers while the sensor streams can disrupt it; sequence with `md`
+ * sensitivity / `inithm0360` as needed on the bench.
  */
 static BaseType_t prvMd(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) {
 	const char *pcParameter;
-	BaseType_t lParameterStringLength;
-	uint16_t sensitivity;
+	BaseType_t lLen;
+	char *endptr;
 
-	/* Get parameter */
-	pcParameter = FreeRTOS_CLIGetParameter(pcCommandString, 1, &lParameterStringLength);
-	if (pcParameter != NULL) {
-		char *endptr;
-		long sensitivity_long = strtol(pcParameter, &endptr, 10);
+	pcParameter = FreeRTOS_CLIGetParameter(pcCommandString, 1, &lLen);
+	if (pcParameter == NULL) {
+		cli_append(&pcWriteBuffer, &xWriteBufferLen,
+		           "md <0-3> | dump | grid | read <addr> | write <addr> <val>");
+		return pdFALSE;
+	}
 
-		if (endptr == pcParameter || *endptr != '\0' || sensitivity_long < 0 || sensitivity_long > 3) {
-			cli_append(&pcWriteBuffer, &xWriteBufferLen, "Error: Sensitivity must be an integer between 0 and 3.");
+	/* --- Phase-0 instrumentation subcommands --- */
+	if ((lLen == 4) && (strncmp(pcParameter, "dump", 4) == 0)) {
+		hm0360_md_dumpConfig();		/* prints to console */
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "MD registers dumped to console");
+		return pdFALSE;
+	}
+
+	if ((lLen == 4) && (strncmp(pcParameter, "grid", 4) == 0)) {
+		static uint8_t roiOut[ROIOUTENTRIES];
+		static char gridBuf[160];
+		uint16_t mdBlocks = hm0360_md_getMDOutput(roiOut, ROIOUTENTRIES);
+
+		/* 16x16 grid to the console in two 128-block halves (as image_task does) */
+		hm0360_md_printGrid(roiOut, 128, gridBuf, sizeof(gridBuf));
+		xprintf("%s", gridBuf);
+		hm0360_md_printGrid(&roiOut[16], 128, gridBuf, sizeof(gridBuf));
+		xprintf("%s\n", gridBuf);
+
+		cli_append(&pcWriteBuffer, &xWriteBufferLen,
+		           "MD motion in %u blocks (16x16 grid on console)", mdBlocks);
+		return pdFALSE;
+	}
+
+	if ((lLen == 4) && (strncmp(pcParameter, "read", 4) == 0)) {
+		uint16_t addr;
+		uint8_t val;
+		pcParameter = FreeRTOS_CLIGetParameter(pcCommandString, 2, &lLen);
+		if (pcParameter == NULL) {
+			cli_append(&pcWriteBuffer, &xWriteBufferLen, "usage: md read <addr>  (hex, e.g. 209b)");
+			return pdFALSE;
+		}
+		addr = (uint16_t)strtol(pcParameter, &endptr, 16);
+		if (endptr == pcParameter) {
+			cli_append(&pcWriteBuffer, &xWriteBufferLen, "bad address");
+			return pdFALSE;
+		}
+		if (hm0360_md_readReg(addr, &val) == HX_CIS_NO_ERROR) {
+			cli_append(&pcWriteBuffer, &xWriteBufferLen, "reg 0x%04x = 0x%02x", addr, val);
 		}
 		else {
-			sensitivity = (uint16_t)sensitivity_long;
+			cli_append(&pcWriteBuffer, &xWriteBufferLen, "read failed (HM0360 present?)");
+		}
+		return pdFALSE;
+	}
+
+	if ((lLen == 5) && (strncmp(pcParameter, "write", 5) == 0)) {
+		uint16_t addr;
+		long lval;
+		uint8_t val, readback;
+		pcParameter = FreeRTOS_CLIGetParameter(pcCommandString, 2, &lLen);
+		if (pcParameter == NULL) {
+			cli_append(&pcWriteBuffer, &xWriteBufferLen, "usage: md write <addr> <val>  (hex)");
+			return pdFALSE;
+		}
+		addr = (uint16_t)strtol(pcParameter, &endptr, 16);
+		if (endptr == pcParameter) {
+			cli_append(&pcWriteBuffer, &xWriteBufferLen, "bad address");
+			return pdFALSE;
+		}
+		pcParameter = FreeRTOS_CLIGetParameter(pcCommandString, 3, &lLen);
+		if (pcParameter == NULL) {
+			cli_append(&pcWriteBuffer, &xWriteBufferLen, "usage: md write <addr> <val>  (hex)");
+			return pdFALSE;
+		}
+		lval = strtol(pcParameter, &endptr, 16);
+		if ((endptr == pcParameter) || (lval < 0) || (lval > 0xff)) {
+			cli_append(&pcWriteBuffer, &xWriteBufferLen, "bad value (00-ff)");
+			return pdFALSE;
+		}
+		val = (uint8_t)lval;
+		if (hm0360_md_writeReg(addr, val) == HX_CIS_NO_ERROR) {
+			readback = val;
+			hm0360_md_readReg(addr, &readback);
+			cli_append(&pcWriteBuffer, &xWriteBufferLen,
+			           "reg 0x%04x <- 0x%02x (now 0x%02x)", addr, val, readback);
+		}
+		else {
+			cli_append(&pcWriteBuffer, &xWriteBufferLen, "write failed (HM0360 present?)");
+		}
+		return pdFALSE;
+	}
+
+	/* --- default: numeric sensitivity 0-3 (backward compatible) --- */
+	{
+		long sensitivity_long = strtol(pcParameter, &endptr, 10);
+
+		if ((endptr == pcParameter) || (*endptr != '\0') || (sensitivity_long < 0) || (sensitivity_long > 3)) {
+			cli_append(&pcWriteBuffer, &xWriteBufferLen,
+			           "Error: use 'md <0-3>' or 'md dump|grid|read <addr>|write <addr> <val>'");
+		}
+		else {
+			uint16_t sensitivity = (uint16_t)sensitivity_long;
 			cisdp_sensor_set_md_sensitivity(sensitivity);
 			fatfs_setOperationalParameter(OP_PARAMETER_MD_SENSITIVITY, sensitivity);
 			cli_append(&pcWriteBuffer, &xWriteBufferLen, "MD sensitivity set to %u", sensitivity);
 		}
-	}
-	else {
-		cli_append(&pcWriteBuffer, &xWriteBufferLen, "Error: Missing sensitivity parameter.");
 	}
 
 	return pdFALSE;

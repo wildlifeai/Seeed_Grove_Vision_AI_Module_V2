@@ -100,12 +100,43 @@ static HX_CIS_SensorSetting_t  IMX708_mirror_setting[] = {
 		{HX_CIS_I2C_Action_W, 0x0101, (CIS_MIRROR_SETTING&0xFF)},
 };
 
+// High-resolution RAW capture override (see hires.c): when nonzero, the
+// datapath is configured as INP centre-crop -> RAW -> WDMA2 at this address
+// instead of the integrated HW5x5+JPEG flow.
+#define HIRES_RAW_WIDTH		1280
+#define HIRES_RAW_HEIGHT	960
+static uint32_t g_hires_raw_addr = 0;
+
+void cisdp_set_hires_raw(uint32_t rawAddr)
+{
+	g_hires_raw_addr = rawAddr;
+}
+
+uint8_t cisdp_get_demos_pattern(void)
+{
+	// Order matches demosaic_pattern_t (demosaic.h). DP_HW5X5_DEMOS_PATTERN
+	// expands to an enum constant, so this folds at compile time.
+	switch (DP_HW5X5_DEMOS_PATTERN) {
+	case DEMOS_PATTENMODE_RGGB: return 0;
+	case DEMOS_PATTENMODE_GRBG: return 1;
+	case DEMOS_PATTENMODE_GBRG: return 2;
+	default:                    return 3;	// BGGR
+	}
+}
+
 static void cisdp_wdma_addr_init(APP_DP_INP_SUBSAMPLE_E subs)
 {
-    sensordplib_set_xDMA_baseaddrbyapp(g_wdma1_baseaddr, g_wdma2_baseaddr, g_wdma3_baseaddr);
+	if (g_hires_raw_addr != 0) {
+		// WDMA2 carries the RAW Bayer frame for the CPU pipeline
+		sensordplib_set_xDMA_baseaddrbyapp(g_wdma1_baseaddr, g_hires_raw_addr, g_wdma3_baseaddr);
+	}
+	else {
+		sensordplib_set_xDMA_baseaddrbyapp(g_wdma1_baseaddr, g_wdma2_baseaddr, g_wdma3_baseaddr);
+	}
     sensordplib_set_jpegfilesize_addrbyapp(g_jpegautofill_addr);
 
-	xprintf("WD1[%x], WD2_J[%x], WD3_RAW[%x], JPAuto[%x]\n",g_wdma1_baseaddr, g_wdma2_baseaddr,
+	xprintf("WD1[%x], WD2_J[%x], WD3_RAW[%x], JPAuto[%x]\n",g_wdma1_baseaddr,
+			(g_hires_raw_addr != 0) ? g_hires_raw_addr : g_wdma2_baseaddr,
 			g_wdma3_baseaddr, g_jpegautofill_addr);
 }
 
@@ -483,21 +514,33 @@ int cisdp_dp_init(bool inp_init, SENSORDPLIB_PATH_E dp_type, sensordplib_CBEvent
 	set_mipi_csirx_enable();
 
     INP_CROP_T crop;
-    crop.start_x = DP_INP_CROP_START_X;
-    crop.start_y = DP_INP_CROP_START_Y;
+    if (g_hires_raw_addr != 0) {
+    	// High-resolution RAW capture (hires.c): centre-crop the sensor's
+    	// 2304x1296 stream to 1280x960 in the INP block. The RAW Bayer frame
+    	// goes to WDMA2 at the address hires.c registered (the CPU demosaics
+    	// and JPEG-encodes it in strips - the HW5x5/JPEG blocks are bypassed).
+    	crop.start_x = (SENCTRL_SENSOR_WIDTH - HIRES_RAW_WIDTH) / 2;		// 512
+    	crop.start_y = (SENCTRL_SENSOR_HEIGHT - HIRES_RAW_HEIGHT) / 2;		// 168
+    	crop.last_x = crop.start_x + HIRES_RAW_WIDTH - 1;
+    	crop.last_y = crop.start_y + HIRES_RAW_HEIGHT - 1;
+    }
+    else {
+    	crop.start_x = DP_INP_CROP_START_X;
+    	crop.start_y = DP_INP_CROP_START_Y;
 
-    if(DP_INP_CROP_WIDTH >= 1) {
-    	crop.last_x = DP_INP_CROP_START_X + DP_INP_CROP_WIDTH - 1;
-}
-    else {
-    	crop.last_x = 0;
-	}
-    if(DP_INP_CROP_HEIGHT >= 1) {
-    	crop.last_y = DP_INP_CROP_START_Y + DP_INP_CROP_HEIGHT - 1;
-	}
-    else {
-    	crop.last_y = 0;
- 	}
+    	if(DP_INP_CROP_WIDTH >= 1) {
+    		crop.last_x = DP_INP_CROP_START_X + DP_INP_CROP_WIDTH - 1;
+    	}
+    	else {
+    		crop.last_x = 0;
+    	}
+    	if(DP_INP_CROP_HEIGHT >= 1) {
+    		crop.last_y = DP_INP_CROP_START_Y + DP_INP_CROP_HEIGHT - 1;
+    	}
+    	else {
+    		crop.last_y = 0;
+    	}
+    }
 
     sensordplib_set_sensorctrl_inp_wi_crop(SENCTRL_SENSOR_TYPE, SENCTRL_STREAM_TYPE, SENCTRL_SENSOR_WIDTH, SENCTRL_SENSOR_HEIGHT, DP_INP_SUBSAMPLE, crop);
 
@@ -507,8 +550,14 @@ int cisdp_dp_init(bool inp_init, SENSORDPLIB_PATH_E dp_type, sensordplib_CBEvent
 	switch (dp_type)
 	{
 	case SENSORDPLIB_PATH_INP_WDMA2:
-	    sensordplib_set_raw_wdma2(DP_INP_OUT_WIDTH, DP_INP_OUT_HEIGHT,
-	    		NULL);
+		if (g_hires_raw_addr != 0) {
+			sensordplib_set_raw_wdma2(HIRES_RAW_WIDTH, HIRES_RAW_HEIGHT,
+					NULL);
+		}
+		else {
+			sensordplib_set_raw_wdma2(DP_INP_OUT_WIDTH, DP_INP_OUT_HEIGHT,
+					NULL);
+		}
 	    break;
 	case SENSORDPLIB_PATH_INP_HW2x2_CDM:
 	    sensordplib_set_HW2x2_CDM(hw2x2_cfg, cdm_cfg,

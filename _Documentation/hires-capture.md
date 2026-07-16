@@ -149,3 +149,25 @@ CM55M), so use generous capture intervals (`capture N 3000`).
 - Files: `hires.c/h` (orchestration + buffer overlay), `demosaic.c/h`,
   `sw_jpeg.c/h` (streaming API), `cisdp_sensor.c` (imx708: hires override),
   `image_task.c` (mode selection + frame branch).
+
+## Bench tooling (`_Tools/`)
+
+All of these tolerate the bench USB re-enumerating whenever the device
+resets or power-cycles (reopen-per-loss), and re-assert the keep-awake
+AFTER boot completes (an op8 sent at CLI-up is silently overwritten by
+the config load).
+
+- `flash_reopen.py --image <img>`: catch-anywhere flasher. Hammers the
+  bootloader's 30 ms key window from the first banner byte (and blindly
+  right after a port re-enumeration, when a boot is by definition in
+  progress), then drives the X-Modem burn with erase-tolerant timeouts.
+- `hires_check.py --port COM13`: end-to-end hi-res validation - arms
+  op32, walks the operator through the cold boot, captures a burst over
+  the preview stream, decodes and saves frames, restores field config
+  on pass.
+- `vga_grab.py`: one normal-mode frame + reports the preview MD-overlay
+  fields (`md_blocks`/grid state) - the quick heatmap sanity check.
+- `full_rawdump.py`: captures one hi-res frame and pulls the ENTIRE raw
+  Bayer buffer to the PC via the `rawdump` CLI (10 chunks, ~90 s) for
+  offline analysis - this is the tool that let the line-delivery
+  geometry be solved without reflash loops.

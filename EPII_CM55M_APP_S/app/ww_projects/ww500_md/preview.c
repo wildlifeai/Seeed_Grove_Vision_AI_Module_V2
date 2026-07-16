@@ -41,6 +41,7 @@
 #include "hm0360_md.h"		// hm0360_md_getMDOutput(), hm0360_md_prepare()
 #include "hm0360_regs.h"	// ROIOUTENTRIES (the 32 MD_ROI_OUT registers)
 #include "fatfs_task.h"		// fatfs_getOperationalParameter(OP_PARAMETER_MD_INTERVAL)
+#include "hires.h"			// hires_isActive() + HIRES_WIDTH/HEIGHT for true frame size
 
 // A VGA JPEG is well under 200 KB and a 1280x960 hi-res JPEG (hires.c)
 // under ~400 KB; anything bigger means the JPEG info is implausible and
@@ -182,6 +183,11 @@ void preview_sendFrame(void) {
 	}
 	mdHex[ROIOUTENTRIES * 2] = '\0';
 
+	// Hi-res mode (op32) streams the CPU-pipeline JPEG, whose size differs from
+	// the VGA datapath default that app_get_raw_width/height() report.
+	int pvWidth  = hires_isActive() ? (int)HIRES_WIDTH  : (int)app_get_raw_width();
+	int pvHeight = hires_isActive() ? (int)HIRES_HEIGHT : (int)app_get_raw_height();
+
 	// Frame line gains "md_blocks" (moving-block count) and "md" (64-hex-char
 	// 16x16 motion bitmap) beside the JPEG. Existing viewers (live_view.py, the
 	// Himax web toolkit) ignore the extra fields, so this stays compatible.
@@ -189,7 +195,7 @@ void preview_sendFrame(void) {
 			"\"resolution\": [%d, %d], \"boxes\": [], \"md_blocks\": %d, \"md\": \"%s\", "
 			"\"image\": \"",
 			(int)frameCount,
-			(int)app_get_raw_width(), (int)app_get_raw_height(),
+			pvWidth, pvHeight,
 			(int)mdBlocks, mdHex);
 
 	sendBase64((const uint8_t *)jpegBuffer, jpegLength);

@@ -2358,7 +2358,8 @@ static BaseType_t prvMd(char *pcWriteBuffer, size_t xWriteBufferLen, const char 
 			return pdFALSE;
 		}
 		addr = (uint16_t)strtol(pcParameter, &endptr, 16);
-		if (endptr == pcParameter) {
+		if ((endptr == pcParameter) || ((endptr - pcParameter) != lLen)) {
+			// require the WHOLE token to parse - strtol alone accepts "209bxyz"
 			cli_append(&pcWriteBuffer, &xWriteBufferLen, "bad address");
 			return pdFALSE;
 		}
@@ -2381,7 +2382,8 @@ static BaseType_t prvMd(char *pcWriteBuffer, size_t xWriteBufferLen, const char 
 			return pdFALSE;
 		}
 		addr = (uint16_t)strtol(pcParameter, &endptr, 16);
-		if (endptr == pcParameter) {
+		if ((endptr == pcParameter) || ((endptr - pcParameter) != lLen)) {
+			// require the WHOLE token to parse - strtol alone accepts "209bxyz"
 			cli_append(&pcWriteBuffer, &xWriteBufferLen, "bad address");
 			return pdFALSE;
 		}
@@ -2391,7 +2393,8 @@ static BaseType_t prvMd(char *pcWriteBuffer, size_t xWriteBufferLen, const char 
 			return pdFALSE;
 		}
 		lval = strtol(pcParameter, &endptr, 16);
-		if ((endptr == pcParameter) || (lval < 0) || (lval > 0xff)) {
+		if ((endptr == pcParameter) || ((endptr - pcParameter) != lLen)
+				|| (lval < 0) || (lval > 0xff)) {
 			cli_append(&pcWriteBuffer, &xWriteBufferLen, "bad value (00-ff)");
 			return pdFALSE;
 		}

@@ -96,6 +96,15 @@ int hires_stage(void) {
 	uint32_t rawStart = (uint32_t)rawBuf();
 	uint32_t rawEnd = rawStart + (HIRES_WIDTH * HIRES_HEIGHT);
 
+	// The linker aligns __tensor_arena_start__ to 32 bytes (ww500_md.ld); this
+	// tripwire protects the SCB cache-maintenance calls (which require cache-
+	// line alignment) if that ever changes.
+	if ((rawStart & 31u) != 0) {
+		xprintf("Hi-res: raw buffer 0x%08x not 32-byte aligned - disabled\n",
+				(unsigned)rawStart);
+		return -1;
+	}
+
 	if (rawEnd > SRAM_REGION_END) {
 		xprintf("Hi-res: raw buffer 0x%08x..0x%08x exceeds SRAM end - disabled\n",
 				(unsigned)rawStart, (unsigned)rawEnd);

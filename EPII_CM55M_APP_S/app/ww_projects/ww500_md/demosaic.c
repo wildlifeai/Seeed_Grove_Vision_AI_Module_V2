@@ -177,7 +177,9 @@ static inline int site_colour(demosaic_pattern_t p, uint32_t x, uint32_t y) {
 		{ 1, 2, 0, 1 },		// GBRG
 		{ 2, 1, 1, 0 },		// BGGR
 	};
-	return site[p][((y & 1u) << 1) | (x & 1u)];
+	// Mask (branchless - this runs per pixel) so an out-of-range pattern value
+	// can never index past site[3]; all valid patterns are 0-3.
+	return site[(uint32_t)p & 3u][((y & 1u) << 1) | (x & 1u)];
 }
 
 static inline uint32_t clamp_u(int32_t v, int32_t lo, int32_t hi) {

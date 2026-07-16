@@ -1,7 +1,14 @@
-# High-resolution capture — one 1280x960 JPEG (op32)
+# High-resolution capture — one 1216x960 JPEG (op32)
 
 #### Claude - 11 July 2026 (branch `feat/hires-capture`)
 
+> **RETEST (16 Jul 2026): all fixes confirmed on hardware.** Three-frame
+> burst on the shipped build: artifact repairs verified (no PDAF dashes,
+> no right-edge strip), the MD-overlay/hi-res exclusivity fix verified
+> (frame 2 - previously always corrupted - pristine), and the VGA
+> preview heatmap confirmed working alongside it. One new open item from
+> the burst (frame 3, load-dependent line delivery) is recorded under
+> Known limitations below.
 
 > **STATUS (12 Jul 2026): WORKING - first hi-res frames captured on the
 > bench** (`Hi-res: 1280x928 JPEG 301871 bytes in 1641ms`, auto-WB
@@ -119,19 +126,45 @@ back to 640x480 with a console note.
 
 ```
 setop 14 0        # NN off (frees the arena)
-setop 32 1        # 1280x960 single-JPEG mode  (0 = normal 640x480)
+setop 32 1        # hi-res single-JPEG mode, output 1216x960  (0 = normal 640x480)
 reset             # datapath mode is chosen at sensor init, per wake
 ```
 
 Everything else behaves identically: auto-exposure (measured from the raw
 green channel), auto white balance (measured from the raw Bayer means),
-EXIF (correct 1280x960 dimensions), SD save, and the live preview stream
-(~4 s/frame at this size). Field of view: **identical to the 640x480 pipeline** - both use the same
-1280x960 INP centre crop; VGA subsamples it 2:1, hi-res keeps every pixel.
-Hi-res is a pure 4x detail upgrade with no framing change.
+EXIF (correct 1216x960 dimensions), SD save, and the live preview stream
+(~5 s/frame at this size; the MD overlay is disabled during hi-res - see
+live_preview.md). Field of view: **near-identical to the 640x480
+pipeline** - VGA takes a 1280x960 INP centre crop of the sensor's
+2304x1296 stream and subsamples 2:1; hi-res has the sensor itself stream
+a centred 1280x992 digital-crop window of the same binned readout (the
+INP cannot crop wider than 640, DS 5.6.3) and keeps every pixel. The
+usable encode is 1216x960 (see STATUS: delivered-line geometry), so
+hi-res is a ~3.8x detail upgrade with no meaningful framing change.
 
-Capture cost: ~2-3 s per frame (CPU demosaic + colour + JPEG on the
-CM55M), so use generous capture intervals (`capture N 3000`).
+Capture cost: ~2 s per frame (CPU line-tracking + demosaic + colour +
+JPEG on the CM55M). Use generous capture intervals: 12 s minimum, and
+**>= 20 s for guaranteed-clean back-to-back frames** - see Known
+limitations.
+
+## Known limitations / open items
+
+- **Burst contention (open, filed on PR #144):** when a frame's MIPI
+  delivery overlaps the previous frame's CPU-heavy encode/preview-send,
+  the per-line delivery loss grows beyond the fixed 32 wire-bytes and
+  the line tracker's {1254, 1255} stride assumption misaligns row tails
+  (ghosted band at the right edge). Single-shot field captures
+  (wake -> one capture -> sleep) never overlap and are unaffected.
+  Mitigation: >= 20 s spacing for bursts. Fix candidate: the tracker's
+  green-split score flags bad solves - gate on it and re-capture once.
+- **Retry-restart I2C -60 (cosmetic):** a capture-retry restart
+  immediately after a WDMA2 abnormal can fail stream-on with I2C bus
+  errors (suspected sensorctrl auto-I2C interaction). Irrelevant in
+  normal operation now that first frames complete.
+- **Preview stream splice sensitivity:** a hi-res INVOKE line is
+  ~250-450 KB of base64 (several seconds at 921600 baud); a console
+  print from another task inside that window corrupts that frame only.
+  Viewers drop bad frames; bench scripts use wide capture spacing.
 
 ## Design notes
 

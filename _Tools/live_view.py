@@ -191,7 +191,9 @@ class SerialWorker(threading.Thread):
                     self.last_frame_ts = time.monotonic()
                     count = data.get("count", 0)
                     if count <= 3 or count % 20 == 0:
-                        self.log_q.put(f"[frame] #{count} {len(jpeg)} bytes")
+                        _mdb = data.get("md_blocks")
+                        self.log_q.put(f"[frame] #{count} {len(jpeg)} bytes"
+                                       + (f" MD_blocks={_mdb}" if _mdb is not None else " (no MD field)"))
                     self._confirm_frame()
                     # Optional HM0360 motion grid (firmware preview.c): 32 bytes
                     # as hex = 16x16 bitmap; md_blocks = moving-block count.

@@ -1597,8 +1597,19 @@ static BaseType_t prvRawDump(char *pcWriteBuffer, size_t xWriteBufferLen, const 
 
 	uint32_t total = 0;
 	const uint8_t *raw = hires_get_raw(&total);
-	uint32_t off = (p1 != NULL) ? (uint32_t)strtol(p1, NULL, 10) * 1024u : 0;
-	uint32_t len = (p2 != NULL) ? (uint32_t)strtol(p2, NULL, 10) * 1024u : 16384u;
+	// Parse the KB counts and clamp BEFORE the x1024: a huge or negative
+	// input would wrap the multiply and dodge the bounds checks below.
+	long offKb = (p1 != NULL) ? strtol(p1, NULL, 10) : 0;
+	long lenKb = (p2 != NULL) ? strtol(p2, NULL, 10) : 16;
+	uint32_t maxKb = total / 1024u;
+	if ((offKb < 0) || ((uint32_t)offKb > maxKb)) {
+		offKb = 0;
+	}
+	if ((lenKb < 0) || ((uint32_t)lenKb > maxKb)) {
+		lenKb = 16;
+	}
+	uint32_t off = (uint32_t)offKb * 1024u;
+	uint32_t len = (uint32_t)lenKb * 1024u;
 
 	if (off >= total) {
 		off = 0;

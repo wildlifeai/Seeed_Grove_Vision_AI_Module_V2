@@ -45,7 +45,7 @@ static uint8_t mainCameraID;
 // restore from then on would pin the bus to the HM0360, silently starving
 // the main camera of its I2C commands (bench 12 Jul 2026: IMX708 stream-on
 // lost, sensor left in standby, every capture timing out).
-static uint8_t idSaveDepth = 0;
+static uint32_t idSaveDepth = 0;
 
 static bool hm0360MainCamera = false;
 

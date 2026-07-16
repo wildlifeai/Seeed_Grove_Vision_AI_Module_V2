@@ -136,7 +136,10 @@ void demosaic_track_lines(const uint8_t *bayer, uint32_t h,
 		uint32_t cnt = track_pass(bayer, h, strideA, strideB, avail,
 								  sEven, sOdd, s_tryOff);
 		uint32_t score = green_split(bayer, s_tryOff, cnt);
-		if (score < bestScore) {
+		// A failed hypothesis (cnt 0/1) scores 0 - green_split has no rows to
+		// sample - and would otherwise win unbeatably. Prefer the hypothesis
+		// that tracked the most lines; the green-split score only breaks ties.
+		if ((cnt > bestCnt) || ((cnt == bestCnt) && (score < bestScore))) {
 			bestScore = score;
 			bestCnt = cnt;
 			for (uint32_t i = 0; i < cnt; i++) {
@@ -158,8 +161,12 @@ void demosaic_repair_zeros(uint8_t *bayer, uint32_t w, uint32_t h) {
 	// black level is ~16), so zero is a safe defect marker: replace with
 	// the same-CFA-colour neighbour two rows away.
 	for (uint32_t y = 0; y < h; y++) {
+		uint32_t srcY = (y >= 2) ? (y - 2) : (y + 2);
+		if (srcY >= h) {
+			continue;	// h < 3: no same-parity neighbour row exists
+		}
 		uint8_t *row = (uint8_t *)row_ptr(bayer, w, y);
-		const uint8_t *src = row_ptr(bayer, w, (y >= 2) ? (y - 2) : (y + 2));
+		const uint8_t *src = row_ptr(bayer, w, srcY);
 		for (uint32_t x = 0; x < w; x++) {
 			if (row[x] == 0u) {
 				row[x] = src[x];

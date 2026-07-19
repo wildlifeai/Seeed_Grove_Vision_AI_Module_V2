@@ -253,7 +253,17 @@ static uint8_t          fileRxPacketNum;
 // mid-transfer (ftx err 7). Saved/restored around each session; if a session
 // dies without a CLOSE (e.g. BLE dropped), the extended period simply delays
 // the next DPD entry once — the period resets on wake from DPD.
-#define FILERX_SESSION_INACTIVITY_MS 5000
+//
+// 15000 not 5000: iOS renegotiates the connection interval ~28-30 s into a
+// transfer, and CoreBluetooth can stall the in-flight write for >5 s (bench
+// 19 Jul 2026: LARGE.BIN died at packet 96/2125 — the HX hit "Inactive for
+// 5000ms", aborted the session and entered DPD at the exact moment the phone
+// was about to resume; Android stalls are sub-second and never exposed this).
+// The app tolerates 15 s of device silence before aborting, so the device
+// must extend the same tolerance — a renegotiation stall then becomes a
+// pause, not a death. Cost of the larger value: one delayed DPD entry after
+// an abandoned session, nothing more.
+#define FILERX_SESSION_INACTIVITY_MS 15000
 static uint32_t savedInactivityPeriod;
 static bool     inactivityExtended = false;
 

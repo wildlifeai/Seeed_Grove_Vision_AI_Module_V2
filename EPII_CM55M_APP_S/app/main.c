@@ -368,6 +368,27 @@ int main(void)
 }
 #endif
 
+#ifdef TFLM_MB_CLS
+#include "tflm_mb_cls.h"
+/** main entry */
+int main(void)
+{
+	board_init();
+	tflm_mb_cls_app();
+	return 0;
+}
+#endif
+
+#ifdef TORCH_MB_CLS
+#include "torch_mb_cls.h"
+/** main entry */
+int main(void)
+{
+	board_init();
+	torch_mb_cls_app();
+	return 0;
+}
+#endif
 
 #ifdef SEEED_SAMPLE
 #include "seeed_sample.h"
@@ -469,4 +490,3 @@ int main(void)
 	return 0;
 }
 #endif // WW_TEMPLATE
-

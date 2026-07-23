@@ -1082,6 +1082,27 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
     	XP_WHITE;
     	break;
 
+    case APP_MSG_DPEVENT_XDMA_WDMA2_ABNORMAL1: // 0x012a ERR_FE_COUNT_NOT_REACH
+    case APP_MSG_DPEVENT_XDMA_WDMA2_ABNORMAL2: // 0x012b ERR_DIS_BEFORE_FINISH
+    case APP_MSG_DPEVENT_XDMA_WDMA2_ABNORMAL3: // 0x012c ERR_FIFO_MISMATCH
+    case APP_MSG_DPEVENT_XDMA_WDMA2_ABNORMAL4: // 0x012d ERR_FIFO_OVERFLOW
+    case APP_MSG_DPEVENT_XDMA_WDMA2_ABNORMAL5: // 0x012e ERR_BUS
+        // WDMA2 abnormal completion (e.g. the frame ended short of the
+        // configured byte count). Without a handler the image task sat in
+        // 'Capturing' forever. The DMA is armed once per capture, so this
+        // fires ONCE - it must go straight to the retry, not through the
+        // WDT double-fire guard below.
+    	XP_RED;
+        dbg_printf(DBG_LESS_INFO, ">>>> WDMA2 abnormal event 0x%04x after %dms <<<<\n",
+        		event, app_getElapsedMs(startTime));
+        XP_WHITE;
+        // The abnormal can arrive <100ms after the capture start, while the
+        // sensorctrl's hardware auto-I2C may still be mid-transaction -
+        // restarting immediately wedged the shared CIS bus (stream-on then
+        // failed with I2C -60 errors). Let it drain before the restart.
+        vTaskDelay(pdMS_TO_TICKS(1000));
+        goto capture_retry;
+
     case APP_MSG_DPEVENT_EDM_WDT1_TIMEOUT:   // 0x011d
     case APP_MSG_DPEVENT_EDM_WDT2_TIMEOUT:   // 0x011c
     case APP_MSG_DPEVENT_EDM_WDT3_TIMEOUT:   // 0x011b
@@ -1101,6 +1122,8 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
             break;
         }
 
+capture_retry:
+
         // The first frame after a fresh sensor start sometimes never arrives.
         // Restart the sensor in place and retry, up to MAX_CAPTURE_RETRIES,
         // before giving up. This keeps the current capture request alive
@@ -1112,6 +1135,18 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
             xprintf(">>>> Frame timed out - restarting sensor, retry %d/%d\n",
             		g_capture_retries, MAX_CAPTURE_RETRIES);
             XP_WHITE;
+
+#if defined(USE_RP2) || defined(USE_RP3)
+            // Forensics on the first retry, while the sensor rail and the
+            // datapath are still up: which side of the link is dead?
+            if (g_capture_retries == 1) {
+                cisdp_dump_diag();
+            }
+            // Per-retry DMA delivery measurement (hi-res only): a varying
+            // high-water across retries means the datapath armed mid-frame;
+            // a constant one means a fixed geometry/timing shortfall
+            hires_dump_hwm_and_refill();
+#endif
 
             // Stop then restart the datapath/sensor to re-arm the capture.
             // Dwell progressively longer with the sensor powered down before
@@ -1916,6 +1951,18 @@ static bool configure_image_sensor(CAMERA_CONFIG_E operation) {
 #if defined(USE_RP2) || defined(USE_RP3)
         // Only needed if using a RP camera
         rp_sensor_enable(true);
+
+        // High-resolution capture (op32) must be decided BEFORE the sensor
+        // init: the 1280x960 sensor window is programmed by
+        // cisdp_sensor_init() and the MIPI/INP geometry follows it.
+        if (hires_wanted()) {
+        	if (hires_stage() < 0) {
+        		hires_deactivate();	// buffer layout broken: stay at 640x480
+        	}
+        }
+        else {
+        	hires_deactivate();
+        }
 #endif
 
         if (!cameraSystemEnabled) {
@@ -1943,11 +1990,12 @@ static bool configure_image_sensor(CAMERA_CONFIG_E operation) {
         	ae_notifySensorInit();
 
         	// High-resolution single-JPEG capture (op32 = 1, NN off): the
-        	// datapath becomes INP centre-crop -> RAW -> WDMA2 and the CPU
-        	// does demosaic/colour/JPEG in strips (hires.c). Selected here,
+        	// sensor streams a 1280x960 window (programmed in sensor init
+        	// above), the datapath becomes RAW -> WDMA2 and the CPU does
+        	// demosaic/colour/JPEG in strips (hires.c). Selected here,
         	// before the sensor starts - the datapath cannot be switched
         	// mid-stream (see RP3_white_balance_reencode_issue.md).
-        	if (hires_wanted()) {
+        	if (hires_isStaged()) {
         		if (hires_datapath_init((void *)os_app_dplib_cb) < 0) {
         			xprintf("\r\nDATAPATH Init fail (hi-res)\r\n");
         			return false;
@@ -2189,8 +2237,8 @@ static void prepareJpegFile(int8_t * outCategories, uint8_t classCount, fileBuff
 	char deployment_id[UUIDLENGTH];
 
 	if (hires_isActive()) {
-		exif_input.width  = (uint16_t)HIRES_WIDTH;
-		exif_input.height = (uint16_t)HIRES_HEIGHT;
+		exif_input.width  = (uint16_t)HIRES_PROC_WIDTH;
+		exif_input.height = (uint16_t)HIRES_PROC_HEIGHT;
 	}
 	else {
 		exif_input.width  = (uint16_t)app_get_raw_width();

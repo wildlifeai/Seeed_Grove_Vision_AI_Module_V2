@@ -24,6 +24,7 @@
 #include "hx_drv_CIS_common.h"	// hx_drv_cis_set_reg
 #include "fatfs_task.h"		// operational parameters
 #include "preview.h"		// preview_isActive(): unbounded AE while previewing
+#include "cisdp_sensor.h"	// cisdp_select_main_camera_i2c()
 #include "ae.h"
 
 // Sony register layout (IMX708/IMX219): 16-bit big-endian pairs
@@ -97,6 +98,13 @@ static uint32_t brightLuma(uint32_t yAddr, uint16_t w, uint16_t h) {
 }
 
 static void writeReg16(uint16_t regH, uint16_t value) {
+#if defined(USE_RP2) || defined(USE_RP3)
+	// The HM0360 MD companion shares the CIS I2C bus and can leave the
+	// slave ID pointing at itself - always address the main camera.
+	// (Only the RP drivers provide this hook; the AE loop only runs for
+	// the RP cameras.)
+	cisdp_select_main_camera_i2c();
+#endif
 	// hx_drv_cis_set_reg(addr, val, 0) - same call the camreg command uses
 	hx_drv_cis_set_reg(regH, (uint8_t)((value >> 8) & 0xFF), 0);
 	hx_drv_cis_set_reg((uint16_t)(regH + 1), (uint8_t)(value & 0xFF), 0);

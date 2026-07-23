@@ -39,6 +39,14 @@ static uint16_t calculateSleepTime(uint32_t interval);
 // Somewhere to sore the I2C address of the main image sensor
 static uint8_t mainCameraID;
 
+// Depth of nested saveMainCameraConfig() scopes. The md functions call each
+// other (e.g. the AE-stats path), so an inner save must NOT re-sample the
+// current slave ID - it would capture the HM0360's own address, and every
+// restore from then on would pin the bus to the HM0360, silently starving
+// the main camera of its I2C commands (bench 12 Jul 2026: IMX708 stream-on
+// lost, sensor left in standby, every capture timing out).
+static uint32_t idSaveDepth = 0;
+
 static bool hm0360MainCamera = false;
 
 static bool hm0360_present = false;
@@ -63,7 +71,10 @@ static void saveMainCameraConfig(void) {
 		return;
 	}
 
-	hx_drv_cis_get_slaveID(&mainCameraID);
+	// Only the OUTERMOST scope samples the current ID (see idSaveDepth)
+	if (idSaveDepth++ == 0) {
+		hx_drv_cis_get_slaveID(&mainCameraID);
+	}
     hx_drv_cis_set_slaveID(HM0360_SENSOR_I2CID);
 }
 
@@ -75,7 +86,10 @@ static void restoreMainCameraConfig(void) {
 		// Don't waste time saving and restoring this
 		return;
 	}
-	hx_drv_cis_set_slaveID(mainCameraID);
+	// Inner scopes keep the HM0360 selected; only the outermost restores
+	if (idSaveDepth > 0 && --idSaveDepth == 0) {
+		hx_drv_cis_set_slaveID(mainCameraID);
+	}
 }
 
 

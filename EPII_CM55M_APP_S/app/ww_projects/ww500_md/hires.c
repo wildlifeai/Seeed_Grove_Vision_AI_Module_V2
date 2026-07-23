@@ -207,12 +207,30 @@ uint32_t hires_process_frame(void) {
 
 	// The frame was DMA-written: refresh the CPU's view. The delivered
 	// lines are ~1255 B each; invalidate the whole tracked span.
-	const uint32_t avail = HIRES_LINE_STRIDE_B * (HIRES_PROC_HEIGHT + 4u);
+	// Span the tracker may walk. Derived from the widest stride the search can
+	// return (NOT the old 1255 constant): with a larger delivered stride the
+	// chain would otherwise run out of bytes part-way down the frame.
+	uint32_t avail = HIRES_STRIDE_MAX * (HIRES_PROC_HEIGHT + 4u);
+	if (avail > HIRES_RAW_BUFFER_BYTES) {
+		avail = HIRES_RAW_BUFFER_BYTES;
+	}
 	SCB_InvalidateDCache_by_Addr((void *)raw, (int32_t)avail);
 
-	// Lock each delivered line's true start (see HIRES_LINE_STRIDE_A/B)
+	// Measure this frame's delivered-line stride rather than trusting a
+	// constant: the INP's per-line byte loss depends on DMA-arming timing and
+	// has shifted between builds (a stride 8 bytes off the hard-coded
+	// {1254,1255} produced a diagonal shear - bench 22 Jul). The printed value
+	// is the diagnostic: anything far from 1254 means the datapath timing moved.
+	uint32_t strideBase = demosaic_detect_stride(raw, HIRES_PROC_HEIGHT, avail,
+												 HIRES_STRIDE_MIN, HIRES_STRIDE_MAX);
+	if (strideBase != HIRES_LINE_STRIDE_A) {
+		xprintf("Hi-res: delivered stride %d (expected %d)\r\n",
+				(int)strideBase, (int)HIRES_LINE_STRIDE_A);
+	}
+
+	// Lock each delivered line's true start
 	demosaic_track_lines(raw, HIRES_PROC_HEIGHT,
-						 HIRES_LINE_STRIDE_A, HIRES_LINE_STRIDE_B, avail);
+						 strideBase, strideBase + 1u, avail);
 
 	// Repair the sensor's fixed-position zero runs (masked-PDAF dashes)
 	demosaic_repair_zeros((uint8_t *)raw, HIRES_PROC_WIDTH, HIRES_PROC_HEIGHT);

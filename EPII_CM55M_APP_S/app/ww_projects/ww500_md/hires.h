@@ -38,6 +38,14 @@
 // RAW10 line in this pass-through mode (bench 12 Jul 2026, rawdump stride
 // analysis), so a 1280-px sensor line lands as 1254/1255 bytes with +/-1
 // jitter. demosaic_track_lines() locks each line's true start.
+// Bounds for the per-frame stride search (brackets the historical 1254.4
+// with generous margin; a wrong build-timing shift of +/-25 bytes is caught)
+// Size of the RAW capture buffer (sensor window 1280x960 delivered 1 byte/px)
+#define HIRES_RAW_BUFFER_BYTES	(1280u * 960u)
+
+#define HIRES_STRIDE_MIN	1230u
+#define HIRES_STRIDE_MAX	1280u
+
 #define HIRES_LINE_STRIDE_A	1254u
 #define HIRES_LINE_STRIDE_B	1255u
 

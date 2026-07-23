@@ -39,6 +39,26 @@ typedef enum {
  * candidate per-line strides (e.g. 1254/1255); avail bounds the delivered
  * bytes. The table applies to all demosaic_* calls until cleared.
  */
+/* Lines used when auto-detecting the delivered-line stride (see
+ * demosaic_detect_stride). A short prefix discriminates strides reliably. */
+#define DEMOSAIC_DETECT_LINES	128u
+
+/*
+ * Measure the delivered-line stride actually present in this frame.
+ *
+ * The INP swallows a fixed number of wire-bytes per line in RAW pass-through,
+ * so a 1280-px line lands as ~1254 bytes - but the exact figure depends on
+ * DMA-arming timing and has shifted between firmware builds (bench 22 Jul: a
+ * build whose delivered stride was 8 bytes off produced a diagonal shear
+ * because the hard-coded {1254,1255} candidates could not represent it).
+ * Detecting per frame keeps the pipeline correct without magic numbers.
+ *
+ * Returns the base stride; callers track with {base, base+1} to absorb the
+ * +/-1 jitter of the fractional true stride.
+ */
+uint32_t demosaic_detect_stride(const uint8_t *bayer, uint32_t h, uint32_t avail,
+								uint32_t lo, uint32_t hi);
+
 void demosaic_track_lines(const uint8_t *bayer, uint32_t h,
 						  uint32_t strideA, uint32_t strideB, uint32_t avail);
 

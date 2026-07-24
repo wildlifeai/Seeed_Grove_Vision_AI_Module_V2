@@ -118,6 +118,63 @@ static uint32_t green_split(const uint8_t *bayer, const uint32_t *off, uint32_t 
 	return (uint32_t)(d / (int64_t)rows);
 }
 
+/*
+ * Cost of chaining the whole frame with one candidate stride pair: the mean
+ * per-line SAD of the greedy choice. Parity is deliberately ignored here -
+ * the sign hypotheses are resolved later by demosaic_track_lines(); at this
+ * stage we only care which base stride makes consecutive lines line up.
+ */
+static uint32_t chain_cost(const uint8_t *bayer, uint32_t h,
+						   uint32_t strideA, uint32_t strideB, uint32_t avail,
+						   uint32_t *off) {
+	uint32_t cost = 0;
+	uint32_t n;
+	off[0] = 0;
+	for (n = 1; n < h; n++) {
+		uint32_t prev = off[n - 1];
+		uint32_t ref = (n >= 2) ? off[n - 2] : off[0];
+		uint32_t oa = prev + strideA;
+		uint32_t ob = prev + strideB;
+		if (ob + strideB > avail) {
+			break;		// ran out of delivered bytes
+		}
+		uint32_t ca = line_sad(bayer + ref, bayer + oa);
+		uint32_t cb = line_sad(bayer + ref, bayer + ob);
+		if (ca <= cb) {
+			off[n] = oa;
+			cost += ca;
+		} else {
+			off[n] = ob;
+			cost += cb;
+		}
+	}
+	if (n < 2) {
+		return 0xFFFFFFFFu;
+	}
+	return cost / (n - 1);
+}
+
+uint32_t demosaic_detect_stride(const uint8_t *bayer, uint32_t h, uint32_t avail,
+								uint32_t lo, uint32_t hi) {
+	// A short prefix is plenty to discriminate strides and keeps this cheap
+	// next to the ~1.7 s encode.
+	uint32_t lines = (h < DEMOSAIC_DETECT_LINES) ? h : DEMOSAIC_DETECT_LINES;
+	uint32_t best = lo;
+	uint32_t bestCost = 0xFFFFFFFFu;
+
+	if (lines < 3 || lo > hi) {
+		return lo;
+	}
+	for (uint32_t s = lo; s <= hi; s++) {
+		uint32_t c = chain_cost(bayer, lines, s, s + 1u, avail, s_tryOff);
+		if (c < bestCost) {
+			bestCost = c;
+			best = s;
+		}
+	}
+	return best;
+}
+
 void demosaic_track_lines(const uint8_t *bayer, uint32_t h,
 						  uint32_t strideA, uint32_t strideB, uint32_t avail) {
 	if (h > DEMOSAIC_MAX_LINES) {

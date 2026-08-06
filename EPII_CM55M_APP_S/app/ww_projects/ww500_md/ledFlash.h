@@ -31,6 +31,9 @@ typedef enum flashLeds {
 
 // The LED flash is either off or driven by the AE light sensor
 // (see _Documentation/AE_Light_Sensor_Roadmap.md)
+// NOTE: could consider also these:
+// FLASH_MODE_ALWAYS_ON,	// On all the time
+// fsFLASH_MODE_TIME_OF_DAY	// Determined by time of day timer
 typedef enum flashLedMode {
     FLASH_MODE_OFF,			// Off all the time
     FLASH_MODE_AE,			// Determined by light levels
@@ -76,8 +79,8 @@ void ledFlashDisable(void);
 // Turn on the flash if conditions are right.
 void ledFlashActivate(void);
 
-// returns whether the LED flash should be in use
-bool ledFlashIsActive(void);
+// return 0 if flash is inactive. Otherwise return  1 (visible) or 2 (IR)
+uint8_t ledFlashIsActive(void);
 
 // Setter for flashMode
 void ledFlashSetFlashMode(FlashLedMode_t mode);

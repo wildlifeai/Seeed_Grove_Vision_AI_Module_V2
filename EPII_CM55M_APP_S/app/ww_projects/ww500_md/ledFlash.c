@@ -313,10 +313,15 @@ void ledFlashActivate(void) {
 /**
  * Returns whether the LED flash should be in use
  *
- * @return true if the LED is active
+ * @return 0 if flash is inactive. Otherwise return  1 (visible) or 2 (IR)
  */
-bool ledFlashIsActive(void) {
-	return flashActive;
+uint8_t ledFlashIsActive(void) {
+	if (flashActive) {
+		return fatfs_getOperationalParameter(OP_PARAMETER_FLASH_LED);
+	}
+	else {
+		return 0;
+	}
 }
 
 /**

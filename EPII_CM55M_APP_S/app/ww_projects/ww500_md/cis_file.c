@@ -42,6 +42,8 @@ static bool stagedLoaded = false;
 /**
  * Load the staged table from CAMERA_EXTRA_FILE if that has not happened yet.
  *
+ * Called when fatfs task starts.
+ *
  * FatFs here is NOT re-entrant (FF_FS_REENTRANT = 0), so this must only run
  * where no other task is using the disk: the fatfs_task calls it once at boot
  * (after mounting, before other tasks start disk activity), and
@@ -131,12 +133,14 @@ bool cis_file_stageReg(uint16_t addr, uint8_t val) {
 	// (cis_file_process() at sensor init) - guard against concurrent updates
 	taskENTER_CRITICAL();
 
+	// check if the regsiter is alreadyy in the table
 	for (i = 0; i < stagedCount; i++) {
 		if (stagedSettings[i].RegAddree == addr) {
 			break;
 		}
 	}
 
+	// New register
 	if (i == stagedCount) {
 		if (stagedCount == CIS_FILE_MAX_STAGED) {
 			success = false;
@@ -146,6 +150,7 @@ bool cis_file_stageReg(uint16_t addr, uint8_t val) {
 		}
 	}
 
+	// Add an entry to the table
 	if (success) {
 		stagedSettings[i].I2C_ActionType = HX_CIS_I2C_Action_W;
 		stagedSettings[i].RegAddree = addr;

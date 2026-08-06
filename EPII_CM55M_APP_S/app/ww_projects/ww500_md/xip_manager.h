@@ -51,6 +51,16 @@ extern "C" {
 #define MAX_LABEL_LEN           20          // Maximum bytes per class label string (including NUL)
 #define MAX_MODEL_NAME_LEN      IMAGEFILENAMELEN          // 8.3 format filename + NUL (e.g. "1V2.TFL\0")
 
+/*
+ * Camera image variant labels, stored per slot in a small metadata record in the
+ * spare bytes of the slot selector sector. Each firmware image labels its own
+ * slot at boot (see cameraSwitch_labelBootSlot()), so after both variants have
+ * booted once the day/night switching logic knows what is in each slot.
+ */
+#define XIP_SLOT_VARIANT_UNKNOWN	0	// slot content not yet labelled (or just rewritten)
+#define XIP_SLOT_VARIANT_HM0360		1	// night/IR image: HM0360 is the main camera
+#define XIP_SLOT_VARIANT_RP3		2	// day/colour image: RP v3 (IMX708) is the main camera
+
 
 /*************************************** Type definitions **************************************/
 
@@ -146,6 +156,9 @@ bool xip_copy_model_from_sd_to_flash(char *filename);
  * Build a ModelMetaData record from the model name and the corresponding
  * label file on the SD card, then write it to the start of the model flash area.
  *
+ * NOTE: there is also other metadata in the Firmware Image Slot Selector
+ * - the camera type used by each firmware slot.
+ *
  * @param modelName  model filename only (no path), e.g. "1V2.TFL"
  * @return true on success
  */
@@ -173,15 +186,8 @@ int xip_dump_slot_selector(void);
  */
 int xip_update_firmware_from_sd(const char *filename);
 
-/*
- * Camera image variant labels, stored per slot in a small metadata record in the
- * spare bytes of the slot selector sector. Each firmware image labels its own
- * slot at boot (see cameraSwitch_labelBootSlot()), so after both variants have
- * booted once the day/night switching logic knows what is in each slot.
- */
-#define XIP_SLOT_VARIANT_UNKNOWN	0	// slot content not yet labelled (or just rewritten)
-#define XIP_SLOT_VARIANT_HM0360		1	// night/IR image: HM0360 is the main camera
-#define XIP_SLOT_VARIANT_RP3		2	// day/colour image: RP v3 (IMX708) is the main camera
+
+/********************* New functions added for Dual-camera day/night switching  ***************************/
 
 /**
  * Create the SPI mutex before the scheduler starts (call from app_main()).
@@ -197,7 +203,7 @@ void xip_manager_preinit(void);
 int xip_get_active_slot(void);
 
 /**
- * Read the camera variant label recorded for a slot.
+ * Read the camera in use by a slot.
  *
  * @param slot  0 or 1
  * @return XIP_SLOT_VARIANT_x, or -1 on failure
@@ -205,8 +211,10 @@ int xip_get_active_slot(void);
 int xip_get_slot_variant(uint8_t slot);
 
 /**
- * Record the camera variant label for a slot. Only rewrites the selector
- * sector if the label actually changes.
+ * Updates Firmware Image Slot Selector with meta data
+ * (the camera supported by one firmware slot)
+ *
+ * Only rewrites the selector sector if the label actually changes.
  *
  * @param slot     0 or 1
  * @param variant  XIP_SLOT_VARIANT_x

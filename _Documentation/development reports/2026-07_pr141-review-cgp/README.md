@@ -34,8 +34,8 @@ from this review (drafted from this thread's findings).
 | File | What it is |
 |---|---|
 | [CGP's review notes](../../../EPII_CM55M_APP_S/app/ww_projects/ww500_md/doc/CGP_Code_Review_July26.md) | Charles's review notes, all 9 topics — committed by CGP in `ww500_md/doc/` (commit 55ccb85a on this branch) |
-| `review_responses.md` | Point-by-point responses with file:line evidence: bench results, dispute verdicts, camreg/vcm audit, battery impact, triage of CGP's changes, #142/#140 focus lists, call agenda |
-| `build_flash_guide.md` | Two-variant build → image → flash → verify walkthrough + bench checklist |
+| `review_responses.md` | Point-by-point responses with file:line evidence: bench results, dispute verdicts, camreg/vcm audit, battery impact, triage of CGP's changes, next steps |
+| [dual_image_build_and_flash.md](../../dual_image_build_and_flash.md) | Standalone topic doc distilled from this thread: two-variant build → image → flash → verify chain + bench checklist (lives in `_Documentation/`, not here) |
 | `reviewer_worktree_setup.md` | Reviewer workflow: git worktrees + Meld, `review/cgp-*` branches, frozen-stack rule |
 | `bench_validation_evidence.md` | Serial-log evidence: slot-labelling ladder, op26 cycle, staged-exposure validation |
 | `logs/console_session*.log` | Raw timestamped serial captures behind the evidence doc |

@@ -24,22 +24,38 @@
 #ifndef AE_H_
 #define AE_H_
 
+/*********************************************** Includes ****************************************************/
+
 #include <stdint.h>
 #include <stdbool.h>
 
+/*********************************************** Global Defines **********************************************/
+
+
+/*********************************************** Global Types ************************************************/
+
+
+/*********************************************** Global Variables ********************************************/
+
+
+/*********************************************** Global Function Declarations *********************************/
+
 /**
- * Reset AE state to the sensor's table defaults. Call after a full sensor
- * init (cisdp_sensor_init(true)) - the registers have just reverted, so the
- * loop must restart from the table values.
+ * @brief Reset AE state to the sensor's table defaults.
+ *
+ * Call after a full sensor init (cisdp_sensor_init(true)) - the registers
+ * have just reverted, so the loop must restart from the table values.
  */
 void ae_notifySensorInit(void);
 
 /**
- * Measure the frame and adjust exposure/gain toward the target.
+ * @brief Measure the frame and adjust exposure/gain toward the target.
+ *
  * Call from the image task on FRAME_READY, before the next capture is armed.
  *
- * @param yAddr  address of the Y plane (demosaic output, w*h bytes)
- * @param w,h    frame dimensions
+ * @param yAddr address of the Y plane (demosaic output, w*h bytes)
+ * @param w     frame width
+ * @param h     frame height
  * @return true if a register adjustment was made (next frame will differ)
  */
 bool ae_process(uint32_t yAddr, uint16_t w, uint16_t h);

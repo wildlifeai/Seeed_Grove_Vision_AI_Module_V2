@@ -15,8 +15,15 @@
 #ifndef PREVIEW_H_
 #define PREVIEW_H_
 
+/*********************************************** Includes ****************************************************/
+
 #include <stdint.h>
 #include <stdbool.h>
+
+/*********************************************** Global Defines **********************************************/
+
+
+/*********************************************** Global Types ************************************************/
 
 typedef enum {
 	PREVIEW_OFF = 0,			// no streaming (normal operation)
@@ -24,26 +31,44 @@ typedef enum {
 	PREVIEW_STREAM_AND_SAVE = 2	// stream frames; save to SD as normal
 } PREVIEW_MODE_E;
 
+/*********************************************** Global Variables ********************************************/
+
+
+/*********************************************** Global Function Declarations *********************************/
+
 /**
- * Set the preview mode. Takes effect from the next captured frame.
+ * @brief Set the preview mode. Takes effect from the next captured frame.
+ *
+ * @param mode PREVIEW_MODE_E to switch to.
  */
 void preview_setMode(PREVIEW_MODE_E mode);
 
+/**
+ * @brief Get the current preview mode.
+ *
+ * @return Current PREVIEW_MODE_E.
+ */
 PREVIEW_MODE_E preview_getMode(void);
 
 /**
- * True when frames should be streamed (mode 1 or 2).
+ * @brief True when frames should be streamed (mode 1 or 2).
+ *
+ * @return true if preview streaming is active.
  */
 bool preview_isActive(void);
 
 /**
- * True when preview wants the SD file save skipped (mode 1).
+ * @brief True when preview wants the SD file save skipped (mode 1).
+ *
+ * @return true if the SD card save should be skipped.
  */
 bool preview_skipsFileSave(void);
 
 /**
- * Emit the JPEG of the capture just completed as one JSON line on the
- * console UART. Call from the image task once the frame is ready - after
+ * @brief Emit the JPEG of the capture just completed as one JSON line on the
+ * console UART.
+ *
+ * Call from the image task once the frame is ready - after
  * img_correct_process() has run, so the streamed image is the same one
  * prepareJpegFile() would save (WB-corrected sw_jpeg output when the
  * correction ran, otherwise the hardware encoder output).

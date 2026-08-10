@@ -4,13 +4,32 @@
  * has hardware float, -mfloat-abi=hard).
  */
 
+/*********************************************** Includes ****************************************************/
+
 #include <stdint.h>
 #include <string.h>
 #include <math.h>
 
 #include "sw_jpeg.h"
 
-/*************************************** Standard tables *********************/
+/*********************************************** Local Defines **********************************************/
+
+
+/*********************************************** Local Types ************************************************/
+
+// Canonical Huffman code/length per 8-bit symbol, built from the BITS/VAL tables
+typedef struct { uint16_t code[256]; uint8_t size[256]; } huff_t;
+
+typedef struct {
+    uint8_t *buf;
+    uint32_t cap;
+    uint32_t len;
+    uint32_t bitBuf;   // accumulates bits MSB-first
+    int      bitCnt;   // bits currently in bitBuf
+    int      overflow;
+} bitwriter_t;
+
+/*********************************************** Local Variables ********************************************/
 
 // Zig-zag scan order (natural index for each of the 64 zig-zag positions)
 static const uint8_t ZIGZAG[64] = {
@@ -83,27 +102,41 @@ static const uint8_t AC_CHROMA_VAL[162] = {
     0xf9,0xfa
 };
 
-/*************************************** Derived state **********************/
-
-// Canonical Huffman code/length per 8-bit symbol, built from the BITS/VAL tables
-typedef struct { uint16_t code[256]; uint8_t size[256]; } huff_t;
-
+// Derived state, built by init_tables()
 static huff_t hDcLuma, hAcLuma, hDcChroma, hAcChroma;
 static float dctMat[8][8];     // separable DCT basis
 static uint16_t qLuma[64], qChroma[64];   // scaled quant tables (natural order)
 static int tablesReadyQuality = -1;   // quality the tables were built for, -1 = none
 
-/*************************************** Bit writer *************************/
+/*********************************************** Local Function Declarations *********************************/
 
-typedef struct {
-    uint8_t *buf;
-    uint32_t cap;
-    uint32_t len;
-    uint32_t bitBuf;   // accumulates bits MSB-first
-    int      bitCnt;   // bits currently in bitBuf
-    int      overflow;
-} bitwriter_t;
+static void bw_byte(bitwriter_t *w, uint8_t b);
+static void bw_bits(bitwriter_t *w, uint32_t value, int nbits);
+static void bw_flush(bitwriter_t *w);
+static void bw_marker(bitwriter_t *w, uint8_t m);
+static void build_huff(huff_t *h, const uint8_t *bits, const uint8_t *vals);
+static void scale_quant(uint16_t *out, const uint8_t *base, int quality);
+static void init_tables(int quality);
+static void fdct(const float *in, float *out);
+static void magnitude(int v, int *sizeBits, uint32_t *coded);
+static void encode_block(bitwriter_t *w, const float *pixels, const uint16_t *q,
+                         const huff_t *hDc, const huff_t *hAc, int *prevDc);
+static void write_dqt(bitwriter_t *w, const uint16_t *q, int id);
+static void write_dht(bitwriter_t *w, int cls, int id,
+                      const uint8_t *bits, const uint8_t *vals);
+static void get_block(const uint8_t *plane, int stride, int W, int H,
+                      int px, int py, float *blk);
 
+/*********************************************** Local Function Definitions *********************************/
+
+/**
+ * @brief Append one byte to the writer's output buffer.
+ *
+ * Sets w->overflow instead of writing past w->cap.
+ *
+ * @param w bit writer state.
+ * @param b byte to append.
+ */
 static void bw_byte(bitwriter_t *w, uint8_t b) {
     if (w->len < w->cap) {
         w->buf[w->len++] = b;
@@ -112,7 +145,14 @@ static void bw_byte(bitwriter_t *w, uint8_t b) {
     }
 }
 
-// Emit a run of bits (value's low 'nbits' bits), MSB first, with 0xFF stuffing
+/**
+ * @brief Emit a run of bits (value's low 'nbits' bits), MSB first, with
+ * 0xFF byte stuffing as each output byte is completed.
+ *
+ * @param w     bit writer state.
+ * @param value bits to emit, in the low nbits bits.
+ * @param nbits number of bits to emit (0..32).
+ */
 static void bw_bits(bitwriter_t *w, uint32_t value, int nbits) {
     if (nbits == 0) return;
     w->bitBuf |= (value & ((1u << nbits) - 1)) << (32 - w->bitCnt - nbits);
@@ -126,19 +166,37 @@ static void bw_bits(bitwriter_t *w, uint32_t value, int nbits) {
     }
 }
 
+/**
+ * @brief Flush any partial byte remaining in the bit buffer, padding with
+ * 1 bits per the JPEG spec.
+ *
+ * @param w bit writer state.
+ */
 static void bw_flush(bitwriter_t *w) {
     if (w->bitCnt > 0) {
         bw_bits(w, 0x7F, 8 - w->bitCnt);   // pad with 1s
     }
 }
 
+/**
+ * @brief Write a 2-byte JPEG marker (0xFF followed by the marker code).
+ *
+ * @param w bit writer state.
+ * @param m marker code (e.g. 0xD8 for SOI).
+ */
 static void bw_marker(bitwriter_t *w, uint8_t m) {
     bw_byte(w, 0xFF);
     bw_byte(w, m);
 }
 
-/*************************************** Table setup ***********************/
-
+/**
+ * @brief Build canonical Huffman codes/lengths per symbol from the BITS/VAL
+ * tables (JPEG Annex C procedure).
+ *
+ * @param h    output: code/size per 8-bit symbol.
+ * @param bits count of codes of each length 1..16.
+ * @param vals symbol values, in code-assignment order.
+ */
 static void build_huff(huff_t *h, const uint8_t *bits, const uint8_t *vals) {
     memset(h, 0, sizeof(*h));
     uint16_t code = 0;
@@ -154,6 +212,14 @@ static void build_huff(huff_t *h, const uint8_t *bits, const uint8_t *vals) {
     }
 }
 
+/**
+ * @brief Scale a base (quality-50) quantisation table to the requested
+ * quality, using the standard Annex K scaling formula.
+ *
+ * @param out     output: scaled table (natural order).
+ * @param base    base table (natural order).
+ * @param quality 1..100, clamped if out of range.
+ */
 static void scale_quant(uint16_t *out, const uint8_t *base, int quality) {
     int scale;
     if (quality < 1) quality = 1;
@@ -167,6 +233,12 @@ static void scale_quant(uint16_t *out, const uint8_t *base, int quality) {
     }
 }
 
+/**
+ * @brief (Re)build the Huffman tables, DCT basis and quantisation tables
+ * for the given quality.
+ *
+ * @param quality 1..100.
+ */
 static void init_tables(int quality) {
     build_huff(&hDcLuma,   DC_LUMA_BITS,   DC_LUMA_VAL);
     build_huff(&hAcLuma,   AC_LUMA_BITS,   AC_LUMA_VAL);
@@ -186,9 +258,12 @@ static void init_tables(int quality) {
     tablesReadyQuality = quality;
 }
 
-/*************************************** Block coding **********************/
-
-// 8x8 forward DCT: out = M * in * M^T  (in/out natural order, row-major)
+/**
+ * @brief 8x8 forward DCT: out = M * in * M^T.
+ *
+ * @param in  8x8 block, row-major, natural order.
+ * @param out 8x8 DCT coefficients, row-major, natural order.
+ */
 static void fdct(const float *in, float *out) {
     float tmp[64];
     // tmp = M * in
@@ -209,7 +284,15 @@ static void fdct(const float *in, float *out) {
     }
 }
 
-// Number of magnitude bits and the JPEG-coded value for a signed coefficient
+/**
+ * @brief Number of magnitude bits and the JPEG-coded value for a signed
+ * coefficient.
+ *
+ * @param v        signed coefficient value.
+ * @param sizeBits output: number of magnitude bits.
+ * @param coded    output: JPEG-coded magnitude (one's-complement style for
+ *                 negatives).
+ */
 static void magnitude(int v, int *sizeBits, uint32_t *coded) {
     int a = (v < 0) ? -v : v;
     int s = 0;
@@ -219,9 +302,18 @@ static void magnitude(int v, int *sizeBits, uint32_t *coded) {
     *coded = (uint32_t)((v < 0) ? (v - 1) : v) & ((s ? (1u << s) : 1u) - 1);
 }
 
-/*
- * Encode one 8x8 block (already level-shifted floats). Quantises with 'q',
- * Huffman-codes DC (relative to *prevDc) with hDc and AC with hAc.
+/**
+ * @brief Encode one 8x8 block (already level-shifted floats).
+ *
+ * Quantises with 'q', Huffman-codes DC (relative to *prevDc) with hDc and
+ * AC with hAc.
+ *
+ * @param w      bit writer state.
+ * @param pixels 8x8 level-shifted pixel block, row-major, natural order.
+ * @param q      quantisation table (natural order).
+ * @param hDc    DC Huffman table.
+ * @param hAc    AC Huffman table.
+ * @param prevDc in/out: previous block's DC coefficient for this component.
  */
 static void encode_block(bitwriter_t *w, const float *pixels, const uint16_t *q,
                          const huff_t *hDc, const huff_t *hAc, int *prevDc) {
@@ -267,8 +359,13 @@ static void encode_block(bitwriter_t *w, const float *pixels, const uint16_t *q,
     }
 }
 
-/*************************************** Headers **************************/
-
+/**
+ * @brief Write a DQT (Define Quantisation Table) marker segment.
+ *
+ * @param w  bit writer state.
+ * @param q  quantisation table, natural order (written out in zig-zag order).
+ * @param id table id (0 = luma, 1 = chroma).
+ */
 static void write_dqt(bitwriter_t *w, const uint16_t *q, int id) {
     bw_marker(w, 0xDB);
     bw_byte(w, 0x00); bw_byte(w, 0x43);   // length = 67
@@ -276,6 +373,15 @@ static void write_dqt(bitwriter_t *w, const uint16_t *q, int id) {
     for (int i = 0; i < 64; i++) bw_byte(w, (uint8_t)q[ZIGZAG[i]]);  // zig-zag order
 }
 
+/**
+ * @brief Write a DHT (Define Huffman Table) marker segment.
+ *
+ * @param w    bit writer state.
+ * @param cls  table class (0 = DC, 1 = AC).
+ * @param id   table id.
+ * @param bits count of codes of each length 1..16.
+ * @param vals symbol values, in code-assignment order.
+ */
 static void write_dht(bitwriter_t *w, int cls, int id,
                       const uint8_t *bits, const uint8_t *vals) {
     int nv = 0;
@@ -288,8 +394,20 @@ static void write_dht(bitwriter_t *w, int cls, int id,
     for (int i = 0; i < nv; i++) bw_byte(w, vals[i]);
 }
 
-/*************************************** Public API **********************/
-
+/**
+ * @brief Extract an 8x8 block from a plane, level-shifted by -128.
+ *
+ * Replicates the last row/column when the block would run past the edge of
+ * the plane (px+8 > W or py+8 > H).
+ *
+ * @param plane  source plane.
+ * @param stride row stride of plane, in bytes.
+ * @param W      plane width in pixels.
+ * @param H      plane height in pixels.
+ * @param px     block origin x.
+ * @param py     block origin y.
+ * @param blk    output: 8x8 level-shifted block, row-major, natural order.
+ */
 static void get_block(const uint8_t *plane, int stride, int W, int H,
                       int px, int py, float *blk) {
     for (int y = 0; y < 8; y++) {
@@ -302,6 +420,23 @@ static void get_block(const uint8_t *plane, int stride, int W, int H,
     }
 }
 
+/*********************************************** Global Function Definitions *********************************/
+
+/**
+ * @brief Encode a planar YUV420 image to a baseline JFIF/JPEG bitstream.
+ *
+ * Plane layout at yuv: Y (w*h), then Cb (w/2 * h/2), then Cr (w/2 * h/2).
+ * w and h should be multiples of 16 (the 4:2:0 MCU size); other sizes are
+ * handled by edge replication.
+ *
+ * @param yuv      planar YUV420 source
+ * @param w        image width in pixels
+ * @param h        image height in pixels
+ * @param out      output buffer for the JPEG
+ * @param outCap   capacity of out in bytes
+ * @param quality  1..100 (higher = better quality / larger file)
+ * @return JPEG size in bytes, or 0 on error (bad args / output overflow)
+ */
 uint32_t sw_jpeg_encode_yuv420(const uint8_t *yuv, uint32_t w, uint32_t h,
                                uint8_t *out, uint32_t outCap, uint8_t quality) {
     if (!yuv || !out || w == 0 || h == 0 || (w & 1) || (h & 1)) {

@@ -1,5 +1,5 @@
 # Reviewing Stacked PRs
-#### CGP — 8 August 2026
+#### CGP — 8 August 2026 (updated 10 August 2026)
 
 ## What "stacked" means
 
@@ -17,7 +17,7 @@ Victor's PRs #141, #142 and #140 were exactly this shape:
 | 2 | `feat/ble-fast-transfer` | #142 | `origin/feat/camera-features-combined` |
 | 3 | `feat/uart-live-preview` (WIP) | #140 | `origin/feat/ble-fast-transfer` |
 
-This doc is the companion to [`Reviewing_External_PRs_with_Worktrees.md`](Reviewing_External_PRs_with_Worktrees.md) — same worktree/Meld/Eclipse recipe, with two adjustments: **review order** and **diff base**.
+This doc is the companion to [`Reviewing_External_PRs_with_Worktrees.md`](Reviewing_External_PRs_with_Worktrees.md) — same worktree/Meld/Eclipse recipe, with two adjustments: **review order** and **diff base**. Everything else there (folder layout, Eclipse/VSCode setup, pushing your review branch, cleanup) applies unchanged.
 
 ## Rule 1 — review oldest first
 
@@ -52,7 +52,7 @@ In [`Reviewing_External_PRs_with_Worktrees.md`](Reviewing_External_PRs_with_Work
 git worktree add ..\compare --detach origin/feat/camera-features-combined
 ```
 
-The `pr<N>` review worktree itself (Step 1) is still created from that PR's own branch tip as usual — you want the full file contents there, just the *comparison* narrowed to the previous branch in the stack.
+The `review-cgp-<N>` review worktree itself (Step 1) is still created from that PR's own branch tip as usual — you want the full file contents there, just the *comparison* narrowed to the previous branch in the stack.
 
 ## What if an earlier PR changes after you've already reviewed a later one?
 
@@ -72,12 +72,14 @@ What *you* can safely do is rebase your own `review/cgp-<N>` branches if you wan
 Following on from Step 7 of the worktree doc, moving to the next PR in the stack looks like:
 
 ```
-git worktree remove ..\pr<N>
-git worktree add -b review/cgp-<N+1> ..\pr<N+1> origin/<next-feature-branch>
+git worktree remove ..\review-cgp-<N>
+git worktree add -b review/cgp-<N+1> ..\review-cgp-<N+1> origin/<next-feature-branch>
 git worktree add ..\compare --detach origin/<this-stack's-previous-branch>
 ```
 
-Same routine each time: Meld `..\compare` ↔ `..\pr<N+1>`, scaffold/copy the PR description, edit and commit on `review/cgp-<N+1>`, push when done, remove `..\compare` after.
+Same routine each time: Meld `..\compare` ↔ `..\review-cgp-<N+1>`, scaffold/copy the PR description, edit and commit on `review/cgp-<N+1>`, push when done, remove `..\compare` after.
+
+In practice it's just as reasonable to keep all the stack's review worktrees (and their Eclipse workspaces) open side by side until the whole stack is reviewed, and remove them together at the end — that's how the #141/#142/#140 round below actually went.
 
 ## Quick reference — the #141/#142/#140 worked example
 
@@ -85,3 +87,4 @@ Same routine each time: Meld `..\compare` ↔ `..\pr<N+1>`, scaffold/copy the PR
 - #142 is stacked on #141 — review it against `feat/camera-features-combined`. Roughly a tenth of #141's size.
 - #140 is stacked on #142, still WIP — review it against `feat/ble-fast-transfer`, for direction rather than line-by-line polish (best judged by running the live preview tool on real hardware).
 - Fixes you make on #141 get merged upward by Victor through #142 and #140 — you don't need to re-propagate them yourself.
+- All three were reviewed with `review-cgp-140`/`review-cgp-141`/`review-cgp-142` worktrees and matching `workspace_140`/`workspace_141`/`workspace_142` Eclipse workspaces held open side by side throughout, rather than recycled one at a time — see the note above. As of 10 Aug 2026: `review/cgp-141` and `review/cgp-142` are already pushed; `review/cgp-140` is the last to go up, after which all three worktrees and workspaces get removed together (Step 7 of the main doc) — `Seeed_Grove_Vision_AI_Module_V2` is the only one of the five folders that's kept.

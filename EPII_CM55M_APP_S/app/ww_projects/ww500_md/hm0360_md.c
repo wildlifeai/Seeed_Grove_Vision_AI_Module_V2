@@ -605,6 +605,7 @@ HX_CIS_ERROR_E hm0360_md_getAEStats(uint8_t nSamples, uint16_t gapMs, HM0360_AE_
 			}
 		}
 
+		// Delay before taking another sample. The reason for this delay, and for the value, is unclear to me (CGP)
 		if (i + 1 < nSamples) {
 			vTaskDelay(pdMS_TO_TICKS(gapMs));
 		}

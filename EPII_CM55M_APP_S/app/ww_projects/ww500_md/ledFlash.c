@@ -473,6 +473,7 @@ void ledFlashNewAEStats(HM0360_AE_STATS_T * stats) {
 			dark ? "DARK (flash wanted)" : "BRIGHT (no flash)",
 			(dark == wasDark) ? "" : " (changed)");
 
+	// CGP - what about the opposite: turning the flash off?
 	if (flashMode == FLASH_MODE_AE) {
 		flashActive = dark;
 		ledFlashActivate();	// Turn on Flash LED (conditionally)

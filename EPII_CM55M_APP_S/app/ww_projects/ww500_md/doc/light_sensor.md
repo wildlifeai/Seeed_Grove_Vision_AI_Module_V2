@@ -37,7 +37,50 @@ that decision drives two things:
 
 Both are optional and independently switched on — see [§3](#3-configuring-it).
 
-## 2. How the decision is made
+## 2a. How the decision is made
+
+To help me understand the code I created this sequence:
+
+1. Just before entering DPD the code checks whether it should se a timer to wake (in, say, 15 minutes)
+to check the light levels. This is in `image_sleepNow()` in `image_task.c`, and described above in the 
+`Wake scheduling` section.
+2. When the image task resumes in `vImageTask()` the light/dark decision previously saved in 
+op param `OP_PARAMETER_AE_FLASH_STATE` (and other operational parameters) is used by 
+`ledFlashSetFlashModeFromOpParam()` (called via `configure_image_sensor()` → `setupLEDFlash()` 
+during camera init) to determine whether to use the flash to take an image.
+3. If the timer then wakes the processor then a test is made to see if the light sensor 
+code should run. It sets `aeCheckOnlyWake` true and prints "Timer wake for AE light check"
+4. The image task schedules a request for a single image. We soon end up in `handleEventForCapturing()`.
+NN processing is inhibited.
+5. If there is a reason to know the light state (Flash is determined by the light sensor or
+we might want to switch cameras depending on the light) then a call is made to `hm0360_md_getAEStats(AE_SAMPLE_COUNT, AE_SAMPLE_GAP_MS, &aeStats)`.
+That includes if we have woken only to do the light measurement.
+AE_SAMPLE_COUNT is defined as 16 and AE_SAMPLE_GAP_MS as 120 (in `ledFlash.h` - which seems the wrong place!). 
+6. `hm0360_md_getAEStats()` gets the max, min and mean of **AE_MEAN** (a scene-brightness register, not gain)
+across the sampled frames into a structure of type `HM0360_AE_STATS_T`. Gain (analog/digital) is tracked
+separately, only as a running maximum, and used solely to compute a `gainRailed` flag — there is no min/mean
+of gain.
+7. The data from the previous step is passed to `ledFlashNewAEStats()` which is to
+"Decide the flash state from ...the light sensor". The mean AE value is compared
+against Operational Parameter `OP_PARAMETER_AE_DARK_THRESHOLD` (and a hysteresis of AE_HYSTERESIS is applied)
+to decide whether the scene is 'light' or 'dark'. A line like this is sent to the console:
+```
+AE light check: mean AE = 64 (min 64, max 64) over 16 frames, threshold = 65, gain railed = no -> DARK (flash wanted)
+```
+8. The decision is saved to op param `OP_PARAMETER_AE_FLASH_STATE`. If 'dark' the LED is enabled.
+Information is printed to the console.
+9. A call is then made to `cameraSwitch_autoSwitchCheck()` - if enabled this function can switch the AI processor
+firmware image between one that uses the RP3 camera in daylight and one that uses the HM0360 camera in the dark.
+10. The device then enters DPD. The light/dark decision just made **does** affect whether the LED is used for
+motion detection — the two are not independent. In `image_sleepNow()` (`image_task.c:2574-2590`), STROBE is
+armed for MD illumination only if `ledFlashIsActive() > 0` **and** MD is enabled (op11) **and**
+`OP_PARAMETER_MD_FLASH_LED` (op21) is non-zero. `ledFlashIsActive()` reflects exactly the AE decision (op25,
+gated by capture flash being in AE mode, op13 ≠ 0). So op21/op22 only choose *which* LED and *how bright* —
+they cannot make MD illumination fire if the AE decision currently reads "bright", or if op13 = 0. If either
+of those holds, `hm0360_md_configureStrobe(false)` is called and MD illumination is disabled for that sleep
+regardless of op21/op22.
+
+## 2b. The execution sequence as explained by Claude
 
 ```
 HM0360 AE registers  →  hm0360_md_getAEStats()  →  ledFlashNewAEStats()  →  op25 (persisted)
@@ -83,6 +126,7 @@ HM0360 AE registers  →  hm0360_md_getAEStats()  →  ledFlashNewAEStats()  →
   (op21/op22, written on the way into DPD — `image_task.c:2574`). It is armed only if the
   light sensor last judged the scene dark. See `STROBE_timing.md` for the underlying pin
   timing.
+
 
 ## 3. Configuring it
 
@@ -195,6 +239,14 @@ builder. Also flagged in `bench_validation_evidence.md`'s addendum: RP3-image ph
 currently carry the *HM0360's* AE registers in EXIF (via `#if defined(USE_HM0360) ||
 defined(USE_HM0360_MD)`), never the RP3/IMX708's own exposure — worth fixing alongside.
 
+Standard EXIF `Flash` (0x9209) is already handled correctly: `exif_builder.c:402` writes it
+dynamically from `input->flash_fired`, set at `image_task.c:2119` as
+`exif_input.flash_fired = ledFlashIsActive()` — so a photo viewer already shows whether the
+flash fired for that frame, no MakerNote needed. `BrightnessValue` (0x9203) is genuinely
+missing, though — no such tag constant or write exists anywhere in `exif_builder.c`/`.h`.
+Worth adding while touching this file, so a photo viewer/EXIF tool shows a brightness figure
+without needing the MakerNote parsed at all.
+
 ### 6.2 BLE / app — the app never sees the light-sensor decision, only raw registers
 
 `image_task.c` sends the raw single-frame `HM0360 AE regs:` dump over BLE
@@ -204,11 +256,12 @@ gain railed=…, → DARK/BRIGHT"** line from `ledFlashNewAEStats()` goes to the
 (`xprintf`) only — the app cannot currently show "here's why the flash is on/off right now"
 or "the light sensor is currently reading dark/bright" without a serial cable.
 
-**Recommendation:** send the aggregated decision line (or a compact structured equivalent)
-over BLE too, and consider a lightweight status the app can poll/display: current op25
-state, mean AE, and time of last check. This would let a user confirm the light sensor is
-behaving correctly from the phone app during the "run experiments" phase in §4, instead of
-needing a bench console — directly serving this document's audience.
+**Recommendation:** send the same `"AE light check: mean=…, threshold=…, gain railed=…,
+→ DARK/BRIGHT"` line that `ledFlashNewAEStats()` currently only sends to the console
+(`xprintf`) to the app as well, over BLE via `sendMsgToMaster()` — same text, no new format
+to design. This would let a user confirm the light sensor is behaving correctly from the
+phone app during the "run experiments" phase in §4, instead of needing a bench console —
+directly serving this document's audience.
 
 Also worth surfacing: the periodic AE-check-only wakes (op24) are currently silent from the
 app's point of view — no capture is saved and no BLE message is sent unless a switch fires.

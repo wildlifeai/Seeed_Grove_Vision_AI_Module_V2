@@ -328,3 +328,13 @@ before further work in this area, not now.
 | [`STROBE_timing.md`](STROBE_timing.md) | Charles's own Feb 2026 investigation into STROBE-vs-VSYNC pin timing. Predates this PR but the STROBE mode it settled on (`STROBE_CFG` = 3, "Dynamic 1") matches `HM0360_SENSOR_STROBE_MODE` in `hm0360_md.h:24` today — still the right background reading for how MD illumination is physically gated. |
 | [`REVIEW_PR141.md`](../../../../../REVIEW_PR141.md) (repo root) | The PR #141 description — a good one-paragraph-per-feature overview of everything in that PR, light sensor included. Current as a historical summary of what shipped; not a how-to. |
 | [`CGP_Code_Review_July26.md`](CGP_Code_Review_July26.md) (this folder) | Charles's original review notes and questions, including the ones this document tries to answer (§6). Keep as the record of what was asked; don't treat as current status since several items are now resolved (see `review_responses.md`). |
+
+## 9. Some extra thoughts added by Charles:
+
+1.    What happens to the AE registers during the 16 captures which are averaged? Do they jump about randomly? Do they move smoothy towards a settled state? Would fewer than 16 captures suffice? What happens of there is a small difference from the previous 15 minutes? Or a large change? Would it be helpful to seed the averaging algorithm with a value saved at the end of the previous sequence? Can we record all values and save in a .csv or otherwise observe this?
+
+2. Why delay for 120ms between samples? AE_SAMPLE_GAP_MS
+
+3.    Can we extract all of the light sensor code into a single .c file together with documentation that could be sent to Himax for comment?
+
+4.    See this ChatGPT conversation on what might be stored as EXIF: https://chatgpt.com/share/6a7f8870-33c4-83ec-a6a6-30f1e3b84db2

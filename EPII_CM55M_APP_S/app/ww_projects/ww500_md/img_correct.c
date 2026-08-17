@@ -29,6 +29,7 @@
 
 #include "sw_jpeg.h"
 #include "img_correct.h"
+#include "ww500_md.h" // for app_getElapsedMs()
 
 // JPEG quality for the re-encode (1..100). ~85 gives good quality at a size
 // comparable to the hardware encoder's 4x table.
@@ -78,6 +79,7 @@ static void wb_apply_yuv420(uint8_t *yuv, uint32_t w, uint32_t h,
 			int32_t cr = (int32_t)v[cx] - 128;
 
 			// Chroma-derived contributions (shared by the 4 luma pixels)
+			// CGP - what are these magic numbers and where did they come from?
 			int32_t rOfs = (359 * cr) >> 8;					// 1.402 * Cr'
 			int32_t gOfs = (88 * cb + 183 * cr) >> 8;		// 0.344*Cb' + 0.714*Cr'
 			int32_t bOfs = (454 * cb) >> 8;					// 1.772 * Cb'
@@ -128,6 +130,7 @@ static void wb_apply_yuv420(uint8_t *yuv, uint32_t w, uint32_t h,
 
 bool img_correct_process(uint16_t rGainQ8, uint16_t bGainQ8) {
 	corrected_valid = false;
+	uint32_t startTime;
 
 	// Gain 0 disables correction entirely -> the hardware sensor-path JPEG is
 	// saved (this is the "no software encoding" case). Any non-zero gain runs
@@ -142,13 +145,13 @@ bool img_correct_process(uint16_t rGainQ8, uint16_t bGainQ8) {
 	uint32_t w = app_get_raw_width();
 	uint32_t h = app_get_raw_height();
 	uint32_t jpgAddr = app_get_jpeg_addr();
-	uint32_t jpgCap = app_get_jpeg_sz();
+	uint32_t jpgCap = app_get_jpeg_sz();	// Could have just used JPEG_BUFSIZE directly...
 
 	if ((yuvAddr == 0) || (jpgAddr == 0) || (w == 0) || (h == 0) || (w & 1) || (h & 1)) {
 		return false;
 	}
 
-	uint32_t start = xTaskGetTickCount();
+
 	uint32_t yuvSize = (w * h * 3) / 2;
 
 	// The frame was written to demosbuf by WDMA3 (DMA); invalidate the CPU's
@@ -156,14 +159,25 @@ bool img_correct_process(uint16_t rGainQ8, uint16_t bGainQ8) {
 	SCB_InvalidateDCache_by_Addr((void *)yuvAddr, (int32_t)yuvSize);
 
 	// 1. White balance the YUV in place (CPU).
+
+	// Time the colour correction:
+	startTime = xTaskGetTickCount();
+
 	wb_apply_yuv420((uint8_t *)yuvAddr, w, h, rGainQ8, bGainQ8);
 
+	xprintf("Colour correction: R x%d/256, B x%d/256 in %ums\n",
+						rGainQ8, bGainQ8, app_getElapsedMs(startTime));
+
 	// 2. Re-encode to JPEG in software, straight into the JPEG buffer.
+	// Time the JPEG encoding:
+	startTime = xTaskGetTickCount();
+
+	// TODO - consider using the JPEGENC library
 	uint32_t jpegSize = sw_jpeg_encode_yuv420((const uint8_t *)yuvAddr, w, h,
 											  (uint8_t *)jpgAddr, jpgCap,
 											  IMG_CORRECT_JPEG_QUALITY);
 	if (jpegSize == 0) {
-		xprintf("Colour correction: JPEG encode failed (buffer %u)\n", (unsigned)jpgCap);
+		xprintf("JPEG encode failed (buffer %u)\n", (unsigned)jpgCap);
 		return false;   // fall back to the uncorrected sensor-path JPEG
 	}
 
@@ -176,9 +190,7 @@ bool img_correct_process(uint16_t rGainQ8, uint16_t bGainQ8) {
 	corrected_size = jpegSize;
 	corrected_addr = jpgAddr;
 
-	xprintf("Colour correction: R x%d/256, B x%d/256, SW-JPEG %u bytes in %ums\n",
-			rGainQ8, bGainQ8, (unsigned)jpegSize,
-			(unsigned)((xTaskGetTickCount() - start) * portTICK_PERIOD_MS));
+	xprintf("SW JPEG %u bytes in %ums\n", (unsigned)jpegSize, app_getElapsedMs(startTime));
 
 	return true;
 }

@@ -94,7 +94,7 @@ typedef struct {
     const char    *maker_note;      /* AE register CSV string, or NULL */
     const char    *camera_model;    /* EXIF Model, e.g. "WW500 RP3"; NULL -> "WW500" */
     const char    *software;        /* EXIF Software: firmware build string, or NULL to omit */
-    uint16_t       flash_fired;     /* EXIF Flash: 1 = flash/IR illumination used for this capture, 0 = not */
+    uint8_t       flash_fired;     /* EXIF Flash: 0 if flash is inactive. Otherwise 1 (visible) or 2 (IR)  */
 } ExifInput_t;
 
 /*************************************** Public Functions *******************************************/

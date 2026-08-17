@@ -21,7 +21,7 @@ The index into the array are these constants which are defined by the `OP_PARAME
  */
 typedef enum {
 	OP_PARAMETER_SEQUENCE_NUMBER,	// 0 Image file number. Used as part of the image file name. Increments when the file is written.
-	OP_PARAMETER_NUM_NN_ANALYSES,	// 1 he number of times the neural network model has run.
+	OP_PARAMETER_NUM_NN_ANALYSES,	// 1 The number of times the neural network model has run.
 	OP_PARAMETER_NUM_POSITIVE_NN_ANALYSES,	// 2 The number of times the neural network model detects the target.
 	OP_PARAMETER_NUM_COLD_BOOTS,	// 3 The number of AI processor cold boots.
 	OP_PARAMETER_NUM_WARM_BOOTS,	// 4 The number of AI processor warm boots.
@@ -29,13 +29,30 @@ typedef enum {
 	OP_PARAMETER_PICTURE_INTERVAL,	// 6 The interval (in ms) between each of the above images. Limited to about 2000 for HM0360
 	OP_PARAMETER_TIMELAPSE_INTERVAL,// 7 The interval (in s) between entering DPD and waking again to take the next timelapse image (0 inhibits)
 	OP_PARAMETER_INTERVAL_BEFORE_DPD, // 8 The interval (in ms) between when all FreeRTOS task activity ceases and the AI processor entering DPD.
-	OP_PARAMETER_LED_BRIGHTNESS_PERCENT,	// 9 Flash LED duty cycle (brightness) in percent (0 inhibits LED flash)
-	OP_PARAMETER_CAMERA_ENABLED,	// 10 0 = Camera and NN system disabled, 1 = Camera and NN system enabled 
-	OP_PARAMETER_MD_INTERVAL,		// 11 Interval (ms) between frames in motion detect mode (0 inhibits motion detection) 
-	OP_PARAMETER_FLASH_DURATION,	// 12 Duration (ms) that LED flash is on
-	OP_PARAMETER_FLASH_LED,			// 13 LED bit mask: visible LED used = 1, infra-red LED used =2, none = 0
-	OP_PARAMETER_NUM_ENTRIES		// Not an Operational Parameters - serves to count the of entries above here
+	OP_PARAMETER_LED_BRIGHTNESS_PERCENT,	// 9 Flash LED duty cycle (brightness) in percent (approximately, 0 means 'dim', not 'off')
+	OP_PARAMETER_CAMERA_ENABLED,	// 10 0 = Camera and NN system disabled, 1 = Camera and NN system enabled
+	OP_PARAMETER_MD_INTERVAL,		// 11 Interval (ms) between frames in motion detect mode (0 inhibits motion detection)
+	OP_PARAMETER_FLASH_DURATION,	// 12 Duration (ms) that LED flash is on (RP camera only)
+	OP_PARAMETER_FLASH_LED,			// 13 Flash LED bit mask: visible LED used = 1, infra-red LED used =2, none = 0
+	OP_PARAMETER_MODEL_PROJECT,		// 14 Model project ID used for the NN model (0 disables NN)
+	OP_PARAMETER_MODEL_VERSION,		// 15 Model version number used for the NN model
+	OP_PARAMETER_MODEL_THRESHOLD,	// 16 Logit threshold for detection (0-127)
+	OP_PARAMETER_MD_SENSITIVITY,	// 17 Motion Detection Sensitivity: 0=off, 1=low, 2=medium, 3=high
+	OP_PARAMETER_TEST_MODE_BITS,	// 18 To manage test configurations: bit or bits indicate a test function
+	OP_PARAMETER_IMAGES_COUNT,		// 19 Count of images in the current image folder. Use this to decide to create a new image folder.
+	OP_PARAMETER_IMAGES_FILE_INDEX,	// 20 Count of image folders
+	OP_PARAMETER_MD_FLASH_LED,			// 21 LED used to illuminate motion-detection frames while asleep: 0 = none, 1 = visible, 2 = IR
+	OP_PARAMETER_MD_FLASH_BRIGHTNESS_PERCENT,	// 22 Brightness of the motion-detection illumination (percent, 16 hardware levels)
+	OP_PARAMETER_AE_DARK_THRESHOLD,		// 23 AE Mean (0-255) below this means the scene is dark and the flash is needed. See AE_Light_Sensor_Roadmap.md
+	OP_PARAMETER_AE_CHECK_INTERVAL,		// 24 Interval (minutes) between periodic AE light-level checks when the flash is in AE mode. 0 disables
+	OP_PARAMETER_AE_FLASH_STATE,		// 25 Last AE flash decision (0/1). Runtime state, persisted so it survives DPD - not user-set
+	OP_PARAMETER_SLOT_SWITCH,		// 26 Automatic light-based camera image switching: 0 = off (manual 'switchslot' only), 1 = automatic (PLANNED - see camera_switch.c)
+	OP_PARAMETER_WB_RED_GAIN,		// 27 Software white-balance red gain, Q8.8 (256 = 1.0x, 0 = correction off). RP camera only - see img_correct.c
+	OP_PARAMETER_WB_BLUE_GAIN,		// 28 Software white-balance blue gain, Q8.8 (256 = 1.0x, 0 = correction off). RP camera only - see img_correct.c
+
+	OP_PARAMETER_NUM_ENTRIES		// Not an Operational Parameters - serves to define the size of the op_parameter[] array
 } OP_PARAMETERS_E;
+
 ```
 OP_PARAMETER_NUM_ENTRIES is only used to establish the number of entries.
 
@@ -159,7 +176,7 @@ Those comments preceding the first index/value pair are preserved when the file 
 |     6 | OP_PARAMETER_PICTURE_INTERVAL         | 1500          | The interval (in ms) between each of the above images. Limited to about 2000 for HM0360 |
 |     7 | OP_PARAMETER_TIMELAPSE_INTERVAL       | 60            | The interval (in s) between entering DPD and waking again to take the next timelapse image (0 inhibits) |
 |     8 | OP_PARAMETER_INTERVAL_BEFORE_DPD      | 10000         | The interval (in ms) between when all FreeRTOS task activity ceases and the AI processor entering DPD.|
-|     9 | OP_PARAMETER_LED_BRIGHTNESS_PERCENT   | 5             | Brightness of the CAPTURE flash in percent (16 hardware levels; 0 inhibits). Motion-detection illumination has its own brightness (index 22) |
+|     9 | OP_PARAMETER_LED_BRIGHTNESS_PERCENT   | 5             | Brightness of the CAPTURE flash in percent (approximately, 0 means 'dim', not 'off'). Motion-detection illumination has its own brightness (index 22) |
 |    10 | OP_PARAMETER_CAMERA_ENABLED           | 1             | Camera and NN system disabled, 1 = Camera and NN system enabled |
 |    11 | OP_PARAMETER_MD_INTERVAL              | 1000          | Interval (ms) between frames in motion detect mode (0 inhibits motion detection)|
 |    12 | OP_PARAMETER_FLASH_DURATION           | 100           | Duration (ms) that LED flash is on                  |
@@ -172,7 +189,7 @@ Those comments preceding the first index/value pair are preserved when the file 
 |    19 | OP_PARAMETER_IMAGES_COUNT     		| 0             | Count of images in the current image folder. Use this to decide to create a new image folder. |
 |    20 | OP_PARAMETER_IMAGES_FILE_INDEX 		| 0             | Count of image folders |
 |    21 | OP_PARAMETER_MD_FLASH_LED 			| 2             | LED used to illuminate motion-detection frames while asleep: 0 = none, 1 = visible, 2 = IR |
-|    22 | OP_PARAMETER_MD_FLASH_BRIGHTNESS_PERCENT | 5          | Brightness of the motion-detection illumination (percent; 16 hardware levels) |
+|    22 | OP_PARAMETER_MD_FLASH_BRIGHTNESS_PERCENT | 5          | Brightness of the motion-detection illumination (percent; 16 hardware levels)  (approximately, 0 means 'dim', not 'off') |
 |    23 | OP_PARAMETER_AE_DARK_THRESHOLD 		| 65            | AE Mean (0-255) below this means the scene is dark and the flash is needed. See [AE_Light_Sensor_Roadmap.md](AE_Light_Sensor_Roadmap.md) |
 |    24 | OP_PARAMETER_AE_CHECK_INTERVAL 		| 15            | Interval (minutes) between periodic AE light-level checks when the flash is in AE mode (op13) or auto camera switching is on (op26), and timelapse is disabled. 0 disables |
 |    25 | OP_PARAMETER_AE_FLASH_STATE 			| 0             | Last AE flash decision (0/1). Runtime state persisted across DPD - not intended to be set by users |
@@ -257,5 +274,6 @@ EXIF metadata (tag 0xF200) when images are captured.
 
 > **Historical note:** an earlier specification (FIRMWARE_DEPLOYMENT_ID_SPEC.md) proposed
 > transmitting the UUID as eight 16-bit chunks in Operational Parameters 20-27. That scheme
-> was **never implemented** - indexes 20-26 are ordinary Operational Parameters (see the
-> table above). Ignore any remaining references to "OP20-OP27 deployment ID chunks".
+> was implemented but subsequently replaced by the `I ` line in `CONFIG.TXT` described above.
+> Thus OP20-OP27 have been re-allocated to other functions. 
+> Ignore any remaining references to "OP20-OP27 deployment ID chunks".

@@ -313,10 +313,15 @@ void ledFlashActivate(void) {
 /**
  * Returns whether the LED flash should be in use
  *
- * @return true if the LED is active
+ * @return 0 if flash is inactive. Otherwise return  1 (visible) or 2 (IR)
  */
-bool ledFlashIsActive(void) {
-	return flashActive;
+uint8_t ledFlashIsActive(void) {
+	if (flashActive) {
+		return fatfs_getOperationalParameter(OP_PARAMETER_FLASH_LED);
+	}
+	else {
+		return 0;
+	}
 }
 
 /**
@@ -468,6 +473,7 @@ void ledFlashNewAEStats(HM0360_AE_STATS_T * stats) {
 			dark ? "DARK (flash wanted)" : "BRIGHT (no flash)",
 			(dark == wasDark) ? "" : " (changed)");
 
+	// CGP - what about the opposite: turning the flash off?
 	if (flashMode == FLASH_MODE_AE) {
 		flashActive = dark;
 		ledFlashActivate();	// Turn on Flash LED (conditionally)

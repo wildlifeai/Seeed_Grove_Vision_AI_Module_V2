@@ -25,6 +25,12 @@ override SCENARIO_APP_SUPPORT_LIST := $(APP_TYPE)
 # assignment here cannot replace a command-line-set variable, even an
 # empty one, without it.
 ##
+# Windows only: on Linux/macOS "D:/hxbuild" is a *relative* path, so the mkdir
+# below creates a directory literally called "D:" and OUT_DIR_ROOT then puts a
+# colon into every object path - which make parses as a rule separator
+# ("target pattern contains no '%'"). MAX_PATH is a Windows problem, so the
+# workaround stays on Windows.
+ifeq "$(HOST_OS)" "Windows"
 ifeq ($(strip $(OUT_DIR_ROOT)),)
 WW500_BUILD_ROOT := D:/hxbuild
 WW500_BUILD_ROOT_NATIVE := $(subst /,$(PS),$(WW500_BUILD_ROOT))
@@ -33,6 +39,7 @@ ifneq ($(wildcard $(WW500_BUILD_ROOT)),)
 override OUT_DIR_ROOT := $(WW500_BUILD_ROOT)
 endif
 endif
+endif	# HOST_OS == Windows
 
 # Get git info
 GIT_BRANCH := $(shell git rev-parse --abbrev-ref HEAD 2>NUL)

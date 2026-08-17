@@ -50,6 +50,7 @@
 #include "image_task.h"
 #include "printf_x.h"
 #include "xip_manager.h"
+#include "camera_switch.h"
 
 /*************************************** Definitions *******************************************/
 
@@ -123,6 +124,26 @@
 // Magic word for ModelMetaData validation ("LABL")
 #define LABEL_MAGIC             0x4C41424C
 
+
+/*
+ * Wildlife Watcher slot metadata, stored in the spare (0xFF) bytes of the slot
+ * selector sector after the bootloader's 20-byte header. The bootloader only
+ * reads its own header, so this record is invisible to it.
+ *
+ * Records which camera variant (XIP_SLOT_VARIANT_x) each firmware slot holds,
+ * so the day/night automatic camera switch can verify that the other slot
+ * really contains the wanted variant before flipping the selector.
+ */
+#define SLOT_META_OFFSET    32          // byte offset within the selector sector (word-aligned)
+#define SLOT_META_MAGIC     "WWSM"
+
+/*
+ * First word of a programmed firmware slot: the secure-boot container magic
+ * ("ckBS" bytes = 0x53426B63 read as a little-endian word). An erased slot
+ * reads 0xFFFFFFFF.
+ */
+#define SB_CONTAINER_MAGIC  0x53426B63u
+
 /*************************************** Type definitions **************************************/
 
 /*
@@ -142,6 +163,16 @@ typedef struct {
     uint16_t hx_dsp_flag;    // Always 0x0001
     uint16_t checksum;       // 0x4D04 (Slot A) or 0x167C (Slot B)
 } SlotSelectorHeader;
+
+
+// aligned(4): instances are cast to (uint32_t *) for the word-based SPI EEPROM
+// API, but the members alone would only guarantee byte alignment
+typedef struct {
+    char    magic[4];       // "WWSM"
+    uint8_t variant[2];     // XIP_SLOT_VARIANT_x for Slot A ([0]) and Slot B ([1])
+    uint8_t reserved[2];    // keeps the record a whole number of words
+} __attribute__((aligned(4))) SlotMetaRecord;
+
 
 /*************************************** Local variables *************************************/
 
@@ -178,6 +209,8 @@ static int32_t write_metadata_to_flash(ModelMetaData *metaDataRam);
 static int erase_firmware_slot(uint8_t slot);
 static int write_firmware_from_sd(uint8_t slot, const char *filepath);
 static int write_slot_selector(uint8_t slot);
+static int read_slot_meta(SlotMetaRecord *meta);
+static int write_selector_sector(const SlotSelectorHeader *hdr, const SlotMetaRecord *meta);
 
 /*************************************** Local Function Definitions ***************************/
 
@@ -271,17 +304,25 @@ static uint8_t load_labels_from_manifest(char *filename, char (*labels)[MAX_LABE
  * invariant (XIP always on except during a disable_xip/enable_xip window) holds
  * from the very first call.
  *
- * No mutex is taken here: init_flash() is called before any competing SPI
- * access can occur, so serialisation is not needed at this point.
+ * Serialised with xSPIMutex: two tasks CAN race to be the first flash user
+ * (seen in the field: a console 'slots' command arriving while the image task
+ * initialises the flash for model loading). Concurrent hx_lib_spi_eeprom_open()
+ * calls corrupt the SPI controller state and the loser spins forever inside
+ * the Himax driver, killing its task. The mutex is created before the
+ * scheduler starts (xip_manager_preinit()) so it is always valid here.
  */
 static int init_flash(void) {
     uint8_t id_info;
+    int ret = 0;
 
     if (flash_initialized) {
         return 0;
     }
 
+    // TODO - move xSPIMutex creation to ifTask_createTask()?
     if (xSPIMutex == NULL) {
+        // xip_manager_preinit() was not called - fall back to lazy creation.
+        // This is only safe before the scheduler starts (single-threaded).
         xSPIMutex = xSemaphoreCreateMutex();
         if (xSPIMutex == NULL) {
             xprintf("init_flash: failed to create SPI mutex\n");
@@ -289,27 +330,62 @@ static int init_flash(void) {
         }
     }
 
-    if (hx_lib_spi_eeprom_open(spi_inst) != 0) {
-        xprintf("init_flash: failed to open SPI EEPROM\n");
+    if (xSemaphoreTake(xSPIMutex, portMAX_DELAY) != pdTRUE) {
+        xprintf("init_flash: failed to take SPI mutex\n");
         return -1;
     }
 
-    vTaskDelay(pdMS_TO_TICKS(10));
+    if (flash_initialized) {
+        // Another task initialised the flash while we waited for the mutex
+        xSemaphoreGive(xSPIMutex);
+        return 0;
+    }
 
-    if (hx_lib_spi_eeprom_read_ID(spi_inst, &id_info) != 0) {
-        xprintf("init_flash: failed to read flash ID\n");
-        return -1;
+    if (hx_lib_spi_eeprom_open(spi_inst) != 0) {
+        xprintf("init_flash: failed to open SPI EEPROM\n");
+        ret = -1;
+    }
+
+    if (ret == 0) {
+        vTaskDelay(pdMS_TO_TICKS(10));
+
+        if (hx_lib_spi_eeprom_read_ID(spi_inst, &id_info) != 0) {
+            xprintf("init_flash: failed to read flash ID\n");
+            ret = -1;
+        }
     }
 
     // Restore XIP: open() left the chip in SPI command mode.
-    if (hx_lib_spi_eeprom_enable_XIP(spi_inst, true, FLASH_QUAD, true) != 0) {
-        xprintf("init_flash: failed to enable XIP\n");
-        return -1;
+    if (ret == 0) {
+        if (hx_lib_spi_eeprom_enable_XIP(spi_inst, true, FLASH_QUAD, true) != 0) {
+            xprintf("init_flash: failed to enable XIP\n");
+            ret = -1;
+        }
     }
 
-    xprintf("Flash ID 0x%02X initialised\n", id_info);
-    flash_initialized = true;
-    return 0;
+    if (ret == 0) {
+        xprintf("Flash ID 0x%02X initialised\n", id_info);
+        flash_initialized = true;
+    }
+
+    xSemaphoreGive(xSPIMutex);
+    return ret;
+}
+
+/**
+ * Create the SPI mutex before the scheduler starts.
+ *
+ * Must be called from app_main() (single-threaded context) so that the
+ * lazy mutex creation in init_flash() can never race between two tasks.
+ * // TODO - move xSPIMutex creation to ifTask_createTask()?
+ */
+void xip_manager_preinit(void) {
+    if (xSPIMutex == NULL) {
+        xSPIMutex = xSemaphoreCreateMutex();
+        if (xSPIMutex == NULL) {
+            xprintf("xip_manager_preinit: failed to create SPI mutex\n");
+        }
+    }
 }
 
 /**
@@ -804,6 +880,10 @@ bool xip_copy_model_from_sd_to_flash(char *filename) {
 /**
  * Build a ModelMetaData record from the model name and the label file on
  * the SD card, then write it to the start of the model flash area.
+ *
+ *  * NOTE: there is also other metadata in the Firmware Image Slot Selector
+ * - the camera type used by each firmware slot.
+ *
  */
 bool xip_copy_metadata_to_flash(char *modelName) {
     ModelMetaData metaDataRam;
@@ -1389,14 +1469,17 @@ static int write_firmware_from_sd(uint8_t slot, const char *filepath) {
  */
 static int write_slot_selector(uint8_t slot) {
     SlotSelectorHeader hdr;
+    SlotMetaRecord meta;
 
     if (slot == 0) {
         hdr.flash_offset = FLASH_SLOT_A_ADDR;
         hdr.checksum     = SLOT_A_SELECTOR_CHECKSUM;
-    } else if (slot == 1) {
+    }
+    else if (slot == 1) {
         hdr.flash_offset = FLASH_SLOT_B_ADDR;
         hdr.checksum     = SLOT_B_SELECTOR_CHECKSUM;
-    } else {
+    }
+    else {
         xprintf("write_slot_selector: invalid slot %d\n", slot);
         return -1;
     }
@@ -1409,28 +1492,92 @@ static int write_slot_selector(uint8_t slot) {
         return -1;
     }
 
+    // Preserve the camera variant labels across the sector rewrite
+    if (read_slot_meta(&meta) != 0) {
+        return -1;
+    }
+
+    if (write_selector_sector(&hdr, &meta) != 0) {
+        return -1;
+    }
+
+    xprintf("write_slot_selector: slot %d selector written OK\n", slot);
+
+    return 0;
+}
+
+/**
+ * Read the Wildlife Watcher slot metadata record from the selector sector.
+ *
+ * A missing/blank record (fresh device, or selector written by older firmware)
+ * is not an error: the record is returned initialised with both slots
+ * XIP_SLOT_VARIANT_UNKNOWN.
+ */
+static int read_slot_meta(SlotMetaRecord *meta) {
+    if (!disable_xip()) {
+        return -1;
+    }
+
+    int ret = hx_lib_spi_eeprom_word_read(spi_inst, FLASH_SELECTOR_ADDR + SLOT_META_OFFSET,
+                                          (uint32_t *)meta, sizeof(SlotMetaRecord));
+    enable_xip();
+
+    if (ret != 0) {
+        xprintf("read_slot_meta: SPI read failed\n");
+        return -1;
+    }
+
+    if (memcmp(meta->magic, SLOT_META_MAGIC, 4) != 0) {
+        // Record never written - report both slots unknown
+        memcpy(meta->magic, SLOT_META_MAGIC, 4);
+        meta->variant[0]  = XIP_SLOT_VARIANT_UNKNOWN;
+        meta->variant[1]  = XIP_SLOT_VARIANT_UNKNOWN;
+        meta->reserved[0] = 0xFF;
+        meta->reserved[1] = 0xFF;
+    }
+
+    return 0;
+}
+
+/**
+ * Erase the Firmware Image Slot Selector then write the bootloader header and the Wildlife
+ * Watcher metadata record.
+ *
+ * The caller must have called init_flash().
+ */
+static int write_selector_sector(const SlotSelectorHeader *hdr, const SlotMetaRecord *meta) {
+    // Local copies: the SPI write API takes non-const pointers
+    SlotSelectorHeader h = *hdr;
+    SlotMetaRecord     m = *meta;
+
     if (!disable_xip()) {
         return -1;
     }
 
     // Erase the 4 KB selector sector
     if (hx_lib_spi_eeprom_erase_sector(spi_inst, FLASH_SELECTOR_ADDR, FLASH_SECTOR) != 0) {
-        xprintf("write_slot_selector: sector erase failed\n");
+        xprintf("write_selector_sector: sector erase failed\n");
         enable_xip();
         return -1;
     }
 
-    // Write the 20-byte header; remainder stays 0xFF (erased)
+    // Write the 20-byte bootloader header
     if (hx_lib_spi_eeprom_word_write(spi_inst, FLASH_SELECTOR_ADDR,
-                                      (uint32_t *)&hdr, sizeof(SlotSelectorHeader)) != 0) {
-        xprintf("write_slot_selector: header write failed\n");
+                                      (uint32_t *)&h, sizeof(SlotSelectorHeader)) != 0) {
+        xprintf("write_selector_sector: header write failed\n");
+        enable_xip();
+        return -1;
+    }
+
+    // Write the metadata record; the rest of the sector stays 0xFF (erased)
+    if (hx_lib_spi_eeprom_word_write(spi_inst, FLASH_SELECTOR_ADDR + SLOT_META_OFFSET,
+                                      (uint32_t *)&m, sizeof(SlotMetaRecord)) != 0) {
+        xprintf("write_selector_sector: metadata write failed\n");
         enable_xip();
         return -1;
     }
 
     enable_xip();
-
-    xprintf("write_slot_selector: slot %d selector written OK\n", slot);
 
     return 0;
 }
@@ -1491,7 +1638,166 @@ int xip_update_firmware_from_sd(const char *filename) {
         return -5;
     }
 
+    // Step 6: the new image's camera variant is unknown until it boots and
+    // labels itself (cameraSwitch_labelBootSlot()), so clear any stale label.
+    // A failure is not fatal to the update, but a stale label could mislead
+    // the camera switching logic - make it visible.
+    if (xip_set_slot_variant((uint8_t)target_slot, XIP_SLOT_VARIANT_UNKNOWN) != 0) {
+        xprintf("firmware: warning: failed to clear the slot %d variant label\n", target_slot);
+    }
+
     xprintf("firmware: slot %d updated OK. Type 'reset' to boot the new image.\n",
             target_slot);
     return 0;
+}
+
+/**
+ * Report which firmware slot the bootloader will execute.
+ *
+ * @return 0 (Slot A), 1 (Slot B), or -1 on failure
+ */
+int xip_get_active_slot(void) {
+    return get_active_slot();
+}
+
+/**
+ * Read the camera in use by a slot.
+ *
+ * @param slot  0 or 1
+ * @return XIP_SLOT_VARIANT_x, or -1 on failure
+ */
+int xip_get_slot_variant(uint8_t slot) {
+    SlotMetaRecord meta;
+
+    if (slot > 1) {
+        return -1;
+    }
+    if (init_flash() != 0) {
+        return -1;
+    }
+    if (read_slot_meta(&meta) != 0) {
+        return -1;
+    }
+
+    return meta.variant[slot];
+}
+
+/**
+ * Updates Firmware Image Slot Selector with meta data
+ * (the camera supported by one firmware slot)
+ *
+ * Only rewrites the selector sector if the label actually changes.
+ *
+ * Called by xip_update_firmware_from_sd() - set to XIP_SLOT_VARIANT_UNKNOWN when a new image is programmed.
+ * Called by cameraSwitch_labelBootSlot() - set to actual camera when image Task starts (during cold boot only)
+ *
+ * Typical output:
+ * 	Slot B labelled variant 2 = RP3 (day/colour)
+ *
+ * @param slot     0 or 1
+ * @param variant  XIP_SLOT_VARIANT_x
+ * @return 0 on success (including no-change), negative on failure
+ */
+int xip_set_slot_variant(uint8_t slot, uint8_t variant) {
+    SlotSelectorHeader hdr;
+    SlotMetaRecord meta;
+
+    if (slot > 1) {
+        return -1;
+    }
+    if (init_flash() != 0) {
+        return -1;
+    }
+
+    // Need the current header so the sector rewrite keeps the bootloader's choice
+    if (read_slot_selector(&hdr) != 0) {
+        return -1;
+    }
+    if (read_slot_meta(&meta) != 0) {
+        return -1;
+    }
+
+    if (meta.variant[slot] == variant) {
+        return 0;   // no change - avoid a pointless sector erase
+    }
+
+    meta.variant[slot] = variant;
+
+    if (write_selector_sector(&hdr, &meta) != 0) {
+        return -2;
+    }
+
+    xprintf("Slot %c labelled variant %d = %s\n",
+    		(slot == 0) ? 'A' : 'B', variant, cameraSwitch_variantName(variant));
+
+    return 0;
+}
+
+/**
+ * Point the bootloader at the other firmware slot
+ *
+ * Used for day/night camera switching when both slots already hold images.
+ *
+ * Refuses to switch if the target slot does not start with the secure-boot
+ * container magic (i.e. it is erased or corrupt), so the device cannot be
+ * pointed at an unbootable slot.
+ *
+ * The caller is responsible for scheduling a reset (e.g. app_setResetRequest()).
+ *
+ * @return the new active slot (0 or 1) on success;
+ *         -1 selector read/flash failure, -2 target slot has no image,
+ *         -3 selector write failure
+ */
+int xip_switch_slot(void) {
+    int active_slot;
+    int target_slot;
+    uint32_t slot_base;
+    uint32_t magic = 0;
+
+    // get_active_slot() also initialises the flash, but be explicit so this
+    // function does not depend on that internal detail
+    if (init_flash() != 0) {
+        return -1;
+    }
+
+    active_slot = get_active_slot();
+    if (active_slot < 0) {
+        return -1;
+    }
+
+    target_slot = (active_slot == 0) ? 1 : 0;
+    slot_base   = (target_slot == 0) ? FLASH_SLOT_A_ADDR : FLASH_SLOT_B_ADDR;
+
+    // Safety: the target slot must contain a programmed application.
+    // Check at FLASH_APP_OFFSET, not the slot base: Slot A's base always holds
+    // the boot chain, so only the application partition indicates whether an
+    // app image was ever written to that slot.
+    if (!disable_xip()) {
+        return -1;
+    }
+
+    int ret = hx_lib_spi_eeprom_word_read(spi_inst, slot_base + FLASH_APP_OFFSET,
+                                          &magic, sizeof(magic));
+    enable_xip();
+
+    if (ret != 0) {
+        xprintf("switch_slot: SPI read failed\n");
+        return -1;
+    }
+
+    // Check if the firmware image appears valid by checking the first 4 bytes
+    if (magic != SB_CONTAINER_MAGIC) {
+        xprintf("switch_slot: slot %d has no image (first word 0x%08x) - not switching\n",
+                target_slot, (unsigned)magic);
+        return -2;
+    }
+
+    // This is where we switch firmware images for the next boot.
+    if (write_slot_selector((uint8_t)target_slot) != 0) {
+        return -3;
+    }
+
+    xprintf("switch_slot: selector now points at slot %d\n", target_slot);
+
+    return target_slot;
 }

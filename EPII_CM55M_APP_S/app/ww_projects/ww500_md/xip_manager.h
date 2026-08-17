@@ -51,6 +51,16 @@ extern "C" {
 #define MAX_LABEL_LEN           20          // Maximum bytes per class label string (including NUL)
 #define MAX_MODEL_NAME_LEN      IMAGEFILENAMELEN          // 8.3 format filename + NUL (e.g. "1V2.TFL\0")
 
+/*
+ * Camera image variant labels, stored per slot in a small metadata record in the
+ * spare bytes of the slot selector sector. Each firmware image labels its own
+ * slot at boot (see cameraSwitch_labelBootSlot()), so after both variants have
+ * booted once the day/night switching logic knows what is in each slot.
+ */
+#define XIP_SLOT_VARIANT_UNKNOWN	0	// slot content not yet labelled (or just rewritten)
+#define XIP_SLOT_VARIANT_HM0360		1	// night/IR image: HM0360 is the main camera
+#define XIP_SLOT_VARIANT_RP3		2	// day/colour image: RP v3 (IMX708) is the main camera
+
 
 /*************************************** Type definitions **************************************/
 
@@ -146,6 +156,9 @@ bool xip_copy_model_from_sd_to_flash(char *filename);
  * Build a ModelMetaData record from the model name and the corresponding
  * label file on the SD card, then write it to the start of the model flash area.
  *
+ * NOTE: there is also other metadata in the Firmware Image Slot Selector
+ * - the camera type used by each firmware slot.
+ *
  * @param modelName  model filename only (no path), e.g. "1V2.TFL"
  * @return true on success
  */
@@ -172,6 +185,58 @@ int xip_dump_slot_selector(void);
  * @return 0 on success, negative error code on failure
  */
 int xip_update_firmware_from_sd(const char *filename);
+
+
+/********************* New functions added for Dual-camera day/night switching  ***************************/
+
+/**
+ * Create the SPI mutex before the scheduler starts (call from app_main()).
+ * Prevents two tasks racing the first-use flash initialisation.
+ */
+void xip_manager_preinit(void);
+
+/**
+ * Report which firmware slot the bootloader will execute.
+ *
+ * @return 0 (Slot A), 1 (Slot B), or -1 on failure
+ */
+int xip_get_active_slot(void);
+
+/**
+ * Read the camera in use by a slot.
+ *
+ * @param slot  0 or 1
+ * @return XIP_SLOT_VARIANT_x, or -1 on failure
+ */
+int xip_get_slot_variant(uint8_t slot);
+
+/**
+ * Updates Firmware Image Slot Selector with meta data
+ * (the camera supported by one firmware slot)
+ *
+ * Only rewrites the selector sector if the label actually changes.
+ *
+ * @param slot     0 or 1
+ * @param variant  XIP_SLOT_VARIANT_x
+ * @return 0 on success (including no-change), negative on failure
+ */
+int xip_set_slot_variant(uint8_t slot, uint8_t variant);
+
+/**
+ * Point the bootloader at the other firmware slot, WITHOUT writing any image.
+ * Used for day/night camera switching when both slots already hold images.
+ *
+ * Refuses to switch if the target slot does not start with the secure-boot
+ * container magic (i.e. it is erased or corrupt), so the device cannot be
+ * pointed at an unbootable slot.
+ *
+ * The caller is responsible for scheduling a reset (e.g. app_setResetRequest()).
+ *
+ * @return the new active slot (0 or 1) on success;
+ *         -1 selector read/flash failure, -2 target slot has no image,
+ *         -3 selector write failure
+ */
+int xip_switch_slot(void);
 
 #ifdef __cplusplus
 }

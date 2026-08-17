@@ -9,6 +9,12 @@ const FIRMWARE_PATH = process.env.FIRMWARE_PATH; // Path to the generated .img f
 const FIRMWARE_VERSION = process.env.FIRMWARE_VERSION || `commit-${process.env.GITHUB_SHA?.substring(0, 7)}`;
 const RELEASE_NOTES = process.env.RELEASE_NOTES || `Automated build from commit ${process.env.GITHUB_SHA}`;
 const FIRMWARE_TYPE = process.env.FIRMWARE_TYPE || 'himax';
+// Camera variant the Himax image was built for: 'RP3' | 'HM0360' | '' (unknown/legacy)
+const FIRMWARE_VARIANT = (process.env.FIRMWARE_VARIANT || '').trim() || null;
+if (FIRMWARE_VARIANT && !['RP3', 'HM0360'].includes(FIRMWARE_VARIANT)) {
+  console.error(`Error: FIRMWARE_VARIANT must be 'RP3' or 'HM0360' (got '${FIRMWARE_VARIANT}')`);
+  process.exit(1);
+}
 const BUCKET_NAME = process.env.BUCKET_NAME || 'firmware';
 const SYSTEM_EMAIL = process.env.SYSTEM_EMAIL || 'system@wildlife.ai';
 const FALLBACK_USER_ID = process.env.FALLBACK_USER_ID || '00000000-0000-0000-0000-000000000000';
@@ -52,7 +58,8 @@ async function uploadFirmware() {
     const fileContent = fs.readFileSync(FIRMWARE_PATH);
     const fileSize = fs.statSync(FIRMWARE_PATH).size;
     const versionTag = sanitizeForPath(FIRMWARE_VERSION);
-    const storagePath = `${FIRMWARE_TYPE}/${versionTag}_${fileName}`;
+    const variantTag = FIRMWARE_VARIANT ? `${FIRMWARE_VARIANT}_` : '';
+    const storagePath = `${FIRMWARE_TYPE}/${variantTag}${versionTag}_${fileName}`;
 
     console.log(`Uploading ${fileName} to ${BUCKET_NAME}/${storagePath} (${fileSize} bytes)...`);
     const { error: uploadError } = await supabase.storage
@@ -82,16 +89,22 @@ async function uploadFirmware() {
       is_active: true,
       modified_by: systemUserId,
       crc_checksum: process.env.FIRMWARE_CRC || null,
-      build_date: process.env.FIRMWARE_BUILD_DATE || null
+      build_date: process.env.FIRMWARE_BUILD_DATE || null,
+      camera_variant: FIRMWARE_VARIANT
     };
 
     // Check if a record with this (type, version) already exists
-    const { data: existing, error: findError } = await supabase
+    let findQuery = supabase
       .from('firmware')
       .select('id')
       .eq('type', FIRMWARE_TYPE)
       .eq('version', FIRMWARE_VERSION)
-      .is('deleted_at', null)
+      .is('deleted_at', null);
+    // The two camera variants may share a version string (parallel CI builds)
+    findQuery = FIRMWARE_VARIANT
+      ? findQuery.eq('camera_variant', FIRMWARE_VARIANT)
+      : findQuery.is('camera_variant', null);
+    const { data: existing, error: findError } = await findQuery
       .limit(1)
       .maybeSingle();
 
@@ -111,6 +124,7 @@ async function uploadFirmware() {
           modified_by: record.modified_by,
           crc_checksum: record.crc_checksum,
           build_date: record.build_date,
+          camera_variant: record.camera_variant,
           updated_at: new Date().toISOString()
         })
         .eq('id', existing.id)
@@ -132,6 +146,7 @@ async function uploadFirmware() {
     }
 
     console.log(`  Version:       ${FIRMWARE_VERSION}`);
+    console.log(`  Variant:       ${FIRMWARE_VARIANT || '(none)'}`);
     console.log(`  Name:          ${firmwareName}`);
     console.log(`  Storage Path:  ${storagePath}`);
     console.log(`  File Size:     ${fileSize} bytes`);

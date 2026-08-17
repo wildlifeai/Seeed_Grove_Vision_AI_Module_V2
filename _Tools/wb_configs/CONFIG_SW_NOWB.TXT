@@ -1,0 +1,37 @@
+# WW500 Operational Parameters File
+# WB TEST: software encoder, NO white balance (unity gains).
+# Compare against the hardware-uncorrected file to check the software JPEG
+# encoder's fidelity on identical content (colour/quality, not WB).
+# op27 = 256, op28 = 256  (256 = 1.0x = no colour change, but still SW-encoded)
+#
+0 1
+1 0
+2 0
+3 0
+4 0
+5 1
+6 500
+7 10
+8 1000
+9 5
+10 1
+11 0
+12 100
+13 0
+14 0
+15 0
+16 18
+17 1
+18 0
+19 0
+20 0
+21 2
+22 5
+23 65
+24 15
+25 0
+26 0
+# 27: software WB red gain (256 = unity = SW-encode, no colour change)
+27 256
+# 28: software WB blue gain (256 = unity = SW-encode, no colour change)
+28 256

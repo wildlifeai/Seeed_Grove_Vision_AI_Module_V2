@@ -1400,6 +1400,24 @@ static void vIfTask(void *pvParameters) {
 
 			old_state = if_task_state;
 
+			// A task (e.g. the image task's AE report) may ask us to message the MKL62BA
+			// while we are mid-exchange. The sender has already taken xI2CTxSemaphore,
+			// expecting i2cTransmissionComplete() to give it back - so this event must
+			// never be silently dropped, or the CLI task and the sender block forever on
+			// the semaphore: the console dies and the device never sleeps.
+			// IDLE handles it (sends now) and I2C_TX defers it (savedMessage); in every
+			// other state drop the message (it is best-effort telemetry) and give the
+			// semaphore back ourselves so the pipeline recovers.
+			if ((event == APP_MSG_IFTASK_MSG_TO_MASTER)
+					&& (if_task_state != APP_IF_STATE_IDLE)
+					&& (if_task_state != APP_IF_STATE_I2C_TX)) {
+				XP_BROWN;
+				xprintf("Busy (state '%s') - dropping message to master\n", ifTaskStateString[if_task_state]);
+				XP_WHITE;
+				xSemaphoreGive(xI2CTxSemaphore);
+				continue;
+			}
+
 			// switch on state - and call individual event handling functions
 			switch (if_task_state) {
 
@@ -1925,6 +1943,8 @@ TaskHandle_t ifTask_createTask(int8_t priority, uint8_t wakeReason) {
 
 	// Now must release the I2C semaphore
 	xSemaphoreGive(xI2CTxSemaphore);
+
+	// Is this the place for the xip_manager_preinit() code?
 
 	if (xTaskCreate(vIfTask, (const char *)"IFTask",
 			configMINIMAL_STACK_SIZE * 3,

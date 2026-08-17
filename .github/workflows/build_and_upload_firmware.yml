@@ -1,18 +1,26 @@
 name: Build and Upload Himax Firmware
 
-# This workflow builds the Himax (HX6538) firmware image and/or uploads it to
-# the Supabase firmware database. Four ways to run it:
+# This workflow builds the Himax (HX6538) firmware image(s) and/or uploads them
+# to the Supabase firmware database. Four ways to run it:
 #
-#   1. Merge/push to 'dev'  -> BUILD from source, upload to the DEV database
-#   2. Merge/push to 'main' -> BUILD from source, upload to the PRODUCTION database
+#   1. Merge/push to 'dev'  -> BUILD BOTH camera variants from source, upload to the DEV database
+#   2. Merge/push to 'main' -> BUILD BOTH camera variants from source, upload to the PRODUCTION database
 #   3. Manual dispatch, source=prebuilt -> upload the committed
-#      we2_image_gen_local_dpd/output_case1_sec_wlcsp/output.img to the chosen
+#      we2_image_gen_local_dpd/output_case1_sec_wlcsp/output.img (single image;
+#      its camera variant is detected from the image content) to the chosen
 #      database (dev or production) without building
-#   4. Manual dispatch, source=build (any branch) -> BUILD from source, upload
+#   4. Manual dispatch, source=build (any branch) -> BUILD BOTH variants, upload
 #      to the DEV database
+#
+# Camera variants: the WW500 holds two firmware images in A/B flash slots -
+#   RP3    = RP v3 colour camera (IMX708) as main camera  (CIS_SUPPORT_INAPP_MODEL=cis_imx708)
+#   HM0360 = HM0360 night/IR camera as main camera        (CIS_SUPPORT_INAPP_MODEL=cis_hm0360)
+# Each upload carries a camera_variant so the website manifest generator and the
+# mobile app can select the matching pair.
 #
 # Builds use the Arm GNU toolchain pinned below and the RC24M (DPD-capable)
 # image-generation profile, matching the developers' local build environment.
+# See _Documentation/building_firmware.md
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -54,8 +62,9 @@ jobs:
     outputs:
       environment: ${{ steps.resolve.outputs.ENVIRONMENT }}
       source: ${{ steps.resolve.outputs.SOURCE }}
+      matrix: ${{ steps.resolve.outputs.MATRIX }}
     steps:
-      - name: Resolve source and environment
+      - name: Resolve source, environment and build matrix
         id: resolve
         shell: bash
         run: |
@@ -78,13 +87,25 @@ jobs:
             fi
           fi
 
+          # Builds produce both camera variants; the prebuilt path is a single
+          # committed image whose variant is detected from its content
+          if [ "$SOURCE" = "build" ]; then
+            MATRIX='{"include":[{"variant":"RP3","cis_model":"cis_imx708"},{"variant":"HM0360","cis_model":"cis_hm0360"}]}'
+          else
+            MATRIX='{"include":[{"variant":"PREBUILT","cis_model":"none"}]}'
+          fi
+
           echo "SOURCE=$SOURCE" >> $GITHUB_OUTPUT
           echo "ENVIRONMENT=$ENVIRONMENT" >> $GITHUB_OUTPUT
+          echo "MATRIX=$MATRIX" >> $GITHUB_OUTPUT
           echo "Source: $SOURCE, target database: $ENVIRONMENT"
 
   build-firmware:
     needs: setup
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.setup.outputs.matrix) }}
 
     steps:
       - name: Checkout Repository
@@ -110,7 +131,7 @@ jobs:
           tar -xf "arm-gnu-toolchain-${ARM_TOOLCHAIN_VERSION}-x86_64-arm-none-eabi.tar.xz"
           rm "arm-gnu-toolchain-${ARM_TOOLCHAIN_VERSION}-x86_64-arm-none-eabi.tar.xz"
 
-      - name: Build Firmware
+      - name: Build Firmware (${{ matrix.variant }})
         if: needs.setup.outputs.source == 'build'
         shell: bash
         run: |
@@ -118,12 +139,13 @@ jobs:
           arm-none-eabi-gcc --version | head -n 1
 
           cd EPII_CM55M_APP_S
-          # actions/checkout leaves a detached HEAD, so pass the branch name explicitly
-          make -j"$(nproc)" GIT_BRANCH="$GITHUB_REF_NAME"
+          # actions/checkout leaves a detached HEAD, so pass the branch name explicitly.
+          # CIS_SUPPORT_INAPP_MODEL selects the camera variant for this matrix leg.
+          make -j"$(nproc)" GIT_BRANCH="$GITHUB_REF_NAME" CIS_SUPPORT_INAPP_MODEL="${{ matrix.cis_model }}"
 
           ls -la obj_epii_evb_icv30_bdv10/gnu_epii_evb_WLCSP65/EPII_CM55M_gnu_epii_evb_WLCSP65_s.elf
 
-      - name: Generate Firmware Image
+      - name: Generate Firmware Image (${{ matrix.variant }})
         if: needs.setup.outputs.source == 'build'
         shell: bash
         run: |
@@ -153,7 +175,7 @@ jobs:
           echo "Using pre-built image committed to the repository"
           ls -la "$IMG_FILE"
 
-      - name: Rename Firmware Image
+      - name: Detect Camera Variant and Rename Image
         id: find_image
         shell: bash
         run: |
@@ -165,15 +187,36 @@ jobs:
             exit 1
           fi
 
+          # The camera variant is derived from the image content itself
+          # (the firmware embeds a "Camera: ..." identification string), so it
+          # can never disagree with the binary - this also classifies the
+          # committed image on the prebuilt path.
+          CAMERA_LINE=$(strings "$IMG_FILE" | grep -m1 -E "^Camera: " || true)
+          if echo "$CAMERA_LINE" | grep -q "RP v3"; then
+            VARIANT="RP3"
+          elif echo "$CAMERA_LINE" | grep -q "HM0360"; then
+            VARIANT="HM0360"
+          else
+            VARIANT=""
+            echo "Warning: could not detect camera variant ('$CAMERA_LINE')"
+          fi
+          echo "Detected camera variant: '$VARIANT'"
+
+          # Sanity check: a built leg must match its matrix variant
+          if [ "${{ needs.setup.outputs.source }}" = "build" ] && [ "$VARIANT" != "${{ matrix.variant }}" ]; then
+            echo "Error: built image variant '$VARIANT' does not match matrix leg '${{ matrix.variant }}'"
+            exit 1
+          fi
+
           # Extract board name from ww.mk for the filename
           BOARD_NAME=$(grep "^BOARD_NAME_STRING" EPII_CM55M_APP_S/app/ww_projects/ww.mk | awk -F'"' '{print $2}' | head -n 1)
           if [ -z "$BOARD_NAME" ]; then
             BOARD_NAME="WW500_C02"
           fi
 
-          # Generate timestamped filename: BOARD_YYYYMMDDHHMMSS.img
+          # Generate timestamped filename: BOARD_VARIANT_YYYYMMDDHHMMSS.img
           TIMESTAMP=$(date -u +"%Y%m%d%H%M%S")
-          NEW_NAME="${BOARD_NAME}_${TIMESTAMP}.img"
+          NEW_NAME="${BOARD_NAME}_${VARIANT:-UNKNOWN}_${TIMESTAMP}.img"
 
           # Rename the file so the artifact and storage path use the new name
           NEW_PATH="$(dirname "$IMG_FILE")/$NEW_NAME"
@@ -183,11 +226,12 @@ jobs:
           echo "Firmware image: $FULL_PATH"
           echo "firmware_path=$FULL_PATH" >> $GITHUB_OUTPUT
           echo "firmware_filename=$NEW_NAME" >> $GITHUB_OUTPUT
+          echo "firmware_variant=$VARIANT" >> $GITHUB_OUTPUT
 
       - name: Upload Build Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: firmware-image
+          name: firmware-image-${{ matrix.variant }}
           path: ${{ steps.find_image.outputs.firmware_path }}
           retention-days: 30
 
@@ -196,6 +240,9 @@ jobs:
     runs-on: ubuntu-latest
     if: success()
     environment: ${{ needs.setup.outputs.environment }}
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.setup.outputs.matrix) }}
 
     env:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
@@ -212,7 +259,7 @@ jobs:
       - name: Download Build Artifact
         uses: actions/download-artifact@v4
         with:
-          name: firmware-image
+          name: firmware-image-${{ matrix.variant }}
           path: ./firmware
 
       - name: Calculate Semantic Version
@@ -248,7 +295,7 @@ jobs:
           echo "Generated release notes:"
           echo "$COMMITS"
 
-      - name: Extract Device Version
+      - name: Extract Device Version and Variant
         id: version
         shell: bash
         run: |
@@ -261,6 +308,16 @@ jobs:
           # Extract the exact __TIME__ and __DATE__ embedded by the C compiler
           BUILD_TIME=$(strings "$IMG_FILE" | grep -Eo "^[0-2][0-9]:[0-5][0-9]:[0-5][0-9]$" | tail -n 1)
           BUILD_DATE=$(strings "$IMG_FILE" | grep -Eo "^[A-Z][a-z]{2} +[0-9]{1,2} 20[0-9]{2}$" | tail -n 1)
+
+          # Camera variant from the image content (see Detect Camera Variant step)
+          CAMERA_LINE=$(strings "$IMG_FILE" | grep -m1 -E "^Camera: " || true)
+          if echo "$CAMERA_LINE" | grep -q "RP v3"; then
+            VARIANT="RP3"
+          elif echo "$CAMERA_LINE" | grep -q "HM0360"; then
+            VARIANT="HM0360"
+          else
+            VARIANT=""
+          fi
 
           # Extract board name from ww.mk
           BOARD_NAME=$(grep "^BOARD_NAME_STRING" EPII_CM55M_APP_S/app/ww_projects/ww.mk | awk -F'"' '{print $2}' | head -n 1)
@@ -280,7 +337,8 @@ jobs:
 
           echo "unique_version=${UNIQUE_VERSION}" >> $GITHUB_OUTPUT
           echo "build_date=${BUILD_DATE}" >> $GITHUB_OUTPUT
-          echo "Extracted device version: ${UNIQUE_VERSION}"
+          echo "camera_variant=${VARIANT}" >> $GITHUB_OUTPUT
+          echo "Extracted device version: ${UNIQUE_VERSION} (variant: ${VARIANT:-unknown})"
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -317,8 +375,10 @@ jobs:
           FIRMWARE_VERSION: ${{ steps.version.outputs.unique_version }}
           FIRMWARE_BUILD_DATE: ${{ steps.version.outputs.build_date }}
           FIRMWARE_CRC: ${{ steps.crc.outputs.crc }}
+          FIRMWARE_VARIANT: ${{ steps.version.outputs.camera_variant }}
           RELEASE_NOTES: |
             Himax AI firmware ${{ steps.version.outputs.unique_version }}
+            Camera variant: ${{ steps.version.outputs.camera_variant || 'unknown' }}
             Source: ${{ needs.setup.outputs.source }} (${{ github.event_name }})
             Branch: ${{ github.ref_name }}
             Commit: ${{ github.sha }}
@@ -329,7 +389,8 @@ jobs:
         run: node upload_firmware.js
 
       - name: Create Git Tag
-        if: success() && (github.ref == 'refs/heads/main')
+        # Only one matrix leg creates the tag (RP3 for builds, PREBUILT for prebuilt uploads)
+        if: success() && (github.ref == 'refs/heads/main') && (matrix.variant == 'RP3' || matrix.variant == 'PREBUILT')
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"

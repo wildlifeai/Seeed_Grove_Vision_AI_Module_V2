@@ -79,6 +79,7 @@ static void addIFD(ExifTagID tagID, uint8_t *entry_ptr, void *tagData) {
         break;
     }
     case TAG_RESOLUTION_UNIT:
+    case TAG_FLASH:
     {
         uint16_t value = *(uint16_t *)tagData;
         write16_le(entry_ptr,     tagID);
@@ -111,6 +112,7 @@ static void addIFD(ExifTagID tagID, uint8_t *entry_ptr, void *tagData) {
     case TAG_CREATE_DATE:
     case TAG_MAKE:
     case TAG_MODEL:
+    case TAG_SOFTWARE:
     case TAG_DEPLOYMENT_ID:
     case TAG_GPS_LATITUDE_REF:
     case TAG_GPS_LONGITUDE_REF:
@@ -328,6 +330,7 @@ uint16_t exif_build_segment(const ExifInput_t *input) {
     if (input->user_comment  != NULL) dynamic_ifd_count++;
     if (input->maker_note    != NULL) dynamic_ifd_count++;
     if (input->deployment_id != NULL) dynamic_ifd_count++;
+    if (input->software      != NULL) dynamic_ifd_count++;
 
     uint32_t xres_rational[2] = {input->width,  1u};
     uint32_t yres_rational[2] = {input->height, 1u};
@@ -387,16 +390,22 @@ uint16_t exif_build_segment(const ExifInput_t *input) {
 
     /* Write mandatory IFD0 entries. */
     uint8_t entry = 0;
+    uint16_t flash_value = (input->flash_fired != 0u) ? 1u : 0u;  /* EXIF Flash bit0: fired */
     addIFD(TAG_MAKE,             ifd_start + (entry++ * 12), "Wildlife.ai");
-    addIFD(TAG_MODEL,            ifd_start + (entry++ * 12), "WW500");
+    addIFD(TAG_MODEL,            ifd_start + (entry++ * 12),
+           (void *)((input->camera_model != NULL) ? input->camera_model : "WW500"));
     addIFD(TAG_RESOLUTION_UNIT,  ifd_start + (entry++ * 12), &res_unit);
     addIFD(TAG_X_RESOLUTION,     ifd_start + (entry++ * 12), xres_rational);
     addIFD(TAG_Y_RESOLUTION,     ifd_start + (entry++ * 12), yres_rational);
     addIFD(TAG_DATETIME_ORIGINAL, ifd_start + (entry++ * 12), (void *)input->timestamp);
     addIFD(TAG_CREATE_DATE,      ifd_start + (entry++ * 12), (void *)input->timestamp);
+    addIFD(TAG_FLASH,            ifd_start + (entry++ * 12), &flash_value);
     addIFD(TAG_NN_DATA, ifd_start + (entry++ * 12), (void *)input->nn_data);
 
     /* Optional IFD0 entries — included only when the caller provides data. */
+    if (input->software != NULL) {
+        addIFD(TAG_SOFTWARE, ifd_start + (entry++ * 12), (void *)input->software);
+    }
     if (input->maker_note != NULL) {
         addIFD(TAG_MAKER_NOTE, ifd_start + (entry++ * 12), (void *)input->maker_note);
     }

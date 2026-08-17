@@ -15,6 +15,8 @@
  *   - the sensor pedestal shows as a constant offset in the Y plane
  */
 
+/*********************************************** Includes ****************************************************/
+
 #include <stdint.h>
 #include <stdbool.h>
 
@@ -25,6 +27,8 @@
 #include "fatfs_task.h"		// operational parameters
 #include "preview.h"		// preview_isActive(): unbounded AE while previewing
 #include "ae.h"
+
+/*********************************************** Local Defines **********************************************/
 
 // Sony register layout (IMX708/IMX219): 16-bit big-endian pairs
 #define AE_REG_EXPOSURE_H	0x0202
@@ -51,21 +55,33 @@
 #define AE_RATIO_Q8_MAX		768
 #define AE_MAX_STEPS_PER_WAKE	3	// battery bound (ignored during live preview)
 
+/*********************************************** Local Types ************************************************/
+
+
+/*********************************************** Local Variables ********************************************/
+
 static uint16_t curExposure = AE_EXPOSURE_DEFAULT;
 static uint16_t curGainCode = 0;
 static uint8_t stepsThisWake = 0;
 
-void ae_notifySensorInit(void) {
-	// Registers just reverted to the init tables (+ any camreg staged file)
-	curExposure = AE_EXPOSURE_DEFAULT;
-	curGainCode = 0;
-	stepsThisWake = 0;
-}
+/*********************************************** Local Function Declarations *********************************/
+
+static uint32_t brightLuma(uint32_t yAddr, uint16_t w, uint16_t h);
+static void writeReg16(uint16_t regH, uint16_t value);
+
+/*********************************************** Local Function Definitions *********************************/
 
 /**
- * Bright-quartile (p75) luma of the Y plane, subsampled every 8th pixel.
- * Uses a 32-bin histogram: finds the bin where the cumulative count crosses
- * 75%, then refines with the bin's midpoint.
+ * @brief Bright-quartile (p75) luma of the Y plane.
+ *
+ * Subsamples every 8th pixel and builds a 32-bin histogram, then finds the
+ * bin where the cumulative count crosses 75%, refining with the bin's
+ * midpoint.
+ *
+ * @param yAddr address of the Y plane
+ * @param w     frame width
+ * @param h     frame height
+ * @return p75 luma value (0..255)
  */
 static uint32_t brightLuma(uint32_t yAddr, uint16_t w, uint16_t h) {
 	const uint8_t *y = (const uint8_t *)yAddr;
@@ -96,12 +112,44 @@ static uint32_t brightLuma(uint32_t yAddr, uint16_t w, uint16_t h) {
 	return 255;
 }
 
+/**
+ * @brief Write a 16-bit sensor register as two 8-bit writes (big-endian).
+ *
+ * Same call sequence the camreg command uses (hx_drv_cis_set_reg(addr, val, 0)).
+ *
+ * @param regH  address of the high byte register (low byte is regH + 1)
+ * @param value 16-bit value to write
+ */
 static void writeReg16(uint16_t regH, uint16_t value) {
-	// hx_drv_cis_set_reg(addr, val, 0) - same call the camreg command uses
 	hx_drv_cis_set_reg(regH, (uint8_t)((value >> 8) & 0xFF), 0);
 	hx_drv_cis_set_reg((uint16_t)(regH + 1), (uint8_t)(value & 0xFF), 0);
 }
 
+/*********************************************** Global Function Definitions *********************************/
+
+/**
+ * @brief Reset AE state to the sensor's table defaults.
+ *
+ * Call after a full sensor init (cisdp_sensor_init(true)) - the registers
+ * have just reverted, so the loop must restart from the table values.
+ */
+void ae_notifySensorInit(void) {
+	// Registers just reverted to the init tables (+ any camreg staged file)
+	curExposure = AE_EXPOSURE_DEFAULT;
+	curGainCode = 0;
+	stepsThisWake = 0;
+}
+
+/**
+ * @brief Measure the frame and adjust exposure/gain toward the target.
+ *
+ * Call from the image task on FRAME_READY, before the next capture is armed.
+ *
+ * @param yAddr address of the Y plane (demosaic output, w*h bytes)
+ * @param w     frame width
+ * @param h     frame height
+ * @return true if a register adjustment was made (next frame will differ)
+ */
 bool ae_process(uint32_t yAddr, uint16_t w, uint16_t h) {
 	if (fatfs_getOperationalParameter(OP_PARAMETER_CAM_AE_ENABLE) == 0) {
 		return false;

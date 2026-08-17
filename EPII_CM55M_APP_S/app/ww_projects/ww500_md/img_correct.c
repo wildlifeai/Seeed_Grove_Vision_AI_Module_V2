@@ -16,6 +16,8 @@
  * on the CPU. YUV420 is JPEG-native, so this is just DCT + quantise + Huffman.
  */
 
+/*********************************************** Includes ****************************************************/
+
 #include <stdint.h>
 #include <stdbool.h>
 #include <string.h>
@@ -29,6 +31,8 @@
 
 #include "sw_jpeg.h"
 #include "img_correct.h"
+
+/*********************************************** Local Defines **********************************************/
 
 // JPEG quality for the re-encode (1..100). ~85 gives good quality at a size
 // comparable to the hardware encoder's 4x table.
@@ -45,6 +49,34 @@
 // x256 rescale that restores full range after subtraction: 256*255/(255-16)
 #define BLACK_LEVEL			16
 #define BLACK_RESCALE_Q8	273
+
+// Warmth bias so "balanced" matches the phone reference rendering rather than
+// strict grey: measured target on the bright quartile is G/R ~ 0.94 (red a
+// touch above green) and G/B ~ 1.06 (blue a touch below). x256 fixed point.
+#define WB_AUTO_R_BIAS_Q8	271		// 1.06: red ends ~6% above grey-world
+#define WB_AUTO_B_BIAS_Q8	242		// 0.94: blue ends ~6% below grey-world
+#define WB_AUTO_GAIN_MIN	230		// 0.9x  - clamp band from the imx708.json
+#define WB_AUTO_GAIN_MAX	640		// 2.5x    CT-curve endpoints, with margin
+#define WB_AUTO_PEDESTAL	16		// sensor black pedestal, subtracted first
+
+/*********************************************** Local Types ************************************************/
+
+
+/*********************************************** External Function Declarations ******************************/
+
+// Provided by the active cis_sensor/cisdp_sensor.c
+extern uint32_t app_get_raw_addr(void);
+extern uint32_t app_get_raw_width(void);
+extern uint32_t app_get_raw_height(void);
+extern uint32_t app_get_jpeg_addr(void);
+extern uint32_t app_get_jpeg_sz(void);
+
+/*********************************************** Local Variables ********************************************/
+
+// Valid when the last capture was corrected + re-encoded
+static bool corrected_valid;
+static uint32_t corrected_size;
+static uint32_t corrected_addr;
 
 // 4640 K colour correction matrix, Q8.8, rows renormalised to sum 256.
 // (Daylight-ish; good general default. CCT-switched blending is Phase C3.)
@@ -76,30 +108,29 @@ static const uint8_t GAMMA_LUT[256] = {
 	247, 248, 248, 249, 249, 250, 250, 251, 251, 252, 252, 253, 253, 254, 254, 255,
 };
 
-/*************************************** Local variables *********************/
+/*********************************************** Local Function Declarations *********************************/
 
-// Valid when the last capture was corrected + re-encoded
-static bool corrected_valid;
-static uint32_t corrected_size;
-static uint32_t corrected_addr;
+static void wb_apply_yuv420(uint8_t *yuv, uint32_t w, uint32_t h,
+							uint16_t rGain, uint16_t bGain);
+static void wb_measure_yuv420(const uint8_t *yuv, uint32_t w, uint32_t h,
+							  uint32_t *rMean, uint32_t *gMean, uint32_t *bMean);
+static bool wb_auto_gains(const uint8_t *yuv, uint32_t w, uint32_t h,
+						  uint16_t *rGainQ8, uint16_t *bGainQ8);
 
-/*************************************** Buffer accessors ********************/
-
-// Provided by the active cis_sensor/cisdp_sensor.c
-extern uint32_t app_get_raw_addr(void);
-extern uint32_t app_get_raw_width(void);
-extern uint32_t app_get_raw_height(void);
-extern uint32_t app_get_jpeg_addr(void);
-extern uint32_t app_get_jpeg_sz(void);
-
-/*************************************** White balance ***********************/
+/*********************************************** Local Function Definitions *********************************/
 
 /**
- * Apply per-channel white-balance gains to a planar YUV420 image, in place.
+ * @brief Apply per-channel white-balance gains to a planar YUV420 image, in place.
  *
  * For each 2x2 luma block (sharing one Cb,Cr): convert to RGB (JPEG
  * full-range BT.601), scale R and B by the Q8.8 gains, convert back.
  * All arithmetic is integer; coefficients are the standard x256 values.
+ *
+ * @param yuv   planar YUV420 buffer, modified in place.
+ * @param w     frame width.
+ * @param h     frame height.
+ * @param rGain red gain, Q8.8 (256 = 1.0x).
+ * @param bGain blue gain, Q8.8 (256 = 1.0x).
  */
 static void wb_apply_yuv420(uint8_t *yuv, uint32_t w, uint32_t h,
 							uint16_t rGain, uint16_t bGain) {
@@ -189,20 +220,17 @@ static void wb_apply_yuv420(uint8_t *yuv, uint32_t w, uint32_t h,
 	}
 }
 
-/*************************************** Auto white balance ******************/
-
-// Warmth bias so "balanced" matches the phone reference rendering rather than
-// strict grey: measured target on the bright quartile is G/R ~ 0.94 (red a
-// touch above green) and G/B ~ 1.06 (blue a touch below). x256 fixed point.
-#define WB_AUTO_R_BIAS_Q8	271		// 1.06: red ends ~6% above grey-world
-#define WB_AUTO_B_BIAS_Q8	242		// 0.94: blue ends ~6% below grey-world
-#define WB_AUTO_GAIN_MIN	230		// 0.9x  - clamp band from the imx708.json
-#define WB_AUTO_GAIN_MAX	640		// 2.5x    CT-curve endpoints, with margin
-#define WB_AUTO_PEDESTAL	16		// sensor black pedestal, subtracted first
-
 /**
- * Grey-world measurement: subsampled RGB means of the YUV420 frame.
+ * @brief Grey-world measurement: subsampled RGB means of the YUV420 frame.
+ *
  * Samples every 4th chroma column of every 4th chroma row (1/16 of blocks).
+ *
+ * @param yuv   planar YUV420 buffer.
+ * @param w     frame width.
+ * @param h     frame height.
+ * @param rMean overwritten with the sampled mean R.
+ * @param gMean overwritten with the sampled mean G.
+ * @param bMean overwritten with the sampled mean B.
  */
 static void wb_measure_yuv420(const uint8_t *yuv, uint32_t w, uint32_t h,
 							  uint32_t *rMean, uint32_t *gMean, uint32_t *bMean) {
@@ -223,6 +251,8 @@ static void wb_measure_yuv420(const uint8_t *yuv, uint32_t w, uint32_t h,
 			int32_t cb = (int32_t)u[cx] - 128;
 			int32_t cr = (int32_t)v[cx] - 128;
 
+			// CGP - where are these magic numbers from?
+			// Probably: YUV to RGB conversion
 			int32_t R = Y + ((359 * cr) >> 8);
 			int32_t G = Y - ((88 * cb + 183 * cr) >> 8);
 			int32_t B = Y + ((454 * cb) >> 8);
@@ -243,12 +273,21 @@ static void wb_measure_yuv420(const uint8_t *yuv, uint32_t w, uint32_t h,
 }
 
 /**
- * Compute warmth-biased grey-world gains for the current frame.
- * Returns false if the frame is too dark to measure reliably.
+ * @brief Compute warmth-biased grey-world gains for the current frame.
+ *
+ * Calls wb_measure_yuv420() to measure average colour of the image.
+ *
+ * @param yuv     planar YUV420 buffer.
+ * @param w       frame width.
+ * @param h       frame height.
+ * @param rGainQ8 overwritten with the computed red gain, Q8.8.
+ * @param bGainQ8 overwritten with the computed blue gain, Q8.8.
+ * @return false if the frame is too dark to measure reliably.
  */
 static bool wb_auto_gains(const uint8_t *yuv, uint32_t w, uint32_t h,
 						  uint16_t *rGainQ8, uint16_t *bGainQ8) {
 	uint32_t rM, gM, bM;
+	// measure average colour of the image.
 	wb_measure_yuv420(yuv, w, h, &rM, &gM, &bM);
 
 	// Pedestal-correct; if the scene is essentially black, don't guess
@@ -259,6 +298,7 @@ static bool wb_auto_gains(const uint8_t *yuv, uint32_t w, uint32_t h,
 		return false;
 	}
 
+	// Calculate red and blue gains (TODO - explain how)
 	uint32_t rGain = (WB_AUTO_R_BIAS_Q8 * gM) / rM;
 	uint32_t bGain = (WB_AUTO_B_BIAS_Q8 * gM) / bM;
 	if (rGain < WB_AUTO_GAIN_MIN) rGain = WB_AUTO_GAIN_MIN;
@@ -275,42 +315,24 @@ static bool wb_auto_gains(const uint8_t *yuv, uint32_t w, uint32_t h,
 	return true;
 }
 
-/*************************************** Public API **************************/
+/*********************************************** Global Function Definitions *********************************/
 
-bool img_correct_process_mode(uint8_t mode, uint16_t rManualQ8, uint16_t bManualQ8,
-							  bool flashLit) {
-	if (mode == IMG_CORRECT_MODE_OFF) {
-		corrected_valid = false;
-		return false;
-	}
-	if (mode == IMG_CORRECT_MODE_AUTO && !flashLit) {
-		uint32_t yuvAddr = app_get_raw_addr();
-		uint32_t w = app_get_raw_width();
-		uint32_t h = app_get_raw_height();
-		uint16_t rAuto, bAuto;
-
-		if ((yuvAddr != 0) && (w != 0) && (h != 0)) {
-			// The frame is DMA-written; refresh the CPU's view before measuring
-			SCB_InvalidateDCache_by_Addr((void *)yuvAddr, (int32_t)((w * h * 3) / 2));
-			if (wb_auto_gains((const uint8_t *)yuvAddr, w, h, &rAuto, &bAuto)) {
-				return img_correct_process(rAuto, bAuto);
-			}
-		}
-		// Too dark / no buffer: fall through to the manual gains
-	}
-	// Manual mode, flash-lit frame (spectrum differs - keep it predictable),
-	// or auto measurement failed
-	return img_correct_process(rManualQ8, bManualQ8);
-}
-
+/**
+ * @brief Colour-correct the current capture and re-encode it to JPEG.
+ *
+ * Gain 0 disables correction entirely -> the hardware sensor-path JPEG is
+ * saved (this is the "no software encoding" case). Any non-zero gain runs
+ * the software path: unity (256) re-encodes with no colour change - useful
+ * for comparing the software encoder against the hardware one on identical
+ * content - and larger gains apply white balance.
+ *
+ * @param rGainQ8 red gain, Q8.8 (256 = 1.0x); 0 disables correction.
+ * @param bGainQ8 blue gain, Q8.8 (256 = 1.0x); 0 disables correction.
+ * @return true if the frame was corrected and re-encoded.
+ */
 bool img_correct_process(uint16_t rGainQ8, uint16_t bGainQ8) {
 	corrected_valid = false;
 
-	// Gain 0 disables correction entirely -> the hardware sensor-path JPEG is
-	// saved (this is the "no software encoding" case). Any non-zero gain runs
-	// the software path: unity (256) re-encodes with no colour change - useful
-	// for comparing the software encoder against the hardware one on identical
-	// content - and larger gains apply white balance.
 	if ((rGainQ8 == 0) || (bGainQ8 == 0)) {
 		return false;
 	}
@@ -360,6 +382,53 @@ bool img_correct_process(uint16_t rGainQ8, uint16_t bGainQ8) {
 	return true;
 }
 
+/**
+ * @brief Mode-dispatching wrapper around img_correct_process().
+ *
+ * AUTO measures the frame and applies the computed gains; falls back to the
+ * manual gains for flash-lit frames, frames too dark to measure, or if
+ * measurement is unavailable.
+ *
+ * @param mode       IMG_CORRECT_MODE_x.
+ * @param rManualQ8  manual red gain, Q8.8, used for MANUAL mode or as an AUTO fallback.
+ * @param bManualQ8  manual blue gain, Q8.8, used for MANUAL mode or as an AUTO fallback.
+ * @param flashLit   true if the frame was captured with the IR/flash lit.
+ * @return true if the frame was corrected and re-encoded.
+ */
+bool img_correct_process_mode(uint8_t mode, uint16_t rManualQ8, uint16_t bManualQ8,
+							  bool flashLit) {
+	if (mode == IMG_CORRECT_MODE_OFF) {
+		corrected_valid = false;
+		return false;
+	}
+	if (mode == IMG_CORRECT_MODE_AUTO && !flashLit) {
+		uint32_t yuvAddr = app_get_raw_addr();
+		uint32_t w = app_get_raw_width();
+		uint32_t h = app_get_raw_height();
+		uint16_t rAuto, bAuto;
+
+		if ((yuvAddr != 0) && (w != 0) && (h != 0)) {
+			// The frame is DMA-written; refresh the CPU's view before measuring
+			SCB_InvalidateDCache_by_Addr((void *)yuvAddr, (int32_t)((w * h * 3) / 2));
+			if (wb_auto_gains((const uint8_t *)yuvAddr, w, h, &rAuto, &bAuto)) {
+				return img_correct_process(rAuto, bAuto);
+			}
+		}
+		// Too dark / no buffer: fall through to the manual gains
+	}
+	// Manual mode, flash-lit frame (spectrum differs - keep it predictable),
+	// or auto measurement failed
+	return img_correct_process(rManualQ8, bManualQ8);
+}
+
+/**
+ * @brief If the last capture was corrected and re-encoded, overwrite *size and
+ * *addr with the corrected JPEG's size and address; otherwise leave them
+ * untouched.
+ *
+ * @param size Overwritten with the corrected JPEG size when available.
+ * @param addr Overwritten with the corrected JPEG address when available.
+ */
 void img_correct_get_jpeg(uint32_t *size, uint32_t *addr) {
 	if (corrected_valid) {
 		*size = corrected_size;

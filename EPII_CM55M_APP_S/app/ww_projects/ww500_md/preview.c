@@ -23,6 +23,8 @@
  * +33% for base64, so expect roughly 1.5-2.5 fps from 'capture 1000 0'.
  */
 
+/*********************************************** Includes ****************************************************/
+
 #include <stdint.h>
 #include <stdbool.h>
 
@@ -33,6 +35,8 @@
 #include "img_correct.h"	// img_correct_get_jpeg()
 #include "preview.h"
 
+/*********************************************** Local Defines **********************************************/
+
 // A VGA JPEG should be well under this; anything bigger means the JPEG
 // info is implausible and the frame is skipped rather than streamed.
 #define PREVIEW_MAX_JPEG_BYTES	(200 * 1024)
@@ -41,33 +45,28 @@
 // occur at the very end of the frame.
 #define PREVIEW_CHUNK_IN	510
 
+/*********************************************** Local Types ************************************************/
+
+
+/*********************************************** Local Variables ********************************************/
+
 static volatile PREVIEW_MODE_E previewMode = PREVIEW_OFF;
 static uint32_t frameCount = 0;
 
 static const char BASE64_CHARS[] =
 		"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
-void preview_setMode(PREVIEW_MODE_E mode) {
-	previewMode = mode;
-	if (mode == PREVIEW_OFF) {
-		frameCount = 0;
-	}
-}
+/*********************************************** Local Function Declarations *********************************/
 
-PREVIEW_MODE_E preview_getMode(void) {
-	return previewMode;
-}
+static void sendBase64(const uint8_t *data, uint32_t length);
 
-bool preview_isActive(void) {
-	return (previewMode != PREVIEW_OFF);
-}
-
-bool preview_skipsFileSave(void) {
-	return (previewMode == PREVIEW_STREAM);
-}
+/*********************************************** Local Function Definitions *********************************/
 
 /**
- * Base64-encode data and write it to the console in chunks.
+ * @brief Base64-encode data and write it to the console in chunks.
+ *
+ * @param data   bytes to encode.
+ * @param length number of bytes in data.
  */
 static void sendBase64(const uint8_t *data, uint32_t length) {
 	// 4 output chars per 3 input bytes, + NUL
@@ -110,6 +109,59 @@ static void sendBase64(const uint8_t *data, uint32_t length) {
 	}
 }
 
+/*********************************************** Global Function Definitions *********************************/
+
+/**
+ * @brief Set the preview mode. Takes effect from the next captured frame.
+ *
+ * @param mode PREVIEW_MODE_E to switch to.
+ */
+void preview_setMode(PREVIEW_MODE_E mode) {
+	previewMode = mode;
+	if (mode == PREVIEW_OFF) {
+		frameCount = 0;
+	}
+}
+
+/**
+ * @brief Get the current preview mode.
+ *
+ * @return Current PREVIEW_MODE_E.
+ */
+PREVIEW_MODE_E preview_getMode(void) {
+	return previewMode;
+}
+
+/**
+ * @brief True when frames should be streamed (mode 1 or 2).
+ *
+ * @return true if preview streaming is active.
+ */
+bool preview_isActive(void) {
+	return (previewMode != PREVIEW_OFF);
+}
+
+/**
+ * @brief True when preview wants the SD file save skipped (mode 1).
+ *
+ * @return true if the SD card save should be skipped.
+ */
+bool preview_skipsFileSave(void) {
+	return (previewMode == PREVIEW_STREAM);
+}
+
+/**
+ * @brief Emit the JPEG of the capture just completed as one JSON line on the
+ * console UART.
+ *
+ * Call from the image task once the frame is ready - after
+ * img_correct_process() has run, so the streamed image is the same one
+ * prepareJpegFile() would save (WB-corrected sw_jpeg output when the
+ * correction ran, otherwise the hardware encoder output).
+ *
+ * Blocks the calling task for the duration of the UART write
+ * (a VGA JPEG takes roughly 300-600 ms at 921600 baud).
+ */
 void preview_sendFrame(void) {
 	uint32_t jpegLength = 0;
 	uint32_t jpegBuffer = 0;

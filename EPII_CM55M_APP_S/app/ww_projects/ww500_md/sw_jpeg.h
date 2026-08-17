@@ -15,17 +15,31 @@
 #ifndef SW_JPEG_H_
 #define SW_JPEG_H_
 
+/*********************************************** Includes ****************************************************/
+
 #include <stdint.h>
 
+/*********************************************** Global Defines **********************************************/
+
+
+/*********************************************** Global Types ************************************************/
+
+
+/*********************************************** Global Variables ********************************************/
+
+
+/*********************************************** Global Function Declarations *********************************/
+
 /**
- * Encode a planar YUV420 image to a baseline JFIF/JPEG bitstream.
+ * @brief Encode a planar YUV420 image to a baseline JFIF/JPEG bitstream.
  *
  * Plane layout at yuv: Y (w*h), then Cb (w/2 * h/2), then Cr (w/2 * h/2).
  * w and h should be multiples of 16 (the 4:2:0 MCU size); other sizes are
  * handled by edge replication.
  *
  * @param yuv      planar YUV420 source
- * @param w,h      image dimensions in pixels
+ * @param w        image width in pixels
+ * @param h        image height in pixels
  * @param out      output buffer for the JPEG
  * @param outCap   capacity of out in bytes
  * @param quality  1..100 (higher = better quality / larger file)

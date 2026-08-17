@@ -29,30 +29,51 @@
 #ifndef CAMERA_SWITCH_H_
 #define CAMERA_SWITCH_H_
 
+/*********************************************** Includes ****************************************************/
+
 #include <stdint.h>
 #include <stdbool.h>
 
+/*********************************************** Global Defines **********************************************/
+
+
+/*********************************************** Global Types ************************************************/
+
+
+/*********************************************** Global Variables ********************************************/
+
+
+/*********************************************** Global Function Declarations *********************************/
+
 /**
- * The camera variant this firmware was built as (XIP_SLOT_VARIANT_x).
+ * @brief The camera variant this firmware was built as.
+ *
+ * @return XIP_SLOT_VARIANT_x for this build.
  */
 uint8_t cameraSwitch_thisVariant(void);
 
 /**
- * Human-readable name for a variant value. Never returns NULL.
+ * @brief Human-readable name for a variant value. Never returns NULL.
+ *
+ * @param variant XIP_SLOT_VARIANT_x value.
+ * @return Human-readable name for the variant.
  */
 const char * cameraSwitch_variantName(uint8_t variant);
 
 /**
- * Record this image's variant against the currently active slot.
+ * @brief Record this image's variant against the currently active slot.
+ *
  * Cheap when already recorded (no flash write). Call once per wake cycle.
  */
 void cameraSwitch_labelBootSlot(void);
 
 /**
- * Automatic switching check - call after each AE light-level decision.
+ * @brief Automatic switching check - call after each AE light-level decision.
+ *
  * When OP_PARAMETER_SLOT_SWITCH == 1 and the light wants the other camera
  * variant, switches the boot slot and schedules a reset at the next sleep.
- * Returns true if a switch was scheduled.
+ *
+ * @return true if a switch was scheduled.
  */
 bool cameraSwitch_autoSwitchCheck(void);
 

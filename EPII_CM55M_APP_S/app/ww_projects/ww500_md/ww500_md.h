@@ -96,6 +96,7 @@ uint32_t app_getElapsedMs(TickType_t startTime);
 
 void app_onInactivityDetection(void);
 
+// sets a flag so we reset instead of entering DPD
 void app_setResetRequest(bool resetPlease);
 
 bool app_getResetRequest(void);

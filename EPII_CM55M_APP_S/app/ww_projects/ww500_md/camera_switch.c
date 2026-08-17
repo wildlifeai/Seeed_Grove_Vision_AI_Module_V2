@@ -21,7 +21,7 @@
 #include "ww500_md.h"
 
 /**
- * The camera variant this firmware was built as.
+ * The camera this firmware was built for.
  */
 uint8_t cameraSwitch_thisVariant(void) {
 // USE_RP3 and USE_HM0360 are mutually exclusive in ww500_md.mk (RP3 builds
@@ -107,24 +107,30 @@ bool cameraSwitch_autoSwitchCheck(void) {
 		return false;
 	}
 
+	// Switch firmware image slots so the other image is used when we wake from sleep
 	int newSlot = xip_switch_slot();
+
 	if (newSlot < 0) {
 		xprintf("Auto camera switch failed (%d)\n", newSlot);
 		return false;
 	}
 
 	switchScheduled = true;
-	app_setResetRequest(true);	// reboot into the other image at the next sleep
+
+	// Then we will reboot into the other image
+	// Sets a flag so we do a cold-boot reset instead of entering DPD (leave via a warm-boot).
+	app_setResetRequest(true);
+
 	xprintf("Auto camera switch: light is %s -> slot %d ('%s'). Reset scheduled.\n",
 			dark ? "DARK" : "BRIGHT", newSlot, cameraSwitch_variantName(wanted));
 	return true;
 }
 
 /**
- * Record this image's variant against the currently active slot.
+ * Potentially, update Firmware Image Slot Selector with meta data (the selected camera).
  *
- * xip_set_slot_variant() only writes flash when the label changes, so this is
- * cheap to call on every wake cycle.
+ * This is done only once (maximum) when a new firmware image is booted for the first time.
+ *
  */
 void cameraSwitch_labelBootSlot(void) {
 	int activeSlot;
@@ -133,19 +139,23 @@ void cameraSwitch_labelBootSlot(void) {
 
 	variant = cameraSwitch_thisVariant();
 	if (variant == XIP_SLOT_VARIANT_UNKNOWN) {
-		return;		// build variant does not participate in camera switching
+		return;
 	}
 
-	// Failures below are LOUD and retried once: a missed label strands the
-	// app's camera switching on 'unknown' until this image happens to boot
-	// again. Seen once in the field: the label write was silently lost during
-	// the brief mid-update boot of a dual-image firmware update.
 	activeSlot = xip_get_active_slot();
 	if (activeSlot < 0) {
 		xprintf("labelBootSlot: cannot read active slot - variant label NOT written\n");
 		return;
 	}
 
+	// xip_set_slot_variant() Updates Firmware Image Slot Selector with only when the camera changes,
+	// so this is cheap to call on every wake cycle. This should be only once (maximum) when
+	// a new firmware image is first booted.
+	//
+	// Failures below are LOUD and retried once: a missed label strands the
+	// app's camera switching on 'unknown' until this image happens to boot
+	// again. Seen once in the field: the label write was silently lost during
+	// the brief mid-update boot of a dual-image firmware update.
 	result = xip_set_slot_variant((uint8_t) activeSlot, variant);
 	if (result != 0) {
 		xprintf("labelBootSlot: slot %c label write failed (%d) - retrying once\n",

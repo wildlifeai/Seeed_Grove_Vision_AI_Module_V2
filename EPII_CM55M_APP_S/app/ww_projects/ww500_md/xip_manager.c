@@ -50,6 +50,7 @@
 #include "image_task.h"
 #include "printf_x.h"
 #include "xip_manager.h"
+#include "camera_switch.h"
 
 /*************************************** Definitions *******************************************/
 
@@ -123,6 +124,26 @@
 // Magic word for ModelMetaData validation ("LABL")
 #define LABEL_MAGIC             0x4C41424C
 
+
+/*
+ * Wildlife Watcher slot metadata, stored in the spare (0xFF) bytes of the slot
+ * selector sector after the bootloader's 20-byte header. The bootloader only
+ * reads its own header, so this record is invisible to it.
+ *
+ * Records which camera variant (XIP_SLOT_VARIANT_x) each firmware slot holds,
+ * so the day/night automatic camera switch can verify that the other slot
+ * really contains the wanted variant before flipping the selector.
+ */
+#define SLOT_META_OFFSET    32          // byte offset within the selector sector (word-aligned)
+#define SLOT_META_MAGIC     "WWSM"
+
+/*
+ * First word of a programmed firmware slot: the secure-boot container magic
+ * ("ckBS" bytes = 0x53426B63 read as a little-endian word). An erased slot
+ * reads 0xFFFFFFFF.
+ */
+#define SB_CONTAINER_MAGIC  0x53426B63u
+
 /*************************************** Type definitions **************************************/
 
 /*
@@ -143,17 +164,6 @@ typedef struct {
     uint16_t checksum;       // 0x4D04 (Slot A) or 0x167C (Slot B)
 } SlotSelectorHeader;
 
-/*
- * Wildlife Watcher slot metadata, stored in the spare (0xFF) bytes of the slot
- * selector sector after the bootloader's 20-byte header. The bootloader only
- * reads its own header, so this record is invisible to it.
- *
- * Records which camera variant (XIP_SLOT_VARIANT_x) each firmware slot holds,
- * so the day/night automatic camera switch can verify that the other slot
- * really contains the wanted variant before flipping the selector.
- */
-#define SLOT_META_OFFSET    32          // byte offset within the selector sector (word-aligned)
-#define SLOT_META_MAGIC     "WWSM"
 
 // aligned(4): instances are cast to (uint32_t *) for the word-based SPI EEPROM
 // API, but the members alone would only guarantee byte alignment
@@ -163,12 +173,6 @@ typedef struct {
     uint8_t reserved[2];    // keeps the record a whole number of words
 } __attribute__((aligned(4))) SlotMetaRecord;
 
-/*
- * First word of a programmed firmware slot: the secure-boot container magic
- * ("ckBS" bytes = 0x53426B63 read as a little-endian word). An erased slot
- * reads 0xFFFFFFFF.
- */
-#define SB_CONTAINER_MAGIC  0x53426B63u
 
 /*************************************** Local variables *************************************/
 
@@ -315,6 +319,7 @@ static int init_flash(void) {
         return 0;
     }
 
+    // TODO - move xSPIMutex creation to ifTask_createTask()?
     if (xSPIMutex == NULL) {
         // xip_manager_preinit() was not called - fall back to lazy creation.
         // This is only safe before the scheduler starts (single-threaded).
@@ -378,6 +383,7 @@ static int init_flash(void) {
  *
  * Must be called from app_main() (single-threaded context) so that the
  * lazy mutex creation in init_flash() can never race between two tasks.
+ * // TODO - move xSPIMutex creation to ifTask_createTask()?
  */
 void xip_manager_preinit(void) {
     if (xSPIMutex == NULL) {
@@ -880,6 +886,10 @@ bool xip_copy_model_from_sd_to_flash(char *filename) {
 /**
  * Build a ModelMetaData record from the model name and the label file on
  * the SD card, then write it to the start of the model flash area.
+ *
+ *  * NOTE: there is also other metadata in the Firmware Image Slot Selector
+ * - the camera type used by each firmware slot.
+ *
  */
 bool xip_copy_metadata_to_flash(char *modelName) {
     ModelMetaData metaDataRam;
@@ -1470,10 +1480,12 @@ static int write_slot_selector(uint8_t slot) {
     if (slot == 0) {
         hdr.flash_offset = FLASH_SLOT_A_ADDR;
         hdr.checksum     = SLOT_A_SELECTOR_CHECKSUM;
-    } else if (slot == 1) {
+    }
+    else if (slot == 1) {
         hdr.flash_offset = FLASH_SLOT_B_ADDR;
         hdr.checksum     = SLOT_B_SELECTOR_CHECKSUM;
-    } else {
+    }
+    else {
         xprintf("write_slot_selector: invalid slot %d\n", slot);
         return -1;
     }
@@ -1534,8 +1546,10 @@ static int read_slot_meta(SlotMetaRecord *meta) {
 }
 
 /**
- * Erase the selector sector then write the bootloader header and the Wildlife
- * Watcher metadata record. The caller must have called init_flash().
+ * Erase the Firmware Image Slot Selector then write the bootloader header and the Wildlife
+ * Watcher metadata record.
+ *
+ * The caller must have called init_flash().
  */
 static int write_selector_sector(const SlotSelectorHeader *hdr, const SlotMetaRecord *meta) {
     // Local copies: the SPI write API takes non-const pointers
@@ -1653,7 +1667,7 @@ int xip_get_active_slot(void) {
 }
 
 /**
- * Read the camera variant label recorded for a slot.
+ * Read the camera in use by a slot.
  *
  * @param slot  0 or 1
  * @return XIP_SLOT_VARIANT_x, or -1 on failure
@@ -1675,8 +1689,16 @@ int xip_get_slot_variant(uint8_t slot) {
 }
 
 /**
- * Record the camera variant label for a slot. Only rewrites the selector
- * sector if the label actually changes.
+ * Updates Firmware Image Slot Selector with meta data
+ * (the camera supported by one firmware slot)
+ *
+ * Only rewrites the selector sector if the label actually changes.
+ *
+ * Called by xip_update_firmware_from_sd() - set to XIP_SLOT_VARIANT_UNKNOWN when a new image is programmed.
+ * Called by cameraSwitch_labelBootSlot() - set to actual camera when image Task starts (during cold boot only)
+ *
+ * Typical output:
+ * 	Slot B labelled variant 2 = RP3 (day/colour)
  *
  * @param slot     0 or 1
  * @param variant  XIP_SLOT_VARIANT_x
@@ -1711,13 +1733,15 @@ int xip_set_slot_variant(uint8_t slot, uint8_t variant) {
         return -2;
     }
 
-    xprintf("Slot %c labelled variant %d\n", (slot == 0) ? 'A' : 'B', variant);
+    xprintf("Slot %c labelled variant %d = %s\n",
+    		(slot == 0) ? 'A' : 'B', variant, cameraSwitch_variantName(variant));
 
     return 0;
 }
 
 /**
- * Point the bootloader at the other firmware slot, WITHOUT writing any image.
+ * Point the bootloader at the other firmware slot
+ *
  * Used for day/night camera switching when both slots already hold images.
  *
  * Refuses to switch if the target slot does not start with the secure-boot
@@ -1757,6 +1781,7 @@ int xip_switch_slot(void) {
     if (!disable_xip()) {
         return -1;
     }
+
     int ret = hx_lib_spi_eeprom_word_read(spi_inst, slot_base + FLASH_APP_OFFSET,
                                           &magic, sizeof(magic));
     enable_xip();
@@ -1765,12 +1790,15 @@ int xip_switch_slot(void) {
         xprintf("switch_slot: SPI read failed\n");
         return -1;
     }
+
+    // Check if the firmware image appears valid by checking the first 4 bytes
     if (magic != SB_CONTAINER_MAGIC) {
         xprintf("switch_slot: slot %d has no image (first word 0x%08x) - not switching\n",
                 target_slot, (unsigned)magic);
         return -2;
     }
 
+    // This is where we switch firmware images for the next boot.
     if (write_slot_selector((uint8_t)target_slot) != 0) {
         return -3;
     }

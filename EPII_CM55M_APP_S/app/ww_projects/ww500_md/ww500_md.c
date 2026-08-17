@@ -797,6 +797,7 @@ int app_main(void){
 	// Create the flash SPI mutex while still single-threaded, so the first
 	// two flash users (e.g. image task model load vs a console 'slots'
 	// command) cannot race the SPI controller initialisation.
+	// TODO - move xSPIMutex creation to ifTask_createTask()?
 	xip_manager_preinit();
 
 	xprintf("Initialising FreeRTOS tasks\n");

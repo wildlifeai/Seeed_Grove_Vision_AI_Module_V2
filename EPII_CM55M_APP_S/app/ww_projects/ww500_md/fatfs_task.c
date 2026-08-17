@@ -1240,8 +1240,6 @@ FRESULT save_configuration(const char *filename, directoryManager_t *dirManager)
 		dirManager->configRes = res;
 	}
 
-
-
 	return dirManager->configRes;
 }
 

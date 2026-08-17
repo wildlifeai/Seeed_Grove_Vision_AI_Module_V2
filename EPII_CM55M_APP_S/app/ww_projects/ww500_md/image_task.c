@@ -89,6 +89,9 @@
 #define ENABLE_EXIF_CONFIDENCE
 #endif // USE_PERCENTAGE
 
+// Code proposed by Claude - I don't think it works. Consider deleting it
+#define WDTIMOUTFIX
+
 /* Experiment in controlling multiple images captures and LED flash for the HM0360
  * using 2 compiler switches:
  *
@@ -240,6 +243,8 @@ static uint32_t g_frames_total;
 static uint32_t g_timer_period; // Interval between pictures in ms
 static bool g_wdt_event; 		// A watchdog timer event occurred while waiting for FRAME_READY
 
+#ifdef WDTIMOUTFIX
+
 // The first frame after a fresh sensor start sometimes never arrives (a WDT
 // timeout instead of FRAME_READY - see the "Known problems" note above). Rather
 // than tear the camera down and give up (which loses the capture request and,
@@ -247,6 +252,7 @@ static bool g_wdt_event; 		// A watchdog timer event occurred while waiting for 
 // capture is dropped), restart the sensor in place and try again a few times.
 #define MAX_CAPTURE_RETRIES 3
 static uint8_t g_capture_retries;	// in-place retries used for the current capture
+#endif // WDTIMOUTFIX
 
 // True when this wake exists only to sample the light level (AE registers) for
 // the flash decision: capture one frame, read the AE registers, save nothing.
@@ -627,7 +633,9 @@ static APP_MSG_DEST_T handleEventForInit(APP_MSG_T img_recv_msg) {
         else  {
             g_captures_to_take = requested_captures;
             g_timer_period = requested_period;
+#ifdef WDTIMOUTFIX
             g_capture_retries = 0;	// fresh capture sequence
+#endif // WDTIMOUTFIX
             XP_LT_GREEN
 			xprintf("Images to capture: %d\n", g_captures_to_take);
             xprintf("Interval: %dms\n", g_timer_period);
@@ -764,9 +772,9 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
 
     case APP_MSG_IMAGETASK_FRAME_READY:
         // Here when the image sub-system has captured an image - via os_app_dplib_cb() callback.
-
+#ifdef WDTIMOUTFIX
         g_capture_retries = 0;	// a frame arrived: clear the in-place retry counter
-
+#endif // WDTIMOUTFIX
         g_cur_jpegenc_frame++; // The number in this sequence
         g_frames_total++;      // The number since the start of time.
 
@@ -850,6 +858,7 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
         // Only pay the sampling cost when something consumes the decision:
         // the AE-driven flash (op13) or automatic camera switching (op26).
         bool cameraSwitchScheduled = false;
+
         if ((ledFlashGetFlashMode() == FLASH_MODE_AE)
         		|| (fatfs_getOperationalParameter(OP_PARAMETER_SLOT_SWITCH) == 1)) {
             HM0360_AE_STATS_T aeStats;
@@ -1045,6 +1054,7 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
         		event, app_getElapsedMs(startTime));
         XP_WHITE;
 
+#ifdef WDTIMOUTFIX
         // A single frame timeout fires two events in quick succession (WDT2 then
         // WDT3). After a retry restart resets startTime, the trailing event
         // arrives with a tiny elapsed time - ignore it so it does not consume a
@@ -1089,6 +1099,12 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
         // last-resort retry (see the g_wdt_event handling before sleep).
     	g_wdt_event = true;
     	g_capture_retries = 0;
+#else
+    	// Fault detected. Prepare to enter DPD
+        dbg_printf(DBG_LESS_INFO, ">>>> TODO - re-initialise camera? <<<<\n", event);
+        g_wdt_event = true;
+#endif	// WDTIMOUTFIX
+
         configure_image_sensor(CAMERA_CONFIG_STOP); // run some sensordplib_stop functions then run HM0360_stream_off commands to the HM0360
 
         if (fatfs_mounted())  {
@@ -1527,12 +1543,20 @@ static void vImageTask(void *pvParameters) {
     xprintf("Starting Image Task\n");
     XP_WHITE;
 
-    // Record this image's camera variant against the active firmware slot, so
-    // the 'slots' command (and the app) can see what is in each slot. Done at
-    // boot (not at sleep) so the label is correct as soon as the device is
-    // queryable, and is written even if this session never reaches sleep.
-    // Cheap when already recorded (no flash write).
-    cameraSwitch_labelBootSlot();
+    // Potentially, update Firmware Image Slot Selector with meta data (the selected camera).
+    // This is done only once (maximum) when a new firmware image is booted for the first time.
+    // So we can execute this only at cold boot
+
+    if (woken == APP_WAKE_REASON_COLD) {
+    	cameraSwitch_labelBootSlot();
+        // For the record: Verbose AI generated comment follows:
+
+        // Record this image's camera variant against the active firmware slot, so
+        // the 'slots' command (and the app) can see what is in each slot. Done at
+        // boot (not at sleep) so the label is correct as soon as the device is
+        // queryable, and is written even if this session never reaches sleep.
+        // Cheap when already recorded (no flash write).
+    }
 
     // Sanity check: these are defined in cisdp_cfg.h
     // The JPEG buffer seems much larger than necessary
@@ -1902,7 +1926,7 @@ static bool configure_image_sensor(CAMERA_CONFIG_E operation) {
     		XP_WHITE;
 #ifdef STROBE_CONTROLS_FLASH
     		// The HM0360 STROBE pin drives drive the LED
-    		hm0360_md_configureStrobe(ledFlashIsActive());
+    		hm0360_md_configureStrobe((ledFlashIsActive() > 0));
 #else
     		ledFlashActivate();	// Turn on Flash LED (conditionally)
 #endif //  STROBE_CONTROLS_FLASH
@@ -2040,10 +2064,10 @@ static void sleepWhenPossible(void) {
  * @param extraBlock - structure for the second buffer
  */
 static void prepareJpegFile(int8_t * outCategories, uint8_t classCount, fileBufferInfo_t * extraBlock) {
-
 	uint32_t exifLength = 0;
 	uint32_t jpegBuffer;
 	uint32_t jpegLength;
+	static char softwareString[64];	// string for EXIF software version
 
 	// Take semaphore FIRST before modifying jpeg_exif_buf
 	// This prevents jpeg_exif_buf from being overwritten before previous write completes
@@ -2085,13 +2109,14 @@ static void prepareJpegFile(int8_t * outCategories, uint8_t classCount, fileBuff
 #else
 	exif_input.camera_model = NULL;	/* exif_builder falls back to "WW500" */
 #endif
-	static char softwareString[64];
+
 	snprintf(softwareString, sizeof(softwareString), "%s %s",
 	         app_get_board_name_string(), app_get_version_string());
+
 	exif_input.software = softwareString;
-	/* ledFlash holds the illumination decision for the current capture (AE-driven
-	 * or forced); it is stable across the capture, so it reflects this frame. */
-	exif_input.flash_fired = ledFlashIsActive() ? 1u : 0u;
+
+	// Save info about which LED was used to illuminate the current image: none, visible or IR
+	exif_input.flash_fired = ledFlashIsActive();
 
 	/* NN data: [total_bytes][count][score...] */
 	if (classCount > MAX_CLASSES) {
@@ -2170,6 +2195,7 @@ static void prepareJpegFile(int8_t * outCategories, uint8_t classCount, fileBuff
 	uint16_t wbRedNote  = 0u;	/* no software WB on the mono/IR camera */
 	uint16_t wbBlueNote = 0u;
 #endif
+
 	snprintf(maker_note, sizeof(maker_note), "%d, %d, %d, %d, %c, %u, %u, %u",
 	         gain.integration, gain.analogGain, gain.digitalGain, gain.aeMean,
 	         (gain.aeConverged == 1) ? 'Y' : 'N',
@@ -2527,6 +2553,7 @@ bool image_getEnabled(void) {
  */
 void image_sleepNow(void) {
     uint32_t timelapseDelay;
+	uint32_t aeCheckDelay = 0;	// seconds
     uint16_t mdInterval;
 
     // This wake is over - the next one starts fresh
@@ -2544,9 +2571,8 @@ void image_sleepNow(void) {
        	xprintf("Preparing HM0360 for MD:");
     	hm0360_md_prepare(cameraSystemEnabled, mdInterval); // select CONTEXT_B registers (if enabled)
 
-		if (ledFlashIsActive() && (mdInterval > 0)
-				&& (fatfs_getOperationalParameter(OP_PARAMETER_MD_FLASH_LED) != 0)
-				&& (fatfs_getOperationalParameter(OP_PARAMETER_MD_FLASH_BRIGHTNESS_PERCENT) > 0)) {
+		if ((ledFlashIsActive() > 0) && (mdInterval > 0)
+				&& (fatfs_getOperationalParameter(OP_PARAMETER_MD_FLASH_LED) != 0)) {
 			xprintf(" LED flashes.\n");
 			// While the processor sleeps, the HM0360 STROBE pin gates the LED
 			// hardware directly, using whatever LED selection and brightness are
@@ -2623,10 +2649,12 @@ void image_sleepNow(void) {
     	// saved) so the decision is fresh before the next motion-detect capture,
     	// and so the auto camera switch notices dawn/dusk without needing motion.
     	// See _Documentation/AE_Light_Sensor_Roadmap.md
-    	uint32_t aeCheckDelay = 0;	// seconds
+
+    	// TODO - consider merging/syncing the 15 minute wake for AE with a 15 minute LoRaWAN pin interval.
 
     	if (cameraSystemEnabled && ((ledFlashGetFlashMode() == FLASH_MODE_AE)
     			|| (fatfs_getOperationalParameter(OP_PARAMETER_SLOT_SWITCH) == 1))) {
+    		// OP_PARAMETER_AE_CHECK_INTERVAL is in minutes, so convert to seconds
     		aeCheckDelay = (uint32_t) fatfs_getOperationalParameter(OP_PARAMETER_AE_CHECK_INTERVAL) * 60;
     		if (aeCheckDelay > 65535) {
     			aeCheckDelay = 65535;	// the RTC alarm parameter is uint16_t seconds (~18h max)

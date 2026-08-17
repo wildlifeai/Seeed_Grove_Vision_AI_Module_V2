@@ -4,12 +4,12 @@
  * Dual-image camera switching support.
  *
  * The WW500 uses two firmware images built from the same source:
- *   - HM0360 image (USE_HM0360): mono, sees IR - used in the dark with the IR flash
- *   - RP3 image (USE_RP3, IMX708): colour, better quality - used in daylight
+ *   - HM0360 image (USE_HM0360): mono, sees IR - Typically used in the dark with the IR flash
+ *   - RP3 image (USE_RP3, IMX708): colour, better quality - Typically used in daylight
  *
- * Both images live in the two XIP flash slots (see xip_manager.c). Each image
+ * Both images (can) live in the two XIP flash slots (see xip_manager.c). Each image
  * labels its own slot at boot, so the 'slots' CLI command (and the app) can see
- * which variant is in each slot, and 'switchslot' boots the other one.
+ * which camera variant is used by the firmware each slot, and 'switchslot' boots the other one.
  *
  * Switching modes:
  *   - MANUAL (always available): the app user selects a camera and the app
@@ -33,7 +33,7 @@
 #include <stdbool.h>
 
 /**
- * The camera variant this firmware was built as (XIP_SLOT_VARIANT_x).
+ * The camera this firmware was built for.
  */
 uint8_t cameraSwitch_thisVariant(void);
 

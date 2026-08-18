@@ -22,8 +22,12 @@
 #ifndef IMG_CORRECT_H_
 #define IMG_CORRECT_H_
 
+/*********************************************** Includes ****************************************************/
+
 #include <stdint.h>
 #include <stdbool.h>
+
+/*********************************************** Global Defines **********************************************/
 
 // Neutralising gains measured on the bench (white paper, indoor light):
 // G/R = 1.119 -> red x1.119 (286/256), G/B = 1.275 -> blue x1.275 (326/256)
@@ -31,8 +35,21 @@
 #define IMG_CORRECT_BLUE_GAIN_DEFAULT	326
 #define IMG_CORRECT_GAIN_UNITY			256
 
+// WB modes for img_correct_process_mode() (op-param OP_PARAMETER_CAM_WB_MODE)
+#define IMG_CORRECT_MODE_OFF	0	// no correction, hardware sensor-path JPEG
+#define IMG_CORRECT_MODE_AUTO	1	// warmth-biased grey-world, measured per frame
+#define IMG_CORRECT_MODE_MANUAL	2	// fixed gains from op27/op28
+
+/*********************************************** Global Types ************************************************/
+
+
+/*********************************************** Global Variables ********************************************/
+
+
+/*********************************************** Global Function Declarations *********************************/
+
 /**
- * Colour-correct the current capture and re-encode it to JPEG.
+ * @brief Colour-correct the current capture and re-encode it to JPEG.
  *
  * Applies white-balance gains to the YUV420 frame in the raw (demosaic
  * output) buffer, then re-encodes it with the hardware JPEG encoder so the
@@ -49,9 +66,30 @@
 bool img_correct_process(uint16_t rGainQ8, uint16_t bGainQ8);
 
 /**
- * If the last capture was corrected and re-encoded, overwrite *size and *addr
+ * @brief Mode-dispatching wrapper around img_correct_process().
+ *
+ * AUTO measures the frame (subsampled grey-world with a warmth bias matched
+ * to the phone-reference rendering) and applies the computed gains; it falls
+ * back to the manual gains for flash-lit frames (different spectrum), frames
+ * too dark to measure, or if measurement is unavailable.
+ *
+ * @param mode       IMG_CORRECT_MODE_x.
+ * @param rManualQ8  manual red gain, Q8.8, used for MANUAL mode or as an AUTO fallback.
+ * @param bManualQ8  manual blue gain, Q8.8, used for MANUAL mode or as an AUTO fallback.
+ * @param flashLit   true if the frame was captured with the IR/flash lit.
+ * @return true if the frame was corrected and re-encoded.
+ */
+bool img_correct_process_mode(uint8_t mode, uint16_t rManualQ8, uint16_t bManualQ8,
+							  bool flashLit);
+
+/**
+ * @brief If the last capture was corrected and re-encoded, overwrite *size and *addr
  * with the corrected JPEG's size and address; otherwise leave them untouched.
+ *
  * Call from prepareJpegFile() after cisdp_get_jpginfo().
+ *
+ * @param size Overwritten with the corrected JPEG size when available.
+ * @param addr Overwritten with the corrected JPEG address when available.
  */
 void img_correct_get_jpeg(uint32_t *size, uint32_t *addr);
 

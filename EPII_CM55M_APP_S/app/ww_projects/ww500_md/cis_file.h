@@ -15,15 +15,27 @@
 #ifndef CIS_FILE_H_
 #define CIS_FILE_H_
 
+/*********************************************** Includes ****************************************************/
+
 #include <stdint.h>
 #include <stdbool.h>
 #include "hx_drv_CIS_common.h"
 #include "ff.h"  // FatFs library
 
+/*********************************************** Global Defines **********************************************/
+
 // Maximum number of register settings that can be staged by the 'camreg' CLI command.
 // Files larger than this still have all their settings applied by cis_file_process(),
 // but only the first CIS_FILE_MAX_STAGED entries can be edited/re-saved by 'camreg'.
 #define CIS_FILE_MAX_STAGED 24
+
+/*********************************************** Global Types ************************************************/
+
+
+/*********************************************** Global Variables ********************************************/
+
+
+/*********************************************** Global Function Declarations *********************************/
 
 /**
  * @brief Processes a binary file and applies the sensor register settings.
@@ -50,16 +62,22 @@ void cis_file_loadStagedFromFile(void);
  * @brief Whether the staged table has been loaded from (or reconciled with)
  * the SD card. When false, staging and clearing are refused so an unloaded
  * table can never overwrite the registers already saved on the card.
+ *
+ * @return true if the staged table reflects CAMERA_EXTRA_FILE (or its absence).
  */
 bool cis_file_isStagedLoaded(void);
 
 /**
  * @brief Number of register settings currently staged.
+ *
+ * @return Count of entries in the staged table.
  */
 uint16_t cis_file_getStagedCount(void);
 
 /**
  * @brief The staged register settings table (CIS_FILE_MAX_STAGED entries allocated).
+ *
+ * @return Pointer to the staged table.
  */
 HX_CIS_SensorSetting_t * cis_file_getStagedTable(void);
 
@@ -67,6 +85,8 @@ HX_CIS_SensorSetting_t * cis_file_getStagedTable(void);
  * @brief Add a register write to the staged table, or update it if the address is
  * already present.
  *
+ * @param addr Register address to stage.
+ * @param val  Value to stage for that register.
  * @return false if the table is full.
  */
 bool cis_file_stageReg(uint16_t addr, uint8_t val);

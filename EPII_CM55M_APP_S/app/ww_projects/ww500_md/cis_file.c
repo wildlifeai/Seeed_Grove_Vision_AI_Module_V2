@@ -11,6 +11,9 @@
  *  Created on: 16 Mar 2025
  *      Author: charl
  */
+
+/*********************************************** Includes ****************************************************/
+
 #include "cis_file.h"
 
 #include <stdio.h>
@@ -24,6 +27,14 @@
 #include "xprintf.h"
 #include "fatfs_task.h"
 #include "image_task.h"	// for CAMERA_EXTRA_FILE
+
+/*********************************************** Local Defines **********************************************/
+
+
+/*********************************************** Local Types ************************************************/
+
+
+/*********************************************** Local Variables ********************************************/
 
 // Register settings staged for the camera "extra settings" file. Loaded from the file
 // by cis_file_process() at sensor init, and edited by the 'camreg' CLI command, which
@@ -39,141 +50,22 @@ static uint16_t stagedCount = 0;
 // would save a 1-entry file, erasing the registers already on the SD card.
 static bool stagedLoaded = false;
 
-/**
- * Load the staged table from CAMERA_EXTRA_FILE if that has not happened yet.
- *
- * Called when fatfs task starts.
- *
- * FatFs here is NOT re-entrant (FF_FS_REENTRANT = 0), so this must only run
- * where no other task is using the disk: the fatfs_task calls it once at boot
- * (after mounting, before other tasks start disk activity), and
- * cis_file_process() covers it from the image task at sensor init.
- * A missing file counts as loaded (genuinely no staged registers).
- */
-void cis_file_loadStagedFromFile(void) {
-	FIL file;
-	FRESULT res;
-	UINT bytesRead;
-	uint16_t numEntries;
-	HX_CIS_SensorSetting_t fileSettings[CIS_FILE_MAX_STAGED];
+/*********************************************** Local Function Declarations *********************************/
 
-	if (stagedLoaded) {
-		return;
-	}
 
-	if (!fatfs_mounted()) {
-		return;	// try again on the next call
-	}
+/*********************************************** Local Function Definitions *********************************/
 
-	res = f_open(&file, CAMERA_EXTRA_FILE, FA_READ);
 
-	if ((res == FR_NO_FILE) || (res == FR_NO_PATH)) {
-		// No file - there really are no staged registers
-		stagedLoaded = true;
-		return;
-	}
-	if (res != FR_OK) {
-		xprintf("cis_file_loadStagedFromFile: error %d opening '%s'\n", res, CAMERA_EXTRA_FILE);
-		return;	// try again on the next call
-	}
-
-	numEntries = f_size(&file) / sizeof(HX_CIS_SensorSetting_t);
-	if (numEntries > CIS_FILE_MAX_STAGED) {
-		xprintf("Warning: '%s' has %d entries; only the first %d can be edited by 'camreg'\n",
-				CAMERA_EXTRA_FILE, numEntries, CIS_FILE_MAX_STAGED);
-		numEntries = CIS_FILE_MAX_STAGED;
-	}
-
-	if (numEntries == 0) {
-		f_close(&file);
-		stagedLoaded = true;
-		return;
-	}
-
-	res = f_read(&file, fileSettings, numEntries * sizeof(HX_CIS_SensorSetting_t), &bytesRead);
-	f_close(&file);
-
-	if ((res != FR_OK) || (bytesRead != numEntries * sizeof(HX_CIS_SensorSetting_t))) {
-		xprintf("cis_file_loadStagedFromFile: error %d reading '%s'\n", res, CAMERA_EXTRA_FILE);
-		return;	// try again on the next call
-	}
-
-	taskENTER_CRITICAL();
-	memcpy(stagedSettings, fileSettings, numEntries * sizeof(HX_CIS_SensorSetting_t));
-	stagedCount = numEntries;
-	stagedLoaded = true;
-	taskEXIT_CRITICAL();
-
-	xprintf("Loaded %d staged register(s) from '%s'\n", numEntries, CAMERA_EXTRA_FILE);
-}
-
-bool cis_file_isStagedLoaded(void) {
-	return stagedLoaded;
-}
-
-uint16_t cis_file_getStagedCount(void) {
-	return stagedCount;
-}
-
-HX_CIS_SensorSetting_t * cis_file_getStagedTable(void) {
-	return stagedSettings;
-}
-
-bool cis_file_stageReg(uint16_t addr, uint8_t val) {
-	uint16_t i;
-	bool success = true;
-
-	// Refuse until the table reflects the SD card, otherwise the first save
-	// could overwrite registers that are already staged in the file
-	if (!stagedLoaded) {
-		return false;
-	}
-
-	// The staged table is written by the CLI task (here) and by the image task
-	// (cis_file_process() at sensor init) - guard against concurrent updates
-	taskENTER_CRITICAL();
-
-	// check if the regsiter is alreadyy in the table
-	for (i = 0; i < stagedCount; i++) {
-		if (stagedSettings[i].RegAddree == addr) {
-			break;
-		}
-	}
-
-	// New register
-	if (i == stagedCount) {
-		if (stagedCount == CIS_FILE_MAX_STAGED) {
-			success = false;
-		}
-		else {
-			stagedCount++;
-		}
-	}
-
-	// Add an entry to the table
-	if (success) {
-		stagedSettings[i].I2C_ActionType = HX_CIS_I2C_Action_W;
-		stagedSettings[i].RegAddree = addr;
-		stagedSettings[i].Value = val;
-	}
-
-	taskEXIT_CRITICAL();
-
-	return success;
-}
-
-void cis_file_clearStaged(void) {
-	taskENTER_CRITICAL();
-	stagedCount = 0;
-	stagedLoaded = true;	// an explicit clear is authoritative - do not reload the file
-	taskEXIT_CRITICAL();
-}
+/*********************************************** Global Function Definitions *********************************/
 
 /**
- * Read CIS register settings from a file and process them
+ * @brief Read CIS register settings from a file and process them.
  *
- * @param filename - name of file containing binary data
- * @return error code
+ * Mirrors CAMERA_EXTRA_FILE contents into the staged table (if not already
+ * loaded) so the 'camreg' CLI command edits what is actually on the SD card.
+ *
+ * @param filename Name of file containing binary data.
+ * @return Error code.
  */
 HX_CIS_ERROR_E cis_file_process(const char *filename) {
     FIL file;
@@ -184,7 +76,7 @@ HX_CIS_ERROR_E cis_file_process(const char *filename) {
     uint16_t num_entries ;
 
     if (!fatfs_mounted()) {
-        xprintf("SD card not mounted.\n");
+        xprintf("SD card not mounted...\n");
     	return FR_NO_FILESYSTEM;
     }
 
@@ -275,10 +167,162 @@ HX_CIS_ERROR_E cis_file_process(const char *filename) {
 }
 
 /**
- * Allows testing
+ * @brief Load the staged table from CAMERA_EXTRA_FILE if that has not happened yet.
  *
- * @param filename -
- * @param apply_settings - if true then write actual values. If false then print info
+ * FatFs here is NOT re-entrant (FF_FS_REENTRANT = 0), so this must only run
+ * where no other task is using the disk: the fatfs_task calls it once at boot
+ * (after mounting, before other tasks start disk activity), and
+ * cis_file_process() covers it from the image task at sensor init.
+ * A missing file counts as loaded (genuinely no staged registers).
+ */
+void cis_file_loadStagedFromFile(void) {
+	FIL file;
+	FRESULT res;
+	UINT bytesRead;
+	uint16_t numEntries;
+	HX_CIS_SensorSetting_t fileSettings[CIS_FILE_MAX_STAGED];
+
+	if (stagedLoaded) {
+		return;
+	}
+
+	if (!fatfs_mounted()) {
+		return;	// try again on the next call
+	}
+
+	res = f_open(&file, CAMERA_EXTRA_FILE, FA_READ);
+
+	if ((res == FR_NO_FILE) || (res == FR_NO_PATH)) {
+		// No file - there really are no staged registers
+		stagedLoaded = true;
+		return;
+	}
+	if (res != FR_OK) {
+		xprintf("cis_file_loadStagedFromFile: error %d opening '%s'\n", res, CAMERA_EXTRA_FILE);
+		return;	// try again on the next call
+	}
+
+	numEntries = f_size(&file) / sizeof(HX_CIS_SensorSetting_t);
+	if (numEntries > CIS_FILE_MAX_STAGED) {
+		xprintf("Warning: '%s' has %d entries; only the first %d can be edited by 'camreg'\n",
+				CAMERA_EXTRA_FILE, numEntries, CIS_FILE_MAX_STAGED);
+		numEntries = CIS_FILE_MAX_STAGED;
+	}
+
+	if (numEntries == 0) {
+		f_close(&file);
+		stagedLoaded = true;
+		return;
+	}
+
+	res = f_read(&file, fileSettings, numEntries * sizeof(HX_CIS_SensorSetting_t), &bytesRead);
+	f_close(&file);
+
+	if ((res != FR_OK) || (bytesRead != numEntries * sizeof(HX_CIS_SensorSetting_t))) {
+		xprintf("cis_file_loadStagedFromFile: error %d reading '%s'\n", res, CAMERA_EXTRA_FILE);
+		return;	// try again on the next call
+	}
+
+	taskENTER_CRITICAL();
+	memcpy(stagedSettings, fileSettings, numEntries * sizeof(HX_CIS_SensorSetting_t));
+	stagedCount = numEntries;
+	stagedLoaded = true;
+	taskEXIT_CRITICAL();
+
+	xprintf("Loaded %d staged register(s) from '%s'\n", numEntries, CAMERA_EXTRA_FILE);
+}
+
+/**
+ * @brief Whether the staged table has been loaded from (or reconciled with)
+ * the SD card.
+ *
+ * @return true if the staged table reflects CAMERA_EXTRA_FILE (or its absence).
+ */
+bool cis_file_isStagedLoaded(void) {
+	return stagedLoaded;
+}
+
+/**
+ * @brief Number of register settings currently staged.
+ *
+ * @return Count of entries in the staged table.
+ */
+uint16_t cis_file_getStagedCount(void) {
+	return stagedCount;
+}
+
+/**
+ * @brief The staged register settings table (CIS_FILE_MAX_STAGED entries allocated).
+ *
+ * @return Pointer to the staged table.
+ */
+HX_CIS_SensorSetting_t * cis_file_getStagedTable(void) {
+	return stagedSettings;
+}
+
+/**
+ * @brief Add a register write to the staged table, or update it if the address is
+ * already present.
+ *
+ * @param addr Register address to stage.
+ * @param val  Value to stage for that register.
+ * @return false if the table is full.
+ */
+bool cis_file_stageReg(uint16_t addr, uint8_t val) {
+	uint16_t i;
+	bool success = true;
+
+	// Refuse until the table reflects the SD card, otherwise the first save
+	// could overwrite registers that are already staged in the file
+	if (!stagedLoaded) {
+		return false;
+	}
+
+	// The staged table is written by the CLI task (here) and by the image task
+	// (cis_file_process() at sensor init) - guard against concurrent updates
+	taskENTER_CRITICAL();
+
+	for (i = 0; i < stagedCount; i++) {
+		if (stagedSettings[i].RegAddree == addr) {
+			break;
+		}
+	}
+
+	if (i == stagedCount) {
+		if (stagedCount == CIS_FILE_MAX_STAGED) {
+			success = false;
+		}
+		else {
+			stagedCount++;
+		}
+	}
+
+	if (success) {
+		stagedSettings[i].I2C_ActionType = HX_CIS_I2C_Action_W;
+		stagedSettings[i].RegAddree = addr;
+		stagedSettings[i].Value = val;
+	}
+
+	taskEXIT_CRITICAL();
+
+	return success;
+}
+
+/**
+ * @brief Empty the staged table.
+ */
+void cis_file_clearStaged(void) {
+	taskENTER_CRITICAL();
+	stagedCount = 0;
+	stagedLoaded = true;	// an explicit clear is authoritative - do not reload the file
+	taskEXIT_CRITICAL();
+}
+
+/**
+ * @brief Test function to either apply settings or print parsed data.
+ *
+ * @param filename       The path to the binary file.
+ * @param apply_settings If true, calls hx_drv_cis_setRegTable(); otherwise, prints data.
  */
 void cis_file_test(const char *filename, bool apply_settings) {
 	FIL file;
@@ -350,4 +394,3 @@ void cis_file_test(const char *filename, bool apply_settings) {
 
 	vPortFree(sensor_settings);
 }
-

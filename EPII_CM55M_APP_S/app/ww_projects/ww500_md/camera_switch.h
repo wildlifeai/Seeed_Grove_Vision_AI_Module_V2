@@ -4,12 +4,12 @@
  * Dual-image camera switching support.
  *
  * The WW500 uses two firmware images built from the same source:
- *   - HM0360 image (USE_HM0360): mono, sees IR - Typically used in the dark with the IR flash
- *   - RP3 image (USE_RP3, IMX708): colour, better quality - Typically used in daylight
+ *   - HM0360 image (USE_HM0360): mono, sees IR - used in the dark with the IR flash
+ *   - RP3 image (USE_RP3, IMX708): colour, better quality - used in daylight
  *
- * Both images (can) live in the two XIP flash slots (see xip_manager.c). Each image
+ * Both images live in the two XIP flash slots (see xip_manager.c). Each image
  * labels its own slot at boot, so the 'slots' CLI command (and the app) can see
- * which camera variant is used by the firmware each slot, and 'switchslot' boots the other one.
+ * which variant is in each slot, and 'switchslot' boots the other one.
  *
  * Switching modes:
  *   - MANUAL (always available): the app user selects a camera and the app
@@ -29,30 +29,51 @@
 #ifndef CAMERA_SWITCH_H_
 #define CAMERA_SWITCH_H_
 
+/*********************************************** Includes ****************************************************/
+
 #include <stdint.h>
 #include <stdbool.h>
 
+/*********************************************** Global Defines **********************************************/
+
+
+/*********************************************** Global Types ************************************************/
+
+
+/*********************************************** Global Variables ********************************************/
+
+
+/*********************************************** Global Function Declarations *********************************/
+
 /**
- * The camera this firmware was built for.
+ * @brief The camera variant this firmware was built as.
+ *
+ * @return XIP_SLOT_VARIANT_x for this build.
  */
 uint8_t cameraSwitch_thisVariant(void);
 
 /**
- * Human-readable name for a variant value. Never returns NULL.
+ * @brief Human-readable name for a variant value. Never returns NULL.
+ *
+ * @param variant XIP_SLOT_VARIANT_x value.
+ * @return Human-readable name for the variant.
  */
 const char * cameraSwitch_variantName(uint8_t variant);
 
 /**
- * Record this image's variant against the currently active slot.
+ * @brief Record this image's variant against the currently active slot.
+ *
  * Cheap when already recorded (no flash write). Call once per wake cycle.
  */
 void cameraSwitch_labelBootSlot(void);
 
 /**
- * Automatic switching check - call after each AE light-level decision.
+ * @brief Automatic switching check - call after each AE light-level decision.
+ *
  * When OP_PARAMETER_SLOT_SWITCH == 1 and the light wants the other camera
  * variant, switches the boot slot and schedules a reset at the next sleep.
- * Returns true if a switch was scheduled.
+ *
+ * @return true if a switch was scheduled.
  */
 bool cameraSwitch_autoSwitchCheck(void);
 

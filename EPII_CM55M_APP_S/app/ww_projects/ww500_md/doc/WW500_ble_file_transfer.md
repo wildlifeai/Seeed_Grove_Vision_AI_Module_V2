@@ -85,7 +85,7 @@ While streaming, the Android BLE stack renegotiates connection parameters at
 certain points; the link stalls ~950 ms. Our "I2C master did not read our
 message" watchdog was 1000 ms — right on the edge — and a firing watchdog
 tears the session down. 4 s rides the renegotiation out while staying well
-under the 5 s session inactivity hold and the app's 15 s abort.
+under the 15 s session inactivity hold and the app's 15 s abort.
 
 **What did NOT work:** the app originally re-requested Android's HIGH
 connection priority every 20 s to keep the fast interval. That renegotiation
@@ -97,8 +97,19 @@ reliability. This is why "fast bursts, slower sustained".
 
 ### 5. Session inactivity hold
 
-A transfer session holds off DPD (5 s inactivity extension at FILE_START,
+A transfer session holds off DPD (15 s inactivity extension at FILE_START,
 restored at close/abort) so the device does not sleep between packets.
+
+The hold was originally 5 s, which iOS defeated (bench 19 Jul 2026, app
+0.0.60 with write-with-response): ~28–30 s into a large transfer iOS
+renegotiates the connection interval and CoreBluetooth stalls the in-flight
+write for >5 s. The device saw 5 s of silence, logged
+`WARNING: incomplete file transfer — closing before DPD`, and slept at the
+exact moment the phone recovered — LARGE.BIN died at packet 96/2125, while
+the same transfer completes on Android (its stalls are sub-second). 15 s
+matches the app's own silence budget: both ends now tolerate the same
+worst-case gap, so a renegotiation stall is a pause, not a death. An
+abandoned session costs one delayed DPD entry, nothing more.
 
 ### 6. Slot-label robustness (`camera_switch.c`)
 

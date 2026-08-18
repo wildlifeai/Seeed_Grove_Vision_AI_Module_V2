@@ -4,7 +4,8 @@
 Holds the device awake and repeatedly triggers an on-demand capture, printing
 the firmware's own light-sensor decision each time:
 
-    AE light check: AE Mean = NN, threshold = 65 -> flash ON/OFF
+    AE light check: mean AE = 64 (min 64, max 64) over 16 frames,
+    threshold = 65, gain railed = no -> DARK (flash wanted)
 
 Every 'capture' command is a console keystroke sequence, which resets the CLI
 inactivity timer to 60 s (INACTIVITYTIMEOUTCLI), so sending one every <60 s
@@ -14,9 +15,45 @@ cover/uncover test interactive instead of waiting for the 2-minute timer wake.
 Because the device only listens on its UART while awake, the monitor first
 waits for a wake (RTC timer or motion), grabs it, then holds it.
 
+REQUIRED SETUP - the firmware only prints the 'AE light check' line (and thus
+only feeds this monitor) when the AE decision is actually consumed by
+something. Before running this script, enable one of, over the console:
+
+    setop 13 1     # OP_PARAMETER_FLASH_LED = visible LED -> FLASH_MODE_AE
+    setop 13 2     # same, but IR LED
+    setop 26 1     # OP_PARAMETER_SLOT_SWITCH -> automatic day/night switching (op26)
+
+With neither set, captures still run but the device only logs the raw
+'HM0360 AE regs:' register dump, which this monitor cannot parse - you'll see
+'Device is awake' and then nothing (use --verbose to confirm this is why).
+
+READING THE OUTPUT - each line is one capture:
+
+    [19:25:35] #2   AE= 65(thr65) BRIGHT flash ON  up   RAILED integ= 376 aGain= 2 dGain= 65  |####...|
+
+    AE=/thr   raw AE Mean reading and the configured dark threshold
+              (OP_PARAMETER_AE_DARK_THRESHOLD, 'setop 23 <value>').
+    state     this script's own naive ae < thr check - for quick reference only.
+    flash     the firmware's REAL decision (ledFlash.c: ledFlashNewAEStats). It
+              applies hysteresis (stays ON until well above threshold) and a
+              gain-railed override, so it can legitimately disagree with
+              'state' near the boundary - that is not a bug.
+    arrow     up/down/= vs the previous reading's AE value.
+    RAILED    shown when the sensor's gain has maxed out on most frames, i.e.
+              it cannot expose any darker - AE Mean becomes meaningless and
+              the firmware forces DARK regardless of its value.
+    integ/aGain/dGain  Integration time / Analog gain / Digital gain from the
+              'HM0360 AE regs' dump, which the firmware prints AFTER the AE
+              light check line each capture. So reading #1 always shows '?'
+              here (nothing seen yet) and each later reading shows the
+              previous capture's register values, not this one's - expected,
+              not a bug.
+    bar       AE Mean rendered as a simple 0-255 bar for a quick visual read.
+
 Usage:
-    python ae_monitor.py                 # default COM14, ~4 min session
-    python ae_monitor.py --duration 360  # longer session
+    python ae_monitor.py --port COM4                 # ~4 min session
+    python ae_monitor.py --port COM4 --duration 360  # longer session
+    python ae_monitor.py --port COM4 --verbose        # also show raw console lines
 """
 
 import argparse
@@ -28,9 +65,9 @@ import serial
 
 ANSI_RE = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
 # Matches both the legacy single-frame line ("AE Mean = 46, threshold = 65 -> flash ON")
-# and the new aggregated line ("mean AE = 34 (min 3, max 66) over 8 frames,
-# threshold = 65, gain railed = yes -> flash ON").
-AE_RE = re.compile(r"(?:AE Mean|mean AE)\s*=\s*(\d+).*?threshold\s*=\s*(\d+).*?flash\s*(ON|OFF)")
+# and the current aggregated line ("mean AE = 34 (min 3, max 66) over 8 frames,
+# threshold = 65, gain railed = yes -> DARK (flash wanted)" / "-> BRIGHT (no flash)").
+AE_RE = re.compile(r"(?:AE Mean|mean AE)\s*=\s*(\d+).*?threshold\s*=\s*(\d+).*?->\s*(DARK|BRIGHT|flash ON|flash OFF)")
 RAILED_RE = re.compile(r"gain railed\s*=\s*(yes|no)")
 INTEG_RE = re.compile(r"Integration time\s*=\s*(\d+)")
 AGAIN_RE = re.compile(r"Analog gain\s*=\s*(\d+)")
@@ -127,7 +164,8 @@ def main() -> int:
                         reading_num += 1
                         ae = int(m.group(1))
                         thr = int(m.group(2))
-                        flash = m.group(3)
+                        decision = m.group(3)
+                        flash = "ON" if decision in ("DARK", "flash ON") else "OFF"
                         mr = RAILED_RE.search(line)
                         railed = (mr.group(1) == "yes") if mr else False
                         state = "DARK " if ae < thr else "BRIGHT"

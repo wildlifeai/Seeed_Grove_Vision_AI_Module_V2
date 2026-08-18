@@ -207,6 +207,19 @@ static char fContents[CLIFILELEN]; // just for testing
 // For string responses this is set to -1
 int16_t binaryLength;
 
+// These for the RP3 staged regsiter settings
+
+// Register writes staged by the 'camreg' command live in cis_file.c, which loads them
+// from CAMERA_EXTRA_FILE at every sensor init (so they survive DPD cycles and reboots).
+// This command edits that table and re-saves the file.
+static char camRegFileName[] = CAMERA_EXTRA_FILE;
+static fileOperation_t camRegFileOp;
+
+// True while a camreg save is queued/being written by the fatfs_task. Guards
+// camRegFileOp against being overwritten before the previous write completes.
+// Cleared when APP_MSG_CLITASK_DISK_WRITE_COMPLETE arrives.
+static volatile bool camRegWritePending = false;
+
 /*************************************** Local routine prototypes  *************************************/
 
 // The task code.
@@ -792,7 +805,7 @@ static BaseType_t prvReset(char *pcWriteBuffer, size_t xWriteBufferLen, const ch
 
 	cli_append(&pcWriteBuffer, &xWriteBufferLen, "Forcing reset soon.");
 
-	app_setResetRequest(true);
+	app_setResetRequest(true);	// sets a flag so we reset immediately instead of entering DPD
 
 	/* There is no more data to return after this single string, so return pdFALSE. */
 	return pdFALSE;
@@ -849,7 +862,9 @@ static BaseType_t prvCamera(char *pcWriteBuffer, size_t xWriteBufferLen, const c
 }
 
 /**
- * Report the active firmware slot and the camera variant recorded for each slot.
+ * Implements "slots" command
+ *
+ * Report the active firmware slot and the camera type recorded for each slot.
  *
  * Example response:
  *   Active slot 0 running 'RP3 (day/colour)'. Slot A: 'RP3 (day/colour)', Slot B: 'HM0360 (night/IR)'. Auto-switch: on
@@ -880,6 +895,8 @@ static BaseType_t prvSlots(char *pcWriteBuffer, size_t xWriteBufferLen, const ch
 }
 
 /**
+ * Implement "switchslot" command
+ *
  * Manually boot the firmware image in the other slot (day/night camera change).
  *
  * Unlike the automatic switch (camera_switch.c) this does not require the other
@@ -893,12 +910,15 @@ static BaseType_t prvSwitchSlot(char *pcWriteBuffer, size_t xWriteBufferLen, con
 	int otherVariant;
 	int newSlot;
 
-	// Report what we believe is in the other slot before switching
+	// get the firmware image slot
 	int activeSlot = xip_get_active_slot();
+
 	if (activeSlot < 0) {
 		cli_append(&pcWriteBuffer, &xWriteBufferLen, "Slot switch failed: cannot read slot selector");
 		return pdFALSE;
 	}
+
+	// Report the camera we believe is in the other slot before switching
 	otherVariant = xip_get_slot_variant((activeSlot == 0) ? 1 : 0);
 
 	newSlot = xip_switch_slot();
@@ -909,7 +929,7 @@ static BaseType_t prvSwitchSlot(char *pcWriteBuffer, size_t xWriteBufferLen, con
 		return pdFALSE;
 	}
 
-	// Reset (via watchdog) when the device next sleeps
+	// Sets a flag so we do a cold-boot reset instead of entering DPD (leave via a warm-boot).
 	app_setResetRequest(true);
 
 	cli_append(&pcWriteBuffer, &xWriteBufferLen,
@@ -1302,17 +1322,6 @@ static BaseType_t prvI2C(char *pcWriteBuffer, size_t xWriteBufferLen, const char
 
 /********************** camreg & vcm - camera tuning commands **********************/
 
-// Register writes staged by the 'camreg' command live in cis_file.c, which loads them
-// from CAMERA_EXTRA_FILE at every sensor init (so they survive DPD cycles and reboots).
-// This command edits that table and re-saves the file.
-static char camRegFileName[] = CAMERA_EXTRA_FILE;
-static fileOperation_t camRegFileOp;
-
-// True while a camreg save is queued/being written by the fatfs_task. Guards
-// camRegFileOp against being overwritten before the previous write completes.
-// Cleared when APP_MSG_CLITASK_DISK_WRITE_COMPLETE arrives.
-static volatile bool camRegWritePending = false;
-
 /**
  * Ask the fatfs_task to (re)write CAMERA_EXTRA_FILE with the staged register table.
  * The result arrives later as a APP_MSG_CLITASK_DISK_WRITE_COMPLETE message.
@@ -1349,6 +1358,8 @@ static bool camRegSaveTable(void) {
 }
 
 /**
+ * Implements the "camreg"command.
+ *
  * Read or write camera sensor registers, for bench/field tuning of exposure, gain,
  * white balance etc. without rebuilding the firmware.
  *
@@ -1378,6 +1389,7 @@ static BaseType_t prvCamReg(char *pcWriteBuffer, size_t xWriteBufferLen, const c
 		return pdFALSE;
 	}
 
+	// Implements 'list' -
 	if ((lParam1Length == 4) && (strncmp(pcParam1, "list", 4) == 0)) {
 		uint16_t stagedCount = cis_file_getStagedCount();
 		HX_CIS_SensorSetting_t *stagedTable = cis_file_getStagedTable();
@@ -1398,6 +1410,7 @@ static BaseType_t prvCamReg(char *pcWriteBuffer, size_t xWriteBufferLen, const c
 		return pdFALSE;
 	}
 
+	// Implements 'clear'
 	if ((lParam1Length == 5) && (strncmp(pcParam1, "clear", 5) == 0)) {
 		if (camRegWritePending) {
 			// fatfs_task is still reading the staged table for the previous save
@@ -1419,10 +1432,12 @@ static BaseType_t prvCamReg(char *pcWriteBuffer, size_t xWriteBufferLen, const c
 		return pdFALSE;
 	}
 
+	// First parameter is the regsiter address
 	address = (uint16_t) strtol(pcParam1, NULL, 16);
 
 	pcParam2 = FreeRTOS_CLIGetParameter(pcCommandString, 2, &lParam2Length);
 
+	// If there is no parameter 2 then read the register
 	if (pcParam2 == NULL) {
 		// Read the register
 		ret = hx_drv_cis_get_reg(address, &value);
@@ -1436,6 +1451,7 @@ static BaseType_t prvCamReg(char *pcWriteBuffer, size_t xWriteBufferLen, const c
 		return pdFALSE;
 	}
 
+	// If there is a parameter 2 then it is the value to write to the register
 	value = (uint8_t) strtol(pcParam2, NULL, 16);
 
 	if (camRegWritePending) {
@@ -1515,6 +1531,7 @@ static BaseType_t prvVcm(char *pcWriteBuffer, size_t xWriteBufferLen, const char
 		return pdFALSE;
 	}
 
+	// Implement 'probe' command
 	if ((lParameterStringLength == 5) && (strncmp(pcParameter, "probe", 5) == 0)) {
 		// Generic 1-byte I2C read probe - avoids a dependency on the HM0360 driver
 		// for what is an RP v3 camera module part
@@ -1528,7 +1545,9 @@ static BaseType_t prvVcm(char *pcWriteBuffer, size_t xWriteBufferLen, const char
 		return pdFALSE;
 	}
 
+	// Implement manual focus command
 	position = atoi(pcParameter);
+
 	if ((position < 0) || (position > 1023)) {
 		cli_append(&pcWriteBuffer, &xWriteBufferLen, "Position must be 0-1023, or 'probe'");
 		return pdFALSE;

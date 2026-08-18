@@ -2033,6 +2033,8 @@ TaskHandle_t ifTask_createTask(int8_t priority, uint8_t wakeReason) {
 	// Now must release the I2C semaphore
 	xSemaphoreGive(xI2CTxSemaphore);
 
+	// Is this the place for the xip_manager_preinit() code?
+
 	if (xTaskCreate(vIfTask, (const char *)"IFTask",
 			configMINIMAL_STACK_SIZE * 3,
 			NULL, priority,

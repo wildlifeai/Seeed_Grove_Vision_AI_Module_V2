@@ -25,6 +25,12 @@ override SCENARIO_APP_SUPPORT_LIST := $(APP_TYPE)
 # assignment here cannot replace a command-line-set variable, even an
 # empty one, without it.
 ##
+# Windows only: on Linux/macOS "D:/hxbuild" is a *relative* path, so the mkdir
+# below creates a directory literally called "D:" and OUT_DIR_ROOT then puts a
+# colon into every object path - which make parses as a rule separator
+# ("target pattern contains no '%'"). MAX_PATH is a Windows problem, so the
+# workaround stays on Windows.
+ifeq "$(HOST_OS)" "Windows"
 ifeq ($(strip $(OUT_DIR_ROOT)),)
 WW500_BUILD_ROOT := D:/hxbuild
 WW500_BUILD_ROOT_NATIVE := $(subst /,$(PS),$(WW500_BUILD_ROOT))
@@ -33,6 +39,7 @@ ifneq ($(wildcard $(WW500_BUILD_ROOT)),)
 override OUT_DIR_ROOT := $(WW500_BUILD_ROOT)
 endif
 endif
+endif	# HOST_OS == Windows
 
 ##
 # Skip recompiling TensorFlow Lite Micro and CMSIS-NN from source on every
@@ -102,8 +109,8 @@ all: force_rebuild_main
 
 ##
 # 'make clean' (defined in options/rules.mk) only removes $(OUT_DIR), which
-# is now under D:\hxbuild per the fix above - it never touches this
-# project's old in-project object folder. Without this, that folder is
+# on Windows is now under D:\hxbuild per the fix above - it never touches
+# this project's old in-project object folder. Without this, that folder is
 # orphaned rather than cleaned, and if OUT_DIR_ROOT ever falls back to empty
 # (D: unavailable, or an explicit override) a plain 'make' would resume
 # building incrementally on top of whatever stale .o files are sitting in
@@ -189,14 +196,14 @@ override CIS_SEL := HM_COMMON
 override EPII_USECASE_SEL := drv_onecore_cm55m_s
 
 CIS_SUPPORT_INAPP = cis_sensor
-#CIS_SUPPORT_INAPP_MODEL = cis_hm0360
+CIS_SUPPORT_INAPP_MODEL = cis_hm0360
 # OV5647 for RP v1 camera
 #CIS_SUPPORT_INAPP_MODEL = cis_ov5647
 # IMX219 for RP v2 camera
 #CIS_SUPPORT_INAPP_MODEL = cis_imx219
 #CIS_SUPPORT_INAPP_MODEL = cis_imx477
 # IMX708 for RP v3 camera (main camera; HM0360 remains for motion detection via USE_HM0360_MD)
-CIS_SUPPORT_INAPP_MODEL = cis_imx708
+# CIS_SUPPORT_INAPP_MODEL = cis_imx708
 
 # CGP added to indicate HM0360 is used:
 

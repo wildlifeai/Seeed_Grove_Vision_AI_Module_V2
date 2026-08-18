@@ -525,7 +525,9 @@ HX_CIS_ERROR_E hm0360_md_getAEStats(uint8_t nSamples, uint16_t gapMs, HM0360_AE_
 
 	// Read the AE gain ceilings once, so we can tell when the loop has railed.
 	saveMainCameraConfig();
+
 	ret |= hx_drv_cis_get_reg(MAX_AGAIN, &maxAGain);
+
 	// MAX_AGAIN (0x202b) holds the gain code in the LOW bits - the Himax reference
 	// init (github.com/stevehuang82/for_wildlife_ai HM0360 table) programs 0x04 =
 	// code 4. This differs from the ANALOG_GAIN readout (0x0205), which carries the
@@ -533,15 +535,18 @@ HX_CIS_ERROR_E hm0360_md_getAEStats(uint8_t nSamples, uint16_t gapMs, HM0360_AE_
 	// tripped the 'maxAGain > 0' guard below and silently disabled the railed
 	// override. No HM0360 datasheet is available; decode inferred from the
 	// reference init values.
+	// CGP: I have looked in the datasheet - the register is only referenced in a table of registers.
 	maxAGain = maxAGain & 0x07;
 	ret |= hx_drv_cis_get_reg(MAX_DGAIN_H, &maxDGainH);
 	ret |= hx_drv_cis_get_reg(MAX_DGAIN_L, &maxDGainL);
+
 	// Decode MAX_DGAIN with the SAME formula as the DIGITAL_GAIN readout
 	// (hm0360_md_getGainRegs) deliberately: both registers share a format, so the
 	// 'digitalGain >= maxDGain' test stays consistent and trips at the ceiling
 	// (reference init 0x03,0x00). The absolute scaling is unverified without the
 	// datasheet, but the relative comparison is correct.
 	maxDGain = ((maxDGainH & 0x03) << 6) + ((maxDGainL & 0xfa) >> 6);
+
 	// If the sensor is asleep, wake it into continuous streaming for the
 	// sampling window. On the RP camera image with motion detection disabled
 	// the HM0360 is parked in MODE_SLEEP - a sleeping sensor reads AE_MEAN = 0,
@@ -600,6 +605,7 @@ HX_CIS_ERROR_E hm0360_md_getAEStats(uint8_t nSamples, uint16_t gapMs, HM0360_AE_
 			}
 		}
 
+		// Delay before taking another sample. The reason for this delay, and for the value, is unclear to me (CGP)
 		if (i + 1 < nSamples) {
 			vTaskDelay(pdMS_TO_TICKS(gapMs));
 		}

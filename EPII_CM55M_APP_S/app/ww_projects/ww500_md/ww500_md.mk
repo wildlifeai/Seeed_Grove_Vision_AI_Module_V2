@@ -1,5 +1,45 @@
 override SCENARIO_APP_SUPPORT_LIST := $(APP_TYPE)
 
+##
+# Some of the longer TFLM source filenames (e.g.
+# recording_single_arena_buffer_allocator.cc), once nested under the normal
+# obj_<board>/<toolchain>_<board>_<pkg>/library/.../ output tree, push the
+# full .o/.d/.su path past Windows' 260-character MAX_PATH limit when the
+# project is checked out under a long path - causing intermittent-looking
+# "cannot open ...su for writing: No such file or directory" compiler
+# errors that depend on exactly how long your checkout path is.
+#
+# If D:\hxbuild exists (or can be created), relocate the object tree there
+# via the build's own OUT_DIR_ROOT override (see `make help`) - this only
+# changes where .o/.d/.su files are written, not the source layout.
+#
+# Safe on other machines/checkouts: if D: isn't available the mkdir below
+# fails silently and OUT_DIR_ROOT is left unset, so the build falls back to
+# today's normal in-project object tree. Override from the command line
+# with a non-empty path if you want a different location, e.g.
+# make OUT_DIR_ROOT=E:/build (that bypasses this block entirely, since it
+# only acts when OUT_DIR_ROOT is empty).
+#
+# Uses "override" because some IDEs (e.g. Eclipse CDT) pass every build
+# variable explicitly on the command line, including blank ones - a plain
+# assignment here cannot replace a command-line-set variable, even an
+# empty one, without it.
+##
+# Windows only: on Linux/macOS "D:/hxbuild" is a *relative* path, so the mkdir
+# below creates a directory literally called "D:" and OUT_DIR_ROOT then puts a
+# colon into every object path - which make parses as a rule separator
+# ("target pattern contains no '%'"). MAX_PATH is a Windows problem, so the
+# workaround stays on Windows.
+ifeq "$(HOST_OS)" "Windows"
+ifeq ($(strip $(OUT_DIR_ROOT)),)
+WW500_BUILD_ROOT := D:/hxbuild
+WW500_BUILD_ROOT_NATIVE := $(subst /,$(PS),$(WW500_BUILD_ROOT))
+$(shell $(IFNOTEXISTDIR) $(WW500_BUILD_ROOT_NATIVE) $(ENDIFNOTEXISTDIR) $(MKD) $(WW500_BUILD_ROOT_NATIVE) 2> $(NULL))
+ifneq ($(wildcard $(WW500_BUILD_ROOT)),)
+override OUT_DIR_ROOT := $(WW500_BUILD_ROOT)
+endif
+endif
+endif	# HOST_OS == Windows
 
 # Get git info
 GIT_BRANCH := $(shell git rev-parse --abbrev-ref HEAD 2>NUL)
@@ -32,7 +72,30 @@ force_rebuild_main:
 #obj_epii_evb_icv30_bdv10/gnu_epii_evb_WLCSP65/app/ww_projects/$(APP_TYPE)/$(APP_TYPE).o: force_rebuild_main
 $(OBJECT_DESTINATION)/app/ww_projects/$(APP_TYPE)/$(APP_TYPE).o: force_rebuild_main
 all: force_rebuild_main
-	
+
+##
+# Stage the built .elf for image generation (see
+# _Documentation/building_firmware.md, and _Documentation/Compile_and_flash.md
+# section 3b for the DPD/deep-power-down bootloader we actually ship), replacing
+# the manual "copy the .elf file" step previously done by hand before running
+# we2_local_image_gen (see the gen_image target in image_gen.mk for that step).
+##
+WW500_STAGE_ELF_DIR = $(EPII_ROOT)/../we2_image_gen_local_dpd/input_case1_secboot
+WW500_STAGE_ELF_DIR_NATIVE = $(subst /,$(PS),$(WW500_STAGE_ELF_DIR))
+$(shell $(IFNOTEXISTDIR) $(WW500_STAGE_ELF_DIR_NATIVE) $(ENDIFNOTEXISTDIR) $(MKD) $(WW500_STAGE_ELF_DIR_NATIVE) 2> $(NULL))
+
+# APPL_FULL_NAME/ELF_FILENAME aren't defined yet at this point in the include
+# chain (options.mk sets them later, after this file is included via
+# app.mk), so .SECONDEXPANSION is needed to defer this prerequisite's
+# expansion until the whole makefile has been read.
+.PHONY: stage_elf
+.SECONDEXPANSION:
+stage_elf: $$(APPL_FULL_NAME).$$(ELF_FILENAME)
+	@$(ECHO) "Staging ELF for image generation: " $<
+	$(Q)$(CP) $(subst /,$(PS),$<) $(WW500_STAGE_ELF_DIR_NATIVE)$(PS)
+
+all: stage_elf
+
 # The APPL_DEFINES line below must match this line in ww.mk:
 # APP_TYPE = ww500_md
 APPL_DEFINES += -DWW500_MD
@@ -81,14 +144,14 @@ override CIS_SEL := HM_COMMON
 override EPII_USECASE_SEL := drv_onecore_cm55m_s
 
 CIS_SUPPORT_INAPP = cis_sensor
-#CIS_SUPPORT_INAPP_MODEL = cis_hm0360
+CIS_SUPPORT_INAPP_MODEL = cis_hm0360
 # OV5647 for RP v1 camera
 #CIS_SUPPORT_INAPP_MODEL = cis_ov5647
 # IMX219 for RP v2 camera
 #CIS_SUPPORT_INAPP_MODEL = cis_imx219
 #CIS_SUPPORT_INAPP_MODEL = cis_imx477
 # IMX708 for RP v3 camera (main camera; HM0360 remains for motion detection via USE_HM0360_MD)
-CIS_SUPPORT_INAPP_MODEL = cis_imx708
+# CIS_SUPPORT_INAPP_MODEL = cis_imx708
 
 # CGP added to indicate HM0360 is used:
 
@@ -134,4 +197,12 @@ $(info In ww500_md.mk LINKER_SCRIPT_FILE='${LINKER_SCRIPT_FILE}')
 $(info In ww500_md.mk CIS_SUPPORT_INAPP_MODEL='${CIS_SUPPORT_INAPP_MODEL}' SCENARIO_APP_INCDIR='${SCENARIO_APP_INCDIR}')
 # CGP this should have printed useful information, but does not:
 # $(info USE_SPECS='${USE_SPECS}' USE_NANO='${USE_NANO}')
+
+# Post-processing (gen_image, device_image): turn the compiled .elf into a
+# flashable image. Included here, after CIS_SUPPORT_INAPP_MODEL is set above,
+# because that block needs it - see mk/image_gen.mk for why it lives in mk/
+# rather than directly in this folder (ww.mk auto-includes every *.mk file
+# it finds directly here, which would otherwise include it a second time,
+# too early).
+include $(SCENARIO_APP_ROOT)/$(APP_TYPE)/mk/image_gen.mk
 

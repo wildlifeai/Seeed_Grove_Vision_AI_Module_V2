@@ -65,14 +65,32 @@ name up front and says so.
 
    ```
    cd xmodem
-   python xmodem_send.py --port COM13 --baudrate 921600 --file <path>\R6707N35.IMG
+   PYTHONIOENCODING=utf-8 python xmodem_send.py --port COM13 --baudrate 921600 --file <path>\R6707N35.IMG
    ```
 
    then power-cycle when the script says `Please press reset button!!`. The
-   bootloader burns the image into the slot it was trying to boot and restarts.
+   bootloader burns the image into the **backup** slot and restarts into it,
+   leaving the previously running image where it was. Bench log, booting slot A:
+
+   ```
+   slot flash_offset 0x00000000        <- was booting slot A
+   slot FlashOffset 0x00100000         <- burns slot B
+   backup slot header
+   ```
+
+   So recovery does not overwrite the image you are recovering from. This
+   matches the rest of the update model, where every path writes the inactive
+   slot.
+
+   `PYTHONIOENCODING=utf-8` is not optional on Windows: the script's progress
+   bar uses a block character the cp1252 console cannot encode, and the
+   resulting `UnicodeEncodeError` kills the transfer **mid-flash**. If that
+   happens, just re-run — the bootloader is in a separate flash region and
+   still accepts a fresh transfer.
 3. **Verify:** the boot banner shows the image's build time and camera; `ver`
    and `slots` confirm. Repeat with the other variant's image if the second
-   slot also needs restoring (the bootloader alternates to the backup slot).
+   slot also needs restoring (each burn targets whichever slot is inactive at
+   the time, so consecutive burns alternate).
 4. **Labels:** X-Modem burns reset the per-slot camera labels — each slot
    re-labels itself the first time it boots, so `'unknown'` after recovery is
    normal and self-heals on the next `switchslot`.

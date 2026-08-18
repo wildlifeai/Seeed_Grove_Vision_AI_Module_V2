@@ -28,6 +28,19 @@ rest = build time) and ship in the Setup Folder's MANIFEST directory — see
 Each app/console update writes the *inactive* slot: a failed write leaves the
 running image untouched (the selector is only updated after a full verify).
 
+### Filenames must be 8.3
+
+Image filenames are limited to 8.3 format, so a maximum of 12 characters plus the
+NUL: eight for the name, a dot, three for the extension, as in `H6818C33.IMG`.
+This is not a buffer we can enlarge. The app builds FatFs with `FF_USE_LFN 0`
+(`ww500_md/ffconf.h`), so the SD card has no long-filename support and a longer
+name cannot be opened at all.
+
+Website-generated and locally built images already follow this. It matters when
+you rename one by hand, or copy in a file from CI with a descriptive name such as
+`WW500_RP3_20260818.img`: rename it to 8.3 first. The console rejects an over-long
+name up front and says so.
+
 ## Safety rules
 
 - ⚠️ **Devices built before 14 Jun 2026** have a defect in the on-device

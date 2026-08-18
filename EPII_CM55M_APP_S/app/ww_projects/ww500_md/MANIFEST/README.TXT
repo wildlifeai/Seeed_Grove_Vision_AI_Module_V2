@@ -29,6 +29,12 @@ Website-generated images are named VYMDDHMM.IMG after the firmware build time:
 V = camera variant (R or H), Y = last digit of the year, M = month (1-9,
 A = Oct, B = Nov, C = Dec), DD = day, H = hour (0-9, A-N = 10-23), MM = minute.
 
+That name is exactly 8.3 format, and it has to be: the firmware builds FatFs
+without long-filename support, so any file on the SD card is limited to eight
+characters, a dot, and a three character extension. A longer name cannot be
+opened at all. If you rename an image by hand, or copy one in from a build with
+a descriptive name, keep it to 8.3.
+
 Firmware updates are normally applied from the mobile app (Firmware Update
 screen), which programs the image into the matching slot and reboots into it.
 The console command 'firmware <filename>' programs an image file directly.

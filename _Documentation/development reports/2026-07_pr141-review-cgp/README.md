@@ -85,18 +85,37 @@ Agreed August 2026: docs are the record, issues are the tracker. See
 ## Open items
 
 40 issues carry the review's findings, all labelled `review-finding` and on the
-[project board](https://github.com/orgs/wildlifeai/projects/3).
+[project board](https://github.com/orgs/wildlifeai/projects/3). 38 open, 2 closed.
+
+**Already done, do not pick these up.** Listed because the issues are still open and would
+otherwise look like available work:
+
+- **#188** fixed and merged. Both halves are in `dev`: the `HOST_OS` guard around the
+  `D:/hxbuild` block, and the executable bit on the image-generation binaries. The issue
+  can be closed.
+- **#155, #156, #179** fixed in PR #191, awaiting merge. #155 was also reproduced and
+  re-verified on hardware.
+
+**Agreed next focus: the light sensor cluster** (tagged `light-sensor`), so that a working
+camera can be put in front of a field tester:
+
+- Ready now: **#182** (extract the light-sensor code into one module with a document),
+  **#181** (instrument and validate the AE sampling window), **#183** (expose the decision
+  in EXIF and to the app).
+- **#186** is a design question rather than a fix, assigned to CGP: should MD illumination
+  depend on op13 and op21? Answering it shapes the others.
+- Blocked on #143/#144: **#158** (persist AE exposure and gain across DPD, the RP3
+  wake-path white-outs), **#154** (sampling burst runs once per image instead of once per
+  wake). **#184** (single-camera deployments) is also blocked.
 
 **Decisions still open:** #165, #167, #175, #189.
 
-**Conflict-free, safe to do now:** #152, #155, #156, #157, #162, #163, #164, #171, #172,
-#174, #176, #177, #178, #179, #181, #182, #183, #186, #188, #190.
+**Other conflict-free work:** #152, #157, #162, #163, #164, #171, #172, #174, #176, #177,
+#178, #190. Of these, **#190** is the one with a live consequence: `device_image` deletes
+the other camera variant's image, so the dual-image build silently produces only one.
 
-**Blocked until PRs #143 and #144 land** (they touch the same files): #151, #153, #154,
-#158, #159, #160, #161, #168, #170, #173, #180, #184, #185, #187.
-
-**Light sensor** (also tagged `light-sensor`, the cluster Charles raised): #154, #158,
-#181, #182, #183, #184, #186.
+**Blocked until PRs #143 and #144 land** (they touch the same files): #151, #153, #159,
+#160, #161, #168, #170, #173, #180, #185, #187, plus #154, #158 and #184 above.
 
 **Closed:** #166 (superseded by #189), #169 (build outputs restored and verified).
 

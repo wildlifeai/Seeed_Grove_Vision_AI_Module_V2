@@ -84,17 +84,12 @@ Agreed August 2026: docs are the record, issues are the tracker. See
 
 ## Open items
 
-40 issues carry the review's findings, all labelled `review-finding` and on the
-[project board](https://github.com/orgs/wildlifeai/projects/3). 38 open, 2 closed.
+41 issues carry the review's findings, all labelled `review-finding` and on the
+[project board](https://github.com/orgs/wildlifeai/projects/3). 38 open, 3 closed.
 
 **Already done, do not pick these up.** Listed because the issues are still open and would
-otherwise look like available work:
-
-- **#188** fixed and merged. Both halves are in `dev`: the `HOST_OS` guard around the
-  `D:/hxbuild` block, and the executable bit on the image-generation binaries. The issue
-  can be closed.
-- **#155, #156, #179** fixed in PR #191, awaiting merge. #155 was also reproduced and
-  re-verified on hardware.
+otherwise look like available work: **#155, #156, #179**, all fixed in PR #191 and awaiting
+merge. #155 was also reproduced and re-verified on hardware.
 
 **Agreed next focus: the light sensor cluster** (tagged `light-sensor`), so that a working
 camera can be put in front of a field tester:
@@ -111,13 +106,17 @@ camera can be put in front of a field tester:
 **Decisions still open:** #165, #167, #175, #189.
 
 **Other conflict-free work:** #152, #157, #162, #163, #164, #171, #172, #174, #176, #177,
-#178, #190. Of these, **#190** is the one with a live consequence: `device_image` deletes
-the other camera variant's image, so the dual-image build silently produces only one.
+#178, #190, #194. Two of these have a live consequence rather than being tidy-ups:
+**#190**, where `device_image` deletes the other camera variant's image so the dual-image
+build silently produces only one, and **#194**, where the git-info lines redirect to `NUL`
+and so write a stray file of that name into `EPII_CM55M_APP_S/` on every Linux build.
 
 **Blocked until PRs #143 and #144 land** (they touch the same files): #151, #153, #159,
 #160, #161, #168, #170, #173, #180, #185, #187, plus #154, #158 and #184 above.
 
-**Closed:** #166 (superseded by #189), #169 (build outputs restored and verified).
+**Closed:** #166 (superseded by #189), #169 (build outputs restored and verified), #188
+(both build breakages fixed and merged; its one remaining item, the stray `NUL` file,
+carried over to #194 rather than closed with it).
 
 ## Files
 

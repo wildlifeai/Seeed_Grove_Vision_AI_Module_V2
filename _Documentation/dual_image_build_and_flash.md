@@ -24,20 +24,55 @@ make clean && make -j"$(nproc)" CIS_SUPPORT_INAPP_MODEL=cis_hm0360    # HM0360 n
 - `_Tools/build_ww500.sh [cis_model]` wraps this under WSL, but **stops at the ELF** —
   it does not run image generation.
 
+Two build-environment switches worth knowing (`ww500_md.mk`):
+
+- **`D:/hxbuild`**: on Windows only, the object tree is relocated there to stay under
+  MAX_PATH. Override with `make OUT_DIR_ROOT=E:/build` to put it elsewhere; the block only
+  acts when `OUT_DIR_ROOT` is empty. On Linux and macOS it is skipped entirely (it used to
+  run everywhere, which broke CI — see #188).
+- **`WW500_FAST_LIBS`** (default `y`): reuses the prebuilt TFLM and CMSIS-NN archives
+  instead of recompiling them, which is most of a clean build's time. To rebuild those from
+  source, e.g. after an SDK upgrade: `make WW500_FAST_LIBS=n`.
+
 ## 2. Generate and name the images
 
-Use `we2_image_gen_local_dpd` with the **RC24M** profile (recipe in
-[`building_firmware.md`](building_firmware.md)). Two joins the recipe doesn't state:
+**Image generation is now part of the build.** A plain `make` runs it: the default `all`
+target depends on `gen_image` and `device_image` (`ww500_md/mk/image_gen.mk`), so each
+build of section 1 already produces
 
-- Both variant runs write the **same** `output_case1_sec_wlcsp/output.img` — copy the
-  first image out (e.g. to `RP3.IMG`) before generating the second, or it is silently
-  overwritten.
-- For the SD-card route the filename must be **8.3** (e.g. `RP3.IMG`, `HM0360.IMG`, or
-  the Setup-Folder scheme `VYMDDHMM.IMG` from `MANIFEST/README.TXT` — first letter `R` or
-  `H`). FatFS has no long-filename support (`ffconf.h:116`, `FF_USE_LFN 0`), and the
-  `firmware` command additionally truncates names longer than 13 characters
-  (`xip_manager.c:1591`) — a long name can pass the CRC check and then fail "not found".
-  CI's artifact names (`WW500_C02_<VARIANT>_<timestamp>.img`) are too long for the device.
+- `we2_image_gen_local_dpd/output_case1_sec_wlcsp/output.img`, and
+- an 8.3 device-named copy, `VYMDDHMM.IMG`, matching the website's "Prepare SD Card"
+  scheme: `R`/`H` for the variant, then year digit, month, day, hour and minute of the
+  build (e.g. `R6818F30.IMG`). It uses local time, so it agrees with the `ver` boot banner.
+
+No manual `we2_local_image_gen` run and no hand-renaming. On a fresh clone the tool needs
+to be executable; that is recorded in git now, but on Windows the `.exe` variants are
+gitignored and must be copied in once (`mk/image_gen.mk` says which, and errors clearly if
+one is missing).
+
+**The trap when building both variants.** `device_image` deletes `R*.IMG` and `H*.IMG` in
+the output folder before writing its own, to stop images accumulating one per minute. That
+also deletes the *other* variant's image, so two consecutive builds leave only the second:
+
+```
+make clean && make CIS_SUPPORT_INAPP_MODEL=cis_imx708   # R6818F30.IMG
+make clean && make CIS_SUPPORT_INAPP_MODEL=cis_hm0360   # H6818F30.IMG, and R6818F30.IMG is gone
+```
+
+So **copy each image out of that folder before building the other variant**, exactly as
+before. This is tracked as a defect in the tooling rather than intended behaviour.
+
+The manual route still works if you need it: run `we2_image_gen_local_dpd` with the
+**RC24M** profile per [`building_firmware.md`](building_firmware.md). Note that both
+variants write the same `output.img`, so the same copy-it-out rule applies.
+
+**Filenames must be 8.3** for the SD-card route: eight characters, a dot, three more, as in
+`R6818F30.IMG` or `HM0360.IMG`. FatFs is built without long-filename support
+(`ww500_md/ffconf.h:116`, `FF_USE_LFN 0`), so a longer name cannot be opened at all. The
+`firmware` command rejects an over-long name up front and says why. It used to truncate
+silently, which meant a long name could pass the CRC check and then fail "not found" (#155).
+CI's artifact names (`WW500_C02_<VARIANT>_<timestamp>.img`) are too long for the device, so
+rename before copying one to a card.
 
 ## 3. Flash from the SD card — the `firmware` command
 

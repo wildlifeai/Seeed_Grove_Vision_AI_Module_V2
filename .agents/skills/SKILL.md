@@ -80,7 +80,7 @@ What that means for an agent, beyond reading the rules:
 # 4. Hardware behaviour that will trap you
 
 Verified on the bench (details + serial evidence in
-`_Documentation/development reports/2026-07_pr141-review-cgp/`):
+`_Documentation/development reports/2026-08-06_pr141-camera-features-review/`):
 
 * **Slot labels self-heal at first boot** — flashing clears the target slot's label to
   `unknown`; each image labels its own slot on every boot. `slots` showing `unknown` for

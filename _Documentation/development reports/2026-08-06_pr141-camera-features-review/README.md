@@ -43,13 +43,14 @@ Do not gate the label call on cold boot.
 
 ## Open items
 
-- **Light sensor**, the cluster Charles raised and the agreed next focus: #182 (extract into
-  one module with a document), #181 (instrument and validate the AE sampling window), #183
-  (expose the decision in EXIF and to the app), #186 (design question, assigned to CGP: is
-  MD illumination meant to depend on op13?). Blocked on #143/#144: #158, #154, #184.
-- **Other:** #151 (cold-boot gate on `cameraSwitch_labelBootSlot()`), #152 (preserve the RTC
-  across deliberate reboots), #168 (`adjustInactivityPeriod()`), #163 (doc and comment
-  corrections), #165 (op26/op24 defaults).
+- **Light sensor**, the cluster Charles raised and the agreed next focus: [#182] (extract
+  into one module with a document), [#181] (instrument and validate the AE sampling
+  window), [#183] (expose the decision in EXIF and to the app), [#186] (design question,
+  assigned to CGP: is MD illumination meant to depend on op13?). Blocked on [#143] and
+  [#144]: [#158], [#154], [#184].
+- **Other:** [#151] (cold-boot gate on `cameraSwitch_labelBootSlot()`), [#152] (preserve
+  the RTC across deliberate reboots), [#168] (`adjustInactivityPeriod()`), [#163] (doc and
+  comment corrections), [#165] (op26/op24 defaults).
 
 Full set on the [project board](https://github.com/orgs/wildlifeai/projects/3), labelled
 `review-finding`.
@@ -62,9 +63,25 @@ Full set on the [project board](https://github.com/orgs/wildlifeai/projects/3), 
 | [`review_responses.md`](review_responses.md) | Point-by-point responses with file:line evidence: bench results, dispute verdicts, camreg/vcm audit, battery impact, triage of CGP's changes |
 | [`bench_validation_evidence.md`](bench_validation_evidence.md) | Serial-log evidence: slot-labelling ladder, op26 cycle, staged-exposure validation |
 | [`logs/`](logs/) | Raw timestamped serial captures behind the evidence doc |
-| [`reviewer_worktree_setup.md`](reviewer_worktree_setup.md) | The worktree and Meld recipe written for this review. Superseded by [`Reviewing_External_PRs_with_Worktrees.md`](../../Reviewing_External_PRs_with_Worktrees.md) and [`Reviewing_Stacked_PRs.md`](../../Reviewing_Stacked_PRs.md), which are canonical. Retained as an artefact of this thread; consolidation is #178 |
+| [`reviewer_worktree_setup.md`](reviewer_worktree_setup.md) | The worktree and Meld recipe written for this review. Superseded by [`Reviewing_External_PRs_with_Worktrees.md`](../../Reviewing_External_PRs_with_Worktrees.md) and [`Reviewing_Stacked_PRs.md`](../../Reviewing_Stacked_PRs.md), which are canonical. Retained as an artefact of this thread; consolidation is [#178] |
 
 ## Related threads
 
 - [PR #142 review](../2026-08-08_pr142-ble-fast-transfer-review/README.md)
 - [PR #140 review](../2026-08-10_pr140-rp3-image-quality-review/README.md)
+
+[#143]: https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/143
+[#144]: https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/144
+[#151]: https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/151
+[#152]: https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/152
+[#154]: https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/154
+[#158]: https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/158
+[#163]: https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/163
+[#165]: https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/165
+[#168]: https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/168
+[#178]: https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/178
+[#181]: https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/181
+[#182]: https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/182
+[#183]: https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/183
+[#184]: https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/184
+[#186]: https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/186

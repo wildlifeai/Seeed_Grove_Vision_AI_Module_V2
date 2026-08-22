@@ -35,7 +35,7 @@
  *
  * Notes on SD cards > 32G
  * -------------------------
- * These are probaly supporting exFAT. The above ChatGPT conversation suggested I install fat32format.exe
+ * These are probably supporting exFAT. The above ChatGPT conversation suggested I install fat32format.exe
  * from here: http://ridgecrop.co.uk/index.htm?fat32format.htm
  * This worked for me - formatted 64G cards as FAT32
  *
@@ -67,6 +67,7 @@
 #include "semphr.h"
 
 #include "fatfs_task.h"
+#include "cis_file.h"
 #include "image_task.h"
 #include "app_msg.h"
 #include "CLI-commands.h"
@@ -140,6 +141,9 @@ extern GPS_Coordinate exif_gps_deviceLon;
 extern GPS_Altitude exif_gps_deviceAlt;
 
 extern directoryManager_t dirManager;
+// Defined in if_task.c: true while a file-receive session is active. Suppresses the
+// high-volume per-packet console logging that throttles the transfer at 921600 baud.
+extern volatile bool g_fileRxActive;
 extern QueueHandle_t xIfTaskQueue;
 extern QueueHandle_t xImageTaskQueue;
 
@@ -169,8 +173,22 @@ static bool mounted;
 static FIL transferFile;
 static bool transferFileOpen = false;
 
+// Flush FAT metadata with f_sync() every N appends. Without this a long
+// transfer accumulates unbounded dirty filesystem state (cluster chain and
+// directory updates), which is the suspected cause of the non-deterministic
+// f_write() failures ("ftx err 7") seen on transfers beyond ~3-7KB.
+// 16 x 241-byte chunks ≈ 3.9KB between syncs; each f_sync costs ~50-100ms,
+// amortised to a few ms per packet.
+#define TRANSFER_WRITES_PER_SYNC 16
+static uint16_t transferWritesSinceSync = 0;
+
 static TickType_t xStartTime;
 static TickType_t accumulatedTime;
+
+/* Set non-zero while a fileWriteImage() call is in progress.
+ * CLI task polls this before calling hx_drv_rtc_set_time(), which suppresses
+ * ARM interrupts for ~1s and would otherwise starve the FatFS task mid-write. */
+volatile int g_sdWriteActive = 0;
 
 // Strings for each of these states. Values must match APP_TASK1_STATE_E in task1.h
 const char *fatFsTaskStateString[APP_FATFS_STATE_NUMSTATES] = {
@@ -220,6 +238,17 @@ uint16_t op_parameter[OP_PARAMETER_NUM_ENTRIES] = {
 	0,	    	   		// 18 Test Mode Bits - one bit to enable each test function
 	0,	    	   		// 19 OP_PARAMETER_IMAGES_COUNT
 	0,	    	   		// 20 OP_PARAMETER_IMAGES_COUNT - increment as files are added. Start a new folder when this exceeds a threhsold
+	2,	    	   		// 21 OP_PARAMETER_MD_FLASH_LED (2 = IR)
+	50,	    	   		// 22 OP_PARAMETER_MD_FLASH_BRIGHTNESS_PERCENT (STROBE-gated ~15ms pulses; 5% too dim in the field)
+	65,	    	   		// 23 OP_PARAMETER_AE_DARK_THRESHOLD ('moderate' setting - see AE_Light_Sensor_Roadmap.md)
+	15,	    	   		// 24 OP_PARAMETER_AE_CHECK_INTERVAL (minutes; 0 disables)
+	0,	    	   		// 25 OP_PARAMETER_AE_FLASH_STATE (runtime state)
+	0,	    	   		// 26 OP_PARAMETER_SLOT_SWITCH (0 = off/manual only; 1 = automatic light-based switching)
+	286,	   			// 27 OP_PARAMETER_WB_RED_GAIN (Q8.8: 286 = x1.117, the bench-measured neutralising gain; 0 disables)
+	326,	   			// 28 OP_PARAMETER_WB_BLUE_GAIN (Q8.8: 326 = x1.273, the bench-measured neutralising gain; 0 disables)
+	1,	    	   		// 29 OP_PARAMETER_CAM_AE_ENABLE (RP camera auto-exposure on/off - see ae.c)
+	110,	   			// 30 OP_PARAMETER_CAM_AE_TARGET (target mean luma; 0 = built-in default)
+	1,	    	   		// 31 OP_PARAMETER_CAM_WB_MODE (1 = auto grey-world; 2 = manual op27/28; 0 = off)
 };
 
 // Deployment ID UUID string — loaded from 'I ' line in CONFIG.TXT or set via setdid CLI command
@@ -452,6 +481,7 @@ static APP_MSG_DEST_T handleEventForUninit(APP_MSG_T rxMessage) {
 
 		// Inform the if task that the disk operation is complete
 		sendMsg.message.msg_data = (uint32_t)FR_NO_FILESYSTEM;
+		sendMsg.message.msg_parameter = (uint32_t)fileOp;
 		sendMsg.destination = fileOp->senderQueue;
 
 		// The message to send depends on the destination! In retrospect it would have been better
@@ -556,7 +586,9 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 		else {
 			xStartTime = xTaskGetTickCount();
 
+			g_sdWriteActive = 1;
 			res = fileWriteImage(fileOp, extraBlock, &dirManager);
+			g_sdWriteActive = 0;
 			fatfs_incrementOperationalParameter(OP_PARAMETER_IMAGES_COUNT);
 
 			elapsedTime = app_getElapsedMs(xStartTime);
@@ -598,16 +630,23 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 
 		if (fileOp->senderQueue == xImageTaskQueue) {
 			// writes image
+			g_sdWriteActive = 1;
 			res = fileWriteImage(fileOp, NULL, &dirManager);
+			g_sdWriteActive = 0;
 		} else {
 			// writes file
+			g_sdWriteActive = 1;
 			res = fileWrite(fileOp);
+			g_sdWriteActive = 0;
 		}
 
 		xprintf("File write took %dms\n", app_getElapsedMs(xStartTime));
 
-		// Inform the if task that the disk operation is complete
+		// Inform the if task that the disk operation is complete.
+		// msg_parameter echoes the fileOperation_t pointer so a receiver with
+		// several outstanding operations can tell which one completed.
 		sendMsg.message.msg_data = (uint32_t)res;
+		sendMsg.message.msg_parameter = (uint32_t)fileOp;
 		sendMsg.destination = fileOp->senderQueue;
 
 		// The message to send depends on the destination! In retrospect it would have been better
@@ -631,7 +670,8 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 		xStartTime = xTaskGetTickCount();
 		res = fileRead(fileOp);
 
-		xprintf("Elapsed time (fileRead) %dms. Result code %d\n", (xTaskGetTickCount() - xStartTime) * portTICK_PERIOD_MS, res);
+		xprintf("Elapsed time (fileRead) %dms. Result code %d\n",
+				app_getElapsedMs(xStartTime), res);
 
 		fatFs_task_state = APP_FATFS_STATE_IDLE;
 
@@ -684,6 +724,27 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 
 		break;
 
+	case APP_MSG_FATFSTASK_SAVE_CONFIG:
+		// Persist the Operational Parameters to CONFIG.TXT immediately, WITHOUT
+		// unmounting (unlike SAVE_STATE). Sent after a setop / BLE parameter
+		// change so the new value survives the next sleep even if no capture
+		// (which is what normally triggers SAVE_STATE) happens before DPD.
+		// Without this, a changed op param (e.g. a white-balance gain or the
+		// timelapse interval) is lost on the next wake.
+		if (fatfs_mounted()) {
+			res = save_configuration(STATE_FILE, &dirManager);
+			if (res) {
+				xprintf("Error %d saving config\n", res);
+			}
+			else {
+				xprintf("Config saved (op params persisted).\n");
+			}
+		}
+		else {
+			xprintf("Cannot save config - SD not mounted\n");
+		}
+		break;
+
 	case APP_MSG_FATFSTASK_OPEN_FILE:
 		// 1/3 commands for sending files from the app to the SD card
 
@@ -705,7 +766,14 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 		}
 
 		if (res == FR_OK) {
+			// FA_CREATE_ALWAYS truncated any existing file, freeing its cluster
+			// chain. Commit that (and let the card finish the internal
+			// housekeeping) BEFORE the first data write - otherwise re-sending a
+			// large file failed on packet 1 with FR_DISK_ERR (ftx err 7) because
+			// the card was still busy from freeing ~1000 clusters.
+			f_sync(&transferFile);
 			transferFileOpen = true;
+			transferWritesSinceSync = 0;
 			xprintf("Opened '%s' for writing\n", fileOp->fileName);
 		}
 		else {
@@ -730,10 +798,36 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 			res = FR_INVALID_OBJECT;
 		}
 		else {
-			res = f_write(&transferFile, fileOp->buffer, fileOp->length, &bw);
-			if (res == FR_OK && bw != fileOp->length) {
-				xprintf("Short write: %u of %lu bytes\n", bw, fileOp->length);
-				res = FR_DISK_ERR;
+			// Retry transient SD write failures: the card can be briefly busy
+			// (internal garbage collection, or recovering after a large-file
+			// truncate), which returns FR_DISK_ERR. A short delay lets it
+			// recover; only a persistent failure becomes ftx err 7.
+			for (int attempt = 0; ; attempt++) {
+				res = f_write(&transferFile, fileOp->buffer, fileOp->length, &bw);
+				if (res == FR_OK && bw != fileOp->length) {
+					// FR_OK with a short count means the volume is full. Do NOT
+					// retry: the file pointer has already advanced by bw, so a
+					// rewrite of the full buffer would duplicate those bytes and
+					// corrupt the file. Report it as a write error (ftx err 7).
+					xprintf("Short write: %u of %lu bytes (volume full?)\n", bw, fileOp->length);
+					res = FR_DISK_ERR;
+					break;
+				}
+				if (res == FR_OK || attempt >= 3) {
+					break;
+				}
+				xprintf("SD write err %d, retry %d/3\n", res, attempt + 1);
+				vTaskDelay(pdMS_TO_TICKS(15));
+			}
+
+			// Periodic metadata flush — see TRANSFER_WRITES_PER_SYNC above.
+			// A failed sync is reported like a failed write (ftx err 7).
+			if (res == FR_OK && ++transferWritesSinceSync >= TRANSFER_WRITES_PER_SYNC) {
+				res = f_sync(&transferFile);
+				transferWritesSinceSync = 0;
+				if (res != FR_OK) {
+					xprintf("f_sync failed (err %d)\n", res);
+				}
 			}
 		}
 
@@ -1149,8 +1243,6 @@ FRESULT save_configuration(const char *filename, directoryManager_t *dirManager)
 		dirManager->configRes = res;
 	}
 
-
-
 	return dirManager->configRes;
 }
 
@@ -1542,6 +1634,11 @@ static void vFatFsTask(void *pvParameters) {
 		xprintf("sendMsg=0x%x fail\r\n", sendMsg.msg_event);
 	}
 
+	// Load the staged camera register table (camreg command) from the SD card
+	// while this task is still the only one doing disk I/O - FatFs is not
+	// re-entrant, so this cannot be done lazily from the CLI task
+	cis_file_loadStagedFromFile();
+
 	// The semaphore lets the Image Task proceed
 	// xprintf("DEBUG: giving semaphore so Image Task can proceed\n");
 	xSemaphoreGive(xSDInitDoneSemaphore);
@@ -1561,10 +1658,12 @@ static void vFatFsTask(void *pvParameters) {
 				eventString = "Unexpected";
 			}
 
-			XP_LT_CYAN
-			xprintf("\nFatFS Task ");
-			XP_WHITE;
-			xprintf("received event '%s' (0x%04x). Rx data = 0x%08x\r\n", eventString, event, rxData);
+			if (!g_fileRxActive) {
+				XP_LT_CYAN
+				xprintf("\nFatFS Task ");
+				XP_WHITE;
+				xprintf("received event '%s' (0x%04x). Rx data = 0x%08x\r\n", eventString, event, rxData);
+			}
 
 			old_state = fatFs_task_state;
 
@@ -1589,7 +1688,7 @@ static void vFatFsTask(void *pvParameters) {
 				break;
 			}
 
-			if (old_state != fatFs_task_state) {
+			if ((old_state != fatFs_task_state) && !g_fileRxActive) {
 				// state has changed
 				XP_LT_CYAN;
 				xprintf("FatFS Task state changed ");
@@ -1606,7 +1705,7 @@ static void vFatFsTask(void *pvParameters) {
 
 				if (xQueueSend(targetQueue, (void *)&sendMsg, __QueueSendTicksToWait) != pdTRUE) {
 					xprintf("FatFS task sending event 0x%x failed\r\n", sendMsg.msg_event);
-				} else {
+				} else if (!g_fileRxActive) {
 					xprintf("FatFS task sending event 0x%04x. Tx data = 0x%08x\r\n", sendMsg.msg_event, sendMsg.msg_data);
 				}
 			}

@@ -66,6 +66,10 @@ we2_image_gen_local_dpd/secureboot_tool/**/*.log
 # Track all other subfolders normally (do not ignore their contents)
 # No need to do anything else � they are tracked by default
 
+# Python bytecode
+*.pyc
+*.pyo
+__pycache__/
 
 # Editor config
 .vscode/
@@ -74,9 +78,8 @@ we2_image_gen_local_dpd/secureboot_tool/**/*.log
 node_modules/
 
 # Agent and Editor settings
-.agents/
 .cursorrules
 .windsurfrules
-CLAUDE.md
+
 .claude/
 **/claude/

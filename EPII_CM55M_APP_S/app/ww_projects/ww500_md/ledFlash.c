@@ -23,6 +23,8 @@
 #include "ledFlash.h"
 #include "pca9574.h"
 
+#include "hm0360_md.h"
+#include "hx_drv_rtc.h"
 
 /*************************************** Defines **************************************/
 
@@ -38,9 +40,6 @@
 #define LF_RFU			(1 << 6)
 #define LF_FLENABLE		(1 << 7)
 
-// If uncommented, a timer is used to turn off the flash.
-// Probably not needed as the state machine should also turn it off.
-//#define TIMER_TURNS_OFF_FLASH
 
 /*************************************** Local Function Declarations ******************/
 
@@ -55,7 +54,13 @@ extern QueueHandle_t xImageTaskQueue;
 
 /*************************************** Local variables ******************************/
 
+// What determines how to figure out if the LED shoud flash
+static FlashLedMode_t flashMode = FLASH_MODE_OFF;
+
 static bool ledFlashInitialised = false;
+
+// The flash should be operating as determined by OpParam settings, AE values and time of day
+static bool flashActive = false;
 
 // Need to maintain a copy of bits sent to the control/status chip, so we can change individual bits
 static uint8_t controlBits = 0;
@@ -110,6 +115,9 @@ static void FlashOffTimerCallback(TimerHandle_t xTimer) {
  */
 bool ledFlashInit(void) {
 	HX_CIS_ERROR_E ret;
+
+	flashMode = FLASH_MODE_OFF;
+	flashActive = false;
 
 	ret = pca9574_init(PCA9574_I2C_ADDRESS_0);
 
@@ -172,9 +180,7 @@ void ledFlashBrightness(uint8_t brightness) {
 	controlBits &= ~0x0f;	// clear the 4 LS bits
 	controlBits |= brBits;	// sets the 4 LS bits
 
-	// Don't send except in ledFlashEnable() and ledFlashDisable()
-	// Now send these bits to the PCA9574
-	//pca9574_write(PCA9574_I2C_ADDRESS_0, PCA9574_REG_OUT, controlBits);
+	// The control bits are only written to hardware by ledFlashEnable() and ledFlashDisable()
 
 	XP_LT_RED;
     xprintf("DEBUG: ledFlashBrightness(%d%%) [brbits = 0x%01x]\n", brightness, brBits);
@@ -185,6 +191,9 @@ void ledFlashBrightness(uint8_t brightness) {
  * Selects the LED(s) to use
  *
  * In some hardware implementations there is only one LED - this is VISLED
+ *
+ * This is the place at which we can enable or disable the LED based on the
+ * flashMode and other conditions.
  *
  * @param led - a bit mask, one for each LED
  */
@@ -210,7 +219,7 @@ void ledFlashSelectLED(FlashLeds_t led) {
 		controlBits |= LF_IRENABLE;
 	}
 
-	// Don't send except in ledFlashEnable() and ledFlashDisable()
+	// Don't write controlBits except in ledFlashEnable() and ledFlashDisable()
 	XP_LT_RED;
 	xprintf("DEBUG: ledFlashSelectLED(%d)\n", led);
 	XP_WHITE;
@@ -218,40 +227,36 @@ void ledFlashSelectLED(FlashLeds_t led) {
 
 /**
  * Turns on the Flash LED
+ *
+ * ledFlashEnable() and ledFlashDisable() are the only functions
+ * that writecontrolBits to the hardware.
+ *
+ * This is not (normally) used if the HM0360 is the main camera.
+ *
  * The LED will be turned off when the Frame Ready message arrives.
  * At present the LED will also be turned off later by a timer,
  * but this is redundant. Left in at present as a precaution.
  * Also turned off explicitly before entering DPD, again as a precaution.
  *
  * NOTE: this turns on the FLASHEN bit but does NOT affect the HM0360 whose STROBE pin might also flash the LED.
- *
- * @param duration - a period after which the flash is turned off
  */
-void ledFlashEnable(uint16_t duration) {
+void ledFlashEnable(void) {
+
 	if (!ledFlashInitialised) {
 		return;
 	}
 
 	XP_LT_RED;
-
-	if ((fatfs_getOperationalParameter(OP_PARAMETER_FLASH_LED) == 0) ||
-			(duration < LEDFLASHDURATIONMIN) ||
-			(duration > LEDFLASHDURATIONMAX))  {
-		// Neither LED is selected, or inappropriate duration
-		xprintf("DEBUG: not turning on flash\n");
-		ledFlashDisable();
-		return;
-	}
-	else {
-		xprintf("DEBUG: ledFlashEnable(%dms)\n", duration);
-	}
-	XP_WHITE;
+	xprintf("DEBUG: ledFlashEnable()\n");
 
 	controlBits |= LF_FLENABLE;
 	// Now send these bits to the PCA9574
 	pca9574_write(PCA9574_I2C_ADDRESS_0, PCA9574_REG_OUT, controlBits);
 
+    XP_WHITE;
+
 #ifdef TIMER_TURNS_OFF_FLASH
+    uint16_t duration = fatfs_getOperationalParameter(OP_PARAMETER_FLASH_DURATION);
 	// Start a timer that delays for the defined interval.
     if (flashOffTimer != NULL) {
         // Change the period and start the timer
@@ -263,6 +268,9 @@ void ledFlashEnable(uint16_t duration) {
 
 /**
  * Turns off the Flash LED
+ *
+ * ledFlashEnable() and ledFlashDisable() are the only functions
+ * that writecontrolBits to the hardware.
  *
  * NOTE: this turns off the FLASHEN bit but does NOT stop the HM0360 from flashing the LED
  */
@@ -280,4 +288,194 @@ void ledFlashDisable(void) {
 	pca9574_write(PCA9574_I2C_ADDRESS_0, PCA9574_REG_OUT, controlBits);
 
     XP_WHITE;
+}
+
+/**
+ * Turns on the Flash LED if conditions are right
+ *
+ * This calls ledFlashEnable() or ledFlashDisable() which are the only functions
+ * that write controlBits to the hardware.
+ */
+void ledFlashActivate(void) {
+
+	if (!ledFlashInitialised) {
+		return;
+	}
+
+	if (flashActive) {
+		ledFlashEnable();
+	}
+	else {
+		ledFlashDisable();
+	}
+}
+
+/**
+ * Returns whether the LED flash should be in use
+ *
+ * @return 0 if flash is inactive. Otherwise return  1 (visible) or 2 (IR)
+ */
+uint8_t ledFlashIsActive(void) {
+	if (flashActive) {
+		return fatfs_getOperationalParameter(OP_PARAMETER_FLASH_LED);
+	}
+	else {
+		return 0;
+	}
+}
+
+/**
+ * Setter for flashMode from operational parameter values
+ *
+ * Call when the Operational Parameters have been loaded from SD card
+ *
+ * The flash for captures is either off, or driven by the AE light sensor
+ * (on when the scene is dark). See _Documentation/AE_Light_Sensor_Roadmap.md
+
+| No. |  Case                    | OP_PARAMETER_FLASH_LED |
+|-----|--------------------------|------------------------|
+| 1   | Always off               | 0                      |
+| 2   | Selected by AE           | 1 (visible) or 2 (IR)  |
+ *
+ */
+void ledFlashSetFlashModeFromOpParam(uint16_t ledInUse) {
+
+	// ledFlashSelectLED
+	ledFlashSelectLED(ledInUse);
+
+	if (ledInUse == 0) {
+		// No LEDs
+		flashMode = FLASH_MODE_OFF;
+		flashActive = false;
+	}
+	else {
+		// Determined by AE registers (the AE light sensor)
+		flashMode = FLASH_MODE_AE;
+		// Restore the last AE light decision. It is persisted as an Operational
+		// Parameter because RAM is lost in DPD, and the first capture after a
+		// motion-detect wake happens before any fresh AE reading exists.
+		flashActive = (fatfs_getOperationalParameter(OP_PARAMETER_AE_FLASH_STATE) == 1);
+	}
+
+	// debug
+	xprintf("In ledFlashSetFlashModeFromOpParam with %d Mode %d\n",
+			ledInUse, flashMode);
+}
+
+
+
+// Setter for flashMode
+void ledFlashSetFlashMode(FlashLedMode_t mode) {
+	flashMode = mode;
+}
+
+// Getter for flashMode
+FlashLedMode_t  ledFlashGetFlashMode(void) {
+	return flashMode;
+}
+
+/**
+ * The HM0360 AE registers values have arrived - this might determine LED Flash behaviour
+ *
+ * Legacy single-frame entry point, kept for callers that only have one reading.
+ * Prefer ledFlashNewAEStats(), which is robust against the AE loop oscillation
+ * documented there. This wraps the single reading as a one-sample statistic.
+ *
+ * @param gainRegs
+ */
+void ledFlashNewAEValues(HM0360_GAIN_T * gainRegs) {
+	HM0360_AE_STATS_T stats;
+
+	if (gainRegs == NULL) {
+		return;
+	}
+
+	stats.samples = 1;
+	stats.meanAE = gainRegs->aeMean;
+	stats.minAE = gainRegs->aeMean;
+	stats.maxAE = gainRegs->aeMean;
+	stats.maxAnalogGain = gainRegs->analogGain;
+	stats.maxDigitalGain = gainRegs->digitalGain;
+	stats.railedCount = 0;
+	stats.gainRailed = false;
+
+	ledFlashNewAEStats(&stats);
+}
+
+/**
+ * Decide the flash state from aggregated AE statistics (the light sensor).
+ *
+ * A single AE_MEAN reading is unreliable: it is the output of the HM0360's AE
+ * control loop, which limit-cycles. Bench testing in a fully dark box showed
+ * AE_MEAN swinging between ~3 and ~66 (across the dark threshold), so ~37% of
+ * single-frame reads wrongly said "bright". This uses the mean over several
+ * frames plus two extra safeguards:
+ *
+ *   - Hysteresis: turn the flash ON below the dark threshold, but only turn it
+ *     OFF again once well above it (threshold + AE_HYSTERESIS). This stops the
+ *     flash chattering when the light sits near the boundary.
+ *   - Gain-railed override: if the AE has run its gain to maximum on most
+ *     frames it cannot expose any darker, so force the flash ON regardless of
+ *     the (then meaningless) AE_MEAN value.
+ *
+ * See _Documentation/AE_Light_Sensor_Roadmap.md
+ *
+ * @param stats  aggregated AE statistics from hm0360_md_getAEStats()
+ */
+void ledFlashNewAEStats(HM0360_AE_STATS_T * stats) {
+	uint16_t threshold;
+	bool wasDark;
+	bool dark;
+
+    if ((stats == NULL) || (stats->samples == 0)) {
+    	return;
+    }
+
+    // The dark/bright decision has two consumers: the AE-driven flash
+    // (FLASH_MODE_AE) and automatic camera switching (OP_PARAMETER_SLOT_SWITCH,
+    // see camera_switch.c). Compute and persist it when either is enabled -
+    // but only let it drive the flash LED in FLASH_MODE_AE, so op26 alone
+    // never fires the flash when the user has it off.
+    if ((flashMode != FLASH_MODE_AE)
+    		&& (fatfs_getOperationalParameter(OP_PARAMETER_SLOT_SWITCH) != 1)) {
+    	return;
+    }
+
+    threshold = fatfs_getOperationalParameter(OP_PARAMETER_AE_DARK_THRESHOLD);
+    // Hysteresis memory is the persisted decision. In FLASH_MODE_AE this is
+    // kept in lockstep with flashActive (restored from it at boot, written
+    // back below), and it is the only memory that survives DPD in any mode.
+    dark = (fatfs_getOperationalParameter(OP_PARAMETER_AE_FLASH_STATE) == 1);
+    wasDark = dark;
+
+    if (stats->gainRailed) {
+        // AE gain maxed out on most frames - unambiguously dark
+        dark = true;
+    }
+    else if (stats->meanAE < threshold) {
+        // Averaged scene brightness below the dark threshold - flash needed
+        dark = true;
+    }
+    else if (stats->meanAE > (uint16_t)(threshold + AE_HYSTERESIS)) {
+        // Comfortably bright - flash not needed
+        dark = false;
+    }
+    // else: within the hysteresis band - keep the previous decision
+
+    // Persist the decision (written to CONFIG.TXT at DPD entry) so the first
+    // capture after the next wake uses it - RAM does not survive DPD
+    fatfs_setOperationalParameter(OP_PARAMETER_AE_FLASH_STATE, dark ? 1 : 0);
+
+	xprintf("AE light check: mean AE = %d (min %d, max %d) over %d frames, "
+			"threshold = %d, gain railed = %s -> %s%s\n",
+			stats->meanAE, stats->minAE, stats->maxAE, stats->samples,
+			threshold, stats->gainRailed ? "yes" : "no",
+			dark ? "DARK (flash wanted)" : "BRIGHT (no flash)",
+			(dark == wasDark) ? "" : " (changed)");
+
+	// CGP - what about the opposite: turning the flash off?
+	if (flashMode == FLASH_MODE_AE) {
+		flashActive = dark;
+		ledFlashActivate();	// Turn on Flash LED (conditionally)
+	}
 }

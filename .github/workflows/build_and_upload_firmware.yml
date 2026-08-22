@@ -27,14 +27,11 @@ env:
   # Keep in step with the toolchain developers build with locally
   ARM_TOOLCHAIN_VERSION: 14.3.rel1
 
-# NOTE - main-branch copy: this file exists on main so the "Run workflow"
-# button appears in the Actions UI (GitHub only offers manual runs for
-# workflows present on the default branch). It is dispatch-only: pick a branch
-# in the Run workflow dropdown and GitHub executes THAT branch's version of
-# this file against that branch's source. The push triggers (dev/main ->
-# automatic build+upload) live in the dev/feature copies of this file and
-# will take effect here when dev is merged into main.
 on:
+  push:
+    branches:
+      - dev
+      - main
   workflow_dispatch:
     inputs:
       source:
@@ -46,7 +43,7 @@ on:
           - build
           - prebuilt
       environment:
-        description: 'Target Supabase database (prebuilt only - builds from a branch always go to dev; merge to main for production)'
+        description: 'Target Supabase database (production is gated by the GitHub environment protection rules)'
         required: true
         default: 'dev'
         type: choice
@@ -73,13 +70,11 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             SOURCE="${{ inputs.source }}"
-            if [ "$SOURCE" = "prebuilt" ]; then
-              # Capability 3: developer uploads the committed image to either database
-              ENVIRONMENT="${{ inputs.environment }}"
-            else
-              # Capability 4: developer builds from any branch - dev database only
-              ENVIRONMENT="dev"
-            fi
+            # Manual dispatch honours the environment input for both sources
+            # (build and prebuilt). Production is guarded by the GitHub
+            # environment's protection rules (required reviewers / allowed
+            # branches), not by this file.
+            ENVIRONMENT="${{ inputs.environment }}"
           else
             # Push events: build from source; main -> production, dev -> dev
             SOURCE="build"

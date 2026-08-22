@@ -1,5 +1,5 @@
 # Description of the CONFIG.TXT File
-#### CGP - 25 April 2026
+#### CGP - 25 April 2026 (updated 11 July 2026: parameters 29-31 - RP camera auto-exposure and white-balance mode)
 
 The CONFIG.TXT file contains "Operational Parameters" for the WW500.
 
@@ -31,6 +31,10 @@ the pictured are taken at 500ms intervals.
 
 Operational Parameters which are not present in CONFIG.TXT are given their default values.
 
+Parameters changed from the mobile app or the console (`setop`) are written back to
+CONFIG.TXT immediately, so a change survives sleep and power-off even if no image is
+captured first.
+
 ## Operational Parameters Table
 
 | Index | Name                                  | Default Value | Notes                                                |
@@ -51,16 +55,26 @@ Operational Parameters which are not present in CONFIG.TXT are given their defau
 |    13 | OP_PARAMETER_FLASH_LED                | 0             | LED bit mask: visible LED used = 1, infra-red LED used =2, none = 0              |
 |    14 | OP_PARAMETER_MODEL_PROJECT            | 0             | Model project ID used for the NN model (0 disables NN)|
 |    15 | OP_PARAMETER_MODEL_VERSION            | 0             | Model version number used for the NN model |
-|    16 | OP_PARAMETER_MODEL_THRESHOLD          | 18             | Logit threshold for detection (0-127) |
+|    16 | OP_PARAMETER_MODEL_THRESHOLD          | 18            | Logit threshold for detection (0-127) |
 |    17 | OP_PARAMETER_MD_SENSITIVITY           | 1             | Motion Detection Sensitivity: 0=off, 1=low, 2=medium, 3=high |
 |    18 | OP_PARAMETER_TEST_MODE_BITS           | 0             | To manage test configurations: bit or bits indicate a test function |
 |    19 | OP_PARAMETER_IMAGES_COUNT     		| 0             | Count of images in the current image folder. Use this to decide to create a new image folder. |
 |    20 | OP_PARAMETER_IMAGES_FILE_INDEX 		| 0             | Count of image folders |
+|    21 | OP_PARAMETER_MD_FLASH_LED 			| 2             | LED used to illuminate motion-detection frames while asleep: 0 = none, 1 = visible, 2 = IR |
+|    22 | OP_PARAMETER_MD_FLASH_BRIGHTNESS_PERCENT | 50         | Brightness of the motion-detection illumination (percent; 16 hardware levels; approximately, 0 means 'dim', not 'off' - op21 = 0 is the off switch). Default raised from 5 - too dim for night MD |
+|    23 | OP_PARAMETER_AE_DARK_THRESHOLD 		| 65            | AE Mean (0-255) below this means the scene is dark and the flash is needed |
+|    24 | OP_PARAMETER_AE_CHECK_INTERVAL 		| 15            | Interval (minutes) between periodic AE light-level checks. 0 disables |
+|    25 | OP_PARAMETER_AE_FLASH_STATE 			| 0             | Last AE flash decision (0/1). Runtime state - leave as 0 |
+|    26 | OP_PARAMETER_SLOT_SWITCH 				| 0             | Automatic light-based camera image switching: 0 = off (manual `switchslot` only), 1 = automatic (night image in the dark, colour image in daylight; reboots at the next sleep) |
+|    27 | OP_PARAMETER_WB_RED_GAIN 				| 286           | Software white-balance RED gain, Q8.8 (256 = 1.0x, 0 = correction off). RP3 colour camera only |
+|    28 | OP_PARAMETER_WB_BLUE_GAIN 				| 326           | Software white-balance BLUE gain, Q8.8 (256 = 1.0x, 0 = correction off). RP3 colour camera only |
+|    29 | OP_PARAMETER_CAM_AE_ENABLE 			| 1             | RP camera auto-exposure: 0 = off (init-table exposure), 1 = on. Highlight-metered loop steps sensor exposure (8-5000 lines) then analog gain (to 16x) toward the target - see `ae.c` |
+|    30 | OP_PARAMETER_CAM_AE_TARGET 			| 110           | Auto-exposure target: raw bright-quartile (p75) luma, 0-250 (0 = built-in default 95). Bright parts of the scene render just below white after the tone curve |
+|    31 | OP_PARAMETER_CAM_WB_MODE 				| 1             | RP camera white balance: 0 = off (hardware JPEG), 1 = auto (warmth-biased grey-world measured per frame), 2 = manual op27/op28. Auto falls back to manual for flash-lit or too-dark frames - see `img_correct.c` |
 
 ## More Details
 
-For more details of how the Operational Parameters are used, see [Operational_Parameters.md](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/blob/ledflash2/_Documentation/Operational_Parameters.md)
-NOTE - correct the URL when the file is in the 'main' branch.
+For more details of how the Operational Parameters are used, see [Operational_Parameters.md](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/blob/dev/_Documentation/Operational_Parameters.md)
 
 ## GPS location
 
@@ -97,5 +111,23 @@ with "I " with the string following. Example:
 ```
 I 12345678-0000-0000-0000-000000abc666
 ```
+
 The earlier OP_PARAMETER_DEPLOYMENT_ID_CHUNK_1 - OP_PARAMETER_DEPLOYMENT_ID_CHUNK_8
 block has been removed.
+
+
+## LED Flash operation
+
+The flash is driven by the AE light sensor: the HM0360 auto-exposure registers are read
+after each capture (and periodically - see OP_PARAMETER_AE_CHECK_INTERVAL), and the flash
+operates when the scene is dark. The time-of-day and always-on modes have been removed.
+
+| Case                       | Setting |
+|----------------------------|---------|
+| Capture flash off          | OP_PARAMETER_FLASH_LED = 0 |
+| Capture flash by AE sensor | OP_PARAMETER_FLASH_LED = 1 (visible) or 2 (IR); brightness = OP_PARAMETER_LED_BRIGHTNESS_PERCENT |
+| MD illumination            | OP_PARAMETER_MD_FLASH_LED / OP_PARAMETER_MD_FLASH_BRIGHTNESS_PERCENT (also gated by the AE dark decision) |
+
+Tuning: OP_PARAMETER_AE_DARK_THRESHOLD (dark below this AE Mean value; default 65) and
+OP_PARAMETER_AE_CHECK_INTERVAL (minutes between light checks when no timelapse runs).
+See _Documentation/AE_Light_Sensor_Roadmap.md in the firmware repository.

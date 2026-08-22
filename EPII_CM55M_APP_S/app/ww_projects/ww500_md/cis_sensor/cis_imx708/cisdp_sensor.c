@@ -717,6 +717,13 @@ uint32_t app_get_jpeg_addr()
 	return g_wdma2_baseaddr;
 }
 
+// Capacity of the JPEG output buffer (jpegbuf) in bytes. Used by the software
+// JPEG encoder (img_correct.c / sw_jpeg.c) to bound its output.
+uint32_t app_get_jpeg_sz()
+{
+	return JPEG_BUFSIZE;
+}
+
 uint32_t app_get_raw_addr()
 {
 	return g_wdma3_baseaddr;

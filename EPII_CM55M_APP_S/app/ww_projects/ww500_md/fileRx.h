@@ -24,7 +24,9 @@
 
 /*********************************************** Global Defines ***********************************************/
 
-#define FILERX_MAX_FILE_SIZE    (1024u * 1024u)     // 1 MB ceiling on received file size
+// Ceiling on received file size. Must cover edge AI models (1-5 MB) as well
+// as firmware images (~0.5 MB); matches the app's MAX_TRANSFER_SIZE_BYTES.
+#define FILERX_MAX_FILE_SIZE    (10u * 1024u * 1024u)
 
 /*********************************************** Global Type Declarations ************************************/
 

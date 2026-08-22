@@ -20,6 +20,10 @@
 #include "crc16_ccitt.h"
 #include "printf_x.h"
 
+// Defined in if_task.c: true while a file-receive session is active. Used to
+// suppress the high-volume per-packet console logging that throttles the transfer.
+extern volatile bool g_fileRxActive;
+
 /*********************************************** Local Defines ***********************************************/
 
 #define FILERX_MAX_FILENAME     12      // 8.3: up to 8 base + '.' + up to 3 ext (= IMAGEFILENAMELEN - 1)
@@ -176,9 +180,12 @@ fileRx_result_t fileRx_data(const uint8_t *chunk, uint16_t len, uint8_t packetNu
     session.bytesReceived += len;
     session.lastPacketNum  = packetNum;
 
-    XP_LT_BLUE;	// colour for File TX operations
-    xprintf("FileTX: Received packet %d (%d bytes)\n", packetNum, len);
-    XP_WHITE;
+    // Per-packet log suppressed during an active transfer (throttles at 921600 baud).
+    if (!g_fileRxActive) {
+        XP_LT_BLUE;	// colour for File TX operations
+        xprintf("FileTX: Received packet %d (%d bytes)\n", packetNum, len);
+        XP_WHITE;
+    }
 
     return FILERX_OK;
 }

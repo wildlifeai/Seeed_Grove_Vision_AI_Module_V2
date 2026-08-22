@@ -25,7 +25,8 @@ void pdm_pinmux_cfg(SCU_PINMUX_CFG_T *pinmux_cfg);
 void aon_gpio1_pinmux_cfg(SCU_PINMUX_CFG_T *pinmux_cfg);
 
 // Configure a GPIO pin for RP enable pin
-void rp_sensor_enable_gpio1_pinmux_cfg(SCU_PINMUX_CFG_T *pinmux_cfg);
+// Not used
+// void rp_sensor_enable_gpio1_pinmux_cfg(SCU_PINMUX_CFG_T *pinmux_cfg);
 
 // Set the RP SENSOR_ENABLE pin high or low
 void rp_sensor_enable(bool enable);

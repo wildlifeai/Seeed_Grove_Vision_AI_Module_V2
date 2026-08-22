@@ -1,6 +1,16 @@
-# PR #141 review — responses & call agenda
+# Responses to the PR #141 review
 
-*Aug 2026; file:line references are against `review/cgp-141` at `55ccb85a`.*
+#### File: review_responses.md
+#### Author: Claude (Opus 5), reviewed by Victor Anton
+#### August 2026
+
+*Answers to [`CGP_Code_Review_July26.md`](../../../EPII_CM55M_APP_S/app/ww_projects/ww500_md/doc/CGP_Code_Review_July26.md).
+File:line references are against `review/cgp-141` at `55ccb85a`, and will drift as the code
+moves.*
+
+*Sections 0 to 7 are the review exchange as it stood in August, including positions later
+revised. Section 8 was updated on 18 August to record what actually happened. For current
+status see the [thread README](README.md).*
 
 ## 0. Bench results (6 Aug, WW500 C02, scripted serial — full detail in `bench_validation_evidence.md`)
 
@@ -90,21 +100,55 @@ git push
 For next time: a quick `git status` before `git add -A` — anything under
 `prebuilt_libs/`, `obj_*`, or named `objs.in`/`NUL` stays out of commits.
 
-## 8. Next steps and open issues
+## 8. What happened
 
-1. Settle the triage (§7): the cold-boot revert, the EXIF flash/Model handling, the
-   MD-brightness/op22 semantics, and the build-output restore (commands above).
-2. Two pending decisions, filed as "Decide:" issues on the
-   [project board](https://github.com/orgs/wildlifeai/projects/3): the op26/op24
-   defaults (§5, including the LoRaWAN-alignment idea) and the EXIF NN output contract
-   (logits vs percentages, decided with the website work in view).
-3. File the remaining findings from this review as issues — they auto-add to the board;
-   the thread README links them. Two from the bench/field evidence worth naming: the
-   **MakerNote telemetry gap** (RP3 photos record the HM0360 light-sensor's AE registers;
-   the IMX708's own exposure/gain and op29–31 state are recorded nowhere, so field photos
-   can't self-diagnose exposure problems), and **updating deployed integration-preview
-   cameras past the 24 Jul build** so they pick up the hi-res stride fix.
-4. Merge plan: cherry-pick the agreed commits from `review/cgp-141` → merge #141 →
-   the stack retargets → review #142, then #140. Several of this review's findings are
-   answered in #140 (progressive-dwell capture retry, auto-AWB over fixed gains, AE
-   persistence across DPD) and get resolved there.
+*Updated 18 August 2026, replacing the "next steps" list this section originally held.*
+
+**Merged.** All three PRs are in `dev`: [#141] as `1936ce37`, [#142] as `59ced6fd`,
+[#140] as `8cbb6a2b`, with the review changes applied.
+
+**Decided.** op26 (automatic camera switching) now defaults to 0, off, so the simplest
+configuration is the default; the reasoning is in [#165]. op22 (MD flash brightness) stays
+at 50%, since 5 was too dim for night motion detection. On-device image correction is
+retained.
+
+**Not decided.** The EXIF NN output contract, logits versus percentages, is still open. It
+moved to [#189], which consolidates Charles's August input with two findings that came
+later: Camtrap DP does not actually require percentages in EXIF, and the output tensor's
+quantization scale never leaves `cvapp.cpp`, so the server cannot currently derive
+probabilities from the logits it is sent.
+
+**Filed.** The remaining findings became 41 GitHub issues labelled `review-finding`, grouped
+in the [thread README](README.md). The two named here have numbers: the MakerNote telemetry
+gap is [#159], and updating the deployed integration-preview cameras is [#164].
+
+**Still open from §7's triage.** The cold-boot gate on `labelBootSlot()` is [#151]; the EXIF
+Model tag on RP3 photos is [#153].
+
+**What the merge itself exposed**, none of it caught by this review, all in build and CI
+rather than firmware behaviour: [#188] (the `D:/hxbuild` workaround broke every Linux build,
+and the image-generation binaries were not executable), [#190] (`device_image` deletes the
+other camera variant's image), [#156] (the PR gate built one variant on the wrong
+toolchain, which is why the first two reached `dev`) and [#155] (the `firmware` command
+truncated long filenames). [#156], [#155] and [#179] are fixed in [#191].
+
+Several findings here were indeed answered by [#140] as expected, including auto-AWB over
+fixed gains and the progressive-dwell capture retry. AE persistence across DPD was not:
+that remains [#158].
+
+[#140]: https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/140
+[#141]: https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/141
+[#142]: https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/142
+[#151]: https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/151
+[#153]: https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/153
+[#155]: https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/155
+[#156]: https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/156
+[#158]: https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/158
+[#159]: https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/159
+[#164]: https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/164
+[#165]: https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/165
+[#179]: https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/179
+[#188]: https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/188
+[#189]: https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/189
+[#190]: https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/190
+[#191]: https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/191

@@ -28,20 +28,32 @@ website and backend consume this firmware's EXIF fields, op-parameters and BLE c
 
 # 1. Development conversations and documentation
 
-**Docs are the record; GitHub issues are the tracker** (project board:
-`https://github.com/orgs/wildlifeai/projects/3`, auto-add is enabled for this repo).
+**The rules live in [`_Documentation/development reports/README.md`](../../_Documentation/development%20reports/README.md).
+Read it before starting or closing a thread.** In short: docs are the record, GitHub
+issues are the tracker (project board: `https://github.com/orgs/wildlifeai/projects/3`,
+auto-add is enabled for this repo); every thread README carries Status, Outcome and Open
+items; and threads record *how the work happened*, not how the code works.
 
-* Substantive investigation, review exchange or design discussion goes in a dated thread
-  under `_Documentation/development reports/YYYY-MM_topic/` — see the README there. Never
-  leave that material only in a chat transcript, email or PR comment.
-* Every thread README keeps **Status / Outcome / Open items** current. Open items are
-  GitHub issue links, nothing else — a document must never be the only place an open item
-  lives. File issues with the `review-finding` template.
-* When something is agreed, update the affected topic doc (the "what") and the thread's
-  Outcome (the "why") in the same change. A thread closes only when its checklist is
-  ticked.
-* Keep hardware evidence: bench/serial logs supporting a claim belong in the thread's
-  `logs/` folder, referenced from the write-up.
+What that means for an agent, beyond reading the rules:
+
+* **Never leave substantive material only in a chat transcript, email or PR comment.** An
+  investigation, review exchange or design discussion belongs in a dated thread under
+  `_Documentation/development reports/YYYY-MM-DD_short-description/`. This is the failure
+  mode to watch for: the work is done, the finding is real, and it evaporates because it
+  only ever existed in a conversation.
+* **Two homes, and do not confuse them.** How the firmware behaves now goes in the durable
+  docs (`_Documentation/*.md`, `ww500_md/doc/*.md`); how it got that way goes in the
+  thread. When something is agreed, update both in the same change: the topic doc gets the
+  "what", the thread's Outcome gets the "why".
+* **Never edit a thread to keep it true.** Threads are an append-only audit trail. If
+  behaviour changes, the durable doc changes; the thread stays as the record of what was
+  believed and decided at the time.
+* **Open items are GitHub issue links, nothing else.** A document must never be the only
+  place an open item lives. File with the `review-finding` template. Before closing a
+  thread, check its issues are actually still open work: an issue already fixed and merged
+  reads as available work and wastes someone's afternoon.
+* **Keep hardware evidence.** Bench and serial logs supporting a claim belong in the
+  thread's `logs/` folder, referenced from the write-up.
 
 # 2. Git guardrails
 
@@ -68,7 +80,7 @@ website and backend consume this firmware's EXIF fields, op-parameters and BLE c
 # 4. Hardware behaviour that will trap you
 
 Verified on the bench (details + serial evidence in
-`_Documentation/development reports/2026-07_pr141-review-cgp/`):
+`_Documentation/development reports/2026-08-06_pr141-camera-features-review/`):
 
 * **Slot labels self-heal at first boot** — flashing clears the target slot's label to
   `unknown`; each image labels its own slot on every boot. `slots` showing `unknown` for

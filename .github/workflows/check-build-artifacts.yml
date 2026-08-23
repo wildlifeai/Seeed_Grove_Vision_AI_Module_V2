@@ -1,0 +1,76 @@
+name: No build artifacts in PRs
+
+# A normal build rewrites files that are tracked in git, so `git add -A` commits
+# them without anyone noticing:
+#
+#   * prebuilt_libs/**/*.a          the SDK library .mk files copy each freshly
+#                                   built archive back over the tracked one
+#                                   (e.g. library/common/common.mk, middleware/
+#                                   fatfs/fatfs.mk), so every build dirties them
+#   * we2_image_gen_local_dpd/...   image generation runs as part of `all:` since
+#                                   the mk/image_gen.mk work, rewriting output.img
+#
+# Those .a files are what the firmware links against. Committing a local rebuild
+# silently changes what ships, with no visible source diff, which is why this is
+# a hard failure rather than a warning.
+#
+# .gitignore cannot prevent this: the files are tracked deliberately, and git
+# ignores .gitignore for tracked files. The durable fix, and the options being
+# weighed, are in issue #198.
+#
+# To get past this check, restore the files rather than committing them:
+#   git checkout origin/dev -- EPII_CM55M_APP_S/prebuilt_libs we2_image_gen_local_dpd
+#
+# If a change to these files is genuinely intended (a real toolchain or SDK
+# update), label the PR 'intended-artifact-change' and say why in the PR body.
+
+on:
+  pull_request:
+    branches:
+      - dev
+      - main
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    if: ${{ !contains(github.event.pull_request.labels.*.name, 'intended-artifact-change') }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Look for build artifacts in the diff
+        run: |
+          BASE="origin/${{ github.base_ref }}"
+          git fetch origin "${{ github.base_ref }}" --depth=1 --quiet || true
+
+          # Only files this PR actually changed, against the merge base
+          CHANGED=$(git diff --name-only "$(git merge-base "$BASE" HEAD)" HEAD)
+
+          OFFENDERS=$(printf '%s\n' "$CHANGED" | grep -E \
+            -e '^EPII_CM55M_APP_S/prebuilt_libs/.*\.a$' \
+            -e '^we2_image_gen_local_dpd/output_case1_sec_wlcsp/' \
+            -e '(^|/)NUL$' \
+            -e '(^|/)objs\.in$' \
+            -e '(^|/)obj_[^/]*/' || true)
+
+          if [ -z "$OFFENDERS" ]; then
+            echo "No build artifacts in this PR."
+            exit 0
+          fi
+
+          echo "::error::This PR modifies build artifacts. See the notes at the top of .github/workflows/check-build-artifacts.yml"
+          echo
+          echo "Build artifacts changed by this PR:"
+          printf '  %s\n' $OFFENDERS
+          echo
+          echo "These are rewritten by a normal build, so they are almost certainly"
+          echo "unintended. To restore them:"
+          echo
+          echo "    git checkout origin/${{ github.base_ref }} -- EPII_CM55M_APP_S/prebuilt_libs we2_image_gen_local_dpd"
+          echo "    git commit -m 'revert build artifacts'"
+          echo
+          echo "If the change IS intended, label this PR 'intended-artifact-change'."
+          exit 1

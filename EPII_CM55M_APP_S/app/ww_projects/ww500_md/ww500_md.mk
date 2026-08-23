@@ -196,14 +196,20 @@ override CIS_SEL := HM_COMMON
 override EPII_USECASE_SEL := drv_onecore_cm55m_s
 
 CIS_SUPPORT_INAPP = cis_sensor
-CIS_SUPPORT_INAPP_MODEL = cis_hm0360
+# Default camera variant for a plain `make`. Both variants ship, and CI builds
+# both, so this only decides what you get without an override:
+#   make CIS_SUPPORT_INAPP_MODEL=cis_hm0360
+# RP3 is the default because it is the day/colour camera most development and
+# bench work targets. The HM0360 remains present for motion detection either
+# way (USE_HM0360_MD below).
+#CIS_SUPPORT_INAPP_MODEL = cis_hm0360
 # OV5647 for RP v1 camera
 #CIS_SUPPORT_INAPP_MODEL = cis_ov5647
 # IMX219 for RP v2 camera
 #CIS_SUPPORT_INAPP_MODEL = cis_imx219
 #CIS_SUPPORT_INAPP_MODEL = cis_imx477
 # IMX708 for RP v3 camera (main camera; HM0360 remains for motion detection via USE_HM0360_MD)
-# CIS_SUPPORT_INAPP_MODEL = cis_imx708
+CIS_SUPPORT_INAPP_MODEL = cis_imx708
 
 # CGP added to indicate HM0360 is used:
 

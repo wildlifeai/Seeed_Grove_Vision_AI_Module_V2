@@ -148,7 +148,7 @@ From the app, the same commands with the `AI ` prefix: `AI slots`, `AI switchslo
 
 The sequence below exercises every path; it was run end-to-end on a WW500 C02 on
 6 Aug 2026 — serial-log evidence in the review thread
-(`development reports/2026-07_pr141-review-cgp/bench_validation_evidence.md`).
+(`development reports/2026-08-06_pr141-camera-features-review/bench_validation_evidence.md`).
 
 1. Flash both slots (§3 two-pass, or two XMODEM burns) and confirm each image's
    first-boot label line.

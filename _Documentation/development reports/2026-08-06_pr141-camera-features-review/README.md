@@ -43,23 +43,30 @@ Do not gate the label call on cold boot.
 
 ## Open items
 
-- **Light sensor**, the cluster Charles raised and the agreed next focus: [#182] (extract
-  into one module with a document), [#181] (instrument and validate the AE sampling
-  window), [#183] (expose the decision in EXIF and to the app), [#186] (design question,
-  assigned to CGP: is MD illumination meant to depend on op13?). Blocked on [#143] and
-  [#144]: [#158], [#154], [#184].
-- **Other:** [#151] (cold-boot gate on `cameraSwitch_labelBootSlot()`), [#152] (preserve
-  the RTC across deliberate reboots), [#168] (`adjustInactivityPeriod()`), [#163] (doc and
-  comment corrections), [#165] (op26/op24 defaults).
-
-Full set on the [project board](https://github.com/orgs/wildlifeai/projects/3), labelled
+This following matters arising from the code review have been added as Github Issues. A full set is on the [project board](https://github.com/orgs/wildlifeai/projects/3), labelled
 `review-finding`.
+
+| Category | Issue | Description |
+|---|---|---|
+| Light sensor | [#182] | Extract the light-sensor code into one module and a document for Himax |
+| Light sensor | [#181] | Instrument and validate the AE sampling window |
+| Light sensor | [#183] | Expose the light-sensor decision: EXIF aggregate and app reporting |
+| Light sensor | [#186] | design question, assigned to CGP: Is MD illumination meant to depend on op13 (capture flash) and op11? |
+| Light sensor | [#158] | Persist AE exposure and gain across DPD (RP3 wake-path white-outs |
+| Light sensor | [#154] | AE sampling burst runs once per image instead of once per wake |
+| Other | [#184] |Support single-camera deployments as a first-class configuration |
+| Other | [#151] | Revert the cold-boot gate on `cameraSwitch_labelBootSlot()` |
+| Other | [#152] | Preserve the RTC across deliberate reboots |
+| BLE fast file transfer | [#168] | Add `adjustInactivityPeriod()` to pair with `restoreInactivityPeriod()` |
+| Other | [#163] | doc and comment corrections |
+| Other | [#165] | Decide: op26/op24 defaults for automatic camera switching|
 
 ## Files
 
 | File | What it is |
 |---|---|
-| [CGP's review notes](../../../EPII_CM55M_APP_S/app/ww_projects/ww500_md/doc/CGP_Code_Review_July26.md) | Charles's notes, all 9 topics, committed by CGP in `ww500_md/doc/` |
+| [CGP's review notes](CGP_Code_Review_July26.md) | Charles's notes, all 9 topics |
+| [`REVIEW_PR141.md`](REVIEW_PR141.md) | AI-generated summary of PR #141 |
 | [`review_responses.md`](review_responses.md) | Point-by-point responses with file:line evidence: bench results, dispute verdicts, camreg/vcm audit, battery impact, triage of CGP's changes |
 | [`bench_validation_evidence.md`](bench_validation_evidence.md) | Serial-log evidence: slot-labelling ladder, op26 cycle, staged-exposure validation |
 | [`logs/`](logs/) | Raw timestamped serial captures behind the evidence doc |

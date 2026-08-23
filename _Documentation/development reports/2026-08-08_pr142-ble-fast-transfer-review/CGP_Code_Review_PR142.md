@@ -22,11 +22,11 @@ and the firmware update/recovery guide in the same folder.
 
 ## PR #142
 
-Summarised by [REVIEW_PR142.md](../../../../../REVIEW_PR142.md)
+Summarised by [REVIEW_PR142.md](REVIEW_PR142.md)
 
 New Document:
 
-`ww500_md/doc/WW500_ble_file_transfer.md` [here](WW500_ble_file_transfer.md) - describes the approach and results, 
+`ww500_md/doc/WW500_ble_file_transfer.md` [here](../../../EPII_CM55M_APP_S/app/ww_projects/ww500_md/doc/WW500_ble_file_transfer.md) - describes the approach and results, 
 and identifies the files that have changed. 
 
 Changes to `fatfs_task.c`:

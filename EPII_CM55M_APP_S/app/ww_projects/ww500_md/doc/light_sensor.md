@@ -326,8 +326,8 @@ before further work in this area, not now.
 | [`../MANIFEST/config_file.md`](../MANIFEST/config_file.md) | Also current; describes `CONFIG.TXT` format and the same op-param values. |
 | [`slot_selector.md`](slot_selector.md) | Background on the A/B firmware-slot mechanism that automatic camera switching (op26) drives. Describes the underlying flash layout, not the light sensor itself; still accurate as design background. |
 | [`STROBE_timing.md`](STROBE_timing.md) | Charles's own Feb 2026 investigation into STROBE-vs-VSYNC pin timing. Predates this PR but the STROBE mode it settled on (`STROBE_CFG` = 3, "Dynamic 1") matches `HM0360_SENSOR_STROBE_MODE` in `hm0360_md.h:24` today — still the right background reading for how MD illumination is physically gated. |
-| [`REVIEW_PR141.md`](../../../../../REVIEW_PR141.md) (repo root) | The PR #141 description — a good one-paragraph-per-feature overview of everything in that PR, light sensor included. Current as a historical summary of what shipped; not a how-to. |
-| [`CGP_Code_Review_July26.md`](CGP_Code_Review_July26.md) (this folder) | Charles's original review notes and questions, including the ones this document tries to answer (§6). Keep as the record of what was asked; don't treat as current status since several items are now resolved (see `review_responses.md`). |
+| [`REVIEW_PR141.md`](../../../../../_Documentation/development%20reports/2026-08-06_pr141-camera-features-review/REVIEW_PR141.md) | The PR #141 description — a good one-paragraph-per-feature overview of everything in that PR, light sensor included. Current as a historical summary of what shipped; not a how-to. |
+| [`CGP_Code_Review_July26.md`](../../../../../_Documentation/development%20reports/2026-08-06_pr141-camera-features-review/CGP_Code_Review_July26.md) | Charles's original review notes and questions, including the ones this document tries to answer (§6). Keep as the record of what was asked; don't treat as current status since several items are now resolved (see `review_responses.md`). |
 
 ## 9. Some extra thoughts added by Charles:
 

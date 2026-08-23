@@ -4,7 +4,7 @@
 #### Author: Claude (Opus 5), reviewed by Victor Anton
 #### August 2026
 
-*Answers to [`CGP_Code_Review_July26.md`](../../../EPII_CM55M_APP_S/app/ww_projects/ww500_md/doc/CGP_Code_Review_July26.md).
+*Answers to [`CGP_Code_Review_July26.md`](CGP_Code_Review_July26.md).
 File:line references are against `review/cgp-141` at `55ccb85a`, and will drift as the code
 moves.*
 

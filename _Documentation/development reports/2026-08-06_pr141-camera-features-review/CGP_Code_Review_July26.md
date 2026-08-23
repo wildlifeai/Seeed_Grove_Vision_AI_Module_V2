@@ -40,7 +40,7 @@ further changes and I need to understand what has changed.
 
 ## PR #141
 
-Summarised by [REVIEW_PR141.md](../../../../../REVIEW_PR141.md)
+Summarised by [REVIEW_PR141.md](REVIEW_PR141.md)
 
 Comments as follows:
 
@@ -271,7 +271,7 @@ Several new Operational Parameters:
 | ----- | ------------------------------------- | ------------- | ---------------------------------------------------- |
 |    21 |OP_PARAMETER_MD_FLASH_LED 			| 2             | LED used to illuminate motion-detection frames while asleep: 0 = none, 1 = visible, 2 = IR |
 |    22 | OP_PARAMETER_MD_FLASH_BRIGHTNESS_PERCENT | 5          | Brightness of the motion-detection illumination (percent; 16 hardware levels) |
-|    23 | OP_PARAMETER_AE_DARK_THRESHOLD 		| 65            | AE Mean (0-255) below this means the scene is dark and the flash is needed. See [AE_Light_Sensor_Roadmap.md](AE_Light_Sensor_Roadmap.md) |
+|    23 | OP_PARAMETER_AE_DARK_THRESHOLD 		| 65            | AE Mean (0-255) below this means the scene is dark and the flash is needed. See [AE_Light_Sensor_Roadmap.md](../../AE_Light_Sensor_Roadmap.md) |
 |    24 | OP_PARAMETER_AE_CHECK_INTERVAL 		| 15            | Interval (minutes) between periodic AE light-level checks when the flash is in AE mode (op13) or auto camera switching is on (op26), and timelapse is disabled. 0 disables |
 |    25 | OP_PARAMETER_AE_FLASH_STATE 			| 0             | Last AE flash decision (0/1). Runtime state persisted across DPD - not intended to be set by users |
 |    26 | OP_PARAMETER_SLOT_SWITCH 				| 0             | Automatic light-based camera image switching: 0 = off (manual `switchslot` only), 1 = automatic - after each AE light check, if the dark/bright decision (op25) wants the other camera variant and the other slot holds it, the device switches boot slot and reboots at the next sleep. See `camera_switch.c`. Note: the light decision is computed when the flash is in AE mode (op13) **or** op26 = 1, so auto-switching works even with the flash off |

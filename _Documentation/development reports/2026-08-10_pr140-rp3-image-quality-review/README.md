@@ -41,26 +41,33 @@ sequence, after which only the HM0360 image remained. That is [#190], one line t
 
 ## Open items
 
-- **Image quality:** [#153] (EXIF Model tag says HM0360 on RP3 photos), [#159] (record
-  IMX708 exposure telemetry in the MakerNote), [#172] (collate the RP3 deficits into one
-  document), [#173] (profile the colour-correction pipeline), [#174] (verify against a
-  colour test card), [#175] (decide: on-device or server-side correction), [#161]
-  (benchmark `library/JPEGENC`).
-- **Build tooling from this PR:** [#190] (`device_image` deletes the other variant), [#194]
-  (`2>NUL` writes a stray file on Linux), [#179] (build guide, fixed in [#191]).
-- **Blocked on [#143] and [#144]:** [#158] (persist AE exposure and gain across DPD, the
-  wake-path white-outs), [#154] (sampling burst runs once per image instead of once per
-  wake), [#160], [#180].
+This following matters arising from the code review have been added as Github Issues. A full set is on the [project board](https://github.com/orgs/wildlifeai/projects/3), labelled
+`review-finding`..
 
-Full set on the [project board](https://github.com/orgs/wildlifeai/projects/3), labelled
-`review-finding`.
+| Category | Issue | Description |
+|---|---|---|
+| Image quality | [#153] | EXIF Model tag says HM0360 on RP3 photos |
+| Image quality | [#159] | Record IMX708 exposure telemetry in the MakerNote |
+| Image quality | [#172] | Collate the RP3 (IMX708) deficits and fixes into one document for Himax |
+| Image quality | [#173] | Profile and optimise the colour-correction pipeline; ask Himax about hardware acceleration |
+| Image quality | [#174] | Verify colour output against a colour test card |
+| Image quality | [#175] | decide: on-device or server-side correction |
+| Image quality | [#161] | Benchmark `library/JPEGENC` against `sw_jpeg.c` |
+| Build tooling from this PR | [#190] | `device_image` deletes the other variant |
+| Build tooling from this PR | [#194] | `Every Linux build writes a stray file named NUL into EPII_CM55M_APP_S/ |
+| Build tooling from this PR | [#179] | Update `dual_image_build_and_flash.md` for the new make image targets. fixed in [#191] |
+| Blocked on #143 and #144 | [#158] | persist AE exposure and gain across DPD, the wake-path white-outs |
+| Blocked on #143 and #144 | [#154] | AE sampling burst runs once per image instead of once per wake |
+| Blocked on #143 and #144 | [#160] | Remove camRegFileName and tidy the staged-register path |
+| Blocked on #143 and #144 | [#180] | Apply the C/H file formatting standard across the codebase |
 
 ## Files
 
 | File | What it is |
 |---|---|
 | [`review_responses_pr142_pr140.md`](../2026-08-08_pr142-ble-fast-transfer-review/review_responses_pr142_pr140.md) | Responses to both the #142 and #140 reviews. §2 is this PR's provenance questions, §3 and §4 span both. Lives in the #142 thread because it was written as one exchange |
-| [CGP's review report](../../../EPII_CM55M_APP_S/app/ww_projects/ww500_md/doc/CGP_Code_Review_PR140.md) | Charles's review report for this PR |
+| [CGP's review report](CGP_Code_Review_PR140.md) | Charles's review report for this PR |
+| [`REVIEW_PR140.md`](REVIEW_PR140.md) | AI-generated summary of PR #140 |
 | [`rp3-image-quality-plan.md`](../../rp3-image-quality-plan.md) | Durable topic doc produced by this work |
 | [`live_preview.md`](../../live_preview.md) | Durable topic doc for the live preview and `live_view.py` |
 

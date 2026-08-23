@@ -33,21 +33,22 @@ released together**, and neither side currently detects the mismatch.
 
 ## Open items
 
-- [#168] `adjustInactivityPeriod()` to pair with `restoreInactivityPeriod()`
-- [#170] separate engineering-only code from production builds
-
-Related but filed from the same testing session: [#195] (no capability or protocol-version
-query, so consumers cannot detect a mismatch) and [ww-mobile-app#243].
-
-Full set on the [project board](https://github.com/orgs/wildlifeai/projects/3), labelled
+This following matters arising from the code review have been added as Github Issues. A full set is on the [project board](https://github.com/orgs/wildlifeai/projects/3), labelled
 `review-finding`.
+
+| Category | Issue | Description |
+|---|---|---|
+| BLE fast file transfer | [#168] | `adjustInactivityPeriod()` to pair with `restoreInactivityPeriod()` |
+| Engineering Code | [#170] | separate engineering-only code from production builds |
+| Software Protocol Version | [#195] | no capability or protocol-version query, so consumers cannot detect a mismatch. See also [ww-mobile-app#243] |
 
 ## Files
 
 | File | What it is |
 |---|---|
 | [`review_responses_pr142_pr140.md`](review_responses_pr142_pr140.md) | Responses to **both** the #142 and #140 reviews. Kept whole rather than split across two folders, because it was written as one exchange: §1 is #142, §2 is #140's provenance questions, §3 and §4 span both |
-| [CGP's review report](../../../EPII_CM55M_APP_S/app/ww_projects/ww500_md/doc/CGP_Code_Review_PR142.md) | Charles's review report for this PR, if present at the branch tip |
+| [CGP's review report](CGP_Code_Review_PR142.md) | Charles's review report for this PR |
+| [`REVIEW_PR142.md`](REVIEW_PR142.md) | AI-generated summary of PR #142 |
 
 ## Related threads
 

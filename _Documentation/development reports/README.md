@@ -19,6 +19,22 @@ We follow three rules:
 the work began, add a README with the three headers, drop the working files beside it.
 Append as it evolves, don't rewrite them.
 
+**When creating new documents:**
+To make it easier to follow, add these lines towards the top of each markdown file:
+1. Filename (the name of the markdown file)
+2. Author (e.g. a person or AI)
+3. Date (preferrably day as well as month and year)
+
+Example:
+```
+# Responses to the PR #142 and #140 reviews
+
+#### File: review_responses_pr142_pr140.md
+#### Author: Claude (Opus 5), reviewed by Victor Anton
+#### August 2026
+```
+
+
 **To close a thread ensure:**
 
 - [ ] **Outcome is written.** The outcome should summarise for future developers what the

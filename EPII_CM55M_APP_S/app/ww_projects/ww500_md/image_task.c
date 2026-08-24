@@ -2710,6 +2710,7 @@ void image_sleepNow(void) {
     	}
 
     	if (aeCheckDelay > 0) {
+    		xprintf("Will wake to check light level in %d seconds\n", aeCheckDelay);
     		sleep_mode_enter_dpd(SLEEPMODE_WAKE_SOURCE_WAKE_PIN | SLEEPMODE_WAKE_SOURCE_RTC,
     				(uint16_t) aeCheckDelay, false); // Does not return
     	}

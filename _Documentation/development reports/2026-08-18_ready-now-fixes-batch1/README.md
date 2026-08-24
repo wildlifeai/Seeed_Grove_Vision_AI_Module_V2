@@ -1,6 +1,6 @@
 # Ready-now fixes, batch 1: CI matrix, filename rejection, build docs
 
-#### File: README.md
+#### File: `README.md`
 #### Author: Claude (Opus 5), reviewed by Victor Anton
 #### 18 August 2026
 

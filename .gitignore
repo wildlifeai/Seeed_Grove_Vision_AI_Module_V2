@@ -83,3 +83,4 @@ node_modules/
 
 .claude/
 **/claude/
+/CLAUDE_CGP.md

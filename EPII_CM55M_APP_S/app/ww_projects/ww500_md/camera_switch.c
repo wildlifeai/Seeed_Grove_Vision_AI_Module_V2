@@ -17,6 +17,7 @@
 #include "camera_switch.h"
 
 #include "xprintf.h"
+#include "printf_x.h"
 
 #include "xip_manager.h"
 #include "fatfs_task.h"
@@ -162,21 +163,21 @@ bool cameraSwitch_autoSwitchCheck(void) {
 	// wanted variant - never into an unknown or mismatched image.
 	int otherVariant = xip_get_slot_variant((activeSlot == 0) ? 1 : 0);
 	if (otherVariant != (int)wanted) {
-		xprintf("Auto camera switch: light wants '%s' but other slot holds '%s' - staying\n",
+		XP_CYAN xprintf("[LS] Auto camera switch: light wants '%s' but other slot holds '%s' - staying\n",
 				cameraSwitch_variantName(wanted),
-				cameraSwitch_variantName((uint8_t)((otherVariant < 0) ? 0 : otherVariant)));
+				cameraSwitch_variantName((uint8_t)((otherVariant < 0) ? 0 : otherVariant))); XP_WHITE
 		return false;
 	}
 
 	int newSlot = xip_switch_slot();
 	if (newSlot < 0) {
-		xprintf("Auto camera switch failed (%d)\n", newSlot);
+		XP_CYAN xprintf("[LS] Auto camera switch failed (%d)\n", newSlot); XP_WHITE
 		return false;
 	}
 
 	switchScheduled = true;
 	app_setResetRequest(true);	// reboot into the other image at the next sleep
-	xprintf("Auto camera switch: light is %s -> slot %d ('%s'). Reset scheduled.\n",
-			dark ? "DARK" : "BRIGHT", newSlot, cameraSwitch_variantName(wanted));
+	XP_CYAN xprintf("[LS] Auto camera switch: light is %s -> slot %d ('%s'). Reset scheduled.\n",
+			dark ? "DARK" : "BRIGHT", newSlot, cameraSwitch_variantName(wanted)); XP_WHITE
 	return true;
 }

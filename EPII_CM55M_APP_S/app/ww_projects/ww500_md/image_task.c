@@ -260,6 +260,7 @@ static uint8_t g_capture_retries;	// in-place retries used for the current captu
 // the flash decision: capture one frame, read the AE registers, save nothing.
 // Cleared on the way into DPD. See _Documentation/AE_Light_Sensor_Roadmap.md
 static bool aeCheckOnlyWake = false;
+static bool aeCheckRequired = false;
 
 static TimerHandle_t captureTimer;
 
@@ -818,7 +819,7 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
         // app_get_raw_addr(), app_get_raw_width(), app_get_raw_height()
         if (aeCheckOnlyWake) {
         	// AE light check only - the AE registers are all we need
-        	xprintf("Skipping NN processing (AE light check).\n");
+        	XP_CYAN xprintf("[LS] Skipping NN processing (AE light check).\n"); XP_WHITE
         	ret = kTfLiteOk;
         	skip_nn = true;
         }
@@ -861,10 +862,16 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
         // the AE-driven flash (op13) or automatic camera switching (op26).
         bool cameraSwitchScheduled = false;
 
-        if ((ledFlashGetFlashMode() == FLASH_MODE_AE)
-        		|| (fatfs_getOperationalParameter(OP_PARAMETER_SLOT_SWITCH) == 1)) {
+        // Only sample AE after the last image of a (possibly multi-image)
+        // capture request - hm0360_md_getAEStats() takes
+        // AE_SAMPLE_COUNT * AE_SAMPLE_GAP_MS to run, so repeating it for every
+        // image in e.g. 'capture 3 1000' would needlessly slow the burst.
+        if (aeCheckRequired && (g_cur_jpegenc_frame == g_captures_to_take)) {
             HM0360_AE_STATS_T aeStats;
-            if (hm0360_md_getAEStats(AE_SAMPLE_COUNT, AE_SAMPLE_GAP_MS, &aeStats) == HX_CIS_NO_ERROR) {
+            TickType_t aeStatsStartTime = xTaskGetTickCount();
+            HX_CIS_ERROR_E aeStatsRet = hm0360_md_getAEStats(AE_SAMPLE_COUNT, AE_SAMPLE_GAP_MS, &aeStats);
+            XP_CYAN xprintf("[LS] hm0360_md_getAEStats took %dms\n", app_getElapsedMs(aeStatsStartTime)); XP_WHITE
+            if (aeStatsRet == HX_CIS_NO_ERROR) {
                 ledFlashNewAEStats(&aeStats);
             }
             else {
@@ -1723,12 +1730,23 @@ static void vImageTask(void *pvParameters) {
 
     XP_WHITE;
 
+
+    // Whether anything actually consumes a fresh light-level reading this wake:
+    // the AE-driven flash (op13) or automatic day/night camera switching (op26).
+    // Computed once, early - vImageTask() setup runs once per wake, before any
+    // capture - so the capture loop and sleep planning below just read this
+    // instead of repeating the operational-parameter lookups every time.
+    aeCheckRequired = ((ledFlashGetFlashMode() == FLASH_MODE_AE)
+    		|| (fatfs_getOperationalParameter(OP_PARAMETER_SLOT_SWITCH) == 1));
+
+
     // If we woke because of motion detection or timer then let's send ourselves an initial
     // message to take some photos.
 
     // But only if nnSystemEnabled and cameraInitialised!
 
-    if ((cameraSystemEnabled == 1)  && cameraInitialised && ((woken == APP_WAKE_REASON_MD) || (woken == APP_WAKE_REASON_TIMER))) {
+    if ((cameraSystemEnabled == 1)  && cameraInitialised &&
+    		((woken == APP_WAKE_REASON_MD) || (woken == APP_WAKE_REASON_TIMER))) {
 
     	// A timer wake with timelapse disabled and a light-decision consumer
     	// enabled (AE-driven flash, or automatic camera switching op26) is a
@@ -1736,10 +1754,9 @@ static void vImageTask(void *pvParameters) {
     	// DPD): capture a single frame to refresh the AE registers, save nothing.
     	aeCheckOnlyWake = ((woken == APP_WAKE_REASON_TIMER)
     			&& (fatfs_getOperationalParameter(OP_PARAMETER_TIMELAPSE_INTERVAL) == 0)
-    			&& ((ledFlashGetFlashMode() == FLASH_MODE_AE)
-    					|| (fatfs_getOperationalParameter(OP_PARAMETER_SLOT_SWITCH) == 1)));
+    			&& aeCheckRequired);
     	if (aeCheckOnlyWake) {
-    		xprintf("Timer wake for AE light check\n");
+    		XP_CYAN xprintf("[LS] Timer wake for AE light check\n"); XP_WHITE
     	}
 
         // Pass the parameters in the ImageTask message queue
@@ -2700,8 +2717,7 @@ void image_sleepNow(void) {
 
     	// TODO - consider merging/syncing the 15 minute wake for AE with a 15 minute LoRaWAN pin interval.
 
-    	if (cameraSystemEnabled && ((ledFlashGetFlashMode() == FLASH_MODE_AE)
-    			|| (fatfs_getOperationalParameter(OP_PARAMETER_SLOT_SWITCH) == 1))) {
+    	if (cameraSystemEnabled && aeCheckRequired) {
     		// OP_PARAMETER_AE_CHECK_INTERVAL is in minutes, so convert to seconds
     		aeCheckDelay = (uint32_t) fatfs_getOperationalParameter(OP_PARAMETER_AE_CHECK_INTERVAL) * 60;
     		if (aeCheckDelay > 65535) {
@@ -2710,7 +2726,7 @@ void image_sleepNow(void) {
     	}
 
     	if (aeCheckDelay > 0) {
-    		xprintf("Will wake to check light level in %d seconds\n", aeCheckDelay);
+    		XP_CYAN xprintf("[LS] Will wake to check light level in %d seconds\n", aeCheckDelay); XP_WHITE
     		sleep_mode_enter_dpd(SLEEPMODE_WAKE_SOURCE_WAKE_PIN | SLEEPMODE_WAKE_SOURCE_RTC,
     				(uint16_t) aeCheckDelay, false); // Does not return
     	}

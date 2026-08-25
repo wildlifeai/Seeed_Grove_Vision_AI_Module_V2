@@ -358,8 +358,8 @@ void ledFlashSetFlashModeFromOpParam(uint16_t ledInUse) {
 	}
 
 	// debug
-	xprintf("In ledFlashSetFlashModeFromOpParam with %d Mode %d\n",
-			ledInUse, flashMode);
+	XP_CYAN xprintf("[LS] In ledFlashSetFlashModeFromOpParam with %d Mode %d\n",
+			ledInUse, flashMode); XP_WHITE
 }
 
 
@@ -466,12 +466,12 @@ void ledFlashNewAEStats(HM0360_AE_STATS_T * stats) {
     // capture after the next wake uses it - RAM does not survive DPD
     fatfs_setOperationalParameter(OP_PARAMETER_AE_FLASH_STATE, dark ? 1 : 0);
 
-	xprintf("AE light check: mean AE = %d (min %d, max %d) over %d frames, "
+	XP_CYAN xprintf("[LS] AE light check: mean AE = %d (min %d, max %d) over %d frames, "
 			"threshold = %d, gain railed = %s -> %s%s\n",
 			stats->meanAE, stats->minAE, stats->maxAE, stats->samples,
 			threshold, stats->gainRailed ? "yes" : "no",
 			dark ? "DARK (flash wanted)" : "BRIGHT (no flash)",
-			(dark == wasDark) ? "" : " (changed)");
+			(dark == wasDark) ? "" : " (changed)"); XP_WHITE
 
 	// CGP - what about the opposite: turning the flash off?
 	if (flashMode == FLASH_MODE_AE) {

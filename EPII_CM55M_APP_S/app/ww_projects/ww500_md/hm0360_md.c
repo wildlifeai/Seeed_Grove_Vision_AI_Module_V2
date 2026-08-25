@@ -10,6 +10,7 @@
 /********************************** Includes ******************************************/
 
 #include <stdbool.h>
+#include <stdio.h>	// for snprintf() in hm0360_md_getAEStats()
 
 #include "xprintf.h"
 #include "printf_x.h"	// Print colours
@@ -558,8 +559,8 @@ HX_CIS_ERROR_E hm0360_md_getAEStats(uint8_t nSamples, uint16_t gapMs, HM0360_AE_
 	    (priorMode == MODE_SLEEP || priorMode == MODE_SW_NFRAMES_STANDBY)) {
 		if (hx_drv_cis_set_reg(MODE_SELECT, MODE_SW_CONTINUOUS, 0) == HX_CIS_NO_ERROR) {
 			wokeForSampling = true;
-			xprintf("getAEStats: HM0360 was asleep (mode %d) - streaming for the light check\n",
-			        priorMode);
+			XP_CYAN xprintf("[LS] getAEStats: HM0360 was asleep (mode %d) - streaming for the light check\n",
+			        priorMode); XP_WHITE
 		}
 	}
 	restoreMainCameraConfig();
@@ -577,6 +578,13 @@ HX_CIS_ERROR_E hm0360_md_getAEStats(uint8_t nSamples, uint16_t gapMs, HM0360_AE_
 	stats->maxDigitalGain = 0;
 	stats->railedCount = 0;
 
+	// Collates every sampled AE_MEAN into one printable line (see below) so we
+	// can see the settling behaviour across the sampling window, rather than
+	// just the final aggregate - CGP has a hunch nSamples could be reduced.
+	char aeMeanLog[32 * 4 + 8];	// "nnn " per sample, sized for the max nSamples (32)
+	uint16_t aeMeanLogOffset = 0;
+	aeMeanLog[0] = '\0';
+
 	for (uint8_t i = 0; i < nSamples; i++) {
 		if (hm0360_md_getGainRegs(&gain) != HX_CIS_NO_ERROR) {
 			ret = HX_CIS_UNKNOWN_ERROR;
@@ -585,6 +593,10 @@ HX_CIS_ERROR_E hm0360_md_getAEStats(uint8_t nSamples, uint16_t gapMs, HM0360_AE_
 		else {
 			sumAE += gain.aeMean;
 			stats->samples++;
+			if (aeMeanLogOffset < sizeof(aeMeanLog)) {
+				aeMeanLogOffset += snprintf(aeMeanLog + aeMeanLogOffset,
+						sizeof(aeMeanLog) - aeMeanLogOffset, "%u ", gain.aeMean);
+			}
 			if (gain.aeMean < stats->minAE) {
 				stats->minAE = gain.aeMean;
 			}
@@ -611,12 +623,14 @@ HX_CIS_ERROR_E hm0360_md_getAEStats(uint8_t nSamples, uint16_t gapMs, HM0360_AE_
 		}
 	}
 
+	XP_CYAN xprintf("[LS] getAEStats: %d AE_MEAN samples: %s\n", stats->samples, aeMeanLog); XP_WHITE
+
 	// Put the sensor back the way we found it (normally MODE_SLEEP on the RP
 	// camera image with MD disabled)
 	if (wokeForSampling) {
 		saveMainCameraConfig();
 		if (hx_drv_cis_set_reg(MODE_SELECT, priorMode, 0) != HX_CIS_NO_ERROR) {
-			xprintf("getAEStats: failed to restore HM0360 mode %d\n", priorMode);
+			XP_CYAN xprintf("[LS] getAEStats: failed to restore HM0360 mode %d\n", priorMode); XP_WHITE
 		}
 		restoreMainCameraConfig();
 	}

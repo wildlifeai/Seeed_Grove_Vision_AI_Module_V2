@@ -38,7 +38,15 @@ broken into several sub-tasks, which will be listed here:
 
 (Further tasks may follow).
 
-## Current task for Claude - Advise on moving light meter code to a separate .c & .h file.
+## Current task for Claude - Implement Separate lightSensor.c & .h
+
+1.	Implement this based on the dicsussion and 'lightSensor.h'
+2.  Leave the existing .h file in the doc directory as a reference.
+3. Implement the new files using `ww500_md/doc/c_file_format.md` rules.
+4.	Keep the comments modest - those in 'lightSensor.h' are OK for a reference but much too verbose
+for this task.
+
+## Advise on moving light meter code to a separate .c & .h file.  __completed__
 
 1. List functions that are used by the light sensor and flash decision-making.
 2. Propose a route to moving these to their own file e.g. `light_meter.c`

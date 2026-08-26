@@ -192,12 +192,16 @@ bool lightSensor_isRequired(void) {
 }
 
 void lightSensor_takeReading(void) {
-	LightSensorStats_t stats;
-	TickType_t startTime;
-
 	if (!lightSensor_isRequired()) {
 		return;
 	}
+
+	lightSensor_takeReadingForced();
+}
+
+void lightSensor_takeReadingForced(void) {
+	LightSensorStats_t stats;
+	TickType_t startTime;
 
 	startTime = xTaskGetTickCount();
 

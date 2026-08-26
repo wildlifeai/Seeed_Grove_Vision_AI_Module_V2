@@ -130,6 +130,7 @@
 #include "xip_manager.h"
 #include "camera_switch.h"
 #include "hm0360_md.h"
+#include "lightSensor.h"
 
 #include "barrier.h"
 #include "cisdp_sensor.h"
@@ -296,6 +297,9 @@ static BaseType_t prvReinitHM0360(char *pcWriteBuffer, size_t xWriteBufferLen, c
 static BaseType_t prvVer(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 static BaseType_t prvCamera(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 
+// On-demand light-sensor check for bench tuning - see light_sensor.md §6.4
+static BaseType_t prvLight(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
+
 // Camera sensor register access for field/bench tuning (exposure, gain, white balance etc.)
 static BaseType_t prvCamReg(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 #ifdef USE_RP3
@@ -395,6 +399,14 @@ static const CLI_Command_Definition_t xSwitchSlot = {
 	"switchslot:\r\n Boot the firmware in the other slot (day/night camera change)."
 	"\r\n The device resets when it next sleeps\r\n",
 	prvSwitchSlot, /* The function to run. */
+	0		   /* No parameters expected */
+};
+
+/* Structure that defines the "light" command line command. */
+static const CLI_Command_Definition_t xLight = {
+	"light", /* The command string to type. */
+	"light:\r\n Take a fresh light-sensor reading and report the AE value and dark/bright state\r\n",
+	prvLight, /* The function to run. */
 	0		   /* No parameters expected */
 };
 
@@ -857,6 +869,25 @@ static BaseType_t prvCamera(char *pcWriteBuffer, size_t xWriteBufferLen, const c
 	configASSERT(pcWriteBuffer);
 
 	cli_append(&pcWriteBuffer, &xWriteBufferLen, "%s", app_get_camera_string());
+
+	return pdFALSE;
+}
+
+/**
+ * Implements "light" command.
+ *
+ * Takes a fresh light-sensor reading on demand (ignoring whether the AE flash
+ * or auto camera-switch would normally want one) and reports the numeric AE
+ * value and dark/bright state - see light_sensor.md §6.4.
+ */
+static BaseType_t prvLight(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) {
+	(void)pcCommandString;
+	configASSERT(pcWriteBuffer);
+
+	lightSensor_takeReadingForced();
+
+	cli_append(&pcWriteBuffer, &xWriteBufferLen, "Light level: %d (%s)",
+			lightSensor_getReading(), lightSensor_isDark() ? "DARK" : "BRIGHT");
 
 	return pdFALSE;
 }
@@ -2737,6 +2768,7 @@ static void vRegisterCLICommands(void)
 	FreeRTOS_CLIRegisterCommand(&xCamera);
 	FreeRTOS_CLIRegisterCommand(&xSlots);		// Report firmware slots and camera variants
 	FreeRTOS_CLIRegisterCommand(&xSwitchSlot);	// Boot the other slot (day/night camera change)
+	FreeRTOS_CLIRegisterCommand(&xLight);		// On-demand light-sensor check
 	FreeRTOS_CLIRegisterCommand(&xEnable);
 	FreeRTOS_CLIRegisterCommand(&xDisable);
 

@@ -277,14 +277,14 @@ vs. room, not a graded sweep). Re-running `ae_threshold_analysis.py`-style analy
 aggregate-mean data (once §6.1 is fixed and some field photos exist) would confirm — or
 correct — the default.
 
-### 6.4 No on-demand "just check the light" command
+### 6.4 On-demand "just check the light" command — done
 
-The only way to trigger a light check is a full `capture` (which runs NN, may save a file)
-or waiting for a scheduled wake. A CLI command that runs `hm0360_md_getAEStats()` +
-`ledFlashNewAEStats()` directly, with no capture/NN/file-save side effects, would make bench
-tuning (and `ae_monitor.py`-style scripts) faster and less noisy. The `aeCheckOnlyWake` path
-already implements exactly this behaviour internally, just only reachable via a timer wake,
-not a CLI command.
+Added: the `light` CLI/BLE command calls the new `lightSensor_takeReadingForced()` (see
+`lightSensor.c`) directly, with no capture/NN/file-save side effects, and reports the AE
+value and dark/bright state, e.g. `Light level: 71 (DARK)`. Unlike the normal wake-cycle
+path (`lightSensor_takeReading()`, gated on `lightSensor_isRequired()`), the forced variant
+always samples regardless of whether the AE flash (op13) or auto camera-switch (op26) is
+currently enabled, so it works for bench tuning before either is turned on.
 
 ### 6.5 `ae_monitor.py` needs a human validation pass
 

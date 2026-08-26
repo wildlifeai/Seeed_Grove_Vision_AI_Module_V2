@@ -42,6 +42,11 @@ bool lightSensor_isRequired(void);
 // Blocks for the sampling window (~2s). No-op if !lightSensor_isRequired().
 void lightSensor_takeReading(void);
 
+// Same as lightSensor_takeReading(), but always samples, ignoring
+// lightSensor_isRequired() - for on-demand bench/debug use (e.g. the 'light'
+// CLI command). Prefer lightSensor_takeReading() for normal wake-cycle use.
+void lightSensor_takeReadingForced(void);
+
 // The last sampled brightness (HM0360 AE_MEAN units, 0-255, higher = brighter).
 // 0 if lightSensor_takeReading() has not been called since boot/wake.
 uint16_t lightSensor_getReading(void);

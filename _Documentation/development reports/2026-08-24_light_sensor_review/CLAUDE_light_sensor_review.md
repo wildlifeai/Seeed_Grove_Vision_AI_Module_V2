@@ -40,7 +40,7 @@ broken into several sub-tasks, which will be listed here:
 
 (Further tasks may follow).
 
-## Next Task for Claude: Add CLI on-demand "just check the light" command
+## Add CLI on-demand "just check the light" command ___completed___
 
 1.	This is referenced in the `light_sensor.md` document. Let's do it. 
 2.	Command should be `light` and we might as well print the numeric light value as well as the current binary light/dark assessment.
@@ -56,13 +56,13 @@ broken into several sub-tasks, which will be listed here:
 for this task.
 5	Ask any questions if necessary.
 
-## Advise on moving light meter code to a separate .c & .h file.  __completed__
+## Advise on moving light meter code to a separate .c & .h file.  ___completed___
 
 1. List functions that are used by the light sensor and flash decision-making.
 2. Propose a route to moving these to their own file e.g. `light_meter.c`
 3. Don't move code until instrcuted.
 
-#### Clean code; run `hm0360_md_getAEStats()` just once per loop. __completed__
+#### Clean code; run `hm0360_md_getAEStats()` just once per loop. ___completed___
 
 1. The following test occurs several times:
 ```
@@ -91,7 +91,7 @@ NOTES:
 2. Threshold probably too high.
 3. Hysteresis probably too large. 
 
-#### Modify light sensor print statements __completed__
+#### Modify light sensor print statements ___completed___
 
 1. Review the instructions above and confirm that you understand them.
 2. Ask questions where that is helpful
@@ -105,6 +105,20 @@ and are coloured cyan. That will make it easier for humans to review these lines
 
 ---
  ## Completed tasks:
+
+* Add CLI on-demand "just check the light" command — new `light` CLI/BLE command in
+  `CLI-commands.c` (`prvLight()`/`xLight`, registered in `vRegisterCLICommands()`).
+  Charles chose "always force a fresh reading" over respecting the
+  `lightSensor_isRequired()` gate, so `lightSensor.h/.c` gained
+  `lightSensor_takeReadingForced()` (bypasses the gate; `lightSensor_takeReading()`
+  now just calls it when required). Response e.g. `Light level: 71 (DARK)`. Also
+  updated `light_sensor.md` §6.4 (gap closed) and `ble_commands.md` (new `AI light`
+  row). Both camera variants build clean; Charles tested the `light` command on
+  device and confirmed it works. (complete 26 August 2026, device-tested)
+  App now receives messages like this:
+  ```
+  Light level: 85 (BRIGHT)
+  ```
 
 * Implement separate lightSensor.c & .h — new public API (`lightSensor_isRequired()`,
   `lightSensor_takeReading()`, `lightSensor_getReading()`, `lightSensor_isDark()`) in
@@ -122,10 +136,11 @@ and are coloured cyan. That will make it easier for humans to review these lines
   `OP_PARAMETER_AE_FLASH_STATE` directly) - optional follow-up noted in the header
   draft, not done. The `[LS] AE light check: ...` console line `_Tools/ae_monitor.py`
   depends on is preserved verbatim in `lightSensor.c`.
-  NOT YET BUILT: this WSL environment had no `make` installed and no sudo access to
-  install it, so `cis_imx708` and `cis_hm0360` builds have not been verified - please
-  run the two-variant build before treating this as done. (complete 26 August 2026,
-  build unverified)
+  Both `cis_imx708` and `cis_hm0360` builds verified clean (zero errors) after Charles
+  installed `make`. Also fixed an unrelated bug found while verifying: `mk/image_gen.mk`'s
+  `device_image` target deleted both variants' device-named `.IMG` files on every build
+  instead of just its own - now only cleans up its own variant letter.
+  (complete 26 August 2026, build verified)
 
 * Modify light sensor print statements — the 10 AE-light-check console lines in
   `image_task.c`, `ledFlash.c`, `hm0360_md.c` and `camera_switch.c` now prefix with

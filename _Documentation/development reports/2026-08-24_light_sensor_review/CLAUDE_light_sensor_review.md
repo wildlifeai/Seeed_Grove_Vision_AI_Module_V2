@@ -37,8 +37,18 @@ broken into several sub-tasks, which will be listed here:
 3. Advise on moving light meter code to a separate .c & .h file. (done)
 4. Implement Separate lightSensor.c & .h (done)
 5. Add CLI on-demand "just check the light" command (done)
+6. Create a python script to run the new 'light' command continuously.
 
 (Further tasks may follow).
+
+## Next task for Claude: Create a python script to run the new 'light' command continuously.
+
+1. Create 'ae_stream.py' to complement the existing 'ae_monitor.py'.
+2. The task is simply to run the 'light' command at full speed.
+3. Stop when the user types 'esc'.
+4. Carefully check that the serial port is released when done. Do the same check on ae_monitor.py as I 
+thought I might have had trouble running Teraterm aagin after running ae_monitor. Check on all possible exit paths.
+
 
 ## Add CLI on-demand "just check the light" command ___completed___
 
@@ -105,6 +115,17 @@ and are coloured cyan. That will make it easier for humans to review these lines
 
 ---
  ## Completed tasks:
+
+* Diagnosed and fixed a FAT task stack overflow (`save_configuration()`'s
+  `comment_lines[MAXNUMCOMMENTS][80]` stack-local, ~2.6KB on a ~4.3KB task stack) hit
+  while investigating an unrelated `states` CLI command crash. Found the same bug was
+  already fixed on other branches (Victor, commit `13bda489`, 11 July 2026) but never
+  reached `ae_review` - ported that fix (`comment_lines` now `static`, `MAXNUMCOMMENTS`
+  parenthesised) directly into `fatfs_task.c`. Full writeup, including the separate
+  `states`-command NULL-pointer bug found in the same session and a flagged
+  branch-divergence question, in
+  [fat_task_stack_overflow_missing_fix.md](fat_task_stack_overflow_missing_fix.md) -
+  kept here for the PR review. (complete 27 August 2026, build/device not yet verified)
 
 * Add CLI on-demand "just check the light" command — new `light` CLI/BLE command in
   `CLI-commands.c` (`prvLight()`/`xLight`, registered in `vRegisterCLICommands()`).

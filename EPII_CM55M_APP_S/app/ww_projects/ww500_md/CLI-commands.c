@@ -169,6 +169,10 @@ extern QueueHandle_t xImageTaskQueue;
 extern SemaphoreHandle_t xI2CTxSemaphore;
 
 extern internal_state_t internalStates[NUMBEROFTASKS];
+// Number of internalStates[] entries actually populated in app_main() - NUMBEROFTASKS
+// is just the array's capacity (sized to include the optional, usually-compiled-out
+// timer task), not a count of what's really there.
+extern uint8_t numTasksRegistered;
 
 // GPS location of device can be set by this file
 extern GPS_Coordinate exif_gps_deviceLat;
@@ -744,7 +748,7 @@ static BaseType_t prvTaskStateCmd(char *pcWriteBuffer, size_t xWriteBufferLen, c
 		return pdTRUE;
 	}
 
-	if (i < NUMBEROFTASKS) {
+	if (i < numTasksRegistered) {
 		// for some reason this returns 0 always, so no point in printing it:
 		// uxTaskGetTaskNumber(internalStates[i].task_id)
 		snprintf(pcWriteBuffer, xWriteBufferLen, "%s\t%d\t%s\t%d",
@@ -755,7 +759,7 @@ static BaseType_t prvTaskStateCmd(char *pcWriteBuffer, size_t xWriteBufferLen, c
 		i++;
 	}
 
-	if (i == NUMBEROFTASKS) {
+	if (i == numTasksRegistered) {
 		// Done. reset static variables
 		listing = false;
 		i = 0;

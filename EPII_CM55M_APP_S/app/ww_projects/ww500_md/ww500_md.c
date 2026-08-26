@@ -116,6 +116,12 @@ extern QueueHandle_t     xImageTaskQueue;
 /*************************************** Local variables *******************************************/
 
 internal_state_t internalStates[NUMBEROFTASKS];
+// How many internalStates[] entries app_main() actually filled in - NUMBEROFTASKS is
+// just the array's capacity (sized to include the optional, usually-compiled-out
+// timer task via INCLUDETIMERTASK). The 'states' CLI command must loop over this,
+// not NUMBEROFTASKS, or it calls a NULL getState()/stateString() function pointer
+// for the unused slot(s) and crashes.
+uint8_t numTasksRegistered = 0;
 
 static char versionString[64]; // Make sure the buffer is large enough
 
@@ -858,6 +864,8 @@ int app_main(void){
 	internalState.priority = priority;
 	internalStates[taskIndex++] = internalState;
 	xprintf("Created task '%s' Priority %d\n", pcTaskGetName(task_id), priority);
+
+	numTasksRegistered = taskIndex;
 
 	// Now create a barrier entity so that a function is called when all tasks are ready in their for(;;) loop
 	barrier_init(&startupBarrier, taskIndex, ifTask_allTasksReady);

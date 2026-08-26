@@ -99,7 +99,7 @@
 // Length of lines in configuration.txt
 #define MAXCOMMENTLENGTH 80
 // Max number of comment lines in configuration.txt
-#define MAXNUMCOMMENTS OP_PARAMETER_NUM_ENTRIES + 5
+#define MAXNUMCOMMENTS (OP_PARAMETER_NUM_ENTRIES + 5)
 
 /*************************************** Local Function Declarations *****************************/
 
@@ -1149,7 +1149,12 @@ FRESULT save_configuration(const char *filename, directoryManager_t *dirManager)
 	FRESULT res;
 	UINT bytesWritten;
 	char line[MAXCOMMENTLENGTH];
-	char comment_lines[MAXNUMCOMMENTS][MAXCOMMENTLENGTH];
+	// Static, NOT a stack local: MAXNUMCOMMENTS * MAXCOMMENTLENGTH bytes (currently
+	// ~2.6KB, growing by MAXCOMMENTLENGTH with every operational parameter added)
+	// overflowed the FAT task's ~4.3KB stack once the parameter table grew large
+	// enough - a UsageFault on every boot's first config save. Only the FAT task
+	// calls this function, so a single static buffer is safe.
+	static char comment_lines[MAXNUMCOMMENTS][MAXCOMMENTLENGTH];
 	uint16_t comment_count = 0;
 
     if (!fatfs_mounted()) {

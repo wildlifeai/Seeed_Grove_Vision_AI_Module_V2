@@ -39,6 +39,9 @@
 
 # Various build files
 EPII_CM55M_APP_S/obj_*/**
+# Linker response file (options/rules.mk) - normally deleted by the same recipe
+# right after linking, but can linger if a build is killed/crashes mid-link
+EPII_CM55M_APP_S/objs.in
 we2_image_gen_local/output_*/**
 we2_image_gen_local/Images*.txt
 we2_image_gen_local_dpd/Images*.txt

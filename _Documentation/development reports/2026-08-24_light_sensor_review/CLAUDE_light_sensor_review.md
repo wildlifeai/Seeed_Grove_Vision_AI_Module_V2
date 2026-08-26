@@ -37,11 +37,11 @@ broken into several sub-tasks, which will be listed here:
 3. Advise on moving light meter code to a separate .c & .h file. (done)
 4. Implement Separate lightSensor.c & .h (done)
 5. Add CLI on-demand "just check the light" command (done)
-6. Create a python script to run the new 'light' command continuously.
+6. Create a python script to run the new 'light' command continuously. (done)
 
 (Further tasks may follow).
 
-## Next task for Claude: Create a python script to run the new 'light' command continuously.
+## Create a python script to run the new 'light' command continuously. ___completed___
 
 1. Create 'ae_stream.py' to complement the existing 'ae_monitor.py'.
 2. The task is simply to run the 'light' command at full speed.
@@ -115,6 +115,24 @@ and are coloured cyan. That will make it easier for humans to review these lines
 
 ---
  ## Completed tasks:
+
+* Created `_Tools/ae_stream.py` to complement `ae_monitor.py` - sends the on-demand
+  `light` CLI command back-to-back as fast as the device replies (no fixed interval),
+  prints each `Light level: N (DARK|BRIGHT)` reading with a timestamp and bar graph.
+  Waits for device wake the same way `ae_monitor.py` does if it's asleep at start;
+  each `light` command resets the 60s CLI inactivity timer so a continuous stream
+  holds the device awake indefinitely. Stops on ESC (cross-platform: `msvcrt` on
+  Windows, `termios`/`select` on POSIX) or Ctrl+C. Both the serial port and (on
+  POSIX) the terminal's raw-mode setting are released via `try`/`finally` /
+  a context manager on every exit path - normal ESC, Ctrl+C, a device timeout, or
+  any other exception.
+  Audited `ae_monitor.py`'s own exit paths per Charles's request (he suspected a
+  possible port-not-released issue after running it): its single `try:`/`finally:
+  port.close()` wraps the entire body immediately after the port opens successfully,
+  with nothing but two `def`s in between - no exit path (normal return, any
+  exception, `KeyboardInterrupt`) can skip the close. No bug found; left unchanged.
+  Charles tested it against real hardware and confirmed it works.
+  (complete 27 August 2026, hardware-tested)
 
 * Diagnosed and fixed a FAT task stack overflow (`save_configuration()`'s
   `comment_lines[MAXNUMCOMMENTS][80]` stack-local, ~2.6KB on a ~4.3KB task stack) hit

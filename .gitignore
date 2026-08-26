@@ -41,9 +41,16 @@
 EPII_CM55M_APP_S/obj_*/**
 we2_image_gen_local/output_*/**
 we2_image_gen_local/Images*.txt
+we2_image_gen_local_dpd/Images*.txt
 *.elf
 *.map
 *.img
+
+# Runtime copies we2_local_image_gen makes of itself into its own working
+# directory on every run (the real tracked tool binaries live one level down,
+# in arm_none_eabi/)
+/we2_image_gen_local_dpd/arm-none-eabi-objcopy
+/we2_image_gen_local_dpd/arm-none-eabi-objdump
 
 # ---------------------------
 # DPD generated files
@@ -62,6 +69,7 @@ we2_image_gen_local_dpd/output_case1_sec_wlcsp/**
 we2_image_gen_local_dpd/secureboot_tool/**/*.crt
 we2_image_gen_local_dpd/secureboot_tool/**/*.txt
 we2_image_gen_local_dpd/secureboot_tool/**/*.log
+we2_image_gen_local_dpd/secureboot_tool/**/*.cfg
 
 # Track all other subfolders normally (do not ignore their contents)
 # No need to do anything else � they are tracked by default

@@ -35,16 +35,26 @@ broken into several sub-tasks, which will be listed here:
 1. Modify Light Sensor messages (done)
 2. Clean code; run hm0360_md_getAEStats() just once per loop. (done)
 3. Advise on moving light meter code to a separate .c & .h file.
+4. Implement Separate lightSensor.c & .h
+5. Add CLI on-demand "just check the light" command
 
 (Further tasks may follow).
 
-## Current task for Claude - Implement Separate lightSensor.c & .h
+## Next Task for Claude: Add CLI on-demand "just check the light" command
+
+1.	This is referenced in the `light_sensor.md` document. Let's do it. 
+2.	Command should be `light` and we might as well print the numeric light value as well as the current binary light/dark assessment.
+2.	Review the new light sensor API and confirm that suitable functions exist. If so, just code it. If not, ask for advice.
+4. Ask any useful questions.
+
+## Implement Separate lightSensor.c & .h ___completed___
 
 1.	Implement this based on the dicsussion and 'lightSensor.h'
 2.  Leave the existing .h file in the doc directory as a reference.
 3. Implement the new files using `ww500_md/doc/c_file_format.md` rules.
 4.	Keep the comments modest - those in 'lightSensor.h' are OK for a reference but much too verbose
 for this task.
+5	Ask any questions if necessary.
 
 ## Advise on moving light meter code to a separate .c & .h file.  __completed__
 
@@ -95,6 +105,27 @@ and are coloured cyan. That will make it easier for humans to review these lines
 
 ---
  ## Completed tasks:
+
+* Implement separate lightSensor.c & .h — new public API (`lightSensor_isRequired()`,
+  `lightSensor_takeReading()`, `lightSensor_getReading()`, `lightSensor_isDark()`) in
+  `EPII_CM55M_APP_S/app/ww_projects/ww500_md/`, following the `doc/lightSensor.h`
+  design draft (kept in the review folder as reference; comments in the real files
+  are much shorter). `hm0360_md_getAEStats()`/`HM0360_AE_STATS_T` removed from
+  `hm0360_md.c/.h`, replaced by 3 new primitives (`hm0360_md_getGainCeilings()`,
+  `hm0360_md_getMode()`, `hm0360_md_setModeSelectOnly()`) that lightSensor.c uses to
+  rebuild the sampling loop itself. `ledFlashNewAEValues()`/`ledFlashNewAEStats()`
+  removed from `ledFlash.c/.h`, replaced by a one-line `ledFlash_setActive(bool)`
+  setter; `image_task.c` now orchestrates
+  (`lightSensor_takeReading()` → `ledFlash_setActive(lightSensor_isDark())` →
+  `cameraSwitch_autoSwitchCheck()`) instead of the old function calling into
+  ledFlash directly. `camera_switch.c` left unchanged (still reads
+  `OP_PARAMETER_AE_FLASH_STATE` directly) - optional follow-up noted in the header
+  draft, not done. The `[LS] AE light check: ...` console line `_Tools/ae_monitor.py`
+  depends on is preserved verbatim in `lightSensor.c`.
+  NOT YET BUILT: this WSL environment had no `make` installed and no sudo access to
+  install it, so `cis_imx708` and `cis_hm0360` builds have not been verified - please
+  run the two-variant build before treating this as done. (complete 26 August 2026,
+  build unverified)
 
 * Modify light sensor print statements — the 10 AE-light-check console lines in
   `image_task.c`, `ledFlash.c`, `hm0360_md.c` and `camera_switch.c` now prefix with

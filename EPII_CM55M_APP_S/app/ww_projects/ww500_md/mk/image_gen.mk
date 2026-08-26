@@ -1,4 +1,5 @@
 ##
+
 # Post-processing: turn the compiled .elf into a flashable/device-usable
 # firmware image (gen_image, device_image). Split out of ww500_md.mk to keep
 # that file to just the build-path fix (D:\hxbuild) and the .elf staging
@@ -132,15 +133,18 @@ WW500_IMG_OUTPUT_DIR_NATIVE = $(subst /,$(PS),$(WW500_IMG_OUTPUT_DIR))
 
 # Device-named images accumulate one per build (the filename is unique down
 # to the minute, by design, so nothing here would ever get overwritten on
-# its own) - clean up the previous one(s) first so only the latest sticks
-# around. Matches only R*.IMG/H*.IMG (this target's own naming pattern);
-# output.img and everything else in the folder (json/, inter_files/, etc.)
-# are untouched. The leading '-' ignores the "file not found" error Windows'
-# del gives on the first-ever run, when there's nothing yet to delete.
+# its own) - clean up the previous one(s) of THIS variant first so only the
+# latest of each variant sticks around. Matches only
+# $(WW500_IMG_VARIANT_LETTER)*.IMG (this target's own naming pattern, and only
+# the letter for the variant currently being built - the other variant's
+# device-named image, from an earlier build, must survive this); output.img
+# and everything else in the folder (json/, inter_files/, etc.) are untouched.
+# The leading '-' ignores the "file not found" error Windows' del gives on
+# the first-ever run, when there's nothing yet to delete.
 ifeq ($(HOST_OS),Windows)
-WW500_IMG_CLEAN_CMD = -del /Q $(WW500_IMG_OUTPUT_DIR_NATIVE)\R*.IMG $(WW500_IMG_OUTPUT_DIR_NATIVE)\H*.IMG 2> $(NULL)
+WW500_IMG_CLEAN_CMD = -del /Q $(WW500_IMG_OUTPUT_DIR_NATIVE)\$(WW500_IMG_VARIANT_LETTER)*.IMG 2> $(NULL)
 else
-WW500_IMG_CLEAN_CMD = -rm -f $(WW500_IMG_OUTPUT_DIR)/R*.IMG $(WW500_IMG_OUTPUT_DIR)/H*.IMG 2> $(NULL)
+WW500_IMG_CLEAN_CMD = -rm -f $(WW500_IMG_OUTPUT_DIR)/$(WW500_IMG_VARIANT_LETTER)*.IMG 2> $(NULL)
 endif
 
 .PHONY: device_image

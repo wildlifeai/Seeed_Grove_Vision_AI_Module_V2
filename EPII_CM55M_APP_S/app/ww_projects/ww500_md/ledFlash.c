@@ -23,7 +23,6 @@
 #include "ledFlash.h"
 #include "pca9574.h"
 
-#include "hm0360_md.h"
 #include "hx_drv_rtc.h"
 
 /*************************************** Defines **************************************/
@@ -375,107 +374,13 @@ FlashLedMode_t  ledFlashGetFlashMode(void) {
 }
 
 /**
- * The HM0360 AE registers values have arrived - this might determine LED Flash behaviour
+ * Setter for flashActive - drives the flash hardware immediately.
  *
- * Legacy single-frame entry point, kept for callers that only have one reading.
- * Prefer ledFlashNewAEStats(), which is robust against the AE loop oscillation
- * documented there. This wraps the single reading as a one-sample statistic.
+ * Used by lightSensor.c to apply its dark/bright decision once it has one.
  *
- * @param gainRegs
+ * @param active - true to turn the flash on, false to turn it off
  */
-void ledFlashNewAEValues(HM0360_GAIN_T * gainRegs) {
-	HM0360_AE_STATS_T stats;
-
-	if (gainRegs == NULL) {
-		return;
-	}
-
-	stats.samples = 1;
-	stats.meanAE = gainRegs->aeMean;
-	stats.minAE = gainRegs->aeMean;
-	stats.maxAE = gainRegs->aeMean;
-	stats.maxAnalogGain = gainRegs->analogGain;
-	stats.maxDigitalGain = gainRegs->digitalGain;
-	stats.railedCount = 0;
-	stats.gainRailed = false;
-
-	ledFlashNewAEStats(&stats);
-}
-
-/**
- * Decide the flash state from aggregated AE statistics (the light sensor).
- *
- * A single AE_MEAN reading is unreliable: it is the output of the HM0360's AE
- * control loop, which limit-cycles. Bench testing in a fully dark box showed
- * AE_MEAN swinging between ~3 and ~66 (across the dark threshold), so ~37% of
- * single-frame reads wrongly said "bright". This uses the mean over several
- * frames plus two extra safeguards:
- *
- *   - Hysteresis: turn the flash ON below the dark threshold, but only turn it
- *     OFF again once well above it (threshold + AE_HYSTERESIS). This stops the
- *     flash chattering when the light sits near the boundary.
- *   - Gain-railed override: if the AE has run its gain to maximum on most
- *     frames it cannot expose any darker, so force the flash ON regardless of
- *     the (then meaningless) AE_MEAN value.
- *
- * See _Documentation/AE_Light_Sensor_Roadmap.md
- *
- * @param stats  aggregated AE statistics from hm0360_md_getAEStats()
- */
-void ledFlashNewAEStats(HM0360_AE_STATS_T * stats) {
-	uint16_t threshold;
-	bool wasDark;
-	bool dark;
-
-    if ((stats == NULL) || (stats->samples == 0)) {
-    	return;
-    }
-
-    // The dark/bright decision has two consumers: the AE-driven flash
-    // (FLASH_MODE_AE) and automatic camera switching (OP_PARAMETER_SLOT_SWITCH,
-    // see camera_switch.c). Compute and persist it when either is enabled -
-    // but only let it drive the flash LED in FLASH_MODE_AE, so op26 alone
-    // never fires the flash when the user has it off.
-    if ((flashMode != FLASH_MODE_AE)
-    		&& (fatfs_getOperationalParameter(OP_PARAMETER_SLOT_SWITCH) != 1)) {
-    	return;
-    }
-
-    threshold = fatfs_getOperationalParameter(OP_PARAMETER_AE_DARK_THRESHOLD);
-    // Hysteresis memory is the persisted decision. In FLASH_MODE_AE this is
-    // kept in lockstep with flashActive (restored from it at boot, written
-    // back below), and it is the only memory that survives DPD in any mode.
-    dark = (fatfs_getOperationalParameter(OP_PARAMETER_AE_FLASH_STATE) == 1);
-    wasDark = dark;
-
-    if (stats->gainRailed) {
-        // AE gain maxed out on most frames - unambiguously dark
-        dark = true;
-    }
-    else if (stats->meanAE < threshold) {
-        // Averaged scene brightness below the dark threshold - flash needed
-        dark = true;
-    }
-    else if (stats->meanAE > (uint16_t)(threshold + AE_HYSTERESIS)) {
-        // Comfortably bright - flash not needed
-        dark = false;
-    }
-    // else: within the hysteresis band - keep the previous decision
-
-    // Persist the decision (written to CONFIG.TXT at DPD entry) so the first
-    // capture after the next wake uses it - RAM does not survive DPD
-    fatfs_setOperationalParameter(OP_PARAMETER_AE_FLASH_STATE, dark ? 1 : 0);
-
-	XP_CYAN xprintf("[LS] AE light check: mean AE = %d (min %d, max %d) over %d frames, "
-			"threshold = %d, gain railed = %s -> %s%s\n",
-			stats->meanAE, stats->minAE, stats->maxAE, stats->samples,
-			threshold, stats->gainRailed ? "yes" : "no",
-			dark ? "DARK (flash wanted)" : "BRIGHT (no flash)",
-			(dark == wasDark) ? "" : " (changed)"); XP_WHITE
-
-	// CGP - what about the opposite: turning the flash off?
-	if (flashMode == FLASH_MODE_AE) {
-		flashActive = dark;
-		ledFlashActivate();	// Turn on Flash LED (conditionally)
-	}
+void ledFlash_setActive(bool active) {
+	flashActive = active;
+	ledFlashActivate();
 }

@@ -64,6 +64,7 @@
 
 #include "hm0360_md.h"
 #include "hm0360_regs.h"
+#include "lightSensor.h"
 
 #include "ledFlash.h"
 #include "pinmux_cfg.h"
@@ -863,22 +864,11 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
         bool cameraSwitchScheduled = false;
 
         // Only sample AE after the last image of a (possibly multi-image)
-        // capture request - hm0360_md_getAEStats() takes
-        // AE_SAMPLE_COUNT * AE_SAMPLE_GAP_MS to run, so repeating it for every
-        // image in e.g. 'capture 3 1000' would needlessly slow the burst.
+        // capture request - lightSensor_takeReading() takes a couple of
+        // seconds, so repeating it for every image in e.g. 'capture 3 1000'
+        // would needlessly slow the burst.
         if (aeCheckRequired && (g_cur_jpegenc_frame == g_captures_to_take)) {
-            HM0360_AE_STATS_T aeStats;
-            TickType_t aeStatsStartTime = xTaskGetTickCount();
-            HX_CIS_ERROR_E aeStatsRet = hm0360_md_getAEStats(AE_SAMPLE_COUNT, AE_SAMPLE_GAP_MS, &aeStats);
-            XP_CYAN xprintf("[LS] hm0360_md_getAEStats took %dms\n", app_getElapsedMs(aeStatsStartTime)); XP_WHITE
-            if (aeStatsRet == HX_CIS_NO_ERROR) {
-                ledFlashNewAEStats(&aeStats);
-            }
-            else {
-                // Sampling failed - fall back to the single reading rather than
-                // leaving the flash decision stale
-                ledFlashNewAEValues(&gain);
-            }
+            lightSensor_takeReading();
 
             // Automatic day/night camera switching (op26): if the fresh
             // decision wants the other camera variant, this switches the boot
@@ -1736,8 +1726,7 @@ static void vImageTask(void *pvParameters) {
     // Computed once, early - vImageTask() setup runs once per wake, before any
     // capture - so the capture loop and sleep planning below just read this
     // instead of repeating the operational-parameter lookups every time.
-    aeCheckRequired = ((ledFlashGetFlashMode() == FLASH_MODE_AE)
-    		|| (fatfs_getOperationalParameter(OP_PARAMETER_SLOT_SWITCH) == 1));
+    aeCheckRequired = lightSensor_isRequired();
 
 
     // If we woke because of motion detection or timer then let's send ourselves an initial

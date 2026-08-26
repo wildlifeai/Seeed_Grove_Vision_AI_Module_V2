@@ -10,7 +10,6 @@
 /********************************** Includes ******************************************/
 
 #include <stdbool.h>
-#include <stdio.h>	// for snprintf() in hm0360_md_getAEStats()
 
 #include "xprintf.h"
 #include "printf_x.h"	// Print colours
@@ -19,9 +18,6 @@
 #include "hx_drv_CIS_common.h"
 #include "hm0360_regs.h"
 #include "fatfs_task.h"
-
-#include "FreeRTOS.h"	// for vTaskDelay() in hm0360_md_getAEStats()
-#include "task.h"
 
 
 /*************************************** Defines **************************************/
@@ -486,165 +482,87 @@ HX_CIS_ERROR_E hm0360_md_getGainRegs(HM0360_GAIN_T * val) {
 }
 
 /**
- * Sample AE_MEAN and the gain registers over several successive frames and
- * return aggregated statistics for a robust light-sensor decision.
+ * Reads the HM0360's configured AE gain ceilings (MAX_AGAIN, MAX_DGAIN_H/L).
+ * Used by lightSensor.c to detect when the AE loop has railed its gain to
+ * maximum - an unambiguous "too dark to expose for" signal.
  *
- * Why this exists: a single AE_MEAN reading is not a reliable brightness
- * measure. It is the output of the HM0360's own AE control loop, which
- * limit-cycles: bench testing in a fully dark box showed AE_MEAN oscillating
- * between ~3 and ~66 frame-to-frame (straddling the dark threshold), so ~37%
- * of single-frame reads wrongly reported "bright". Averaging several frames
- * collapses that oscillation (dark mean ~35, bright mean ~80), and tracking
- * whether the gain has railed to maximum gives an independent "too dark to
- * expose for" signal.
+ * maxAnalogGain is the low 3 bits of MAX_AGAIN (0x202b & 0x07). maxDigitalGain
+ * uses the same decode as the DIGITAL_GAIN readout in hm0360_md_getGainRegs(),
+ * so a 'digitalGain >= maxDigitalGain' comparison stays consistent (no
+ * datasheet field description is available for either register).
  *
- * The read is cheap (an I2C slave-ID swap plus a few register reads), so this
- * adds only about nSamples * gapMs of wall time to an AE-check wake.
- *
- * @param nSamples  frames to sample (clamped to 1..32)
- * @param gapMs     delay between reads, ms (roughly one frame period)
- * @param stats     output; filled on success
+ * @param maxAnalogGain  [out] analog gain ceiling code
+ * @param maxDigitalGain [out] digital gain ceiling, same units as HM0360_GAIN_T.digitalGain
+ * @return error code
  */
-HX_CIS_ERROR_E hm0360_md_getAEStats(uint8_t nSamples, uint16_t gapMs, HM0360_AE_STATS_T * stats) {
-	HX_CIS_ERROR_E ret = HX_CIS_NO_ERROR;
-	HM0360_GAIN_T gain;
-	uint8_t maxAGain;
-	uint8_t maxDGainH, maxDGainL;
-	uint16_t maxDGain;
-	uint32_t sumAE = 0;
+HX_CIS_ERROR_E hm0360_md_getGainCeilings(uint8_t *maxAnalogGain, uint16_t *maxDigitalGain) {
+	HX_CIS_ERROR_E ret;
+	uint8_t maxAGain, maxDGainH, maxDGainL;
 
-	if ((stats == NULL) || !hm0360_present) {
+	if (!hm0360_present) {
 		return HX_CIS_UNKNOWN_ERROR;
 	}
 
-	if (nSamples < 1) {
-		nSamples = 1;
-	}
-	if (nSamples > 32) {
-		nSamples = 32;
-	}
-
-	// Read the AE gain ceilings once, so we can tell when the loop has railed.
 	saveMainCameraConfig();
 
-	ret |= hx_drv_cis_get_reg(MAX_AGAIN, &maxAGain);
-
-	// MAX_AGAIN (0x202b) holds the gain code in the LOW bits - the Himax reference
-	// init (github.com/stevehuang82/for_wildlife_ai HM0360 table) programs 0x04 =
-	// code 4. This differs from the ANALOG_GAIN readout (0x0205), which carries the
-	// code in bits [6:4]. The previous '>> 4' decode turned 0x04 into 0, which
-	// tripped the 'maxAGain > 0' guard below and silently disabled the railed
-	// override. No HM0360 datasheet is available; decode inferred from the
-	// reference init values.
-	// CGP: I have looked in the datasheet - the register is only referenced in a table of registers.
-	maxAGain = maxAGain & 0x07;
+	ret = hx_drv_cis_get_reg(MAX_AGAIN, &maxAGain);
 	ret |= hx_drv_cis_get_reg(MAX_DGAIN_H, &maxDGainH);
 	ret |= hx_drv_cis_get_reg(MAX_DGAIN_L, &maxDGainL);
 
-	// Decode MAX_DGAIN with the SAME formula as the DIGITAL_GAIN readout
-	// (hm0360_md_getGainRegs) deliberately: both registers share a format, so the
-	// 'digitalGain >= maxDGain' test stays consistent and trips at the ceiling
-	// (reference init 0x03,0x00). The absolute scaling is unverified without the
-	// datasheet, but the relative comparison is correct.
-	maxDGain = ((maxDGainH & 0x03) << 6) + ((maxDGainL & 0xfa) >> 6);
-
-	// If the sensor is asleep, wake it into continuous streaming for the
-	// sampling window. On the RP camera image with motion detection disabled
-	// the HM0360 is parked in MODE_SLEEP - a sleeping sensor reads AE_MEAN = 0,
-	// which previously made the light decision permanently "dark" regardless
-	// of the actual scene. The prior mode is restored after sampling.
-	uint8_t priorMode = 0xFF;
-	bool wokeForSampling = false;
-	if (hx_drv_cis_get_reg(MODE_SELECT, &priorMode) == HX_CIS_NO_ERROR &&
-	    (priorMode == MODE_SLEEP || priorMode == MODE_SW_NFRAMES_STANDBY)) {
-		if (hx_drv_cis_set_reg(MODE_SELECT, MODE_SW_CONTINUOUS, 0) == HX_CIS_NO_ERROR) {
-			wokeForSampling = true;
-			XP_CYAN xprintf("[LS] getAEStats: HM0360 was asleep (mode %d) - streaming for the light check\n",
-			        priorMode); XP_WHITE
-		}
-	}
 	restoreMainCameraConfig();
 
-	if (wokeForSampling) {
-		// Let the sensor start streaming and its AE loop begin adapting
-		// before the first sample (~5 frames at 10 fps).
-		vTaskDelay(pdMS_TO_TICKS(500));
+	*maxAnalogGain = maxAGain & 0x07;
+	*maxDigitalGain = ((maxDGainH & 0x03) << 6) + ((maxDGainL & 0xfa) >> 6);
+
+	return ret;
+}
+
+/**
+ * Reads the HM0360's current streaming mode (MODE_SELECT, 0x0100). Plain,
+ * side-effect-free counterpart to hm0360_md_setModeSelectOnly().
+ *
+ * @param mode [out] current MODE_SELECT value
+ * @return error code
+ */
+HX_CIS_ERROR_E hm0360_md_getMode(mode_select_t *mode) {
+	HX_CIS_ERROR_E ret;
+	uint8_t val;
+
+	if (!hm0360_present) {
+		return HX_CIS_UNKNOWN_ERROR;
 	}
 
-	stats->samples = 0;
-	stats->minAE = 255;
-	stats->maxAE = 0;
-	stats->maxAnalogGain = 0;
-	stats->maxDigitalGain = 0;
-	stats->railedCount = 0;
+	saveMainCameraConfig();
+	ret = hx_drv_cis_get_reg(MODE_SELECT, &val);
+	restoreMainCameraConfig();
 
-	// Collates every sampled AE_MEAN into one printable line (see below) so we
-	// can see the settling behaviour across the sampling window, rather than
-	// just the final aggregate - CGP has a hunch nSamples could be reduced.
-	char aeMeanLog[32 * 4 + 8];	// "nnn " per sample, sized for the max nSamples (32)
-	uint16_t aeMeanLogOffset = 0;
-	aeMeanLog[0] = '\0';
-
-	for (uint8_t i = 0; i < nSamples; i++) {
-		if (hm0360_md_getGainRegs(&gain) != HX_CIS_NO_ERROR) {
-			ret = HX_CIS_UNKNOWN_ERROR;
-			// keep going - a partial average is still better than one frame
-		}
-		else {
-			sumAE += gain.aeMean;
-			stats->samples++;
-			if (aeMeanLogOffset < sizeof(aeMeanLog)) {
-				aeMeanLogOffset += snprintf(aeMeanLog + aeMeanLogOffset,
-						sizeof(aeMeanLog) - aeMeanLogOffset, "%u ", gain.aeMean);
-			}
-			if (gain.aeMean < stats->minAE) {
-				stats->minAE = gain.aeMean;
-			}
-			if (gain.aeMean > stats->maxAE) {
-				stats->maxAE = gain.aeMean;
-			}
-			if (gain.analogGain > stats->maxAnalogGain) {
-				stats->maxAnalogGain = gain.analogGain;
-			}
-			if (gain.digitalGain > stats->maxDigitalGain) {
-				stats->maxDigitalGain = gain.digitalGain;
-			}
-			// "Railed" = both analog and digital gain at (or above) the ceiling:
-			// the AE can amplify no further, so the true scene is dark.
-			if ((maxAGain > 0) && (gain.analogGain >= maxAGain) &&
-				(maxDGain > 0) && (gain.digitalGain >= maxDGain)) {
-				stats->railedCount++;
-			}
-		}
-
-		// Delay before taking another sample. The reason for this delay, and for the value, is unclear to me (CGP)
-		if (i + 1 < nSamples) {
-			vTaskDelay(pdMS_TO_TICKS(gapMs));
-		}
+	if (ret == HX_CIS_NO_ERROR) {
+		*mode = (mode_select_t) val;
 	}
 
-	XP_CYAN xprintf("[LS] getAEStats: %d AE_MEAN samples: %s\n", stats->samples, aeMeanLog); XP_WHITE
+	return ret;
+}
 
-	// Put the sensor back the way we found it (normally MODE_SLEEP on the RP
-	// camera image with MD disabled)
-	if (wokeForSampling) {
-		saveMainCameraConfig();
-		if (hx_drv_cis_set_reg(MODE_SELECT, priorMode, 0) != HX_CIS_NO_ERROR) {
-			XP_CYAN xprintf("[LS] getAEStats: failed to restore HM0360 mode %d\n", priorMode); XP_WHITE
-		}
-		restoreMainCameraConfig();
+/**
+ * Writes MODE_SELECT directly, with none of hm0360_md_setMode()'s side
+ * effects (no forced sleep interlude, no PMU_CFG rewrite, no MD interrupt
+ * toggle). Intended for a transient streaming nudge - e.g. waking the sensor
+ * to sample AE registers, then restoring whatever hm0360_md_getMode()
+ * returned beforehand.
+ *
+ * @param mode mode to write to MODE_SELECT
+ * @return error code
+ */
+HX_CIS_ERROR_E hm0360_md_setModeSelectOnly(mode_select_t mode) {
+	HX_CIS_ERROR_E ret;
+
+	if (!hm0360_present) {
+		return HX_CIS_UNKNOWN_ERROR;
 	}
 
-	if (stats->samples > 0) {
-		stats->meanAE = (uint16_t)(sumAE / stats->samples);
-	}
-	else {
-		stats->meanAE = 0;
-		stats->minAE = 0;
-	}
-
-	// Majority of sampled frames railed -> treat as an unambiguous dark signal
-	stats->gainRailed = (stats->railedCount * 2 > stats->samples);
+	saveMainCameraConfig();
+	ret = hx_drv_cis_set_reg(MODE_SELECT, mode, 0);
+	restoreMainCameraConfig();
 
 	return ret;
 }

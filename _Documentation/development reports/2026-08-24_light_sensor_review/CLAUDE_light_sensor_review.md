@@ -34,9 +34,9 @@ broken into several sub-tasks, which will be listed here:
 
 1. Modify Light Sensor messages (done)
 2. Clean code; run hm0360_md_getAEStats() just once per loop. (done)
-3. Advise on moving light meter code to a separate .c & .h file.
-4. Implement Separate lightSensor.c & .h
-5. Add CLI on-demand "just check the light" command
+3. Advise on moving light meter code to a separate .c & .h file. (done)
+4. Implement Separate lightSensor.c & .h (done)
+5. Add CLI on-demand "just check the light" command (done)
 
 (Further tasks may follow).
 

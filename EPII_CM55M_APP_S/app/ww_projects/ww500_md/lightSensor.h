@@ -45,6 +45,9 @@ void lightSensor_takeReading(void);
 // Same as lightSensor_takeReading(), but always samples, ignoring
 // lightSensor_isRequired() - for on-demand bench/debug use (e.g. the 'light'
 // CLI command). Prefer lightSensor_takeReading() for normal wake-cycle use.
+// Neither function drives the flash LED - that is the caller's job (see
+// image_task.c), so a bare light check never has the side effect of
+// switching hardware on.
 void lightSensor_takeReadingForced(void);
 
 // The last sampled brightness (HM0360 AE_MEAN units, 0-255, higher = brighter).

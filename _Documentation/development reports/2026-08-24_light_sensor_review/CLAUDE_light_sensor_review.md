@@ -116,6 +116,22 @@ and are coloured cyan. That will make it easier for humans to review these lines
 ---
  ## Completed tasks:
 
+* Fixed: flash LED turning on during a bare light check (Charles noticed it happening
+  "sometimes" - i.e. whenever the scene was dark at the time). Root cause: my own
+  `lightSensor.c` refactor (see below) put `ledFlash_setActive(dark)` inside the
+  shared `decideDarkBright()` helper, which both `lightSensor_takeReading()` (the
+  real per-capture path) AND `lightSensor_takeReadingForced()` (the `light` CLI
+  command / `ae_stream.py`) call. That meant every on-demand `light` check now drove
+  the physical flash hardware as a side effect - something the old, pre-refactor code
+  could never do, since its equivalent (`ledFlashNewAEStats()`) was only ever reached
+  from inside an actual capture. Fix: removed the `ledFlash_setActive()` call from
+  `lightSensor.c` entirely; `image_task.c` now calls it explicitly right after
+  `lightSensor_takeReading()`, only in the real capture/wake-cycle path - matching
+  what the original `lightSensor.h` design draft's "Design notes" had actually
+  recommended (I'd deviated from that when implementing it). `light`/`ae_stream.py`
+  are now purely passive again. Not yet build/device-verified.
+  (complete 27 August 2026, unverified)
+
 * Created `_Tools/ae_stream.py` to complement `ae_monitor.py` - sends the on-demand
   `light` CLI command back-to-back as fast as the device replies (no fixed interval),
   prints each `Light level: N (DARK|BRIGHT)` reading with a timestamp and bar graph.

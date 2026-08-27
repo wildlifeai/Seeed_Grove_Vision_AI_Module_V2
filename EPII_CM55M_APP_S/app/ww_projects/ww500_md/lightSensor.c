@@ -148,7 +148,13 @@ static bool sampleAeStats(LightSensorStats_t *stats) {
 
 /**
  * @brief Turn aggregated AE statistics into a hysteresis-filtered dark/bright
- * decision, persist it, and drive the flash LED (in FLASH_MODE_AE only).
+ * decision and persist it.
+ *
+ * Deliberately does NOT drive the flash LED here - this runs from both the
+ * real capture path (lightSensor_takeReading()) and the passive on-demand
+ * 'light' CLI command (lightSensor_takeReadingForced()), and the latter must
+ * not have the side effect of switching hardware on. The flash is driven by
+ * the caller instead, only where that is actually wanted (image_task.c).
  *
  * @param stats aggregated AE statistics from sampleAeStats() or a fallback single reading
  */
@@ -178,10 +184,6 @@ static void decideDarkBright(const LightSensorStats_t *stats) {
 			threshold, stats->gainRailed ? "yes" : "no",
 			dark ? "DARK (flash wanted)" : "BRIGHT (no flash)",
 			(dark == wasDark) ? "" : " (changed)"); XP_WHITE
-
-	if (ledFlashGetFlashMode() == FLASH_MODE_AE) {
-		ledFlash_setActive(dark);
-	}
 }
 
 /*********************************************** Global Function Definitions *********************************/

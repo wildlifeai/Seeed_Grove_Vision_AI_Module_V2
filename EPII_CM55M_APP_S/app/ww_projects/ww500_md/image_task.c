@@ -870,6 +870,15 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
         if (aeCheckRequired && (g_cur_jpegenc_frame == g_captures_to_take)) {
             lightSensor_takeReading();
 
+            // Drive the flash LED from the fresh decision. Deliberately done
+            // here, not inside lightSensor.c: lightSensor_takeReading() (and
+            // lightSensor_takeReadingForced(), used by the on-demand 'light'
+            // CLI command) must stay side-effect-free w.r.t. hardware - only
+            // an actual capture/wake cycle should switch the flash.
+            if (ledFlashGetFlashMode() == FLASH_MODE_AE) {
+                ledFlash_setActive(lightSensor_isDark());
+            }
+
             // Automatic day/night camera switching (op26): if the fresh
             // decision wants the other camera variant, this switches the boot
             // slot and schedules a reset at the next sleep. See camera_switch.c.

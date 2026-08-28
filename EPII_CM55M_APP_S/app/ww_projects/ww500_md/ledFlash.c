@@ -374,13 +374,17 @@ FlashLedMode_t  ledFlashGetFlashMode(void) {
 }
 
 /**
- * Setter for flashActive - drives the flash hardware immediately.
+ * Setter for flashActive - records the light sensor's dark/bright decision.
  *
- * Used by lightSensor.c to apply its dark/bright decision once it has one.
+ * Deliberately does NOT drive the flash hardware: called from image_task.c
+ * right after a light check, at which point nothing needs the LED physically
+ * lit (the capture that triggered the check has already finished). The next
+ * real capture, and image_sleepNow()'s MD-illumination STROBE arming, both
+ * read flashActive (via ledFlashIsActive()/ledFlashActivate()) themselves at
+ * the point they actually need it.
  *
- * @param active - true to turn the flash on, false to turn it off
+ * @param active - true if the light sensor decided the scene is dark
  */
 void ledFlash_setActive(bool active) {
 	flashActive = active;
-	ledFlashActivate();
 }

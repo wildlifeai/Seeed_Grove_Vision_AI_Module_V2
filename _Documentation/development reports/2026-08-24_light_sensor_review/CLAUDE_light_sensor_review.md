@@ -116,6 +116,26 @@ and are coloured cyan. That will make it easier for humans to review these lines
 ---
  ## Completed tasks:
 
+* Fixed a third flash-hardware bug, found by Charles observing hardware directly:
+  during the periodic AE-check-only wake (`aeCheckOnlyWake`, `OP_PARAMETER_AE_CHECK_INTERVAL`),
+  the flash fired once even though `lightSensor.c`'s own sampling is flash-free. Root
+  cause: that periodic wake still runs a real (throwaway) image capture to refresh AE
+  registers - a design that predates `lightSensor.c`'s direct register-sampling and is
+  now redundant for that purpose - and `configure_image_sensor(CAMERA_CONFIG_RUN)`
+  (`image_task.c`) arms the flash for every capture unconditionally, using the
+  *previous* light decision (the fresh one isn't known until after this capture
+  finishes). Considered removing the throwaway capture entirely, but that would bypass
+  the normal capture state machine's barrier/telemetry/WDT-retry handling in ways not
+  fully verified safe - deferred as a separate, bigger change. Fix applied instead:
+  guard the flash-arming in `CAMERA_CONFIG_RUN` with `!aeCheckOnlyWake`. For the
+  HM0360/STROBE_CONTROLS_FLASH branch this needed an explicit `hm0360_md_configureStrobe(false)`,
+  not just skipping the call - STROBE may already be armed from the previous
+  `image_sleepNow()`'s MD-illumination setup, so omitting the call alone would not
+  have turned it off (caught this refinement while implementing the originally
+  proposed simpler skip). `image_sleepNow()` re-arms STROBE correctly from the fresh
+  decision before the next sleep either way. Both `cis_imx708` and `cis_hm0360` build
+  clean. Not yet device-verified. (complete 28 August 2026, build verified only)
+
 * Fixed: flash LED turning on during a bare light check (Charles noticed it happening
   "sometimes" - i.e. whenever the scene was dark at the time). Root cause: my own
   `lightSensor.c` refactor (see below) put `ledFlash_setActive(dark)` inside the
@@ -129,8 +149,35 @@ and are coloured cyan. That will make it easier for humans to review these lines
   `lightSensor_takeReading()`, only in the real capture/wake-cycle path - matching
   what the original `lightSensor.h` design draft's "Design notes" had actually
   recommended (I'd deviated from that when implementing it). `light`/`ae_stream.py`
-  are now purely passive again. Not yet build/device-verified.
-  (complete 27 August 2026, unverified)
+  are now purely passive again.
+  (complete 27 August 2026; hardware testing of this fix surfaced two further,
+  independent flash-hardware bugs - see the 28 August entry below)
+
+* Fixed two further flash-hardware bugs found when Charles tested the above fix on
+  `capture 3 1000`: (A) a fast flicker during the ~1.9s AE-sampling window itself, and
+  (B) the flash solid ON for a further ~1s afterward - both should be off throughout
+  light sensing. Confirmed against Charles's hardware model (STROBE, from the HM0360
+  itself, drives the LED for HM0360 captures and MD illumination; FLASHEN, from the
+  PCA9574, is driven by software only for RP3 captures; colour selection is
+  independent of both) by re-reading every `ledFlashActivate()`/`hm0360_md_configureStrobe()`
+  call site in `image_task.c` - all correctly gated by the existing
+  `STROBE_CONTROLS_FLASH` macro, confirming neither bug was in that logic.
+  (A): `sampleAeStats()` (`lightSensor.c`) wakes the HM0360 into `MODE_SW_CONTINUOUS`
+  for sampling but never touched STROBE_CFG, so a strobe left armed by the *previous*
+  `image_sleepNow()` (for MD illumination) fired on every streamed AE-sampling frame.
+  Fixed by adding a new `hm0360_md_getStrobe()` getter (`hm0360_md.c/.h`, mirrors the
+  existing `hm0360_md_getMode()` pattern) and saving/restoring STROBE_CFG around the
+  sampling window, the same way the streaming mode itself is already saved/restored.
+  (B): `ledFlash_setActive()` (`ledFlash.c`) updated the `flashActive` flag AND
+  immediately drove the PCA9574 FLASHEN hardware, even though nothing needs the LED
+  lit at that moment - the capture that triggered the check is already finished, and
+  the next real capture / `image_sleepNow()`'s STROBE arming both read the flag
+  themselves when they actually need it (`ledFlash.c` already had precedent for a
+  flag-only update with no hardware write, in `ledFlashSetFlashModeFromOpParam()`).
+  Fixed by removing the `ledFlashActivate()` call from `ledFlash_setActive()` - it is
+  now a pure flag setter.
+  Both `cis_imx708` and `cis_hm0360` build clean. Not yet device-verified.
+  (complete 28 August 2026, build verified only)
 
 * Created `_Tools/ae_stream.py` to complement `ae_monitor.py` - sends the on-demand
   `light` CLI command back-to-back as fast as the device replies (no fixed interval),

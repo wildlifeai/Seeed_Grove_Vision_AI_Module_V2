@@ -73,9 +73,9 @@ FlashLedMode_t ledFlashGetFlashMode(void);
 
 void ledFlashSetFlashModeFromOpParam(uint16_t ledInUse);
 
-// Setter for flashActive - drives the flash hardware immediately via
-// ledFlashActivate(). Used by the light sensor (lightSensor.c) to apply its
-// dark/bright decision when the flash is in FLASH_MODE_AE.
+// Setter for flashActive - records a dark/bright decision (image_task.c, from
+// the light sensor) for the next real capture / DPD-entry STROBE arming to
+// read. Does NOT drive the flash hardware itself - see ledFlash.c.
 void ledFlash_setActive(bool active);
 
 #endif /* LEDFLASH_H_ */

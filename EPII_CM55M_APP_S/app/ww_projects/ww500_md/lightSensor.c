@@ -69,7 +69,11 @@ static void decideDarkBright(const LightSensorStats_t *stats);
  * @brief Sample AE_MEAN and the gain registers over AE_SAMPLE_COUNT frames.
  *
  * Wakes the HM0360 into streaming first if it was asleep (a sleeping sensor
- * reads AE_MEAN = 0), and restores its prior mode afterward.
+ * reads AE_MEAN = 0), and restores its prior mode afterward. Also disables the
+ * STROBE pin for the duration - if left as whatever the previous DPD sleep
+ * armed it to (e.g. MD illumination), the sensor would otherwise fire the
+ * flash on every one of these streamed sampling frames. Restored afterward,
+ * whether or not the mode itself needed changing.
  *
  * @param stats [out] aggregated statistics, filled if at least one sample was read
  * @return true if stats->samples > 0
@@ -82,6 +86,8 @@ static bool sampleAeStats(LightSensorStats_t *stats) {
 	uint32_t sumAE = 0;
 	mode_select_t priorMode = MODE_SLEEP;
 	bool wokeForSampling = false;
+	bool priorStrobeEnabled = false;
+	bool gotPriorStrobe;
 	char aeMeanLog[AE_SAMPLE_COUNT * 4 + 8];	// "nnn " per sample
 	uint16_t logOffset = 0;
 
@@ -93,6 +99,13 @@ static bool sampleAeStats(LightSensorStats_t *stats) {
 		return false;
 	}
 
+	// If the HM0360 strobe is enabled, then disable it.
+	gotPriorStrobe = (hm0360_md_getStrobe(&priorStrobeEnabled) == HX_CIS_NO_ERROR);
+	if (gotPriorStrobe && priorStrobeEnabled) {
+		hm0360_md_configureStrobe(false);
+	}
+
+	// If the HM0360 is in SLEEP state then put it in CONTINUOUS mode.
 	if ((hm0360_md_getMode(&priorMode) == HX_CIS_NO_ERROR) &&
 			((priorMode == MODE_SLEEP) || (priorMode == MODE_SW_NFRAMES_STANDBY))) {
 		if (hm0360_md_setModeSelectOnly(MODE_SW_CONTINUOUS) == HX_CIS_NO_ERROR) {
@@ -101,6 +114,7 @@ static bool sampleAeStats(LightSensorStats_t *stats) {
 		}
 	}
 
+	// Loop several times reading the gain registers. Record each AE Mean reading in a string.
 	aeMeanLog[0] = '\0';
 	for (uint8_t i = 0; i < AE_SAMPLE_COUNT; i++) {
 		if (hm0360_md_getGainRegs(&gain) == HX_CIS_NO_ERROR) {
@@ -127,12 +141,19 @@ static bool sampleAeStats(LightSensorStats_t *stats) {
 		}
 	}
 
+	// Print the several AE mean values.
 	XP_CYAN xprintf("[LS] getAEStats: %d AE_MEAN samples: %s\n", stats->samples, aeMeanLog); XP_WHITE
 
+	// Potentially restore HM0360 mode - e.g. to SLEEP
 	if (wokeForSampling) {
 		if (hm0360_md_setModeSelectOnly(priorMode) != HX_CIS_NO_ERROR) {
 			XP_CYAN xprintf("[LS] getAEStats: failed to restore HM0360 mode %d\n", priorMode); XP_WHITE
 		}
+	}
+
+	// If necessary, re-enable the HM0360 STROBE
+	if (gotPriorStrobe && priorStrobeEnabled) {
+		hm0360_md_configureStrobe(true);
 	}
 
 	if (stats->samples == 0) {

@@ -870,11 +870,12 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
         if (aeCheckRequired && (g_cur_jpegenc_frame == g_captures_to_take)) {
             lightSensor_takeReading();
 
-            // Drive the flash LED from the fresh decision. Deliberately done
-            // here, not inside lightSensor.c: lightSensor_takeReading() (and
-            // lightSensor_takeReadingForced(), used by the on-demand 'light'
-            // CLI command) must stay side-effect-free w.r.t. hardware - only
-            // an actual capture/wake cycle should switch the flash.
+            // Record the fresh decision as flashActive, ready for the next
+            // real capture (or image_sleepNow()'s STROBE arming) to read.
+            // Does NOT switch the LED on now - nothing needs it lit at this
+            // point, and lightSensor_takeReading()/lightSensor_takeReadingForced()
+            // (the latter used by the on-demand 'light' CLI command) must stay
+            // side-effect-free w.r.t. hardware.
             if (ledFlashGetFlashMode() == FLASH_MODE_AE) {
                 ledFlash_setActive(lightSensor_isDark());
             }
@@ -1988,14 +1989,28 @@ static bool configure_image_sensor(CAMERA_CONFIG_E operation) {
 #endif // USE_HM0360_CAPTURE_TIMER
     		XP_WHITE;
 #ifdef STROBE_CONTROLS_FLASH
-    		// The HM0360 STROBE pin drives drive the LED
-    		hm0360_md_configureStrobe((ledFlashIsActive() > 0));
+    		// The HM0360 STROBE pin drives the LED. For the periodic AE-only
+    		// check's throwaway frame, force it off explicitly - it may
+    		// already be armed from the previous sleep's MD-illumination
+    		// setup, so just skipping this call would not be enough.
+    		// image_sleepNow() re-arms it correctly, from the fresh decision,
+    		// before the next sleep.
+    		if (aeCheckOnlyWake) {
+    			hm0360_md_configureStrobe(false);
+    		}
+    		else {
+    			hm0360_md_configureStrobe((ledFlashIsActive() > 0));
+    		}
 #else
-    		ledFlashActivate();	// Turn on Flash LED (conditionally)
+    		if (!aeCheckOnlyWake) {
+    			ledFlashActivate();	// Turn on Flash LED (conditionally)
+    		}
 #endif //  STROBE_CONTROLS_FLASH
 #else
-    		// turn on the LED for the RP camera
-    		ledFlashActivate();	// Turn on Flash LED (conditionally)
+    		if (!aeCheckOnlyWake) {
+    			// turn on the LED for the RP camera
+    			ledFlashActivate();	// Turn on Flash LED (conditionally)
+    		}
 #endif // USE_HM0360
     		cisdp_sensor_start(); // Starts data path sensor control block
     	}

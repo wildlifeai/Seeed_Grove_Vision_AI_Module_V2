@@ -467,7 +467,9 @@ HX_CIS_ERROR_E hm0360_md_getGainRegs(HM0360_GAIN_T * val) {
 	// Digital gain registers 0x020E & 0x020F (seems to be [1-0] from 020e and [7-2] from 020f
 	ret |= hx_drv_cis_get_reg(DIGITAL_GAIN_H, &valueH);
 	ret |= hx_drv_cis_get_reg(DIGITAL_GAIN_L, &valueL);
-	val->digitalGain = ((valueH & 0x03) << 6) + ((valueL & 0xfa) >> 6);
+	// CGP - I noticed an error here on 28/8/26
+	//val->digitalGain = ((valueH & 0x03) << 6) + ((valueL & 0xfa) >> 6);
+	val->digitalGain = ((valueH & 0x03) << 6) + ((valueL & 0xfc) >> 2);
 
 	// AE Mean register 0x205d (RO)
 	ret |= hx_drv_cis_get_reg(AE_MEAN, &valueL);
@@ -637,6 +639,34 @@ void hm0360_md_printGrid(uint8_t *roiOut, uint16_t numBlocks, char *msg, uint16_
 
 	msg[offset] = '\0';
 }
+/**
+ * Reads whether the HM0360 STROBE_CFG register currently has the flash enabled.
+ * Side-effect-free counterpart to hm0360_md_configureStrobe() - lets a caller
+ * save/restore the prior setting around a transient change (see lightSensor.c,
+ * which must not leave the flash strobing during an AE-sampling window).
+ *
+ * @param flashEnabled [out] true if STROBE_CFG is non-zero (flash enabled)
+ * @return error code
+ */
+HX_CIS_ERROR_E hm0360_md_getStrobe(bool *flashEnabled) {
+	HX_CIS_ERROR_E ret;
+	uint8_t val;
+
+	if (!hm0360_present) {
+		return HX_CIS_UNKNOWN_ERROR;
+	}
+
+	saveMainCameraConfig();
+	ret = hx_drv_cis_get_reg(STROBE_CFG, &val);
+	restoreMainCameraConfig();
+
+	if (ret == HX_CIS_NO_ERROR) {
+		*flashEnabled = (val != 0);
+	}
+
+	return ret;
+}
+
 /**
  * Sets the HM0360 STROBE_CFG register
  *

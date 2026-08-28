@@ -91,6 +91,10 @@ uint16_t hm0360_md_getMDOutput(uint8_t * regTable, uint8_t length);
 
 void hm0360_md_printGrid(uint8_t *roiOut, uint16_t numBlocks, char *msg, uint16_t msgLen);
 
+// Read whether the STROBE pin is currently configured to drive the flash.
+// Side-effect-free counterpart to hm0360_md_configureStrobe().
+HX_CIS_ERROR_E hm0360_md_getStrobe(bool *flashEnabled);
+
 // Configure the HM0360 STROBE pin which can drive the flash cct
 HX_CIS_ERROR_E hm0360_md_configureStrobe(bool flashRequired);
 

@@ -1,0 +1,25 @@
+# Deployment end (quiesce). Extracted from the merged three-way log, 31 Aug 2026.
+# NOTE: the app leg had stalled and these app lines were recovered from the logcat
+# ring buffer afterwards, so their relative timestamps all read 00:00.156. The wall
+# clock in each app line (08:38:56-472) is the reliable ordering.
+#
+[11:50.641] himax | 000: 80 01 0a 00 73 65 74 6f  70 20 31 31 20 30 d7 35 ....setop 11 0.5
+[11:50.641] himax | MKL62BA command received: 'setop 11 0'
+[11:50.641] himax | Set OpParam 11 = 0
+[11:50.641] himax | Sending 24 bytes: Header 4, payload 18, checksum 2 'Set OpParam 11 = 0'
+[11:50.688] nrf   | BLE in: Received  13 bytes 'AI setop 11 0'
+[11:50.688] nrf   | Sending 'setop 11 0' to AI processor (4 ctrl bytes, 10 payload, 2 CRC)<info> app: AI state changed from IDLE to PROCESSING
+[11:50.688] nrf   | 000: 80 01 0A 00 73 65 74 6F  70 20 31 31 20 30 D7 35  ....setop 11 0.5
+[11:50.688] nrf   | <info> app: AI processor replies: 'Set OpParam 11 = 0'
+[11:50.688] nrf   | BLE out: Sent  19 bytes: 'Set OpParam 11 = 0'
+[11:51.031] nrf   | BLE out: Sent  14 bytes: 'Disconnecting'
+[00:00.156] app   | [EndDeployment] Pre-fetched bulk ops for end-deployment
+[00:00.156] app   | [EndDeployment] Clearing Deployment ID...
+[00:00.156] app   | [EndDeployment] ID cleared
+[00:00.156] app   | [DeviceSettings] Quiescing device (EndDeployment: true)...
+[00:00.156] app   | [DeviceSettings] 2. Clearing Motion & Timelapse intervals...
+[00:00.156] app   | Written AI setop 11 0 to the device WILD-CNKW (08:38:56-472)
+[00:00.156] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: Set OpParam 11 = 0
+[00:00.156] app   | [DeviceSettings] Device quiesced successfully.
+[00:00.156] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: Disconnecting
+[00:00.156] app   | Peripheral disconnect event triggered. Disconnecting: D6:47:9B:89:E7:23

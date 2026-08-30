@@ -1,0 +1,148 @@
+# Deployment start, capture method 'activity'. Extracted from the merged three-way log
+# (app logcat + nRF COM5 + Himax COM6), 30 Aug 2026. Column 2 is the source leg.
+# Timestamps are mm:ss.mmm since capture start; app lines also carry wall clock.
+#
+[00:18.344] himax | MKL62BA command received: 'selftest'
+[00:24.391] himax | OpParams 0 0 0 1 0 1 500 0 1000 5 1 0 100 0 0 0 18 1 0 0 0 2 50 65 15 0 0 286 326 1 110 1 
+[01:24.453] himax | Sending 93 bytes: Header 4, payload 87, checksum 2 'Sleep 0 0 0 1 0 1 500 0 1000 5 1 0 100 0 0 0 18 1 0 0 0 2 50 65 15 0 0 286 326 1 110 1 '
+[05:56.047] app   | Written AI info to the device WILD-CNKW (16:35:37-859)
+[05:56.844] himax | MKL62BA command received: 'selftest'
+[05:56.906] himax | MKL62BA command received: 'setutc 2026-08-30T04:35:37Z'
+[05:57.969] himax | MKL62BA command received: 'info'
+[05:58.266] app   | [ResetDefaults] Reading current operational parameters...
+[05:58.297] app   | Written AI getop -1 to the device WILD-CNKW (16:35:40-114)
+[05:58.344] himax | MKL62BA command received: 'getop -1'
+[05:58.344] himax | OpParams 0 0 0 1 1 1 500 0 1000 5 1 0 100 0 0 0 18 1 0 0 0 2 50 65 15 0 0 286 326 1 110 1 
+[05:58.344] himax | Sending 96 bytes: Header 4, payload 90, checksum 2 'OpParams 0 0 0 1 1 1 500 0 1000 5 1 0 100 0 0 0 18 1 0 0 0 2 50 65 15 0 0 286 326 1 110 1 '
+[05:58.437] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: OpParams 0 0 0 1 1 1 500 0 1000 5 1 0 100 0 0 0 18 1 0 0 0 2 50 65 15 0 0 286 326 1 110 1
+[05:58.453] app   | [ResetDefaults] Current OPs: 0 0 0 1 1 1 500 0 1000 5 1 0 100 0 0 0 18 1 0 0 0 2 50 65 15 0 0 286 326 1 110 1
+[05:58.469] app   | [ResetDefaults] 2 OPs need writing, model loaded: false
+[05:58.469] app   | [ResetDefaults] Setting OP 0 = 1
+[05:58.469] app   | Written AI setop 0 1 to the device WILD-CNKW (16:35:40-282)
+[05:58.484] nrf   | <info> app: AI processor replies: 'OpParams 0 0 0 1 1 1 500 0 1000 5 1 0 100 0 0 0 18 1 0 0 0 2 50 65 15 0 0 286 326 1 110 1 '
+[05:58.484] nrf   | BLE out: Sent  91 bytes: 'OpParams 0 0 0 1 1 1 500 0 1000 5 1 0 100 0 0 0 18 1 0 0 0 2 50 65 15 0 0 286 326 1 110 1 '
+[05:58.531] himax | MKL62BA command received: 'setop 0 1'
+[05:58.531] himax | Set OpParam 0 = 1
+[05:58.531] himax | Sending 23 bytes: Header 4, payload 17, checksum 2 'Set OpParam 0 = 1'
+[05:58.609] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: Set OpParam 0 = 1
+[05:58.609] nrf   | <info> app: AI processor replies: 'Set OpParam 0 = 1'
+[05:58.609] nrf   | BLE out: Sent  18 bytes: 'Set OpParam 0 = 1'
+[05:58.641] app   | [ResetDefaults] Setting OP 26 = 1
+[05:58.641] app   | Written AI setop 26 1 to the device WILD-CNKW (16:35:40-455)
+[05:58.734] himax | MKL62BA command received: 'setop 26 1'
+[05:58.734] himax | Set OpParam 26 = 1
+[05:58.734] himax | Sending 24 bytes: Header 4, payload 18, checksum 2 'Set OpParam 26 = 1'
+[05:58.766] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: Set OpParam 26 = 1
+[05:58.797] app   | [ResetDefaults] Skipping clearing deployment ID (skipIdentityReset = true)
+[05:58.797] app   | [ResetDefaults] Skipping zeroing GPS (skipIdentityReset = true)
+[05:58.797] app   | [ResetDefaults] Factory reset complete. 2 OPs written.
+[05:58.812] nrf   | <info> app: AI processor replies: 'Set OpParam 26 = 1'
+[05:58.812] nrf   | BLE out: Sent  19 bytes: 'Set OpParam 26 = 1'
+[05:58.953] app   | Written AI ver to the device WILD-CNKW (16:35:40-764)
+[05:58.984] himax | MKL62BA command received: 'ver'
+[06:00.109] himax | Sending 93 bytes: Header 4, payload 87, checksum 2 'Sleep 1 0 0 1 1 1 500 0 1000 5 1 0 100 0 0 0 18 1 0 0 0 2 50 65 15 0 1 286 326 1 110 1 '
+[06:00.391] app   | Written AI info to the device WILD-CNKW (16:35:42-200)
+[06:01.172] himax | MKL62BA command received: 'selftest'
+[06:01.297] himax | MKL62BA command received: 'info'
+[06:01.531] app   | Written AI ver to the device WILD-CNKW (16:35:43-344)
+[06:01.609] himax | MKL62BA command received: 'ver'
+[06:02.750] himax | Sending 93 bytes: Header 4, payload 87, checksum 2 'Sleep 1 0 0 1 2 1 500 0 1000 5 1 0 100 0 0 0 18 1 0 0 0 2 50 65 15 0 1 286 326 1 110 1 '
+[06:10.031] app   | Written AI getop -1 to the device WILD-CNKW (16:35:51-851)
+[06:10.687] himax | MKL62BA command received: 'selftest'
+[06:10.812] himax | MKL62BA command received: 'getop -1'
+[06:10.812] himax | OpParams 1 0 0 1 3 1 500 0 1000 5 1 0 100 0 0 0 18 1 0 0 0 2 50 65 15 0 1 286 326 1 110 1 
+[06:10.812] himax | Sending 96 bytes: Header 4, payload 90, checksum 2 'OpParams 1 0 0 1 3 1 500 0 1000 5 1 0 100 0 0 0 18 1 0 0 0 2 50 65 15 0 1 286 326 1 110 1 '
+[06:10.906] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: OpParams 1 0 0 1 3 1 500 0 1000 5 1 0 100 0 0 0 18 1 0 0 0 2 50 65 15 0 1 286 326 1 110 1
+[06:10.922] app   | [Deployment] Pre-flight OPs: 1 0 0 1 3 1 500 0 1000 5 1 0 100 0 0 0 18 1 0 0 0 2 50 65 15 0 1 286 326 1 110 1
+[06:10.953] nrf   | <info> app: AI processor replies: 'OpParams 1 0 0 1 3 1 500 0 1000 5 1 0 100 0 0 0 18 1 0 0 0 2 50 65 15 0 1 286 326 1 110 1 '
+[06:10.953] nrf   | BLE out: Sent  91 bytes: 'OpParams 1 0 0 1 3 1 500 0 1000 5 1 0 100 0 0 0 18 1 0 0 0 2 50 65 15 0 1 286 326 1 110 1 '
+[06:11.422] app   | [ResetDefaults] Reading current operational parameters...
+[06:11.422] app   | [ResetDefaults] Using provided current OPs: 1 0 0 1 3 1 500 0 1000 5 1 0 100 0 0 0 18 1 0 0 0 2 50 65 15 0 1 286 326 1 110 1
+[06:11.422] app   | [ResetDefaults] 0 OPs need writing, model loaded: false
+[06:11.422] app   | [ResetDefaults] Skipping clearing deployment ID (skipIdentityReset = true)
+[06:11.422] app   | [ResetDefaults] Skipping zeroing GPS (skipIdentityReset = true)
+[06:11.422] app   | [ResetDefaults] Factory reset complete. 0 OPs written.
+[06:11.422] app   | [DeployConfig] Starting deployment configuration sequence...
+[06:11.422] app   | '[DeployConfig] Setting deployment ID:', 'a8e5a82d-dcb4-460d-9bf7-2f7a3bf7fa94'
+[06:11.516] himax | MKL62BA command received: 'setdid a8e5a82d-dcb4-460d-9bf7-2f7a3bf7fa94'
+[06:11.516] himax | Deployment ID set to a8e5a82d-dcb4-460d-9bf7-2f7a3bf7fa94
+[06:11.516] himax | Sending 63 bytes: Header 4, payload 57, checksum 2 'Deployment ID set to a8e5a82d-dcb4-460d-9bf7-2f7a3bf7fa94'
+[06:11.531] app   | Written AI setdid a8e5a82d-dcb4-460d-9bf7-2f7a3bf7fa94 to the device WILD-CNKW (16:35:53-339)
+[06:11.594] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: Deployment ID set to a8e5a82d-dcb4-460d-9bf7-2f7a3bf7fa94
+[06:11.594] nrf   | <info> app: AI processor replies: 'Deployment ID set to a8e5a82d-dcb4-460d-9bf7-2f7a3bf7fa94'
+[06:11.594] nrf   | BLE out: Sent  58 bytes: 'Deployment ID set to a8e5a82d-dcb4-460d-9bf7-2f7a3bf7fa94'
+[06:11.625] app   | [DeployConfig] Deployment ID set successfully via AI setdid
+[06:11.625] app   | [DeployConfig] Skipping reset of Op 20 (already 0)
+[06:11.625] app   | [DeployConfig] Skipping reset of Op 19 (already 0)
+[06:11.625] app   | [DeployConfig] Image directory counters handled (Op 19+20)
+[06:11.703] himax | MKL62BA command received: 'setgps 0,0,0'
+[06:11.703] himax | Device GPS set
+[06:11.703] himax | Sending 20 bytes: Header 4, payload 14, checksum 2 'Device GPS set'
+[06:11.766] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: Device GPS set
+[06:11.781] nrf   | <info> app: AI processor replies: 'Device GPS set'
+[06:11.781] nrf   | BLE out: Sent  15 bytes: 'Device GPS set'
+[06:11.781] app   | [DeployConfig] GPS zeroed out (Privacy mode or missing location)
+[06:11.797] app   | '[DeployConfig] Configuring capture method:', 'activity'
+[06:11.797] app   | [DeployConfig] Motion detection mode - interval 1000ms, timeout 30s
+[06:11.797] app   | [DeployConfig] Skipping parameter 17 (already 1)
+[06:11.797] app   | [DeployConfig] Setting parameter 11 to 1000
+[06:11.797] app   | Written AI setop 11 1000 to the device WILD-CNKW (16:35:53-612)
+[06:11.828] himax | MKL62BA command received: 'setop 11 1000'
+[06:11.828] himax | Set OpParam 11 = 1000
+[06:11.891] himax | Sending 27 bytes: Header 4, payload 21, checksum 2 'Set OpParam 11 = 1000'
+[06:11.922] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: Set OpParam 11 = 1000
+[06:11.937] app   | [DeployConfig] Skipping parameter 7 (already 0)
+[06:11.937] app   | [DeployConfig] Skipping parameter 8 (already 1000)
+[06:11.937] app   | [DeployConfig] Skipping parameter 10 (already 1)
+[06:11.937] app   | [DeployConfig] Deployment configuration complete (Atomic)
+[06:11.969] nrf   | <info> app: AI processor replies: 'Set OpParam 11 = 1000'
+[06:11.969] nrf   | BLE out: Sent  22 bytes: 'Set OpParam 11 = 1000'
+[06:12.016] himax | MKL62BA command received: 'setop 18 2'
+[06:12.016] himax | Set OpParam 18 = 2
+[06:12.016] himax | Sending 24 bytes: Header 4, payload 18, checksum 2 'Set OpParam 18 = 2'
+[06:12.094] nrf   | <info> app: AI processor replies: 'Set OpParam 18 = 2'
+[06:12.094] nrf   | BLE out: Sent  19 bytes: 'Set OpParam 18 = 2'
+[06:12.094] app   | Written AI setop 18 2 to the device WILD-CNKW (16:35:53-911)
+[06:12.094] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: Set OpParam 18 = 2
+[06:12.125] app   | Written AI setop 5 2 to the device WILD-CNKW (16:35:53-940)
+[06:12.203] himax | MKL62BA command received: 'setop 5 2'
+[06:12.203] himax | Set OpParam 5 = 2
+[06:12.203] himax | Sending 23 bytes: Header 4, payload 17, checksum 2 'Set OpParam 5 = 2'
+[06:12.250] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: Set OpParam 5 = 2
+[06:12.281] app   | Written AI capture 1 500 to the device WILD-CNKW (16:35:54-085)
+[06:12.281] nrf   | <info> app: AI processor replies: 'Set OpParam 5 = 2'
+[06:12.281] nrf   | BLE out: Sent  18 bytes: 'Set OpParam 5 = 2'
+[06:12.328] himax | MKL62BA command received: 'capture 1 500'
+[06:14.812] app   | Written AI getop -1 to the device WILD-CNKW (16:35:56-626)
+[06:15.016] himax | MKL62BA command received: 'getop -1'
+[06:15.016] himax | OpParams 2 0 0 1 3 2 500 0 1000 5 1 1000 100 0 0 0 18 1 2 1 0 2 50 65 15 0 1 286 326 1 110 1 
+[06:15.016] himax | Sending 99 bytes: Header 4, payload 93, checksum 2 'OpParams 2 0 0 1 3 2 500 0 1000 5 1 1000 100 0 0 0 18 1 2 1 0 2 50 65 15 0 1 286 326 1 110 1 '
+[06:15.156] nrf   | <info> app: AI processor replies: 'OpParams 2 0 0 1 3 2 500 0 1000 5 1 1000 100 0 0 0 18 1 2 1 0 2 50 65 15 0 1 286 326 1 110 1 '
+[06:15.156] nrf   | BLE out: Sent  94 bytes: 'OpParams 2 0 0 1 3 2 500 0 1000 5 1 1000 100 0 0 0 18 1 2 1 0 2 50 65 15 0 1 286 326 1 110 1 '
+[06:15.172] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: OpParams 2 0 0 1 3 2 500 0 1000 5 1 1000 100 0 0 0 18 1 2 1 0 2 50 65 15 0 1 286 326 1 110 1
+[06:15.344] app   | Written AI getop -1 to the device WILD-CNKW (16:35:57-160)
+[06:15.391] himax | MKL62BA command received: 'getop -1'
+[06:15.391] himax | OpParams 2 0 0 1 3 2 500 0 1000 5 1 1000 100 0 0 0 18 1 2 1 0 2 50 65 15 0 1 286 326 1 110 1 
+[06:15.391] himax | Sending 99 bytes: Header 4, payload 93, checksum 2 'OpParams 2 0 0 1 3 2 500 0 1000 5 1 1000 100 0 0 0 18 1 2 1 0 2 50 65 15 0 1 286 326 1 110 1 '
+[06:15.547] nrf   | <info> app: AI processor replies: 'OpParams 2 0 0 1 3 2 500 0 1000 5 1 1000 100 0 0 0 18 1 2 1 0 2 50 65 15 0 1 286 326 1 110 1 '
+[06:15.547] nrf   | BLE out: Sent  94 bytes: 'OpParams 2 0 0 1 3 2 500 0 1000 5 1 1000 100 0 0 0 18 1 2 1 0 2 50 65 15 0 1 286 326 1 110 1 '
+[06:15.562] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: OpParams 2 0 0 1 3 2 500 0 1000 5 1 1000 100 0 0 0 18 1 2 1 0 2 50 65 15 0 1 286 326 1 110 1
+[06:16.531] himax | Sending 96 bytes: Header 4, payload 90, checksum 2 'Sleep 2 0 0 1 3 2 500 0 1000 5 1 1000 100 0 0 0 18 1 2 1 0 2 50 65 15 0 1 286 326 1 110 1 '
+[06:22.250] app   | Written AI getop 19 to the device WILD-CNKW (16:36:04-070)
+[06:23.531] himax | MKL62BA command received: 'selftest'
+[06:23.594] himax | MKL62BA command received: 'getop 19'
+[06:23.906] app   | Written AI getop 19 to the device WILD-CNKW (16:36:05-718)
+[06:23.984] himax | MKL62BA command received: 'getop 19'
+[06:25.109] himax | Sending 96 bytes: Header 4, payload 90, checksum 2 'Sleep 2 0 0 1 4 2 500 0 1000 5 1 1000 100 0 0 0 18 1 2 1 0 2 50 65 15 0 1 286 326 1 110 1 '
+[06:27.859] himax | MKL62BA command received: 'selftest'
+[06:34.172] himax | Sending 96 bytes: Header 4, payload 90, checksum 2 'Sleep 4 0 0 1 5 2 500 0 1000 5 1 1000 100 0 0 0 18 1 2 3 0 2 50 65 15 0 1 286 326 1 110 1 '
+[06:41.937] himax | MKL62BA command received: 'selftest'
+[06:48.203] himax | Sending 96 bytes: Header 4, payload 90, checksum 2 'Sleep 6 0 0 1 6 2 500 0 1000 5 1 1000 100 0 0 0 18 1 2 5 0 2 50 65 15 0 1 286 326 1 110 1 '
+[09:59.625] himax | MKL62BA command received: 'selftest'
+[10:05.937] himax | Sending 96 bytes: Header 4, payload 90, checksum 2 'Sleep 8 0 0 1 7 2 500 0 1000 5 1 1000 100 0 0 0 18 1 2 7 0 2 50 65 15 0 1 286 326 1 110 1 '
+[18:55.641] himax | MKL62BA command received: 'selftest'
+[18:55.703] himax | MKL62BA command received: 'setutc 2026-08-30T04:48:36Z'
+[19:03.750] himax | Sending 97 bytes: Header 4, payload 91, checksum 2 'Sleep 10 0 0 1 8 2 500 0 1000 5 1 1000 100 0 0 0 18 1 2 9 0 2 50 65 15 0 1 286 326 1 110 1 '
+[33:32.469] himax | MKL62BA command received: 'selftest'
+[33:32.547] himax | MKL62BA command received: 'setutc 2026-08-30T05:03:13Z'
+[33:36.734] himax | Sending 97 bytes: Header 4, payload 91, checksum 2 'Sleep 11 0 0 1 9 2 500 0 1000 5 1 1000 100 0 0 0 18 1 2 9 0 2 50 65 15 0 1 286 326 1 110 1 '

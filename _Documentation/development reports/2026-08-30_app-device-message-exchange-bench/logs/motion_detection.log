@@ -1,0 +1,60 @@
+# Motion detection firing after op11 was set to 1000. Extracted from the merged
+# three-way log, 30 Aug 2026. Shows Wake (MD), the HM0360 block grid, the AE light
+# check and the resulting captures.
+#
+[06:14.266] himax | AE light check: mean AE = 66 (min 66, max 66) over 16 frames, threshold = 65, gain railed = no -> BRIGHT (no flash)
+[06:14.266] himax | HM0360 motion in 0 blocks:
+[06:14.469] nrf   | BLE out: Sent 124 bytes: 'HM0360 motion in 0 blocks:
+[06:14.578] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: HM0360 motion in 0 blocks:
+[06:14.719] nrf   | BLE out: Sent  63 bytes: 'Captured 1 images. Last is A93B32B0.JPG (File write 48ms avg.)'
+[06:14.781] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: Captured 1 images. Last is A93B32B0.JPG (File write 48ms avg.)
+[06:27.875] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: Wake (MD)
+[06:28.000] nrf   | <info> app: AI state machine bumped with 'Wake (MD)' (Current state: SLEEP)
+[06:28.000] nrf   | BLE out: Sent  10 bytes: 'Wake (MD)'
+[06:29.734] himax | AE light check: mean AE = 77 (min 58, max 89) over 16 frames, threshold = 65, gain railed = no -> BRIGHT (no flash)
+[06:29.797] himax | HM0360 motion in 70 blocks:
+[06:29.937] nrf   | BLE out: Sent 125 bytes: 'HM0360 motion in 70 blocks:
+[06:30.031] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: HM0360 motion in 70 blocks:
+[06:32.547] himax | AE light check: mean AE = 70 (min 70, max 71) over 16 frames, threshold = 65, gain railed = no -> BRIGHT (no flash)
+[06:32.547] himax | HM0360 motion in 0 blocks:
+[06:32.750] nrf   | BLE out: Sent 124 bytes: 'HM0360 motion in 0 blocks:
+[06:32.766] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: HM0360 motion in 0 blocks:
+[06:33.125] nrf   | BLE out: Sent  64 bytes: 'Captured 2 images. Last is A93B33E0.BMP (File write 112ms avg.)'
+[06:33.141] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: Captured 2 images. Last is A93B33E0.BMP (File write 112ms avg.)
+[06:41.906] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: Wake (MD)
+[06:42.016] nrf   | <info> app: AI state machine bumped with 'Wake (MD)' (Current state: SLEEP)
+[06:42.016] nrf   | BLE out: Sent  10 bytes: 'Wake (MD)'
+[06:43.750] himax | AE light check: mean AE = 73 (min 47, max 78) over 16 frames, threshold = 65, gain railed = no -> BRIGHT (no flash)
+[06:43.812] himax | HM0360 motion in 0 blocks:
+[06:44.016] nrf   | BLE out: Sent 124 bytes: 'HM0360 motion in 0 blocks:
+[06:44.062] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: HM0360 motion in 0 blocks:
+[06:46.562] himax | AE light check: mean AE = 76 (min 76, max 77) over 16 frames, threshold = 65, gain railed = no -> BRIGHT (no flash)
+[06:46.562] himax | HM0360 motion in 0 blocks:
+[06:46.766] nrf   | BLE out: Sent 124 bytes: 'HM0360 motion in 0 blocks:
+[06:46.812] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: HM0360 motion in 0 blocks:
+[06:47.141] nrf   | BLE out: Sent  64 bytes: 'Captured 2 images. Last is A93B34C0.BMP (File write 112ms avg.)'
+[06:47.172] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: Captured 2 images. Last is A93B34C0.BMP (File write 112ms avg.)
+[09:59.703] nrf   | <info> app: AI state machine bumped with 'Wake (MD)' (Current state: SLEEP)
+[09:59.703] nrf   | BLE out: Failed to send  10 bytes: 'Wake (MD)'
+[10:01.500] himax | AE light check: mean AE = 72 (min 70, max 73) over 16 frames, threshold = 65, gain railed = no -> BRIGHT (no flash)
+[10:01.500] himax | HM0360 motion in 5 blocks:
+[10:01.703] nrf   | BLE out: Failed to send 124 bytes: 'HM0360 motion in 5 blocks:
+[10:04.312] himax | AE light check: mean AE = 72 (min 69, max 73) over 16 frames, threshold = 65, gain railed = no -> BRIGHT (no flash)
+[10:04.375] himax | HM0360 motion in 0 blocks:
+[10:04.578] nrf   | BLE out: Failed to send 124 bytes: 'HM0360 motion in 0 blocks:
+[10:04.953] nrf   | BLE out: Failed to send  64 bytes: 'Captured 2 images. Last is A93B4190.BMP (File write 146ms avg.)'
+[18:55.766] nrf   | <info> app: AI state machine bumped with 'Wake (MD)' (Current state: SLEEP)
+[18:55.766] nrf   | BLE out: Failed to send  10 bytes: 'Wake (MD)'
+[18:59.328] himax | AE light check: mean AE = 85 (min 85, max 86) over 16 frames, threshold = 65, gain railed = no -> BRIGHT (no flash)
+[18:59.391] himax | HM0360 motion in 0 blocks:
+[18:59.578] nrf   | BLE out: Failed to send 124 bytes: 'HM0360 motion in 0 blocks:
+[19:02.109] himax | AE light check: mean AE = 85 (min 85, max 86) over 16 frames, threshold = 65, gain railed = no -> BRIGHT (no flash)
+[19:02.109] himax | HM0360 motion in 0 blocks:
+[19:02.344] nrf   | BLE out: Failed to send 124 bytes: 'HM0360 motion in 0 blocks:
+[19:02.719] nrf   | BLE out: Failed to send  64 bytes: 'Captured 2 images. Last is A93B62A0.BMP (File write 113ms avg.)'
+[33:32.406] himax | Timer wake for AE light check
+[33:32.469] himax | Skipping NN processing (AE light check).
+[33:35.375] himax | AE light check: mean AE = 73 (min 73, max 74) over 16 frames, threshold = 65, gain railed = no -> BRIGHT (no flash)
+[33:35.453] himax | HM0360 motion in 0 blocks:
+[33:35.687] nrf   | BLE out: Failed to send 124 bytes: 'HM0360 motion in 0 blocks:
+[33:35.687] nrf   | BLE out: Failed to send  50 bytes: 'Captured 1 images. Last is  (File write 0ms avg.)'

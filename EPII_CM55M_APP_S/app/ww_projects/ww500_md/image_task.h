@@ -98,4 +98,7 @@ bool image_getEnabled(void);
 // Call to shut down cameras and enter DPD
 void image_sleepNow(void);
 
+// Send an unsolicited text message to the app/BLE processor (MKL62BA)
+void sendMsgToMaster(char *str);
+
 #endif /* APP_WW_PROJECTS_WW500_MD_IMAGE_TASK_H_ */

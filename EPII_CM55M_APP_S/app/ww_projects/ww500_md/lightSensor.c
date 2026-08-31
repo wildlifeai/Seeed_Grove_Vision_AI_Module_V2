@@ -19,6 +19,7 @@
 #include "ledFlash.h"
 #include "fatfs_task.h"
 #include "ww500_md.h"	// app_getElapsedMs()
+#include "image_task.h"	// sendMsgToMaster()
 #include "xprintf.h"
 #include "printf_x.h"	// Print colours
 
@@ -52,6 +53,8 @@ typedef struct {
 	uint8_t  minAE;
 	uint8_t  maxAE;
 	bool     gainRailed;	// AE gain at maximum on most frames - unambiguously dark
+	bool     converged;		// AE_CONVERGED on the last sampled frame
+	uint8_t  analogGain;	// ANALOG_GAIN on the last sampled frame
 } LightSensorStats_t;
 
 /*********************************************** Local Variables ********************************************/
@@ -94,6 +97,8 @@ static bool sampleAeStats(LightSensorStats_t *stats) {
 	stats->samples = 0;
 	stats->minAE = 255;
 	stats->maxAE = 0;
+	stats->converged = false;
+	stats->analogGain = 0;
 
 	if (hm0360_md_getGainCeilings(&maxAnalogGain, &maxDigitalGain) != HX_CIS_NO_ERROR) {
 		return false;
@@ -129,6 +134,11 @@ static bool sampleAeStats(LightSensorStats_t *stats) {
 			if (gain.aeMean > stats->maxAE) {
 				stats->maxAE = gain.aeMean;
 			}
+			// Kept from every successful read, so these end up holding the
+			// values from the last (not necessarily i == AE_SAMPLE_COUNT - 1,
+			// if a later read fails) sampled frame.
+			stats->converged = (gain.aeConverged != 0);
+			stats->analogGain = gain.analogGain;
 			// "Railed" = both gains at (or above) the ceiling - AE can amplify no further.
 			if ((maxAnalogGain > 0) && (gain.analogGain >= maxAnalogGain) &&
 					(maxDigitalGain > 0) && (gain.digitalGain >= maxDigitalGain)) {
@@ -180,7 +190,10 @@ static bool sampleAeStats(LightSensorStats_t *stats) {
  * @param stats aggregated AE statistics from sampleAeStats() or a fallback single reading
  */
 static void decideDarkBright(const LightSensorStats_t *stats) {
+	char lightCheckMsg[190];
+
 	uint16_t threshold = fatfs_getOperationalParameter(OP_PARAMETER_AE_DARK_THRESHOLD);
+
 	// Hysteresis memory is the persisted decision - the only memory that
 	// survives DPD.
 	bool wasDark = (fatfs_getOperationalParameter(OP_PARAMETER_AE_FLASH_STATE) == 1);
@@ -199,12 +212,21 @@ static void decideDarkBright(const LightSensorStats_t *stats) {
 
 	fatfs_setOperationalParameter(OP_PARAMETER_AE_FLASH_STATE, dark ? 1 : 0);
 
-	XP_CYAN xprintf("[LS] AE light check: mean AE = %d (min %d, max %d) over %d frames, "
-			"threshold = %d, gain railed = %s -> %s%s\n",
+	// Built once so the console and the app see the same wording - '[LS]' is
+	// added only for the console print, as a marker for humans scanning the
+	// log; the app gets the message via the normal telemetry channel instead.
+
+	snprintf(lightCheckMsg, sizeof(lightCheckMsg),
+			"AE light check: mean AE = %d (min %d, max %d) over %d frames, "
+			"threshold = %d, analog gain = %d, converged = %s, gain railed = %s -> %s%s",
 			stats->meanAE, stats->minAE, stats->maxAE, stats->samples,
-			threshold, stats->gainRailed ? "yes" : "no",
+			threshold, stats->analogGain, stats->converged ? "yes" : "no",
+			stats->gainRailed ? "yes" : "no",
 			dark ? "DARK (flash wanted)" : "BRIGHT (no flash)",
-			(dark == wasDark) ? "" : " (changed)"); XP_WHITE
+			(dark == wasDark) ? "" : " (changed)");
+
+	XP_CYAN xprintf("[LS] %s\n", lightCheckMsg); XP_WHITE
+	sendMsgToMaster(lightCheckMsg);
 }
 
 /*********************************************** Global Function Definitions *********************************/
@@ -240,6 +262,8 @@ void lightSensor_takeReadingForced(void) {
 		stats.minAE = gain.aeMean;
 		stats.maxAE = gain.aeMean;
 		stats.gainRailed = false;
+		stats.converged = (gain.aeConverged != 0);
+		stats.analogGain = gain.analogGain;
 	}
 
 	XP_CYAN xprintf("[LS] AE sampling took %dms\n", app_getElapsedMs(startTime)); XP_WHITE

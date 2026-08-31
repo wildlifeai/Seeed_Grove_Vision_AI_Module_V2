@@ -514,7 +514,7 @@ HX_CIS_ERROR_E hm0360_md_getGainCeilings(uint8_t *maxAnalogGain, uint16_t *maxDi
 	restoreMainCameraConfig();
 
 	*maxAnalogGain = maxAGain & 0x07;
-	*maxDigitalGain = ((maxDGainH & 0x03) << 6) + ((maxDGainL & 0xfa) >> 6);
+	*maxDigitalGain = ((maxDGainH & 0x03) << 6) + ((maxDGainL & 0xfc) >> 2);
 
 	return ret;
 }

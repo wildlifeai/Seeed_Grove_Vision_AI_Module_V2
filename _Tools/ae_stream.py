@@ -4,10 +4,17 @@
 Complements ae_monitor.py (which drives full 'capture' cycles on a timer) with a
 much simpler tool: repeatedly send the on-demand 'light' CLI command
 (see EPII_CM55M_APP_S/app/ww_projects/ww500_md/doc/light_sensor.md sec.6.4) as fast
-as the device answers, and print each reading. No NN, no file save, no capture -
-'light' calls lightSensor_takeReadingForced() directly, so this is the lowest-latency
-way to watch the raw light-sensor value change (e.g. while covering/uncovering the
-sensor) without waiting for the normal wake-cycle gating.
+as the device answers, and print each reading. No NN, no file save - only a
+throwaway single-frame capture, the same one the periodic AE-check-interval timer
+wake already uses, so this is a much lower-latency way to watch the raw light-sensor
+value change (e.g. while covering/uncovering the sensor) than waiting for the normal
+wake-cycle gating.
+
+'light' replies to the console immediately ("Checking light level...") without
+waiting for the reading - the actual result is reported asynchronously, on the
+"[LS] AE light check: ..." console line (this script's LIGHT_RE parses that line,
+stripped of the "[LS] " marker and any colour codes) once the ~2s sampling window
+finishes.
 
 Each 'light' command keeps the device out of DPD sleep for another 60s
 (INACTIVITYTIMEOUTCLI), same as ae_monitor.py's captures, so a continuous stream
@@ -15,9 +22,11 @@ holds the device awake indefinitely. If the device is currently asleep when this
 script starts, it waits for a wake (RTC timer or motion) first, exactly like
 ae_monitor.py.
 
-READING THE OUTPUT - each line is one 'light' command's reply:
+READING THE OUTPUT - each line is one 'light' command's result. analog gain and
+converged (AE_CONVERGED) are the sensor's own state on the last sampled frame -
+useful for judging how much to trust a given mean-AE reading:
 
-    [19:25:35] #12  Light level: 71 (DARK)
+    [19:25:35] #12  Light level:  71 (DARK  ) gain= 12 conv=Y |###########                             |
 
 Press ESC to stop (Ctrl+C also works). The script always closes the serial port
 before exiting, however it exits - normal ESC/Ctrl+C, a device timeout, or any
@@ -37,7 +46,15 @@ import time
 import serial
 
 ANSI_RE = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
-LIGHT_RE = re.compile(r"Light level:\s*(\d+)\s*\((DARK|BRIGHT)\)")
+# Anchored on the '[LS] ' marker: decideDarkBright() (lightSensor.c) prints the
+# same text twice on the console - once itself, prefixed '[LS] ', and again
+# (unprefixed) wherever the outgoing message to the BLE processor gets echoed.
+# Without the anchor both copies match and every reading is reported twice.
+LIGHT_RE = re.compile(
+    r"^\[LS\]\s.*mean AE\s*=\s*(\d+).*?"
+    r"analog gain\s*=\s*(\d+).*?converged\s*=\s*(yes|no).*?"
+    r"->\s*(DARK|BRIGHT)"
+)
 BOOT_MARKERS = ("Image sensor and data path initialised", "Inactivity period set",
                 "available commands")
 
@@ -174,9 +191,12 @@ def main() -> int:
                             reading_num += 1
                             awaiting_reply = False
                             ae = int(m.group(1))
-                            state = m.group(2)
+                            analog_gain = int(m.group(2))
+                            converged = m.group(3) == "yes"
+                            state = m.group(4)
                             bar = "#" * min(40, ae * 40 // 255)
-                            print(f"[{wallclock()}] #{reading_num:<4} Light level: {ae:3d} ({state:<6}) |{bar:<40}|",
+                            print(f"[{wallclock()}] #{reading_num:<4} Light level: {ae:3d} ({state:<6}) "
+                                  f"gain={analog_gain:3d} conv={'Y' if converged else 'N'} |{bar:<40}|",
                                   flush=True)
 
             print(f"[{wallclock()}] Session finished ({reading_num} readings).")

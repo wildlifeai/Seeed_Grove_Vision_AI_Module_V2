@@ -192,8 +192,9 @@ static bool configure_image_sensor(CAMERA_CONFIG_E operation);
 
 static void setupLEDFlash(void);
 
-// Send unsolicited message to the master
-static void sendMsgToMaster(char *str);
+// Send unsolicited message to the master - declared in image_task.h, not
+// static: lightSensor.c also calls this directly to forward its light-check
+// result to the app, the same way this file's own telemetry does.
 
 // When final activity from the FatFS Task and IF Task are complete, enter DPD
 static void sleepWhenPossible(void);
@@ -2150,7 +2151,7 @@ static void setupLEDFlash(void) {
  * Send an unsolicited message to the MKL62BA.
  *
  */
-static void sendMsgToMaster(char *str) {
+void sendMsgToMaster(char *str) {
     APP_MSG_T send_msg;
 
 	// Wait till previous I2C comms transmission is done.

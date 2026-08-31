@@ -4,12 +4,19 @@
 # bottom of each JPEG in a folder, reading the values from the same
 # MakerNote EXIF field jpegAE-batch.py extracts for its CSV.
 #
-#   HM0360 AE regs:                      ->   AE  integ=376  aGain=1  dGain=107  mean=102  conv=N
+#   HM0360 AE regs:                      ->   AE  integ=376  aGain=1  dGain=107  mean=102  conv=N  flashMN=1  flashEXIF=1
 #     Integration time = 376 lines
 #     Analog gain = 1
 #     Digital gain = 107
 #     AE Mean = 102
 #     AEConverged?: N
+#
+# The flash state is stored twice in the file (image_task.c / exif_builder.c):
+# once as the last field of the MakerNote CSV (flashMN, 0/1/2 - off/visible/IR),
+# and again, separately, as the standard EXIF Flash tag (0x9209, flashEXIF - just
+# a fired/not-fired bit, collapsed from the same source value). Both are shown
+# so the two can be compared; once they are confirmed to always agree, one of
+# the two could be dropped.
 #
 # Originals are never modified: each annotated image is written under a new
 # name (default suffix '_AE') into a subfolder (default '<input_folder>\AN',
@@ -33,9 +40,13 @@ AE_HEADERS = [
     "Digital gain",
     "AE Mean",
     "AEConverged",
+    "WB Red Gain",
+    "WB Blue Gain",
+    "Flash Fired",
 ]
 
 TAG_MAKERNOTE = 0x927C
+TAG_FLASH     = 0x9209
 POINTER_TAGS  = {0x8769, 0x8825}   # ExifIFDPointer, GPSInfoIFDPointer
 
 TYPE_SIZES = {
@@ -91,6 +102,9 @@ def parse_ifd(fp, base_offset, ifd_offset, endian, collected, check_next_ifd=Tru
         if tag == TAG_MAKERNOTE:
             collected['makernote'] = value.decode('ascii', errors='replace').strip('\x00').strip()
 
+        if tag == TAG_FLASH and len(value) >= 2:
+            collected['flash_exif'] = struct.unpack(endian + 'H', value[:2])[0]
+
         if tag in POINTER_TAGS:
             parse_ifd(fp, base_offset, value_offset, endian, collected, check_next_ifd=False)
             fp.seek(next_entry_pos)
@@ -103,7 +117,9 @@ def parse_ifd(fp, base_offset, ifd_offset, endian, collected, check_next_ifd=Tru
                 parse_ifd(fp, base_offset, next_offset, endian, collected)
 
 
-def extract_makernote(filepath):
+def extract_exif_fields(filepath):
+    """Return {'makernote': str, 'flash_exif': int or missing} from one JPEG's
+    EXIF segment - a single IFD walk covers both, since they live side by side."""
     collected = {}
     try:
         with open(filepath, 'rb') as fp:
@@ -136,22 +152,28 @@ def extract_makernote(filepath):
                     break
     except Exception:
         pass
-    return collected.get('makernote', '')
+    return collected
 
 
 # --- Annotation --------------------------------------------------------
 
-def format_ae_line(fields):
-    """Turn the 5 named AE fields into one succinct line, or a placeholder
-    if the MakerNote was empty/unparseable."""
+def format_ae_line(fields, flash_exif):
+    """Turn the named AE/MakerNote fields plus the separate EXIF Flash tag
+    into one succinct line, or a placeholder if the MakerNote was
+    empty/unparseable. flashMN and flashEXIF are shown side by side so the
+    two independently-stored flash values can be compared (see module
+    docstring)."""
+    flash_exif_str = str(flash_exif) if flash_exif is not None else '?'
     if not any(fields.values()):
-        return "AE: no MakerNote data"
+        return f"AE: no MakerNote data  flashEXIF={flash_exif_str}"
     return (
         f"AE  integ={fields['Integration time']}  "
         f"aGain={fields['Analog gain']}  "
         f"dGain={fields['Digital gain']}  "
         f"mean={fields['AE Mean']}  "
-        f"conv={fields['AEConverged']}"
+        f"conv={fields['AEConverged']}  "
+        f"flashMN={fields['Flash Fired'] or '?'}  "
+        f"flashEXIF={flash_exif_str}"
     )
 
 
@@ -164,16 +186,29 @@ def annotate_image(src_path, out_path, text, quality, margin):
     if img.mode not in ("RGB", "L"):
         img = img.convert("RGB")
 
-    font_size = max(14, img.height // 24)
-    try:
-        font = ImageFont.load_default(size=font_size)
-    except TypeError:
-        # Pillow < 9.2 has no 'size' arg on load_default() - falls back to
-        # its small fixed-size bitmap font.
-        font = ImageFont.load_default()
+    def load_font(size):
+        try:
+            return ImageFont.load_default(size=size)
+        except TypeError:
+            # Pillow < 9.2 has no 'size' arg on load_default() - falls back to
+            # its small fixed-size bitmap font (no further shrinking possible).
+            return ImageFont.load_default()
 
     draw = ImageDraw.Draw(img)
+    max_width = img.width - 2 * margin
+
+    font_size = max(14, img.height // 24)
+    font = load_font(font_size)
     bbox = draw.textbbox((0, 0), text, font=font)
+    text_w = bbox[2] - bbox[0]
+
+    # The line has grown (AE fields + both flash values) - shrink it to fit
+    # the image width rather than letting it run off the right edge.
+    if text_w > max_width > 0 and font_size > 8:
+        font_size = max(8, int(font_size * max_width / text_w))
+        font = load_font(font_size)
+        bbox = draw.textbbox((0, 0), text, font=font)
+
     text_h = bbox[3] - bbox[1]
     x = margin
     y = img.height - text_h - margin
@@ -293,9 +328,9 @@ def main():
             skipped += 1
             continue
 
-        makernote = extract_makernote(src_path)
-        fields = parse_makernote(makernote)
-        text = format_ae_line(fields)
+        exif_fields = extract_exif_fields(src_path)
+        fields = parse_makernote(exif_fields.get('makernote', ''))
+        text = format_ae_line(fields, exif_fields.get('flash_exif'))
 
         try:
             annotate_image(src_path, out_path, text, args.quality, args.margin)

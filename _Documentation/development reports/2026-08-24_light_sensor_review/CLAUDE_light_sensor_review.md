@@ -116,6 +116,36 @@ and are coloured cyan. That will make it easier for humans to review these lines
 ---
  ## Completed tasks:
 
+* Fixed an EXIF/MakerNote flash-state off-by-one bug, found while building a new
+  bench tool (`_Tools/jpegAE_annotate.py`, burns the MakerNote AE fields plus the
+  standard EXIF `TAG_FLASH` (0x9209) onto the bottom of each JPEG) - Charles noticed
+  the two flash values looked shifted by one image when comparing the annotated
+  frames against what the images actually showed. Root cause, confirmed by tracing
+  `APP_MSG_IMAGETASK_FRAME_READY` handling in `image_task.c`: within the processing
+  of a single captured frame, the post-capture light check (when it runs, i.e. the
+  last frame of a burst) calls `ledFlash_setActive()` at line ~919, which updates
+  `ledFlashIsActive()` to the *fresh* decision for the *next* capture - but
+  `prepareJpegFile()`, called a few dozen lines later for the *same* frame, was
+  reading that same live `ledFlashIsActive()` at EXIF-build time
+  (`exif_input.flash_fired = ledFlashIsActive();`). So the flash value written into
+  an image's EXIF (and, downstream, both the MakerNote's `flashFired` field and the
+  standard `TAG_FLASH` tag, which both derive from `exif_input.flash_fired`) was the
+  decision for the *next* image, not the one that was actually used to arm the flash
+  for *this* image (decided earlier, before capture, in
+  `configure_image_sensor(CAMERA_CONFIG_RUN)`). Confirmed `ledFlash_setActive()` has
+  exactly one call site in the whole codebase (`image_task.c:919`), so no other
+  write could be muddying this - a clean, consistent one-image lag.
+  Fix: added a new file-scope `lastCaptureFlashState` (`image_task.c`), snapshotted
+  from `ledFlashIsActive()` at the top of `FRAME_READY` handling (right after
+  `ledFlashDisable()`, before the light check can touch it), and changed
+  `prepareJpegFile()` to read that snapshot instead of a live `ledFlashIsActive()`
+  call. Noted but NOT fixed (out of scope for this pass, flagged for a separate
+  decision): `img_correct_process_mode()`'s white-balance correction (RP2/RP3 builds
+  only, `image_task.c` ~lines 1038/1055) reads `ledFlashIsActive()` at the same late
+  point in the same frame's handling, so it likely has the identical staleness
+  problem for the flash argument it passes in.
+  Not yet build-verified. (complete 1 September 2026, build verification pending)
+
 * Found and fixed a date-rollover bug in `exif_utc.c` while investigating why the
   periodic AE-check-interval timer wake stopped working (Charles saw
   `[LS] Will wake to check light level in 60 seconds` followed by `Will wake at

@@ -271,6 +271,15 @@ static bool aeCheckRequired = false;
 // the exact same real (throwaway) single-frame capture mechanics.
 static bool aeCheckCliTriggered = false;
 
+// The flash state (0/1/2 = off/visible/IR, per ledFlashIsActive()) actually
+// used to arm THIS frame's capture, snapshotted at APP_MSG_IMAGETASK_FRAME_READY
+// before the post-capture light check (if any) can overwrite ledFlashIsActive()
+// with the decision for the NEXT capture. prepareJpegFile() reads this - not a
+// live ledFlashIsActive() call - so the EXIF/MakerNote flash field describes the
+// image it is attached to, not the following one. See
+// _Documentation/development reports/2026-08-24_light_sensor_review/CLAUDE_light_sensor_review.md.
+static uint8_t lastCaptureFlashState = 0;
+
 static TimerHandle_t captureTimer;
 
 static fileOperation_t fileOp;
@@ -834,6 +843,13 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
 #endif // INVESTIGATE_FLASH_BRIGHTNESS
 
         ledFlashDisable(); // finished with the LED flash. Turn it off.
+
+        // Snapshot the flash state that was actually used to arm this capture
+        // (configure_image_sensor(CAMERA_CONFIG_RUN), before this frame existed)
+        // - before the light check below (if it runs) calls ledFlash_setActive()
+        // and overwrites ledFlashIsActive() with the decision for the NEXT
+        // capture. See lastCaptureFlashState's declaration.
+        lastCaptureFlashState = ledFlashIsActive();
 
         // measure time for the frame capture just completed
         // That is, the time since event APP_MSG_IMAGETASK_STARTCAPTURE in handleEventForInit()
@@ -2241,8 +2257,13 @@ static void prepareJpegFile(int8_t * outCategories, uint8_t classCount, fileBuff
 
 	exif_input.software = softwareString;
 
-	// Save info about which LED was used to illuminate the current image: none, visible or IR
-	exif_input.flash_fired = ledFlashIsActive();
+	// Save info about which LED was used to illuminate the current image: none, visible or IR.
+	// lastCaptureFlashState, not a live ledFlashIsActive() call: by the time
+	// prepareJpegFile() runs, the post-capture light check (if it ran for this
+	// frame) has already updated ledFlashIsActive() with the decision for the
+	// NEXT capture - reading it live here would attach the wrong image's flash
+	// state to this one's EXIF. See lastCaptureFlashState's declaration.
+	exif_input.flash_fired = lastCaptureFlashState;
 
 	/* NN data: [total_bytes][count][score...] */
 	if (classCount > MAX_CLASSES) {

@@ -880,18 +880,50 @@ static BaseType_t prvCamera(char *pcWriteBuffer, size_t xWriteBufferLen, const c
 /**
  * Implements "light" command.
  *
- * Takes a fresh light-sensor reading on demand (ignoring whether the AE flash
- * or auto camera-switch would normally want one) and reports the numeric AE
- * value and dark/bright state - see light_sensor.md §6.4.
+ * Triggers a fresh light-sensor reading on demand (ignoring whether the AE
+ * flash or auto camera-switch would normally want one) - see light_sensor.md
+ * §6.4. The actual result is reported asynchronously, on the console (the
+ * "[LS] AE light check: ..." line, printed unconditionally by
+ * lightSensor.c regardless of trigger source) and to the app via the normal
+ * "HM0360 AE regs" telemetry - not as this command's own CLI response.
+ *
+ * Deliberately fire-and-forget, like prvCapture(): sends
+ * APP_MSG_IMAGETASK_STARTCAPTURE with msg_data = 0 (see handleEventForInit())
+ * and returns immediately, rather than blocking for the image task's result.
+ * An earlier version blocked here on a semaphore given once the reading was
+ * ready - that deadlocked when 'light' was invoked over BLE: the IF task's
+ * I2C_RX state doesn't clear until the CLI produces a reply for the command
+ * that arrived, but the image task's own reply-enabling step
+ * (sendMsgToMaster(), for the AE-regs telemetry) needs that same I2C link
+ * free to run - so a blocking reply here and an async telemetry send there
+ * waited on each other. Firing the request and replying immediately (like
+ * every other capture-triggering command) avoids that entirely.
+ *
+ * The msg_data = 0 sentinel still routes through exactly the same real
+ * (throwaway) single-frame capture path the periodic AE-check-interval timer
+ * wake already uses (aeCheckOnlyWake) - one path for both triggers - while
+ * aeCheckCliTriggered keeps this specific call forced and side-effect-free
+ * (no flash arming, no camera-switch check). Doing this on the image task
+ * also keeps all HM0360 I2C access serialised through one task - calling it
+ * directly from here could otherwise race a real capture's own HM0360 access
+ * from the image task at the same time.
  */
 static BaseType_t prvLight(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) {
+	APP_MSG_T send_msg;
+
 	(void)pcCommandString;
 	configASSERT(pcWriteBuffer);
 
-	lightSensor_takeReadingForced();
+	send_msg.msg_data = 0;	// 0 = light-check only, see handleEventForInit()
+	send_msg.msg_parameter = 0;
+	send_msg.msg_event = APP_MSG_IMAGETASK_STARTCAPTURE;
 
-	cli_append(&pcWriteBuffer, &xWriteBufferLen, "Light level: %d (%s)",
-			lightSensor_getReading(), lightSensor_isDark() ? "DARK" : "BRIGHT");
+	if (xQueueSend(xImageTaskQueue, (void *)&send_msg, __QueueSendTicksToWait) != pdTRUE) {
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "Failed to queue light check");
+		return pdFALSE;
+	}
+
+	cli_append(&pcWriteBuffer, &xWriteBufferLen, "Checking light level...");
 
 	return pdFALSE;
 }

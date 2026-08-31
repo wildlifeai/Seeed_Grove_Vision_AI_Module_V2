@@ -262,6 +262,13 @@ static uint8_t g_capture_retries;	// in-place retries used for the current captu
 // Cleared on the way into DPD. See _Documentation/AE_Light_Sensor_Roadmap.md
 static bool aeCheckOnlyWake = false;
 static bool aeCheckRequired = false;
+// True for the one aeCheckOnlyWake capture request that came from the on-demand
+// 'light' CLI command (prvLight(), CLI-commands.c) rather than the periodic
+// AE-check-interval timer wake - see the STARTCAPTURE handler in
+// handleEventForInit(). Distinguishes "always force a reading, no side effects"
+// (CLI) from the timer path's existing behaviour, even though both now share
+// the exact same real (throwaway) single-frame capture mechanics.
+static bool aeCheckCliTriggered = false;
 
 static TimerHandle_t captureTimer;
 
@@ -624,17 +631,40 @@ static APP_MSG_DEST_T handleEventForInit(APP_MSG_T img_recv_msg) {
         requested_captures = (uint16_t)img_recv_msg.msg_data;
         requested_period = img_recv_msg.msg_parameter;
 
+        if (requested_captures == 0) {
+        	// Light-check only, via prvLight() in CLI-commands.c - take exactly
+        	// the same real (throwaway) single-frame capture path as the
+        	// periodic AE-check-interval timer wake (aeCheckOnlyWake, set below
+        	// and in vImageTask()'s own setup) rather than a separate shortcut,
+        	// so there is one path for both triggers. aeCheckCliTriggered
+        	// distinguishes this from a timer-triggered aeCheckOnlyWake later
+        	// on, so the reading stays forced and side-effect-free (no flash
+        	// arming, no camera-switch check) as already decided for 'light' -
+        	// only the capture mechanics are shared, not those consequences.
+        	aeCheckCliTriggered = true;
+        	requested_captures = 1;
+        }
+
         if (!cameraSystemEnabled) {
         	xprintf("Can't capture - camera system not enabled\n");
-        	snprintf(msgToMaster, MSGTOMASTERLEN, "Camera system not enabled");
-        	sendMsgToMaster(msgToMaster);
+        	if (aeCheckCliTriggered) {
+        		aeCheckCliTriggered = false;
+        	}
+        	else {
+        		snprintf(msgToMaster, MSGTOMASTERLEN, "Camera system not enabled");
+        		sendMsgToMaster(msgToMaster);
+        	}
         }
         // Check parameters are acceptable
         else if ((requested_captures < MIN_IMAGE_CAPTURES) || (requested_captures > MAX_IMAGE_CAPTURES) ||
             (requested_period < MIN_IMAGE_INTERVAL) || (requested_period > MAX_IMAGE_INTERVAL))  {
             xprintf("Invalid parameter values %d or %d\n", requested_captures, requested_period);
+            aeCheckCliTriggered = false;
         }
         else  {
+            if (aeCheckCliTriggered) {
+            	aeCheckOnlyWake = true;
+            }
             g_captures_to_take = requested_captures;
             g_timer_period = requested_period;
 #ifdef WDTIMOUTFIX
@@ -866,25 +896,38 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
         // Only sample AE after the last image of a (possibly multi-image)
         // capture request - lightSensor_takeReading() takes a couple of
         // seconds, so repeating it for every image in e.g. 'capture 3 1000'
-        // would needlessly slow the burst.
-        if (aeCheckRequired && (g_cur_jpegenc_frame == g_captures_to_take)) {
-            lightSensor_takeReading();
-
-            // Record the fresh decision as flashActive, ready for the next
-            // real capture (or image_sleepNow()'s STROBE arming) to read.
-            // Does NOT switch the LED on now - nothing needs it lit at this
-            // point, and lightSensor_takeReading()/lightSensor_takeReadingForced()
-            // (the latter used by the on-demand 'light' CLI command) must stay
-            // side-effect-free w.r.t. hardware.
-            if (ledFlashGetFlashMode() == FLASH_MODE_AE) {
-                ledFlash_setActive(lightSensor_isDark());
+        // would needlessly slow the burst. aeCheckOnlyWake is included here (as
+        // well as aeCheckRequired) so an on-demand 'light' command still gets a
+        // reading even if aeCheckRequired itself happens to be false.
+        if ((aeCheckRequired || aeCheckOnlyWake) && (g_cur_jpegenc_frame == g_captures_to_take)) {
+            if (aeCheckCliTriggered) {
+                // On-demand 'light' command: always force a reading, but stay a
+                // passive diagnostic - no flash arming, no camera-switch check.
+                // Only the capture mechanics are shared with the timer path,
+                // not those consequences.
+                lightSensor_takeReadingForced();
             }
+            else {
+                lightSensor_takeReading();
 
-            // Automatic day/night camera switching (op26): if the fresh
-            // decision wants the other camera variant, this switches the boot
-            // slot and schedules a reset at the next sleep. See camera_switch.c.
-            cameraSwitchScheduled = cameraSwitch_autoSwitchCheck();
+                // Record the fresh decision as flashActive, ready for the next
+                // real capture (or image_sleepNow()'s STROBE arming) to read.
+                // Does NOT switch the LED on now - nothing needs it lit at this
+                // point.
+                if (ledFlashGetFlashMode() == FLASH_MODE_AE) {
+                    ledFlash_setActive(lightSensor_isDark());
+                }
+
+                // Automatic day/night camera switching (op26): if the fresh
+                // decision wants the other camera variant, this switches the
+                // boot slot and schedules a reset at the next sleep. See
+                // camera_switch.c.
+                cameraSwitchScheduled = cameraSwitch_autoSwitchCheck();
+            }
         }
+
+
+		xprintf("DEBUG: 1\n");
 
         snprintf(msgToMaster, MSGTOMASTERLEN, "HM0360 AE regs:\n  Integration time = %d lines\n  Analog gain = %d\n  Digital gain = %d\n  AE Mean = %d\n  AEConverged?: %c",
         		gain.integration,
@@ -898,8 +941,11 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
         xprintf("%s\n", msgToMaster);
         XP_WHITE;
 
+		xprintf("DEBUG: 2\n");
         // and send to BLE
         sendMsgToMaster(msgToMaster);
+
+		xprintf("DEBUG: 3\n");
 
         if (cameraSwitchScheduled) {
         	// Tell the app the device is about to change camera (and reboot)
@@ -923,6 +969,9 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
 		                   MSGTOMASTERLEN - offset,
 		                   "HM0360 motion in %d blocks:\n",
 		                   mdBlocks);
+
+
+		xprintf("DEBUG: 4\n");
 
 		for (uint8_t i = 0; i < ROIOUTENTRIES; i++) {
 		    offset += snprintf(msgToMaster + offset,
@@ -1223,6 +1272,13 @@ static APP_MSG_DEST_T handleEventForNNProcessing(APP_MSG_T img_recv_msg) {
         	// Stop the image sensor.
         	// move to earlier: configure_image_sensor(CAMERA_CONFIG_STOP);
         	image_task_state = APP_IMAGE_TASK_STATE_INIT;
+
+        	// This capture request's whole lifecycle is over - clear its
+        	// aeCheckOnlyWake flag now rather than waiting for the next DPD
+        	// sleep, so it can never leak into a later, unrelated capture in
+        	// the same wake (e.g. a real 'capture' sent shortly after 'light').
+        	aeCheckOnlyWake = false;
+        	aeCheckCliTriggered = false;
         }
         else  {
 #ifdef USE_HM0360_CAPTURE_TIMER
@@ -2110,9 +2166,14 @@ static void sendMsgToMaster(char *str) {
     send_msg.msg_parameter = strnlen(str, MSGTOMASTERLEN);
     send_msg.msg_event = APP_MSG_IFTASK_MSG_TO_MASTER;
 
+    // debug
+    xprintf("<%c", str[0]);
+
     if (xQueueSend(xIfTaskQueue, (void *)&send_msg, __QueueSendTicksToWait) != pdTRUE) {
         xprintf("send_msg=0x%x fail\r\n", send_msg.msg_event);
     }
+    // debug
+    xprintf("%c>\n", str[0]);
 }
 
 /**

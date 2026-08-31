@@ -116,6 +116,55 @@ and are coloured cyan. That will make it easier for humans to review these lines
 ---
  ## Completed tasks:
 
+* Found and fixed a date-rollover bug in `exif_utc.c` while investigating why the
+  periodic AE-check-interval timer wake stopped working (Charles saw
+  `[LS] Will wake to check light level in 60 seconds` followed by `Will wake at
+  2026:09:01 00:17:54` instead of the same-day 60-seconds-later time - a genuine RTC
+  alarm miscalculation, not just a bad print, since the same computed value is
+  written into the hardware alarm register). Root cause: `days_in_month()`'s lookup
+  table is 0-indexed but `rtc_time.tm_mon` is 1-indexed everywhere else in this file
+  (confirmed via `exif_utc_utc_string_to_time()`'s direct ISO-string parse), so it
+  was always reading one month ahead - silently breaking date arithmetic that
+  crosses Jan 29-31, Mar 31, May 31, Aug 31, or Oct 31, and causing an out-of-bounds
+  array read for any December date. Also fixed two compounding bugs found while
+  tracing the fix through: the month/year wraparound used `>= 12` and reset to `0`,
+  which (for 1-indexed months) incorrectly forced a false year-rollover on every
+  plain November→December transition, not just a genuine December overflow, and
+  wrapped to a nonexistent "month 0" instead of January; and `is_leap_year()` added
+  1900 to a year value that's already a full 4-digit year (e.g. 2026), not years-
+  since-1900. Confirmed unrelated to any light-sensor work this session - different
+  file, and `days_in_month()`/`exif_utc_add_seconds_to_tm()` have exactly one live
+  caller in the whole app (`sleep_mode.c`'s RTC wake-alarm calculation, used by both
+  the AE-check timer and timelapse mode), so this had been a latent, date-dependent
+  bug for both features rather than anything introduced this session. Both camera
+  variants build clean. Not yet device-tested. (complete 31 August 2026, build
+  verified only)
+
+* Routed the `light` CLI command through the image task instead of calling
+  `lightSensor_takeReadingForced()` directly from the CLI task - fixes both a
+  consistency gap (every other light check already went via the image task's queue)
+  and a real cross-task I2C race risk (`hm0360_md.c`'s `saveMainCameraConfig()` swaps
+  the I2C slave ID with no locking - `light` and a real capture could otherwise race
+  on it from two different tasks). First cut used a lightweight shortcut
+  (`msg_data == 0` → call `lightSensor_takeReadingForced()` directly, no real
+  capture); Charles then asked for the exact same state-machine path as the periodic
+  `aeCheckOnlyWake` timer wake, not just the same entry point - revised so
+  `msg_data == 0` now triggers a real (throwaway) single-frame capture via a new
+  `aeCheckCliTriggered` flag, sharing 100% of the capture mechanics (skip-NN,
+  skip-file-save, flash-suppression) with the timer path. Deliberately kept the
+  *consequences* separate though: flash arming and the auto camera-switch check
+  still only happen for the timer-triggered case, not a CLI-triggered one - `light`
+  stays a passive, always-forced diagnostic, as already decided; only the mechanics
+  became one path, not the side effects. `aeCheckOnlyWake` is now also cleared at
+  the capture's true completion point (`DISK_WRITE_COMPLETE`) rather than only at
+  the next DPD sleep, so a CLI-triggered check can no longer leak into a later
+  genuine `capture` command run without an intervening sleep. `prvLight()` itself
+  (blocking send-and-wait on `xLightCheckDoneSemaphore`) is unchanged from the first
+  cut. Full design (both versions) in
+  [light_command_via_image_task_proposal.md](light_command_via_image_task_proposal.md).
+  Both camera variants build clean. Not yet device-tested.
+  (complete 31 August 2026, build verified only)
+
 * Fixed a third flash-hardware bug, found by Charles observing hardware directly:
   during the periodic AE-check-only wake (`aeCheckOnlyWake`, `OP_PARAMETER_AE_CHECK_INTERVAL`),
   the flash fired once even though `lightSensor.c`'s own sampling is flash-free. Root

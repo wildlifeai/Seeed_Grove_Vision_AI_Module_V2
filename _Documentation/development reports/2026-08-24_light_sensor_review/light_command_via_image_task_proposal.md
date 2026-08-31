@@ -1,118 +1,181 @@
-# Proposal: route the 'light' CLI command through the image task, not the CLI task
+# The 'light' CLI command routes through the image task, via the real capture path
 
-**Status: proposed, NOT implemented. Awaiting Charles's review.**
+**Status: implemented 31 August 2026 (revised from the original design below after
+Charles asked for one further change). Both `cis_imx708` and `cis_hm0360` build clean.
+Not yet device-tested.**
 
 ## Problem
 
-The `light` CLI command (`prvLight()`, `CLI-commands.c`) currently calls
+The `light` CLI command (`prvLight()`, `CLI-commands.c`) originally called
 `lightSensor_takeReadingForced()` directly from whichever task processes console
-commands (the "CLI" task). This is inconsistent with every other light check in the
+commands (the "CLI" task). This was inconsistent with every other light check in the
 firmware: a real capture's post-capture check, and the periodic
-`OP_PARAMETER_AE_CHECK_INTERVAL` timer wake, both go through the **image task**'s
-message queue and state machine (`APP_MSG_IMAGETASK_STARTCAPTURE` →
+`OP_PARAMETER_AE_CHECK_INTERVAL` timer wake (`aeCheckOnlyWake`), both go through the
+**image task**'s message queue and state machine (`APP_MSG_IMAGETASK_STARTCAPTURE` →
 `handleEventForInit()`).
 
-Worse, it's a real concurrency hazard, not just an inconsistency: `light` calls the
+It was also a real concurrency hazard, not just an inconsistency: `light` called the
 same `hm0360_md.c` I2C functions (which swap the I2C slave ID to address the HM0360,
 then swap it back) that a real image-task-driven capture also calls. `hm0360_md.c`'s
 `saveMainCameraConfig()` has a standing comment: `// TODO do we need some critical
 section or semaphore code here, in case we change task mid-stream?` - i.e. this was
-already a known, unaddressed gap. If someone runs `light` from the console at the same
-moment the image task is mid-capture, the two tasks could race on the shared I2C
+already a known, unaddressed gap. If someone ran `light` from the console at the same
+moment the image task was mid-capture, the two tasks could race on the shared I2C
 slave-ID register.
 
-Routing `light` through the image task's own queue serializes all HM0360 I2C access
-through one task, closing that gap as a side effect of fixing the consistency issue
-Charles asked about.
+## First version (superseded)
 
-## Proposed design
+The first implementation routed `light` through the image task's queue, but as a
+lightweight shortcut: `APP_MSG_IMAGETASK_STARTCAPTURE` with `msg_data == 0` went
+straight to `lightSensor_takeReadingForced()` inside `handleEventForInit()`, with no
+real image capture at all - closing the I2C-race gap, but still a *different* code
+path through the state machine than `aeCheckOnlyWake`'s real (throwaway) single-frame
+capture.
 
-Charles's own suggestion: reuse the existing `APP_MSG_IMAGETASK_STARTCAPTURE` message,
-with a sentinel `msg_data == 0` meaning "light check only, no real capture" - instead
-of introducing a whole new message event type.
+Charles asked for one further change: **use the exact same path through the state
+machine as the periodic timer wake, not just the same entry point.**
 
-### 1. New semaphore (`image_task.c`)
+## Final design
 
-Created in `image_createTask()`, alongside the existing `xJpegBufferSemaphore`
-(same file, same function, same `xSemaphoreCreateBinary()` pattern) - but *not* given
-immediately after creation, unlike `xJpegBufferSemaphore`: it must start "empty" so
-the first `xSemaphoreTake()` in `prvLight()` correctly blocks until the image task
-signals completion.
+`msg_data == 0` is still `prvLight()`'s sentinel (unambiguous - `prvCapture()`'s own
+validation already rejects `0` for a real `capture` command, so it can never collide
+with a genuine user request), but `handleEventForInit()` now treats it as "run a real,
+throwaway single-frame capture, exactly like `aeCheckOnlyWake`" rather than a shortcut.
+
+### 1. New flag: `aeCheckCliTriggered` (`image_task.c`)
 
 ```c
-static SemaphoreHandle_t xLightCheckDoneSemaphore = NULL;
-...
-xLightCheckDoneSemaphore = xSemaphoreCreateBinary();
-if (xLightCheckDoneSemaphore == NULL) {
-    xprintf("Failed to create xLightCheckDoneSemaphore\n");
-    configASSERT(0);
-}
-// Deliberately NOT given here - starts empty, unlike xJpegBufferSemaphore.
+static bool aeCheckCliTriggered = false;
 ```
 
-Needs an `extern SemaphoreHandle_t xLightCheckDoneSemaphore;` in `CLI-commands.c`,
-matching how `xImageTaskQueue` is already externed there.
+Distinguishes a CLI-triggered `aeCheckOnlyWake` capture from a timer-triggered one,
+since both now share the exact same capture mechanics but must keep different
+consequences (see below).
 
-### 2. `handleEventForInit()`'s `APP_MSG_IMAGETASK_STARTCAPTURE` case (`image_task.c`)
+### 2. `handleEventForInit()`'s `APP_MSG_IMAGETASK_STARTCAPTURE` case
 
-New branch, checked *before* the existing `MIN_IMAGE_CAPTURES`/`MAX_IMAGE_CAPTURES`
-range validation (so `0` doesn't fall into "Invalid parameter values"):
+`requested_captures == 0` now means "translate this into a single throwaway capture,
+the same way `aeCheckOnlyWake` already works for the timer wake":
 
 ```c
 if (requested_captures == 0) {
-    // Light-check only, no real capture - see prvLight() in CLI-commands.c.
-    // Deliberately just the reading: no ledFlash_setActive(), no
-    // cameraSwitch_autoSwitchCheck() - 'light' stays a passive diagnostic
-    // with no side effects on flash arming or camera switching, exactly as
-    // already decided when it was lightSensor_takeReadingForced() called
-    // directly from the CLI task. Only *where* it runs changes here.
-    lightSensor_takeReadingForced();
-    xSemaphoreGive(xLightCheckDoneSemaphore);
+    aeCheckCliTriggered = true;
+    requested_captures = 1;
 }
-else if ((requested_captures < MIN_IMAGE_CAPTURES) || (requested_captures > MAX_IMAGE_CAPTURES) ||
-    (requested_period < MIN_IMAGE_INTERVAL) || (requested_period > MAX_IMAGE_INTERVAL))  {
-    // ... existing validation, unchanged
+
+if (!cameraSystemEnabled) {
+    if (aeCheckCliTriggered) {
+        // No capture will run to report completion - signal directly.
+        aeCheckCliTriggered = false;
+        xSemaphoreGive(xLightCheckDoneSemaphore);
+    }
+    else {
+        // ... existing "Can't capture" telemetry, unchanged
+    }
+}
+else if (/* existing MIN/MAX_IMAGE_CAPTURES / MIN/MAX_IMAGE_INTERVAL range check */) {
+    if (aeCheckCliTriggered) {
+        aeCheckCliTriggered = false;
+        xSemaphoreGive(xLightCheckDoneSemaphore);
+    }
 }
 else {
-    // ... existing real-capture path, unchanged
+    if (aeCheckCliTriggered) {
+        aeCheckOnlyWake = true;
+    }
+    // ... existing real-capture setup (configure_image_sensor(CAMERA_CONFIG_RUN)
+    // etc.), completely unchanged - this now runs for a CLI-triggered light
+    // check exactly as it already did for a timer-triggered one.
 }
 ```
 
-No state-machine transition needed - `image_task_state` stays
-`APP_IMAGE_TASK_STATE_INIT` throughout, since no real capture happens.
+`aeCheckOnlyWake` is only set here, inside the success branch - not eagerly at the
+top - so an early rejection (camera disabled, bad params) can't leave it lingering
+`true` with no capture ever running to clear it.
 
-### 3. `prvLight()` rewrite (`CLI-commands.c`) - blocking send-and-wait
+### 3. The post-capture light-check block
+
+Broadened to run whenever `aeCheckOnlyWake` is set too, not just `aeCheckRequired`
+(so a CLI-triggered check still gets a reading even if `aeCheckRequired` itself
+happens to be false - e.g. neither the AE flash nor auto camera-switch is enabled),
+and split by `aeCheckCliTriggered` to keep the CLI path's existing "forced,
+side-effect-free" contract even though the capture mechanics are now shared:
 
 ```c
-static BaseType_t prvLight(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) {
-    APP_MSG_T send_msg;
-    (void)pcCommandString;
-    configASSERT(pcWriteBuffer);
-
-    send_msg.msg_data = 0;   // 0 = light-check only (see handleEventForInit())
-    send_msg.msg_parameter = 0;
-    send_msg.msg_event = APP_MSG_IMAGETASK_STARTCAPTURE;
-
-    if (xQueueSend(xImageTaskQueue, (void *)&send_msg, __QueueSendTicksToWait) != pdTRUE) {
-        cli_append(&pcWriteBuffer, &xWriteBufferLen, "Failed to queue light check");
-        return pdFALSE;
+if ((aeCheckRequired || aeCheckOnlyWake) && (g_cur_jpegenc_frame == g_captures_to_take)) {
+    if (aeCheckCliTriggered) {
+        // On-demand 'light': always force a reading, but stay passive - no
+        // flash arming, no camera-switch check. Only the capture mechanics
+        // are shared with the timer path, not those consequences.
+        lightSensor_takeReadingForced();
     }
-    if (xSemaphoreTake(xLightCheckDoneSemaphore, pdMS_TO_TICKS(5000)) != pdTRUE) {
-        cli_append(&pcWriteBuffer, &xWriteBufferLen, "Light check timed out");
-        return pdFALSE;
+    else {
+        lightSensor_takeReading();
+        if (ledFlashGetFlashMode() == FLASH_MODE_AE) {
+            ledFlash_setActive(lightSensor_isDark());
+        }
+        cameraSwitchScheduled = cameraSwitch_autoSwitchCheck();
     }
-
-    cli_append(&pcWriteBuffer, &xWriteBufferLen, "Light level: %d (%s)",
-            lightSensor_getReading(), lightSensor_isDark() ? "DARK" : "BRIGHT");
-    return pdFALSE;
 }
 ```
 
-5000ms timeout gives comfortable headroom over `sampleAeStats()`'s ~2.4s worst-case
-duration, while still bounding the CLI task's wait if something goes wrong.
+**Deliberate scope limit:** the *mechanics* (real throwaway capture, state machine,
+skip-NN, skip-file-save, flash-suppression) are now fully shared between the CLI and
+timer triggers. The *consequences* (flash arming, automatic camera switching) are
+still CLI-triggered-only skipped, preserving the existing "light stays a passive
+diagnostic" decision. Making those consequences shared too - i.e. running `light`
+from the console could arm the flash or trigger an automatic camera-slot switch and
+reboot - would be a materially bigger behavioural change than "use the same path"
+was asking for, so this was not done without checking first.
 
-Still prints the exact same `Light level: N (DARK|BRIGHT)` line - `_Tools/ae_stream.py`
-(`LIGHT_RE`) keeps working unchanged; this refactor is invisible to it.
+### 4. Completion point: `handleEventForNNProcessing()`'s `APP_MSG_IMAGETASK_DISK_WRITE_COMPLETE`
+
+This is the single point where a capture's *entire* lifecycle (capture → NN-skip →
+file-write-skip, even for a throwaway frame - the FAT task still replies
+`DISK_WRITE_COMPLETE` for a null-filename "skip the write" request) is truly finished
+and the state machine returns to `APP_IMAGE_TASK_STATE_INIT`. `aeCheckOnlyWake` is
+read at several points spread across this whole span (skip-NN, skip-ae_process,
+skip-file-save), so it cannot be cleared right after the light-check block itself -
+doing so would break this *same* capture's later skip-file-save decision. Clearing it
+here instead, once the whole lifecycle is over, was necessary because `light` can now
+be invoked repeatedly without the device ever sleeping in between (unlike the timer
+path, which almost always leads straight back to DPD, where `image_sleepNow()`
+already cleared it) - without this, a CLI-triggered check's `aeCheckOnlyWake` could
+leak into a genuine `capture` command run moments later in the same session, wrongly
+skipping its NN processing, file save, and flash.
+
+```c
+if (g_cur_jpegenc_frame == g_captures_to_take) {
+    captureSequenceComplete(img_recv_msg.msg_parameter);
+    image_task_state = APP_IMAGE_TASK_STATE_INIT;
+
+    aeCheckOnlyWake = false;
+    if (aeCheckCliTriggered) {
+        aeCheckCliTriggered = false;
+        xSemaphoreGive(xLightCheckDoneSemaphore);
+    }
+}
+```
+
+### 5. `prvLight()` (`CLI-commands.c`) - unchanged from the first version
+
+Still a blocking send-and-wait on `xLightCheckDoneSemaphore` (5000ms timeout), still
+prints the same `Light level: N (DARK|BRIGHT)` line `_Tools/ae_stream.py` parses -
+none of this needed to change; only what happens on the image task side of the
+message did.
+
+## Known side effect, accepted
+
+A CLI-triggered light check now goes through the *entire* real capture pipeline
+(`configure_image_sensor(CAMERA_CONFIG_RUN)`, sensor datapath init, JPEG-encoder
+skip, file-write round-trip to the FAT task) rather than a lightweight direct
+register read. It's slower and does more work than strictly necessary for "read some
+registers," and it also emits the same `captureSequenceComplete()` BLE telemetry
+("Captured 1 images...") that the timer-triggered throwaway capture already emits
+today - slightly odd-looking for an on-demand diagnostic command, but this is
+existing, unchanged behaviour for the *timer* path, not something new introduced
+here, and now applies equally rather than being an inconsistency between the two
+triggers.
 
 ## Edge case, accepted rather than fixed
 
@@ -121,16 +184,4 @@ If `light` is run while the image task is mid-real-capture (state isn't
 handler is currently active - none of which recognize it - and is silently dropped as
 an unexpected event, the same way a `capture` command sent while already capturing
 would be. `prvLight()`'s semaphore wait then simply times out after 5s and reports
-"Light check timed out" - safe and bounded, just not instant, in this rare case. Not
-proposing to fix this now; flagging it as a known, acceptable limitation of this
-design.
-
-## Why this wasn't implemented immediately
-
-Charles asked for this to be written up for review rather than implemented straight
-away (reviewing Monday). The design itself was talked through and looks sound, but
-touches three things across two files (a new semaphore, a new branch in the image
-task's core capture-request handler, and a behavioural change to `prvLight()` from
-synchronous-direct-call to blocking-message-send) - enough surface area to want an
-explicit go-ahead first, consistent with how every other non-trivial change this
-session was handled.
+"Light check timed out" - safe and bounded, just not instant, in this rare case.

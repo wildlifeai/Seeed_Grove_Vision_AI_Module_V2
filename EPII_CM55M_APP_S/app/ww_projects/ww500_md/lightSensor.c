@@ -41,7 +41,8 @@
 // entered below OP_PARAMETER_AE_DARK_THRESHOLD, but only left once brightness
 // rises above (threshold + AE_HYSTERESIS), so the decision does not chatter
 // when the light sits near the boundary.
-#define AE_HYSTERESIS 12
+//#define AE_HYSTERESIS 12
+#define AE_HYSTERESIS 0
 
 /*********************************************** Local Types ************************************************/
 
@@ -205,7 +206,7 @@ static void decideDarkBright(const LightSensorStats_t *stats) {
 	else if (stats->meanAE < threshold) {
 		dark = true;
 	}
-	else if (stats->meanAE > (uint16_t)(threshold + AE_HYSTERESIS)) {
+	else if (stats->meanAE >= (uint16_t)(threshold + AE_HYSTERESIS)) {
 		dark = false;
 	}
 	// else: within the hysteresis band - keep the previous decision

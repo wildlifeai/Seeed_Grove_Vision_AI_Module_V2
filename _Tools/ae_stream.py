@@ -22,11 +22,39 @@ holds the device awake indefinitely. If the device is currently asleep when this
 script starts, it waits for a wake (RTC timer or motion) first, exactly like
 ae_monitor.py.
 
+--capture switches from the throwaway 'light' check to a real 'capture 1 1'
+(one image, saved to SD, same as ae_monitor.py but sent back-to-back as fast
+as the device answers rather than on a fixed timer). The same "[LS] AE light
+check: ..." line is parsed either way - lightSensor_takeReading() runs after
+a real capture too - but it is only printed if the AE decision is actually
+consumed: enable one of, over the console, first:
+
+    setop 13 1     # OP_PARAMETER_FLASH_LED = visible LED -> FLASH_MODE_AE
+    setop 13 2     # same, but IR LED
+    setop 26 1     # OP_PARAMETER_SLOT_SWITCH -> automatic day/night switching (op26)
+
+('light' does not need this - it forces the reading regardless.) A real
+capture also takes noticeably longer (JPEG encode, NN processing, disk write)
+than the ~2s 'light' sampling window, so --capture uses a longer reply
+timeout.
+
 READING THE OUTPUT - each line is one 'light' command's result. analog gain and
 converged (AE_CONVERGED) are the sensor's own state on the last sampled frame -
 useful for judging how much to trust a given mean-AE reading:
 
     [19:25:35] #12  Light level:  71 (DARK  ) gain= 12 conv=Y |###########                             |
+
+BENCH NOTES - at any time (no need to stop the stream), type free text and
+press Enter to log it as a timestamped line alongside the readings, e.g. while
+covering the sensor by hand to mark what you just did:
+
+    [19:26:02] NOTE: covered sensor with hand
+
+Typing is silent - keystrokes are not echoed to the console and are never
+sent to the device - only the finished note appears, once you press Enter.
+Backspace still edits the note before then. Because it does not interrupt
+the 'light' command stream, reading lines keep appearing while you type; the
+note itself is unaffected and is logged correctly once you press Enter.
 
 Press ESC to stop (Ctrl+C also works). The script always closes the serial port
 before exiting, however it exits - normal ESC/Ctrl+C, a device timeout, or any
@@ -35,6 +63,7 @@ other error - see the try/finally in main() and the _RawKeys context manager bel
 Usage:
     python ae_stream.py --port COM4
     python ae_stream.py --port COM4 --verbose
+    python ae_stream.py --port COM4 --capture   # real 'capture 1 1' cycles instead of 'light'
 """
 
 import argparse
@@ -58,18 +87,26 @@ LIGHT_RE = re.compile(
 BOOT_MARKERS = ("Image sensor and data path initialised", "Inactivity period set",
                 "available commands")
 
-# Give up waiting for one 'light' reply after this long (its own sampling window
-# is ~2s) and re-send, rather than hanging forever if a reply is missed.
+# Give up waiting for one reply after this long and re-send, rather than
+# hanging forever if a reply is missed. 'light's own sampling window is ~2s;
+# a real 'capture' additionally encodes/writes/runs NN, so it gets longer.
 COMMAND_TIMEOUT = 8.0
+COMMAND_TIMEOUT_CAPTURE = 20.0
 
 
-# --- Cross-platform, non-blocking single-key check for ESC -----------------
+# --- Cross-platform, non-blocking keyboard polling --------------------------
 #
 # Windows: msvcrt.kbhit()/getch() need no setup/teardown of their own.
 # POSIX: the terminal must be put into cbreak mode to read a key without the
 # user pressing Enter, and MUST be restored afterward - this context manager
 # guarantees that restoration on every exit path, the same way the serial port
 # itself is guaranteed to close (see main()'s try/finally).
+#
+# poll_keys() returns every keystroke waiting right now, as a plain string
+# (possibly empty) - ESC, Enter, Backspace and printable characters all come
+# back as normal characters ('\x1b', '\r'/'\n', '\x08'/'\x7f', ...) for main()
+# to interpret; it is what lets main() both watch for ESC and accumulate the
+# free-text notes described in the module docstring.
 if os.name == "nt":
     import msvcrt
 
@@ -80,12 +117,15 @@ if os.name == "nt":
         def __exit__(self, *exc_info):
             return False
 
-    def esc_pressed() -> bool:
-        pressed = False
+    def poll_keys() -> str:
+        chars = []
         while msvcrt.kbhit():
-            if msvcrt.getch() == b"\x1b":
-                pressed = True
-        return pressed
+            ch = msvcrt.getch()
+            if ch in (b"\x00", b"\xe0"):
+                msvcrt.getch()  # discard 2nd byte of an extended key (arrows, F-keys, ...)
+                continue
+            chars.append(ch.decode("utf-8", "replace"))
+        return "".join(chars)
 
 else:
     import termios
@@ -103,12 +143,11 @@ else:
             termios.tcsetattr(self.fd, termios.TCSADRAIN, self.old_settings)
             return False
 
-    def esc_pressed() -> bool:
-        pressed = False
+    def poll_keys() -> str:
+        chars = []
         while select.select([sys.stdin], [], [], 0)[0]:
-            if sys.stdin.read(1) == "\x1b":
-                pressed = True
-        return pressed
+            chars.append(sys.stdin.read(1))
+        return "".join(chars)
 
 
 def main() -> int:
@@ -122,7 +161,12 @@ def main() -> int:
     ap.add_argument("--baud", type=int, default=921600)
     ap.add_argument("--char-delay", type=float, default=0.03, help="inter-character send delay")
     ap.add_argument("--verbose", action="store_true", help="also stream raw console lines")
+    ap.add_argument("--capture", action="store_true",
+                     help="send real 'capture 1 1' cycles instead of the throwaway 'light' check")
     args = ap.parse_args()
+
+    command = "capture 1 1" if args.capture else "light"
+    command_timeout = COMMAND_TIMEOUT_CAPTURE if args.capture else COMMAND_TIMEOUT
 
     eol = b"\r\n"
 
@@ -146,27 +190,44 @@ def main() -> int:
         try:
             port.reset_input_buffer()
             print(f"[{wallclock()}] Waiting for the device to wake (RTC timer ~2 min, or wave to trigger motion)...")
-            print("Press ESC to stop.")
+            print("Press ESC to stop. Type notes and press Enter to log them.")
 
             buf = b""
             awake = False
             reading_num = 0
             awaiting_reply = False
             command_deadline = 0.0
+            note_buf = []
+            stopping = False
 
             while True:
-                if esc_pressed():
+                for ch in poll_keys():
+                    if ch == "\x1b":
+                        stopping = True
+                    elif ch in ("\r", "\n"):
+                        if note_buf:
+                            note_text = "".join(note_buf)
+                            note_buf.clear()
+                            print(f"[{wallclock()}] NOTE: {note_text}", flush=True)
+                        # blank Enter (no text typed) - ignore
+                    elif ch in ("\x08", "\x7f"):  # Backspace / DEL
+                        if note_buf:
+                            note_buf.pop()
+                    elif ch.isprintable():
+                        note_buf.append(ch)
+
+                if stopping:
                     print(f"\n[{wallclock()}] ESC pressed - stopping.")
                     break
 
                 now = time.monotonic()
 
                 if awake and not awaiting_reply:
-                    send("light")
+                    send(command)
                     awaiting_reply = True
-                    command_deadline = now + COMMAND_TIMEOUT
+                    command_deadline = now + command_timeout
                 elif awaiting_reply and now >= command_deadline:
-                    print(f"[{wallclock()}] No reply within {COMMAND_TIMEOUT:.0f}s - retrying.")
+                    print(f"[{wallclock()}] No reply within {command_timeout:.0f}s - retrying.")
                     awaiting_reply = False  # loop will resend immediately
 
                 data = port.read(4096)
@@ -184,7 +245,7 @@ def main() -> int:
 
                         if not awake and any(m in line for m in BOOT_MARKERS):
                             awake = True
-                            print(f"[{wallclock()}] Device is awake - starting the light stream.")
+                            print(f"[{wallclock()}] Device is awake - starting the '{command}' stream.")
 
                         m = LIGHT_RE.search(line)
                         if m:

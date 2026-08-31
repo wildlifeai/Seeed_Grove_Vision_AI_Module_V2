@@ -927,9 +927,6 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
             }
         }
 
-
-		xprintf("DEBUG: 1\n");
-
         snprintf(msgToMaster, MSGTOMASTERLEN, "HM0360 AE regs:\n  Integration time = %d lines\n  Analog gain = %d\n  Digital gain = %d\n  AE Mean = %d\n  AEConverged?: %c",
         		gain.integration,
 				gain.analogGain,
@@ -942,11 +939,8 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
         xprintf("%s\n", msgToMaster);
         XP_WHITE;
 
-		xprintf("DEBUG: 2\n");
         // and send to BLE
         sendMsgToMaster(msgToMaster);
-
-		xprintf("DEBUG: 3\n");
 
         if (cameraSwitchScheduled) {
         	// Tell the app the device is about to change camera (and reboot)
@@ -970,9 +964,6 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
 		                   MSGTOMASTERLEN - offset,
 		                   "HM0360 motion in %d blocks:\n",
 		                   mdBlocks);
-
-
-		xprintf("DEBUG: 4\n");
 
 		for (uint8_t i = 0; i < ROIOUTENTRIES; i++) {
 		    offset += snprintf(msgToMaster + offset,
@@ -2167,14 +2158,9 @@ void sendMsgToMaster(char *str) {
     send_msg.msg_parameter = strnlen(str, MSGTOMASTERLEN);
     send_msg.msg_event = APP_MSG_IFTASK_MSG_TO_MASTER;
 
-    // debug
-    xprintf("<%c", str[0]);
-
     if (xQueueSend(xIfTaskQueue, (void *)&send_msg, __QueueSendTicksToWait) != pdTRUE) {
         xprintf("send_msg=0x%x fail\r\n", send_msg.msg_event);
     }
-    // debug
-    xprintf("%c>\n", str[0]);
 }
 
 /**

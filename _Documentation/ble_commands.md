@@ -1,5 +1,6 @@
 # WW500 BLE commands
 #### CGP - 25 November 2025
+#### Updated 1 September 2026 (`AI light` and the `AE light check` line) and 3 September 2026 (the gain-based wording from ee65771f, checked against e8b7feb5) by Claude, reviewed by Victor Anton
 
 When the smartphone app establishes a BLE connection to the WW500 it can send and receive messages.
 The messages that it sends are treated as commands to the WW500. The messages it receives are 
@@ -164,7 +165,7 @@ The "Reqd?" column indicates whether the command should be implemented by the ap
 | AI txfile      | filename, or '.' | File contents returned in several chunks   | Y, 2  |
 | AI camreg      | addr [val]    | Read or write a camera sensor register (hex). Writes are saved to the SD card and re-applied at every sensor init. Also `AI camreg list` and `AI camreg clear` | 3 |
 | AI vcm         | pos           | Set focus lens position 0-1023 (RP3 camera only). `AI vcm probe` checks the actuator is present | 3 |
-| AI light       |               | Takes a fresh HM0360 light-sensor reading on demand and reports it, e.g. `Light level: 71 (DARK)` | 3 |
+| AI light       |               | Requests a fresh HM0360 light-sensor reading. Replies **immediately** with `Checking light level...`; the reading itself arrives later as asynchronous telemetry | 5 |
 | AI slots       |               | Reports the active firmware slot and the camera variant in each slot, e.g. `Active slot 0 running 'RP3 (day/colour)'. Slot A: 'RP3 (day/colour)', Slot B: 'HM0360 (night/IR)'. Auto-switch: on` | Y, 4 |
 | AI switchslot  |               | Boots the firmware image in the other slot (day/night camera change). Response `Switched to slot n ('variant'). Reset scheduled.` — the device resets when it next sleeps | Y, 4 |
 | AI firmware    | file [0xCRC]  | Writes `/MANIFEST/<file>` to the INACTIVE firmware slot, verifies it and updates the slot selector; `AI reset` boots it. With the optional CRC16-CCITT the file is checked before flash is touched. Used twice (once per camera image) by the app's "Update both cameras" flow — see [firmware_update_and_recovery.md](firmware_update_and_recovery.md) | Y, 4 |
@@ -189,6 +190,25 @@ __Notes:__
    to the colour image in daylight. The device announces `Auto camera switch: ...` and
    reboots into the other image at the next sleep. See
    [Operational_Parameters.md](Operational_Parameters.md).
+5. **`AI light` is two-phase, not request/response.** The command only queues the request
+   and returns `Checking light level...` straight away. The reading is taken after a
+   throwaway single-frame capture (one register read on the gain-based build, plus a 200 ms
+   settle if the sensor was asleep; the mean-based build samples 16 frames over about two
+   seconds), and its result arrives afterwards as two asynchronous messages:
+   the `HM0360 AE regs:` block and the `AE light check: ...` decision line (both in the
+   table under "Asynchronous Messages"). An app must therefore treat the immediate reply as
+   an acknowledgement only, and listen for the decision line to get the answer.
+
+   This is deliberate. An earlier version blocked until the reading was ready and
+   **deadlocked over BLE**: the IF task's I2C_RX state does not clear until the CLI produces
+   a reply, but the telemetry send needs that same I2C link free, so the two waited on each
+   other. Firing the request and replying immediately, as every other capture-triggering
+   command does, avoids that. Do not "fix" this by making the reply synchronous.
+
+   `AI light` performs a real but throwaway single-frame capture on the same path the
+   periodic op24 timer wake uses. It writes no image file, arms no flash and does not run
+   the auto camera-switch check, so it is the cheap way to measure light. Taking a normal
+   capture purely to force a reading is no longer necessary.
 
 __Other AI Processor Commands__
 
@@ -216,6 +236,8 @@ Some of these messages are documented un the table below.
 | NN+       |                               | ```NN+``` | Sent by AI processor when the NN detects its target. |
 | NN+       |                               | ```NN-``` | Sent by AI processor when the NN does not detect its target. |
 | Captured  |                               | ```Captured 3 images. Last is MD000708.JPG``` | Sent by AI processor when a sequence of image captures completes. |
+| HM0360 AE regs | multi-line               | ```HM0360 AE regs:```<br>```  Integration time = 376 lines```<br>```  Analog gain = 4```<br>```  Digital gain = 192```<br>```  AE Mean = 12```<br>```  AEConverged?: N``` | Raw auto-exposure registers, sent after each capture and after each light check. The app already parses these. |
+| AE light check |                          | ```AE light check: AGain = 2, conv=Y -> BRIGHT (change)``` | The **decision** and its inputs, in one line. Sent after every light check: always for `AI light` and the op24 timer wake, and after a capture only when something consumes the decision (op13 selects a LED, or op26 = 1). Otherwise a capture sends the regs block and no decision line. Two wordings depending on the build; see the note below. |
 
 
 The Wake and Sleep messages are intended to allow the BLE processor to follow the state of the AI processor. 
@@ -224,6 +246,48 @@ are sent in LoRaWAN messages.
 
 It may be useful to parse some of these messages and present them to the user. 
 (Some would indeed be helpful for engineering purposes: moton detection and positive NN indications.)
+
+__Parsing the `AE light check` line__
+
+This one line carries the light/dark verdict together with what produced it, so it is the
+message to parse to show or debug the day/night decision. Since ee65771f (2 September 2026,
+the #202 and #203 fix) the firmware is built gain-based (`AE_DECISION_GAIN_BASED` in `lightSensor.c`) and the line
+is short:
+
+```
+AE light check: AGain = 2, conv=Y -> BRIGHT (change)
+```
+
+| Field | Meaning |
+|---|---|
+| `AGain` | Analog gain on the sampled frame. Dark when above `DARK_ANALOG_GAIN_THRESHOLD` (2) |
+| `conv` | `Y` or `N`, whether the AE loop had converged. `N` on its own means dark: the sensor is railed |
+| `-> DARK` / `-> BRIGHT` | The decision, persisted to op25 |
+| `(change)` | Present only when this reading flipped the decision |
+
+The mean-based build (the define removed) prints the longer form, with the same suffix:
+
+```
+AE light check: mean AE=77 (min 75, max 80, 16 frames) thr=65, AGain=0, conv=Y, gain railed = N -> BRIGHT
+```
+
+| Field | Meaning |
+|---|---|
+| `mean AE` | Mean AE_MEAN (0 to 255) over the sampled frames; the value compared against `thr` |
+| `min` / `max` / `N frames` | The spread and the sample count. A wide spread means the AE loop was still hunting |
+| `thr` | The live value of op23, so the app can show the decision margin |
+| `AGain`, `conv` | As above |
+| `gain railed` | Analog **and** digital gain both at their ceiling on most frames, so the sensor can amplify no further. This short-circuits straight to DARK |
+
+Both forms fit inside the 150-byte message limit. The wording before ee65771f (`analog gain = 4,
+converged = no, gain railed = yes -> DARK (flash wanted) (changed)`) did not, which is #203.
+
+**Parse by name, not by position, and accept both forms.** Fields have been added and renamed
+as the light sensor work progressed, and more may follow. A regex keyed on each label survives
+that; splitting on commas does not.
+
+The `[LS]` prefix seen on the console is added for humans scanning a serial log and is
+**not** part of the message the app receives.
 
 
 ## Setting UTC time

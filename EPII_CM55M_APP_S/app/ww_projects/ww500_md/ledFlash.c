@@ -21,6 +21,7 @@
 
 #include "fatfs_task.h"
 #include "ledFlash.h"
+#include "lightSensor.h"
 #include "pca9574.h"
 
 #include "hx_drv_rtc.h"
@@ -353,7 +354,7 @@ void ledFlashSetFlashModeFromOpParam(uint16_t ledInUse) {
 		// Restore the last AE light decision. It is persisted as an Operational
 		// Parameter because RAM is lost in DPD, and the first capture after a
 		// motion-detect wake happens before any fresh AE reading exists.
-		flashActive = (fatfs_getOperationalParameter(OP_PARAMETER_AE_FLASH_STATE) == 1);
+		flashActive = lightSensor_isDark();
 	}
 
 	// debug

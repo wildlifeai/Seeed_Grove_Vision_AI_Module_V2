@@ -22,6 +22,7 @@
 #include "xip_manager.h"
 #include "fatfs_task.h"
 #include "ww500_md.h"
+#include "lightSensor.h"
 
 /*********************************************** Local Defines **********************************************/
 
@@ -148,7 +149,7 @@ bool cameraSwitch_autoSwitchCheck(void) {
 		return false;	// this build does not participate (e.g. RP2)
 	}
 
-	bool dark = (fatfs_getOperationalParameter(OP_PARAMETER_AE_FLASH_STATE) == 1);
+	bool dark = lightSensor_isDark();
 	uint8_t wanted = dark ? XIP_SLOT_VARIANT_HM0360 : XIP_SLOT_VARIANT_RP3;
 	if (wanted == self) {
 		return false;	// already running the right camera for the light level

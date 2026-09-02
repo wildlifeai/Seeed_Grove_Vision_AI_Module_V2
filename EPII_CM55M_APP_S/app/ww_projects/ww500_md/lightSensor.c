@@ -44,8 +44,24 @@
 //#define AE_HYSTERESIS 12
 #define AE_HYSTERESIS 0
 
+// Selects the dark/bright decision algorithm. Defined (the default): the new,
+// simpler algorithm below - dark if AE has not converged, or analog gain
+// exceeds DARK_ANALOG_GAIN_THRESHOLD. No hysteresis, no averaging - one
+// register read. Undefine to revert to the original mean-AE/threshold/
+// hysteresis algorithm (sampleAeStats()/decideDarkBright(), still present
+// below, unchanged) for comparison.
+#define AE_DECISION_GAIN_BASED
+
+#ifdef AE_DECISION_GAIN_BASED
+// Analog gain (HM0360_GAIN_T.analogGain units) above which the scene is
+// judged dark - the AE loop has run out of exposure/digital gain to spend
+// and is compensating with analog gain instead.
+#define DARK_ANALOG_GAIN_THRESHOLD 2
+#endif // AE_DECISION_GAIN_BASED
+
 /*********************************************** Local Types ************************************************/
 
+#ifndef AE_DECISION_GAIN_BASED
 // Aggregated AE statistics over a sampling window - private to the dark/bright
 // decision, nothing outside this file needs the per-sample detail.
 typedef struct {
@@ -57,17 +73,94 @@ typedef struct {
 	bool     converged;		// AE_CONVERGED on the last sampled frame
 	uint8_t  analogGain;	// ANALOG_GAIN on the last sampled frame
 } LightSensorStats_t;
+#endif // !AE_DECISION_GAIN_BASED
 
 /*********************************************** Local Variables ********************************************/
 
 static uint16_t lastReading = 0;
 
+// Buffer for messages to be sent via I2C to the BLE processor
+// TODO could make it extern and share with image_task.c
+static char msgToMaster[MSGTOMASTERLEN];
+
 /*********************************************** Local Function Declarations *********************************/
 
+#ifdef AE_DECISION_GAIN_BASED
+static void decideDarkBrightGainBased(void);
+#else
 static bool sampleAeStats(LightSensorStats_t *stats);
 static void decideDarkBright(const LightSensorStats_t *stats);
+#endif // AE_DECISION_GAIN_BASED
 
 /*********************************************** Local Function Definitions *********************************/
+
+#ifdef AE_DECISION_GAIN_BASED
+
+/**
+ * @brief Dark/bright decision from a single AE/gain register read: dark if
+ * AE has not converged, or analog gain exceeds DARK_ANALOG_GAIN_THRESHOLD.
+ * No hysteresis and no averaging - unlike decideDarkBright(), this is a
+ * fresh decision each call, not filtered by the previous one. The decision
+ * is still persisted (OP_PARAMETER_AE_FLASH_STATE) so it is available to the
+ * next image before this function runs again.
+ *
+ * Wakes the HM0360 into streaming first if it was asleep, and restores its
+ * prior mode afterward - same as sampleAeStats(), just around one read
+ * instead of a loop.
+ *
+ * Deliberately does NOT drive the flash LED here - see decideDarkBright()'s
+ * comment, which applies equally to this function.
+ */
+static void decideDarkBrightGainBased(void) {
+	HM0360_GAIN_T gain;
+	mode_select_t priorMode = MODE_SLEEP;
+	bool wokeForSampling = false;
+	bool wasDark;
+	bool dark;
+
+	// If the HM0360 is in SLEEP state then put it in CONTINUOUS mode - a
+	// sleeping sensor reads AE_MEAN = 0 and stale gain values.
+	if ((hm0360_md_getMode(&priorMode) == HX_CIS_NO_ERROR) &&
+			((priorMode == MODE_SLEEP) || (priorMode == MODE_SW_NFRAMES_STANDBY))) {
+		if (hm0360_md_setModeSelectOnly(MODE_SW_CONTINUOUS) == HX_CIS_NO_ERROR) {
+			wokeForSampling = true;
+			vTaskDelay(pdMS_TO_TICKS(AE_WAKE_SETTLE_MS));
+		}
+	}
+
+	if (hm0360_md_getGainRegs(&gain) != HX_CIS_NO_ERROR) {
+		if (wokeForSampling) {
+			hm0360_md_setModeSelectOnly(priorMode);
+		}
+		return;
+	}
+
+	// Potentially restore HM0360 mode - e.g. to SLEEP
+	if (wokeForSampling) {
+		if (hm0360_md_setModeSelectOnly(priorMode) != HX_CIS_NO_ERROR) {
+			XP_CYAN xprintf("[LS] decideDarkBrightGainBased: failed to restore HM0360 mode %d\n", priorMode); XP_WHITE
+		}
+	}
+
+	wasDark = (fatfs_getOperationalParameter(OP_PARAMETER_AE_FLASH_STATE) == 1);
+	dark = (!gain.aeConverged) || (gain.analogGain > DARK_ANALOG_GAIN_THRESHOLD);
+
+	fatfs_setOperationalParameter(OP_PARAMETER_AE_FLASH_STATE, dark ? 1 : 0);
+
+	// NOTE: not too long! message must fit in MSGTOMASTERLEN
+	snprintf(msgToMaster, MSGTOMASTERLEN,
+			"AE light check: AGain = %d, conv=%s -> %s%s",
+			gain.analogGain, gain.aeConverged ? "Y" : "N",
+			dark ? "DARK" : "BRIGHT",
+			(dark == wasDark) ? "" : " (change)");
+
+	XP_CYAN xprintf("[LS] %s\n", msgToMaster); XP_WHITE
+	sendMsgToMaster(msgToMaster);
+
+	lastReading = gain.aeMean;
+}
+
+#else // AE_DECISION_GAIN_BASED
 
 /**
  * @brief Sample AE_MEAN and the gain registers over AE_SAMPLE_COUNT frames.
@@ -191,7 +284,6 @@ static bool sampleAeStats(LightSensorStats_t *stats) {
  * @param stats aggregated AE statistics from sampleAeStats() or a fallback single reading
  */
 static void decideDarkBright(const LightSensorStats_t *stats) {
-	char lightCheckMsg[190];
 
 	uint16_t threshold = fatfs_getOperationalParameter(OP_PARAMETER_AE_DARK_THRESHOLD);
 
@@ -217,18 +309,22 @@ static void decideDarkBright(const LightSensorStats_t *stats) {
 	// added only for the console print, as a marker for humans scanning the
 	// log; the app gets the message via the normal telemetry channel instead.
 
-	snprintf(lightCheckMsg, sizeof(lightCheckMsg),
-			"AE light check: mean AE = %d (min %d, max %d) over %d frames, "
-			"threshold = %d, analog gain = %d, converged = %s, gain railed = %s -> %s%s",
+	// NOTE: not too long! message must fit in MSGTOMASTERLEN
+	// AE light check: mean AE=77 (min 75, max 80, 16 frames) thr=65, AGain=0, conv=Y, gain railed = N -> BRIGHT
+	snprintf(msgToMaster, MSGTOMASTERLEN,
+			"AE light check: mean AE=%d (min %d, max %d, %d frames) "
+			"thr=%d, AGain=%d, conv=%s, gain railed = %s -> %s%s",
 			stats->meanAE, stats->minAE, stats->maxAE, stats->samples,
-			threshold, stats->analogGain, stats->converged ? "yes" : "no",
-			stats->gainRailed ? "yes" : "no",
-			dark ? "DARK (flash wanted)" : "BRIGHT (no flash)",
-			(dark == wasDark) ? "" : " (changed)");
+			threshold, stats->analogGain, stats->converged ? "Y" : "N",
+			stats->gainRailed ? "Y" : "N",
+			dark ? "DARK" : "BRIGHT",
+			(dark == wasDark) ? "" : " (change)");
 
-	XP_CYAN xprintf("[LS] %s\n", lightCheckMsg); XP_WHITE
-	sendMsgToMaster(lightCheckMsg);
+	XP_CYAN xprintf("[LS] %s\n", msgToMaster); XP_WHITE
+	sendMsgToMaster(msgToMaster);
 }
+
+#endif // AE_DECISION_GAIN_BASED
 
 /*********************************************** Global Function Definitions *********************************/
 
@@ -246,6 +342,9 @@ void lightSensor_takeReading(void) {
 }
 
 void lightSensor_takeReadingForced(void) {
+#ifdef AE_DECISION_GAIN_BASED
+	decideDarkBrightGainBased();
+#else
 	LightSensorStats_t stats;
 	TickType_t startTime;
 
@@ -271,6 +370,7 @@ void lightSensor_takeReadingForced(void) {
 
 	decideDarkBright(&stats);
 	lastReading = stats.meanAE;
+#endif // AE_DECISION_GAIN_BASED
 }
 
 uint16_t lightSensor_getReading(void) {

@@ -92,13 +92,20 @@ import time
 import serial
 
 ANSI_RE = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
-# Anchored on the '[LS] ' marker: decideDarkBright() (lightSensor.c) prints the
-# same text twice on the console - once itself, prefixed '[LS] ', and again
-# (unprefixed) wherever the outgoing message to the BLE processor gets echoed.
-# Without the anchor both copies match and every reading is reported twice.
+# Anchored on the '[LS] ' marker: decideDarkBright()/decideDarkBrightGainBased()
+# (lightSensor.c) print the same text twice on the console - once themselves,
+# prefixed '[LS] ', and again (unprefixed) wherever the outgoing message to the
+# BLE processor gets echoed. Without the anchor both copies match and every
+# reading is reported twice.
+# 'mean AE=N ... thr=N' is optional: lightSensor.c's AE_DECISION_GAIN_BASED
+# algorithm has no mean/threshold concept at all and omits it entirely - only
+# 'AGain'/'conv'/the decision are common to both algorithms. group(1) is None
+# when it's absent. Field names/values here must track lightSensor.c's actual
+# snprintf() exactly ('AGain', 'conv=Y/N', not 'analog gain'/'converged=yes/no'
+# - Charles shortened the message on 2026-09-02).
 LIGHT_RE = re.compile(
-    r"^\[LS\]\s.*mean AE\s*=\s*(\d+).*?"
-    r"analog gain\s*=\s*(\d+).*?converged\s*=\s*(yes|no).*?"
+    r"^\[LS\]\s.*?(?:mean AE\s*=\s*(\d+).*?)?"
+    r"AGain\s*=\s*(\d+).*?conv\s*=\s*(Y|N).*?"
     r"->\s*(DARK|BRIGHT)"
 )
 # Fallback completion signal for --capture: image_task.c prints this for every
@@ -309,14 +316,20 @@ def main() -> int:
                             reading_num += 1
                             awaiting_reply = False
                             capture_done_deadline = None
-                            ae = int(m.group(1))
+                            ae = int(m.group(1)) if m.group(1) is not None else None
                             analog_gain = int(m.group(2))
-                            converged = m.group(3) == "yes"
+                            converged = m.group(3) == "Y"
                             state = m.group(4)
-                            bar = "#" * min(40, ae * 40 // 255)
-                            print(f"[{wallclock()}] #{reading_num:<4} Light level: {ae:3d} ({state:<6}) "
-                                  f"gain={analog_gain:3d} conv={'Y' if converged else 'N'} |{bar:<40}|",
-                                  flush=True)
+                            if ae is not None:
+                                bar = "#" * min(40, ae * 40 // 255)
+                                print(f"[{wallclock()}] #{reading_num:<4} Light level: {ae:3d} ({state:<6}) "
+                                      f"gain={analog_gain:3d} conv={'Y' if converged else 'N'} |{bar:<40}|",
+                                      flush=True)
+                            else:
+                                # AE_DECISION_GAIN_BASED line - no mean AE to show.
+                                print(f"[{wallclock()}] #{reading_num:<4} Light level:  -- ({state:<6}) "
+                                      f"gain={analog_gain:3d} conv={'Y' if converged else 'N'}",
+                                      flush=True)
                         elif awaiting_reply and capture_done_deadline is None and CAPTURE_DONE_RE.search(line):
                             # The capture itself is done, but this line prints before NN
                             # processing/the light check - LIGHT_RE's (slower) line for this

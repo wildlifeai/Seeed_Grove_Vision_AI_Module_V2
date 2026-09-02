@@ -155,8 +155,6 @@
 
 #define IMAGE_TASK_QUEUE_LEN 10
 
-// This is experimental. TODO check it is ok
-#define MSGTOMASTERLEN 150
 
 // defaults for PWM output on PB9 for Flash LED brightness
 // default 20kHz
@@ -656,14 +654,14 @@ static APP_MSG_DEST_T handleEventForInit(APP_MSG_T img_recv_msg) {
         }
 
         if (!cameraSystemEnabled) {
-        	xprintf("Can't capture - camera system not enabled\n");
+        	snprintf(msgToMaster, MSGTOMASTERLEN, "Camera system not enabled");
         	if (aeCheckCliTriggered) {
         		aeCheckCliTriggered = false;
         	}
-        	else {
-        		snprintf(msgToMaster, MSGTOMASTERLEN, "Camera system not enabled");
-        		sendMsgToMaster(msgToMaster);
-        	}
+        	// Send to console:
+        	xprintf("%s\n", msgToMaster);
+        	// and to app
+        	sendMsgToMaster(msgToMaster);
         }
         // Check parameters are acceptable
         else if ((requested_captures < MIN_IMAGE_CAPTURES) || (requested_captures > MAX_IMAGE_CAPTURES) ||
@@ -962,8 +960,7 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
         	// Tell the app the device is about to change camera (and reboot)
         	snprintf(msgToMaster, MSGTOMASTERLEN,
         			"Auto camera switch: light level wants the %s camera - switching at next sleep",
-					(fatfs_getOperationalParameter(OP_PARAMETER_AE_FLASH_STATE) == 1) ?
-							"night (HM0360)" : "colour (RP3)");
+					lightSensor_isDark() ? "night (HM0360)" : "colour (RP3)");
         	sendMsgToMaster(msgToMaster);
         }
 
@@ -1532,24 +1529,26 @@ static APP_MSG_DEST_T handleEventForSaveState(APP_MSG_T img_recv_msg)
  * Parameters: APP_MSG_T img_recv_msg
  * Returns: APP_MSG_DEST_T send_msg
  */
-static APP_MSG_DEST_T flagUnexpectedEvent(APP_MSG_T img_recv_msg)
-{
+static APP_MSG_DEST_T flagUnexpectedEvent(APP_MSG_T img_recv_msg) {
     APP_MSG_EVENT_E event;
     APP_MSG_DEST_T send_msg;
 
     event = img_recv_msg.msg_event;
     send_msg.destination = NULL;
 
-    XP_LT_RED;
-    if ((event >= APP_MSG_IMAGETASK_FIRST) && (event < APP_MSG_IMAGETASK_LAST))
-    {
-        xprintf("IMAGE task unhandled event '%s' in '%s'\r\n", imageTaskEventString[event - APP_MSG_IMAGETASK_FIRST], imageTaskStateString[image_task_state]);
+    if ((event >= APP_MSG_IMAGETASK_FIRST) && (event < APP_MSG_IMAGETASK_LAST)) {
+    	snprintf(msgToMaster, MSGTOMASTERLEN,
+    		"IMAGE task unhandled event '%s' in '%s'", imageTaskEventString[event - APP_MSG_IMAGETASK_FIRST], imageTaskStateString[image_task_state]);
     }
-    else
-    {
-        xprintf("IMAGE task unhandled event 0x%04x in '%s'\r\n", event, imageTaskStateString[image_task_state]);
+    else  {
+    	snprintf(msgToMaster, MSGTOMASTERLEN,
+    		"IMAGE task unhandled event 0x%04x in '%s'", event, imageTaskStateString[image_task_state]);
     }
-    XP_WHITE;
+
+    // print to console
+    XP_LT_RED; xprintf("%s\n", msgToMaster); XP_WHITE;
+    // and send to BLE - in case it helps with error recovery.
+    sendMsgToMaster(msgToMaster);
 
     // If non-null then our task sends another message to another task
     return send_msg;
@@ -1769,6 +1768,7 @@ static void vImageTask(void *pvParameters) {
     xprintf("  Neural network %s.\n", (nnStatus < 0) ? "disabled" : "enabled");
     xprintf("  Flash LED(s) in use: %d\n", fatfs_getOperationalParameter(OP_PARAMETER_FLASH_LED));
     xprintf("  Flash brightness: %d%%\n", (uint8_t) fatfs_getOperationalParameter(OP_PARAMETER_LED_BRIGHTNESS_PERCENT));
+    xprintf("  Light is currently %s.\n", lightSensor_isDark() ? "DARK" : "LIGHT");
 
 #ifdef USE_HM0360
     // Flash duration is not used when HM0360 is the main camera
@@ -2808,7 +2808,8 @@ void image_sleepNow(void) {
     	}
 
     	if (aeCheckDelay > 0) {
-    		XP_CYAN xprintf("[LS] Will wake to check light level in %d seconds\n", aeCheckDelay); XP_WHITE
+    		XP_CYAN xprintf("[LS] Will wake to check light level in %d seconds. Currently it is %s\n",
+    				aeCheckDelay, lightSensor_isDark() ? "DARK" : "LIGHT"); XP_WHITE
     		sleep_mode_enter_dpd(SLEEPMODE_WAKE_SOURCE_WAKE_PIN | SLEEPMODE_WAKE_SOURCE_RTC,
     				(uint16_t) aeCheckDelay, false); // Does not return
     	}

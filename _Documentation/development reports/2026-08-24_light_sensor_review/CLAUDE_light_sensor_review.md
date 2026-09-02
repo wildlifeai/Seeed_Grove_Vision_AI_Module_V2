@@ -38,8 +38,18 @@ broken into several sub-tasks, which will be listed here:
 4. Implement Separate lightSensor.c & .h (done)
 5. Add CLI on-demand "just check the light" command (done)
 6. Create a python script to run the new 'light' command continuously. (done)
+7. Change the light/dark decision algorithm. (done)
 
 (Further tasks may follow).
+
+## Change the light/dark decision algorithm ___completed___
+
+1. The algorithm is unreliable. I want to test a different algorithm.
+2. Leave existing code in place in lightSensor.c & .h and add a #define to select between exisiting and new.
+3. New algorithm is: it is dark if (a) AE is not Converged or (b) AE analog gain exceeds a #define level 
+(initially 2).
+4. No need to run multiple tests (currently defined in AE_SAMPLE_COUNT).
+5. Consider the new console output and whether this affects existing python scruipts. 
 
 ## Create a python script to run the new 'light' command continuously. ___completed___
 
@@ -115,6 +125,37 @@ and are coloured cyan. That will make it easier for humans to review these lines
 
 ---
  ## Completed tasks:
+
+* Added a second, simpler dark/bright decision algorithm to `lightSensor.c`,
+  selected by a new `AE_DECISION_GAIN_BASED` `#define` (on by default) - Charles
+  judged the existing mean-AE/threshold/hysteresis algorithm unreliable and wanted
+  to try an alternative without discarding the original. New algorithm: dark if AE
+  hasn't converged, OR analog gain exceeds a new `DARK_ANALOG_GAIN_THRESHOLD`
+  `#define` (initially 2) - a single `hm0360_md_getGainRegs()` read, no sampling
+  loop, no wake-and-settle delay, and (per Charles's explicit answers) no
+  hysteresis: a fresh decision every call, only persisted (`OP_PARAMETER_AE_FLASH_STATE`)
+  so it is available before the next reading, not blended with the previous one.
+  The original algorithm (`sampleAeStats()`/`decideDarkBright()`,
+  `LightSensorStats_t`) is untouched, just now compiled out when the `#define` is
+  active - undefine it to revert.
+  New function `decideDarkBrightGainBased()` prints the same `[LS] AE light
+  check: ... -> DARK|BRIGHT` prefix/suffix as before (no algorithm-identifying
+  marker, per Charles's request) but omits the mean-AE/min/max/threshold/gain-
+  railed fields entirely, since none of them feed this algorithm's decision and
+  printing them would misleadingly imply they did - the line is now just
+  `AE light check: analog gain = N, converged = yes|no -> DARK|BRIGHT`.
+  This broke `_Tools/ae_stream.py`'s `LIGHT_RE` and `_Tools/ae_monitor.py`'s
+  `AE_RE` (both required `mean AE = N`) - fixed both: `ae_stream.py`'s `LIGHT_RE`
+  now treats `mean AE ...threshold` as optional (kept `analog gain`/`converged` as
+  the stable anchor) and prints a leaner "Light level: -- (...)" line when mean AE
+  is absent; `ae_monitor.py`'s `AE_RE` instead uses two independent alternatives
+  (mean/threshold branch vs. analog-gain/converged branch) so the original,
+  already-legacy-tolerant pattern is not weakened, with a matching leaner print
+  branch added. `jpegAE-batch.py`/`jpegAE_annotate.py` are unaffected - they parse
+  the MakerNote EXIF field, which `image_task.c` populates from its own,
+  always-unconditional single AE-register read, independent of which
+  `lightSensor.c` algorithm is active.
+  Not yet build-verified. (complete 1 September 2026, build verification pending)
 
 * Fixed an EXIF/MakerNote flash-state off-by-one bug, found while building a new
   bench tool (`_Tools/jpegAE_annotate.py`, burns the MakerNote AE fields plus the

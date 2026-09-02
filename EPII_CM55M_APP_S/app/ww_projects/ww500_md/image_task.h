@@ -47,6 +47,9 @@ typedef enum {
 // file name: '12345678.jpg' = 12 characters, plus trailing '\0'
 #define IMAGEFILENAMELEN		13
 
+// Length of message to send via I2C to BLE processor then to app.
+#define MSGTOMASTERLEN 150
+
 // Name of the file containing extra camera register settings, applied by
 // cis_file_process() after the sensor init tables at CAMERA_CONFIG_INIT_COLD,
 // and maintained by the 'camreg' CLI command.

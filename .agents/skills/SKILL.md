@@ -54,6 +54,15 @@ What that means for an agent, beyond reading the rules:
   reads as available work and wastes someone's afternoon.
 * **Keep hardware evidence.** Bench and serial logs supporting a claim belong in the
   thread's `logs/` folder, referenced from the write-up.
+* **Bench findings: one folder each, reproduced before filed, updated in place.** A finding
+  gets `<Letter>_short_name/` under its thread with `explanation.md` in the issue template's
+  four sections, the script that reproduces it and `logs/` with the filtered three-way log.
+  Nothing is filed until it has been reproduced on demand and section 2 says how; a finding
+  that cannot be reproduced is not an issue (one was dropped that way). The issue body is the
+  explanation without its header, with evidence as permalinks to the commit. When more is
+  learned, edit the explanation and the issue body together; never add a comment that a
+  reader has to reconcile with the document. Worked example:
+  `2026-09-03_capture_bench_findings/`.
 
 # 2. Git guardrails
 
@@ -79,7 +88,7 @@ What that means for an agent, beyond reading the rules:
 
 # 4. Hardware behaviour that will trap you
 
-Verified on the bench (details + serial evidence in
+Verified on the bench (details and serial evidence in
 `_Documentation/development reports/2026-08-06_pr141-camera-features-review/`):
 
 * **Slot labels self-heal at first boot** — flashing clears the target slot's label to
@@ -95,6 +104,25 @@ Verified on the bench (details + serial evidence in
   has its own rules, see §5.
 * **camreg staged registers** (`RPV3_EX.BIN` etc.) are re-applied after the init tables
   at every sensor init — they override defaults, persist on SD, and survive DPD.
+
+Verified 3 and 4 September 2026 (`2026-09-03_capture_bench_findings/`, `ae_review`
+e8b7feb5 and nRF 0.30.48). All were open issues when written; check the issue before
+building on any of them:
+
+* **The inactivity detector measures idle time only** (the FreeRTOS idle hook), and a capture
+  waiting for a frame is idle. A multi-image capture with a gap above op8 is abandoned in
+  DPD and `Captured` never comes; the IF task sends `Sleep` and completes the shutdown
+  barrier on its own, because the barrier counts calls, not tasks (#208).
+* **A command that reaches the Himax between Save State and DPD strands it awake** until a
+  power cycle (#205): the IF task drops the inactivity event while transmitting. An ordinary
+  wake-then-command can do it. In that state the nRF parks in SELFTEST and drops every app
+  command. A `setop` in the same window is acknowledged and never saved (#207).
+* **The nRF forwards any command mid-`txfile` and restarts its packet counter** (ww-hardware
+  #33); **its console hex dump holds the download to about 1 KB/s** while its upload path is
+  already gated quiet (#34); **`Failed to send` on its console is normal back-pressure**
+  (#35); **the app's loopback benchmark never echoes** (#36).
+* **The bench nRF runs ww-hardware `dev` (0.30.48, 75406df), not `main`.** `ver` reports the
+  nRF build, `AI ver` the Himax build; cite nRF line numbers from `dev`.
 
 # 5. Driving the bench from a script
 
@@ -119,6 +147,16 @@ the fact is not enough, the timing has to be built in.
 * **`PYTHONIOENCODING=utf-8` for any serial or flashing tool.** `xmodem_send.py`'s
   progress bar uses a block character cp1252 cannot encode, and the exception lands
   **mid-flash**. Re-running recovers, since the bootloader is in a separate flash region.
+* **To send commands from a script, drive the app's Engineer Console over adb**, not the
+  Himax console: `adb shell input text` (spaces as `%s`), wait about 1.5 s for the text to
+  land, then tap send. It wakes a sleeping device, and its typed line bypasses the app's
+  queue, so it can land mid-transfer when a test needs that. Opening the Himax port with
+  pyserial's default DTR resets the board, and the device never wakes on serial input.
+* **Three-way logging** (`bench_log.py`, light sensor thread) is what makes a cross-processor
+  finding provable: app over `adb logcat`, nRF and Himax consoles in one file. Its stamps are
+  read time and the nRF flushes its deferred log in bursts, so order events by the Himax
+  lines. Strip NULs (`tr -d '\000'`) from any excerpt before committing it, or git stores it
+  as binary.
 
 Windows shell, unrelated to the hardware but the same class of silent failure:
 

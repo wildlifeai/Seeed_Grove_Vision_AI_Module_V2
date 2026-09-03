@@ -28,7 +28,8 @@ Done on `ae_review`:
 - `lightSensor.c` and `.h` split out; `hm0360_md_getAEStats()` once per loop; the light
   sensor prints tidied; `_Tools/ae_stream.py` and `ae_monitor.py` to run `light` continuously.
 - **The STROBE pin no longer stays armed through a light check** (e8b7feb5, "LED was flashing
-  during light sensing"), the flicker Charles reported.
+  during light sensing"), the flicker Charles reported. Fixed in code; the bench proof is still
+  owed, since every run so far had op11 = 0 and never armed the strobe.
 - The FAT task stack overflow fix ported from Victor's branch
   ([fat_task_stack_overflow_missing_fix.md](fat_task_stack_overflow_missing_fix.md)); built,
   not yet verified on a device.
@@ -89,16 +90,13 @@ Three constraints from the app side:
 | The nRF parses the sleep stats and forwards only `Sleep` | ww-hardware | not filed |
 | Capture-bench findings B, C, F, H, I, J (config save lost, sleep mid-retry, op7, commands mid-stream, transfer rate, `Finished sending`) | Seeed and ww-hardware | drafted on branch `docs/capture-bench-findings`, filed one at a time |
 
-### Not yet in this folder
-
-`light_sensor_ground_truth.md`, the bench-verified state of the light sensor written for
-Charles on 2 September and brought up to e8b7feb5 on 3 September, is held back until Victor
-has reviewed it.
-
 ## Files
+
+Read this README, then the ground truth; the rest is reference.
 
 | File | What it is |
 |---|---|
+| [light_sensor_ground_truth.md](light_sensor_ground_truth.md) | What the bench shows as of e8b7feb5: seven findings with status, evidence and reproduction steps |
 | [CLAUDE_light_sensor_review.md](CLAUDE_light_sensor_review.md) | Charles's instructions and the log of what was done against them |
 | [flash_led_modes_proposal.md](flash_led_modes_proposal.md) | The flash-mode parameter: history, complications, proposed design, open questions |
 | [light_command_via_image_task_proposal.md](light_command_via_image_task_proposal.md) | Why `AI light` goes through the image task, and the accepted side effects |

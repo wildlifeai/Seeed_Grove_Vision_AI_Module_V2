@@ -17,7 +17,7 @@ looping at 19:05 when the device was unplugged.
 inactivity detector fires while a reply to the nRF is going out, the event is flagged unexpected
 and dropped. The image task has already handled its copy of the event: Save State, then
 `sleepWhenPossible()`, which calls `barrier_ready(&shutdownBarrier)` and leaves the task
-`Uninitialised`. The barrier is two-party (`ww500_md.c:872`). The IF task never sends its
+`Uninitialised`. The barrier is two-party (`ww500_md.c:865`). The IF task never sends its
 `Sleep ...` line, never reaches `barrier_ready()`, and the callback `image_sleepNow()` never runs.
 
 From then on the loop feeds itself, once per inactivity period:
@@ -40,7 +40,7 @@ From then on the loop feeds itself, once per inactivity period:
 
 The nRF relays each "unhandled event" line to the phone, so the app sees the device talking
 and healthy. `AI reset` cannot rescue it: `app_setResetRequest()` is only consumed inside
-`image_sleepNow()` (`image_task.c:2757`), which is the function that never runs. `AI enable` is
+`image_sleepNow()` (`image_task.c:2658`), which is the function that never runs. `AI enable` is
 not handled in `Uninitialised` either.
 
 ## 2. How to reproduce
@@ -84,6 +84,25 @@ transmission inside the 1 ms, and the IF task took its `Inactivity` in Idle. Wit
 is a coin toss, not a recipe; the sweep above is the one to use. That attempt is in
 [`logs/ai_dpd_attempt.txt`](logs/ai_dpd_attempt.txt).
 
+## Also seen since filing (4 September)
+
+- **It does not need a timed probe.** After a power cycle the device was woken by a single
+  console command. The nRF's wake flow sent `selftest`, then the command; the reply was still
+  going out when the detector fired, 1000 ms after the boot's last activity, and the loop
+  started: `IF Task unhandled event 'Inactivity' in 'I2C TX State'` at `04:03.734`. An ordinary
+  wake-and-command from the phone is enough.
+- **In the loop the device also looks dead.** The nRF's AI state machine never left SELFTEST,
+  and from then on it answered every app command on its own console with `DEBUG: Ignore this in
+  SELFTEST for now` and nothing over BLE (`05:38.253`). So the app cannot even ask the device
+  what is wrong; the only way out is the power cycle. That half is ww-hardware's.
+- **Two related findings share the machinery.** #207 (a `setop` in the same window is
+  acknowledged but never saved) hits together with this one, as in the original sighting. #208
+  (the device sleeps mid-capture) is the mirror image: there the IF task calls `barrier_ready()`
+  twice, because `lastMessageSent` is never cleared and the barrier counts calls, not tasks.
+  Fixing the barrier per party closes both ends.
+
+Both excerpts: [`logs/reconnect_burst_and_selftest_drop.txt`](logs/reconnect_burst_and_selftest_drop.txt).
+
 ## 3. Where in the code
 
 - `if_task.c`, `handleEventForStateI2CTx()`: cases for TX_DONE, MM_TIMER, ERR, PA0_INT_IN, then a
@@ -92,10 +111,10 @@ is a coin toss, not a recipe; the sweep above is the one to use. That attempt is
   `dpd` attempt shows it working: `Deferring event 0x070d`), then `default: flagUnexpectedEvent()`.
   `APP_MSG_IFTASK_INACTIVITY` is the one event of the set that falls to `default`. The Idle-state
   handler (`if_task.c:922`) is the one that sends the `Sleep` line and sets `lastMessageSent`.
-- `image_task.c:1866`: `APP_IMAGE_TASK_STATE_UNINIT` dispatches straight to `flagUnexpectedEvent()`,
+- `image_task.c:1786`: `APP_IMAGE_TASK_STATE_UNINIT` dispatches straight to `flagUnexpectedEvent()`,
   and that function sends the text to the nRF (`sendMsgToMaster`), which is what keeps the loop fed.
-- `image_task.c:2188` `sleepWhenPossible()`, `ww500_md.c:872` `barrier_init(&shutdownBarrier, 2,
-  image_sleepNow)`, `barrier.c`: `readyCount` only ever goes up, and the callback fires once.
+- `image_task.c:2094` `sleepWhenPossible()`, `ww500_md.c:865` `barrier_init(&shutdownBarrier, 2,
+  image_sleepNow)`, `barrier.c:36` to `53`: `readyCount` only ever goes up, and the callback fires once.
 
 ## 4. Suggested fix
 

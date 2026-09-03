@@ -1,0 +1,96 @@
+# Original sighting, 2 September 2026, capture_flash_01.log 06:34.474 to 06:41.223 (HM0360 slot, op8 3000): hex dumps and app noise removed
+[06:34.451] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: Error bits = 0x0000
+[06:34.474] himax | IF Task received event 'I2C Tx' (0x0701). Rx data = 0x00000000
+[06:34.474] himax | I2C transmission complete.
+[06:34.474] himax | IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+[06:34.474] himax | IF Task received event 'I2C Rx' (0x0700). Rx data = 0x00000000
+[06:34.474] himax | Received I2C message.
+[06:34.474] himax | MKL62BA command received: 'capture 1 500'
+[06:34.474] himax | About to capture 1 image with an interval of '500' milliseconds
+[06:34.474] himax | IF Task state changed from 'Idle' (1) to 'I2C RX State' (2)
+[06:34.474] himax | IF Task received event 'String Response' (0x0703). Rx data = 0x3000e510
+[06:34.474] himax | Assert inter-processor interrupt.
+[06:34.474] himax | Sending 69 bytes: Header 4, payload 63, checksum 2 'About to capture 1 image with an interval of '500' milliseconds'
+[06:34.474] himax | Negate inter-processor interrupt.
+[06:34.474] himax | IF Task state changed from 'I2C RX State' (2) to 'I2C TX State' (3)
+[06:34.474] himax | IMAGE Task received event 'Image Event Start Capture' (0x0a01). Rx data = 0x00000001
+[06:34.474] himax | Images to capture: 1
+[06:34.474] himax | Interval: 500ms
+[06:34.474] himax | sensor_type: 8
+[06:34.474] himax |    Interval of 500ms gives sleep count = 0x4018
+[06:34.474] himax |    Changing mode from 0 to 2 with nFrames=1, sleepTime=500 sleepCount = 0x4018
+[06:34.474] himax | IMAGE Task state changed from 'Init' (1) to 'Capturing' (2)
+[06:34.474] himax | IF Task received event 'I2C Tx' (0x0701). Rx data = 0x00000000
+[06:34.474] himax | I2C transmission complete.
+[06:34.474] himax | IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+[06:34.490] nrf   | <info> app: AI state machine bumped with 'Wake' (Current state: SLEEP)
+[06:34.490] nrf   | <info> app: BLE and AI time differ by 1866s - too much!
+[06:34.490] nrf   | <info> app: AI state changed from SLEEP to WOKEN
+[06:34.490] nrf   | BLE out: Sent   5 bytes: 'Wake'
+[06:34.490] nrf   | <info> app: AI State machine scheduler called with event 8 'Send SelfTest'
+[06:34.490] nrf   | <info> app: AI state machine bumped with 'Send SelfTest' (Current state: WOKEN)
+[06:34.490] nrf   | Sending 'selftest' to AI processor (4 ctrl bytes, 8 payload, 2 CRC)<info> app: OK
+[06:34.490] nrf   | <info> app: AI state changed from WOKEN to SELFTEST
+[06:34.490] nrf   | <info> app: I2C TX complete: 14 bytes.
+[06:34.490] nrf   | <info> app: AI state machine bumped with 'Selftest Rx' (Current state: SELFTEST)
+[06:34.490] nrf   | <info> app: AI self test bits = 0x0000 (all bits now 0x0000)
+[06:34.490] nrf   | <info> app: Can't send UTC
+[06:34.490] nrf   | <info> app: AI state changed from SELFTEST to IDLE
+[06:34.490] nrf   | BLE out: Sent  20 bytes: 'Error bits = 0x0000'
+[06:34.490] nrf   | <info> app: AI State machine scheduler called with event 12 'Msg to AI'
+[06:34.490] nrf   | <info> app: AI state machine bumped with 'Msg to AI' (Current state: IDLE)
+[06:34.490] nrf   | Sending 'capture 1 500' to AI processor (4 ctrl bytes, 13 payload, 2 CRC)<info> app: AI state changed from IDLE to PROCESSING
+[06:34.490] nrf   | <info> app: I2C TX complete: 19 bytes.
+[06:34.490] nrf   | <info> app: AI state machine bumped with 'Msg from AI' (Current state: PROCESSING)
+[06:34.490] nrf   | <info> app: AI processor replies: 'About to capture 1 image with an interval of '500' milliseconds'
+[06:34.490] nrf   | <info> app: AI state changed from PROCESSING to IDLE
+[06:34.490] nrf   | BLE out: Sent  64 bytes: 'About to capture 1 image with an interval of '500' milliseconds'
+[06:34.596] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: About to capture 1 image with an interval of '500' milliseconds
+[06:37.428] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: Sleep
+[06:37.513] himax | Inactive for 3000ms
+[06:37.513] himax | IMAGE Task received event 'Image Event Inactivity' (0x0a00). Rx data = 0x00000000
+[06:37.513] himax | Inactive - expect WDT timeout soon?
+[06:37.513] himax | IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+[06:37.513] himax | Assert inter-processor interrupt.
+[06:37.513] himax | Sending 100 bytes: Header 4, payload 94, checksum 2 'Sleep 298 0 0 61 551 1 500 0 3000 95 1 0 100 2 0 0 18 1 0 14 1 2 50 65 15 0 0 286 326 1 110 1 '
+[06:37.513] himax | Negate inter-processor interrupt.
+[06:37.513] himax | IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+[06:37.513] himax | IF Task received event 'I2C Tx' (0x0701). Rx data = 0x00000000
+[06:37.513] himax | I2C transmission complete.
+[06:37.513] himax | IF task ready to sleep.
+[06:37.513] himax | IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+[06:37.529] nrf   | <info> app: AI state machine bumped with 'Sleep' (Current state: IDLE)
+[06:37.529] nrf   | <info> app: AI processor sends stats: '298 0 0 61 551 1 500 0 3000 95 1 0 100 2 0 0 18 1 0 14 1 2 50 65 15 0 0 286 326 1 110 1 '
+[06:37.529] nrf   | <info> app: AI state changed from IDLE to SLEEP
+[06:37.529] nrf   | BLE out: Sent   6 bytes: 'Sleep'
+[06:39.348] himax | IMAGE Task received event 'Unrecognised' (0x011c). Rx data = 0x00000000
+[06:39.348] himax | >>>> Received a timeout event 0x011c after 4962ms <<<<
+[06:39.348] himax | >>>> Frame timed out - restarting sensor, retry 1/5
+[06:39.348] himax | Stopping sensor
+[06:39.348] himax |    Inhibiting MD
+[06:39.348] himax |    Changing mode from 2 to 0 with nFrames=0, sleepTime=0 sleepCount = 0xffff
+[06:39.348] himax | sensor_type: 8
+[06:39.348] himax |    Interval of 500ms gives sleep count = 0x4018
+[06:39.348] himax |    Changing mode from 0 to 2 with nFrames=1, sleepTime=500 sleepCount = 0x4018
+[06:39.348] himax | IMAGE Task received event 'Unrecognised' (0x011b). Rx data = 0x00000000
+[06:39.348] himax | >>>> Received a timeout event 0x011b after 1ms <<<<
+[06:41.193] himax | IMAGE Task received event 'Unrecognised' (0x012a). Rx data = 0x00000000
+[06:41.193] himax | IMAGE task unhandled event 0x012a in 'Capturing'
+[06:41.193] himax | IF Task received event 'Message to Master' (0x070d). Rx data = 0x30010e98
+[06:41.193] himax | Assert inter-processor interrupt.
+[06:41.193] himax | Sending 54 bytes: Header 4, payload 48, checksum 2 'IMAGE task unhandled event 0x012a in 'Capturing''
+[06:41.193] himax | Negate inter-processor interrupt.
+[06:41.193] himax | IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+[06:41.193] himax | IMAGE Task received event 'Unrecognised' (0x0131). Rx data = 0x00000000
+[06:41.193] himax | IMAGE task unhandled event 0x0131 in 'Capturing'
+[06:41.193] himax | IF Task received event 'I2C Tx' (0x0701). Rx data = 0x00000000
+[06:41.193] himax | I2C transmission complete.
+[06:41.193] himax | IF task ready to sleep.
+[06:41.193] himax | DEBUG: ledFlashDisable()
+[06:41.193] himax | Preparing HM0360 for MD:   HM0360 Motion Detection off.
+[06:41.193] himax |    Inhibiting MD
+[06:41.193] himax |    Changing mode from 2 to 2 with nFrames=1, sleepTime=0 sleepCount = 0xffff
+[06:41.193] himax |  No LED flashes.
+[06:41.193] himax | [LS] Will wake to check light level in 900 seconds. Currently it is LIGHT
+[06:41.193] himax | >>> Entering DPD at 2024:01:01 00:00:48
+[06:41.193] himax | Will wake at 2024:01:01 00:15:48

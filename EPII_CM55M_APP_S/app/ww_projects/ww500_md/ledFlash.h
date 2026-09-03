@@ -32,7 +32,7 @@ typedef enum flashLeds {
 // (see _Documentation/AE_Light_Sensor_Roadmap.md)
 // NOTE: could consider also these:
 // FLASH_MODE_ALWAYS_ON,	// On all the time
-// fsFLASH_MODE_TIME_OF_DAY	// Determined by time of day timer
+// FLASH_MODE_TIME_OF_DAY	// Determined by time of day timer
 typedef enum flashLedMode {
     FLASH_MODE_OFF,			// Off all the time
     FLASH_MODE_AE,			// Determined by light levels

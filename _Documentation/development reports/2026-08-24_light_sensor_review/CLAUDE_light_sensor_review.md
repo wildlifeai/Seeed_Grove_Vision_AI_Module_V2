@@ -39,8 +39,24 @@ broken into several sub-tasks, which will be listed here:
 5. Add CLI on-demand "just check the light" command (done)
 6. Create a python script to run the new 'light' command continuously. (done)
 7. Change the light/dark decision algorithm. (done)
+8. Add other options for enabling the flash LED
 
 (Further tasks may follow).
+
+## Add other options for enabling the flash LED
+
+1. I am still unsure that either light sensor algorthm is reliable. Maybe we can refine the light
+  sensor algorithm in the future.
+2. I would like to consider re-instating options to manually set the flash as always on, always off and determined by time of day.
+This would mean extending `FlashLedMode_t` in `ledFlash.h`.
+These were once there but removed by a different Claude run by a different user. They are mentions in 
+`AE_Light_Sensor_Roadmap.md` section 8.1 
+3. I think the flashMode would be set to one of these values directly from a fresh
+operational parameter, rather than being dynamically set by ledFlashSetFlashModeFromOpParam().
+4. Please consider the implications of this. Write a markdown report for me to consider.
+5. Ask questions if useful.
+6. Don't make code changes until agreed.
+
 
 ## Change the light/dark decision algorithm ___completed___
 
@@ -125,6 +141,32 @@ and are coloured cyan. That will make it easier for humans to review these lines
 
 ---
  ## Completed tasks:
+
+* Fixed a STROBE-flicker bug in `decideDarkBrightGainBased()` (`lightSensor.c`),
+  found by Charles bench-testing `ae_stream.py --capture` with the flash enabled
+  (op13): as he reduced the light, the LED flashed rapidly for 1-2s instead of once
+  per capture - "every time, or not at all" (i.e. tied to whether flash was armed
+  for that capture, not to any particular light level). My first two guesses were
+  wrong and Charles caught both: I initially suspected `WDTIMOUTFIX`'s capture-retry
+  path (added a temporary unconditional `RETRY_RE` check to `ae_stream.py` to catch
+  its `>>>>`-marked console lines without needing `--verbose` - it printed nothing,
+  ruling this out), then re-analysed the wrong function entirely
+  (`sampleAeStats()`/`decideDarkBright()`, the *original* algorithm) before Charles
+  reminded me `AE_DECISION_GAIN_BASED` is currently enabled and he changes the code
+  too, not just me. Root cause, once looking at the right function:
+  `decideDarkBrightGainBased()` wakes the sensor into `MODE_SW_CONTINUOUS` (with a
+  500ms settle delay) whenever it finds the sensor asleep, but never touched STROBE
+  at all - unlike `sampleAeStats()`, which explicitly disables it for exactly this
+  reason. A real capture leaves the sensor in `MODE_SW_NFRAMES_SLEEP` (1 frame then
+  auto-sleep in hardware); if that capture armed STROBE (scene judged dark), it
+  stays armed straight through the sensor's own auto-sleep, so waking it back into
+  continuous streaming without disabling STROBE first fired the flash on every
+  frame streamed during the settle delay and read. Fixed by porting
+  `sampleAeStats()`'s STROBE save/disable/restore bracketing into
+  `decideDarkBrightGainBased()` (both the normal path and the early-return-on-
+  register-read-failure path). Removed the now-superseded `RETRY_RE` diagnostic
+  from `ae_stream.py` once the real cause was confirmed. Charles confirmed the fix
+  works. (complete 3 September 2026, device-tested)
 
 * Added a second, simpler dark/bright decision algorithm to `lightSensor.c`,
   selected by a new `AE_DECISION_GAIN_BASED` `#define` (on by default) - Charles

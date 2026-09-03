@@ -34,8 +34,8 @@
 #define AE_SAMPLE_GAP_MS  120
 
 // Time to let the sensor start streaming and its AE loop begin adapting,
-// after waking it from sleep for the sampling window (~5 frames at 10fps).
-#define AE_WAKE_SETTLE_MS 500
+// after waking it from sleep for the sampling window (~2 frames at 10fps).
+#define AE_WAKE_SETTLE_MS 200
 
 // Hysteresis band (AE_MEAN units, 0-255) above the dark threshold: dark is
 // entered below OP_PARAMETER_AE_DARK_THRESHOLD, but only left once brightness
@@ -106,7 +106,13 @@ static void decideDarkBright(const LightSensorStats_t *stats);
  *
  * Wakes the HM0360 into streaming first if it was asleep, and restores its
  * prior mode afterward - same as sampleAeStats(), just around one read
- * instead of a loop.
+ * instead of a loop. Also disables the STROBE pin for the duration, same
+ * reason and same fix as sampleAeStats(): a real capture leaves the sensor
+ * in MODE_SW_NFRAMES_SLEEP (1 frame then auto-sleep), and if that capture
+ * armed STROBE (scene judged dark), it stays armed through the sensor's own
+ * auto-sleep - waking it back into MODE_SW_CONTINUOUS here without disabling
+ * STROBE first fires the flash on every frame streamed during the settle
+ * delay and read.
  *
  * Deliberately does NOT drive the flash LED here - see decideDarkBright()'s
  * comment, which applies equally to this function.
@@ -115,8 +121,16 @@ static void decideDarkBrightGainBased(void) {
 	HM0360_GAIN_T gain;
 	mode_select_t priorMode = MODE_SLEEP;
 	bool wokeForSampling = false;
+	bool priorStrobeEnabled = false;
+	bool gotPriorStrobe;
 	bool wasDark;
 	bool dark;
+
+	// If the HM0360 strobe is enabled, then disable it.
+	gotPriorStrobe = (hm0360_md_getStrobe(&priorStrobeEnabled) == HX_CIS_NO_ERROR);
+	if (gotPriorStrobe && priorStrobeEnabled) {
+		hm0360_md_configureStrobe(false);
+	}
 
 	// If the HM0360 is in SLEEP state then put it in CONTINUOUS mode - a
 	// sleeping sensor reads AE_MEAN = 0 and stale gain values.
@@ -124,13 +138,16 @@ static void decideDarkBrightGainBased(void) {
 			((priorMode == MODE_SLEEP) || (priorMode == MODE_SW_NFRAMES_STANDBY))) {
 		if (hm0360_md_setModeSelectOnly(MODE_SW_CONTINUOUS) == HX_CIS_NO_ERROR) {
 			wokeForSampling = true;
-			vTaskDelay(pdMS_TO_TICKS(AE_WAKE_SETTLE_MS));
+			vTaskDelay(pdMS_TO_TICKS(AE_WAKE_SETTLE_MS)); // 200ms - almost certianly not needed.
 		}
 	}
 
 	if (hm0360_md_getGainRegs(&gain) != HX_CIS_NO_ERROR) {
 		if (wokeForSampling) {
 			hm0360_md_setModeSelectOnly(priorMode);
+		}
+		if (gotPriorStrobe && priorStrobeEnabled) {
+			hm0360_md_configureStrobe(true);
 		}
 		return;
 	}
@@ -140,6 +157,11 @@ static void decideDarkBrightGainBased(void) {
 		if (hm0360_md_setModeSelectOnly(priorMode) != HX_CIS_NO_ERROR) {
 			XP_CYAN xprintf("[LS] decideDarkBrightGainBased: failed to restore HM0360 mode %d\n", priorMode); XP_WHITE
 		}
+	}
+
+	// If necessary, re-enable the HM0360 STROBE
+	if (gotPriorStrobe && priorStrobeEnabled) {
+		hm0360_md_configureStrobe(true);
 	}
 
 	wasDark = (fatfs_getOperationalParameter(OP_PARAMETER_AE_FLASH_STATE) == 1);

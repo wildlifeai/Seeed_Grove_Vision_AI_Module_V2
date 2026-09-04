@@ -73,7 +73,7 @@ captured first.
 |    31 | OP_PARAMETER_CAM_WB_MODE 				| 1             | RP camera white balance: 0 = off (hardware JPEG), 1 = auto (warmth-biased grey-world measured per frame), 2 = manual op27/op28. Auto falls back to manual for flash-lit or too-dark frames - see `img_correct.c` |
 |    32 | OP_PARAMETER_RFU_1 					| 0             | Reserved for future use |
 |    33 | OP_PARAMETER_RFU_2 					| 0             | Reserved for future use |
-|    34 | OP_PARAMETER_FLASH_MODE 				| 1             | Capture flash mode: 0 = off, 1 = AE-driven, 2 = always on, 3 = time of day. Also gates the night motion-detection illumination, so 0 turns that off too |
+|    34 | OP_PARAMETER_FLASH_MODE 				| 0             | Capture flash mode: 0 = off, 1 = AE-driven, 2 = always on, 3 = time of day |
 |    35 | OP_PARAMETER_FLASH_TOD_START 			| 0             | FLASH_MODE_TIME_OF_DAY only: minutes after midnight UTC when the flash turns on |
 |    36 | OP_PARAMETER_FLASH_TOD_DURATION 		| 0             | FLASH_MODE_TIME_OF_DAY only: duration (minutes) the flash stays on, wraps past midnight |
 
@@ -138,15 +138,9 @@ time-of-day window) - 0 disables the periodic wake. Time-of-day is also re-evalu
 immediately whenever the RTC is set (e.g. from the app). Neither mode adjusts for date,
 season, or sunrise/sunset - the flash does not need to switch at precise times.
 
-Motion-detection illumination picks its own LED and brightness, OP_PARAMETER_MD_FLASH_LED
-and OP_PARAMETER_MD_FLASH_BRIGHTNESS_PERCENT, but it is gated by whether the capture flash
-is currently armed. OP_PARAMETER_FLASH_MODE = 0 therefore turns the night motion-detection
-illumination off as well, whatever OP_PARAMETER_MD_FLASH_LED says. This is why the shipped
-default is 1 (AE-driven): the LED then fires only when the scene is judged dark.
-
-OP_PARAMETER_FLASH_LED is separate and ships as 0, so the capture flash itself stays off
-until an LED is chosen. The AE-driven mode still runs, which is what the night
-motion-detection illumination and the automatic camera switching depend on.
+Motion-detection illumination is independent of the capture-flash mode - see
+OP_PARAMETER_MD_FLASH_LED / OP_PARAMETER_MD_FLASH_BRIGHTNESS_PERCENT below, also gated
+by whether the capture flash is currently armed.
 
 | Case                       | Setting |
 |----------------------------|---------|

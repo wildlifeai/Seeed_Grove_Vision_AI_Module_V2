@@ -11,6 +11,10 @@ Filed as wildlifeai/Seeed_Grove_Vision_AI_Module_V2#205. **Bench:** WW500 `WILD-
 scheduled reset, battery drained, until someone power-cycles it. Seen at 18:55 on the bench, still
 looping at 19:05 when the device was unplugged.
 
+**Status (4 September, 19:03):** fixed by Charles in `ae_review` 4bcb722c and bench-verified on
+the device with the same on-demand reproduction, three hits, all slept. See
+[Verification of the fix](#verification-of-the-fix) below.
+
 ## 1. What is the problem
 
 `handleEventForStateI2CTx()` in `if_task.c` has no case for `APP_MSG_IFTASK_INACTIVITY`. When the
@@ -127,6 +131,66 @@ send unhandled-event text to the nRF from `Uninitialised` (console only), or hav
 re-signal the barrier instead of complaining. The reliable reproduction is the test for this: post
 `APP_MSG_IFTASK_INACTIVITY` while `if_task_state == APP_IF_STATE_I2C_TX` and check DPD is still
 entered.
+
+## Verification of the fix
+
+Commit 4bcb722c on `ae_review` adds `case APP_MSG_IFTASK_INACTIVITY:` to the five IF-task
+states that dropped it (I2C RX, I2C TX, I2C slave TX and RX, PA0), deferring it into
+`savedMessage` the way the state already defers RX_READY and the CLI responses, so Idle replays
+it and sends the `Sleep` line. Charles's own write-up is in
+`_Documentation/development reports/2026-09-04_issue205_inactivity_during_i2c/README.md` on that
+branch. He could not test it; this is that test.
+
+**Bench, 4 September 19:00 to 19:04.** Same device, the fix built and flashed by Victor (banner
+`WW500 MD. (WW500_C02) Built: 16:45:52 Sep  4 2026`, `Git branch: 'nogit'`), a freshly formatted
+SD card (so op8 = 1000 and motion detection off), the phone connected through the Engineer
+Console. Driver: [`repro_A_fix.py`](repro_A_fix.py), the original sweep with the pass condition
+changed: an attempt counts as a window hit when the probe's `MKL62BA command received: 'slots'`
+prints after `Inactive for 1000ms`, and the fix passes when `Deferring event 0x070e` follows and
+the device still reaches `Entering DPD`. The old `IF Task unhandled event 'Inactivity'` line is
+the fail condition.
+
+Three of the first five attempts landed in the window (520, 560 and 600 ms after the anchor
+line), and all three slept:
+
+```
+[02:13.875] himax | Inactive for 1000ms
+[02:13.875] himax | IMAGE Task state changed from 'Init' (1) to 'Save State' (5)
+[02:13.875] himax | MKL62BA command received: 'slots'
+[02:13.875] himax | IF Task state changed from 'I2C RX State' (2) to 'I2C TX State' (3)
+[02:13.875] himax | IMAGE Task state changed from 'Save State' (5) to 'Uninitialised' (0)
+[02:13.875] himax | IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+[02:13.875] himax | Deferring event 0x070e
+[02:13.875] himax | I2C transmission complete.
+[02:13.875] himax | IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+[02:13.875] himax | Issuing deferred event 0x070e 'Inactivity'
+[02:13.875] himax | IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+[02:13.875] himax | Sending 103 bytes: Header 4, payload 97, checksum 2 'Sleep 0 0 0 1 2 1 500 ...'
+[02:14.176] himax | IF task ready to sleep.
+[02:14.176] himax | >>> Entering DPD at 2024:01:01 00:00:08
+```
+
+That is the exact sequence of section 1 with the one missing case filled in: the `Inactivity`
+arrives in `I2C TX State`, is held, and is replayed once the reply has gone out. The other two
+hits are at `[02:38.257]` and `[03:02.008]` in
+[`logs/fix_verification_2026-09-04.txt`](logs/fix_verification_2026-09-04.txt) (filtered: hex
+dumps, nRF state chatter and the app's raw receive lines removed); the driver's per-attempt
+summary is [`logs/fix_verification_sweep.txt`](logs/fix_verification_sweep.txt). No
+`unhandled event` line appears anywhere in the session.
+
+Two things learned getting there, for the next person running the sweep:
+
+- The nRF answers a command with `Sleep` on its own once it has the Himax's `Sleep` message, so a
+  probe that arrives after the Save State is never forwarded. The window is only the Save State,
+  0 to 300 ms wide on this build, and `adb input tap` adds about 170 ms of jitter; a 20 ms step
+  hit three times in five where the earlier 50 ms sweep hit nothing in sixteen.
+- The sweep needs a quiet device and a quiet phone. With motion detection on (op11 = 1000 from
+  an earlier deployment) every wake streamed captures and the dev app fell minutes behind, then
+  sent the taps it had queued as one doubled `AI slotsAI slots`; that is the app backlog of
+  wildlifeai/ww-mobile-app#273, not a firmware matter. The formatted card fixed both.
+
+The single-slot `savedMessage` caveat in section 4 still stands: Charles's README notes it as a
+pre-existing limitation and it is not exercised by this test.
 
 **Evidence:** [`logs/capture_retest_bench.txt`](logs/capture_retest_bench.txt) lines 805 to 828,
 three-way bench (app, nRF, Himax). The app side of the same minute is in wildlifeai/ww-mobile-app,

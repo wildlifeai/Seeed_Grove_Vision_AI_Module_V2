@@ -23,7 +23,7 @@ console at 921600 and nRF console at 115200 interleaved with `adb logcat`. Times
 
 | | Repo | Finding | Severity |
 |---|---|---|---|
-| [A](A_stuck_awake_inactivity_in_i2c_tx/explanation.md) | Seeed | An inactivity event during an I2C reply leaves the device awake until it is power-cycled. Filed as Seeed #205 | high |
+| [A](A_stuck_awake_inactivity_in_i2c_tx/explanation.md) | Seeed | An inactivity event during an I2C reply leaves the device awake until it is power-cycled. Filed as Seeed #205. Fixed in `ae_review` 4bcb722c, bench-verified 4 September | high |
 | [H](H_command_during_binary_send/explanation.md) | ww-hardware | A command received while a file is streaming is forwarded at once and restarts the packet counter. Reproduced on demand, filed as ww-hardware #33 | medium |
 | [B](B_setop_during_save_state_lost/explanation.md) | Seeed | A `setop` that lands after Save State replies success, but the value is not saved. Reproduced on demand, read back after a power cycle. Filed as Seeed #207 | medium |
 | [C](C_inactivity_during_frame_retry/explanation.md) | Seeed | An inactivity event during a capture sequence puts the device to sleep mid-sequence: the IF task half-sleeps and its next transmission completes the barrier. Reproduced on both cameras with `AI capture 3 <gap>`. Filed as Seeed #208 | medium |

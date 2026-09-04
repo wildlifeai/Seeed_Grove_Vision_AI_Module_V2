@@ -48,7 +48,7 @@
 32 0
 33 0
 # 34: flash mode 0=off 1=AE 2=always-on 3=time-of-day
-34 0
+34 1
 # 35: time-of-day start (min after midnight UTC)
 35 0
 # 36: time-of-day duration (min), wraps past midnight

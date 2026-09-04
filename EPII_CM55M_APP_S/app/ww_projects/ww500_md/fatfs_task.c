@@ -47,6 +47,7 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <ctype.h>
+#include <string.h>		// strlen/strchr/strtok: used here, previously only pulled in transitively
 
 #include "WE2_device.h"
 #include "WE2_debug.h"
@@ -1086,10 +1087,20 @@ static FRESULT load_configuration(const char *filename, directoryManager_t *dirM
 
 		// Read lines from the file
 		while (f_gets(line, sizeof(line), &dirManager->configFile)) {
-			// Remove trailing newline if present
-			char *newline = strchr(line, '\n');
-			if (newline) {
-				*newline = '\0';
+			// Strip the line terminator, the CR as well as the LF.
+			//
+			// FatFS here is built with FF_USE_STRFUNC 1, "Enable without LF-CRLF
+			// conversion" (ffconf.h), so a CONFIG.TXT written on Windows still
+			// carries its CR at this point. Stripping only at '\n' leaves it on the
+			// last token of every line, and isNumericToken() rejects "2\r", so the
+			// whole file would be silently ignored and every parameter would fall
+			// back to its compiled-in default. MANIFEST/CONFIG.TXT is itself CRLF,
+			// so this is the ordinary case rather than an edge case.
+			//
+			// It also keeps a trailing CR out of the 'I ' deployment ID string.
+			size_t len = strlen(line);
+			while ((len > 0) && ((line[len - 1] == '\n') || (line[len - 1] == '\r'))) {
+				line[--len] = '\0';
 			}
 
 			// Skip comments which start with #

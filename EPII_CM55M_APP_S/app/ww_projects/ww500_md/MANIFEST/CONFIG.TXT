@@ -26,30 +26,30 @@
 21 2
 # 22: MD illumination brightness (percent)
 22 5
-# 23: AE dark threshold (AE Mean below this = dark = flash needed)
+# 23: AE dark threshold (below this AE Mean = dark)
 23 65
-# 24: flash re-evaluation interval (minutes, 0 disables) - AE light level or time-of-day window
+# 24: flash re-eval interval (min, 0=disable)
 24 15
 # 25: last AE flash decision (runtime state - leave as 0)
 25 0
-# 26: automatic camera image switching (0 = off/manual only; automatic mode planned)
+# 26: auto camera switching (0=off/manual only)
 26 0
-# 27: software white-balance RED gain, Q8.8 (256 = 1.0x, 0 = correction off). RP3 colour camera only.
+# 27: SW white-balance RED gain, Q8.8 (256=1.0x)
 27 286
-# 28: software white-balance BLUE gain, Q8.8 (256 = 1.0x, 0 = correction off). RP3 colour camera only.
+# 28: SW white-balance BLUE gain, Q8.8 (256=1.0x)
 28 326
 # 29: RP camera auto-exposure: 0 = off, 1 = on.
 29 1
-# 30: auto-exposure target (raw p75 luma, 0 = built-in default).
+# 30: auto-exposure target (0=built-in default)
 30 0
-# 31: RP camera white balance: 0 = off, 1 = auto, 2 = manual (op27/28).
+# 31: RP white balance (0=off,1=auto,2=manual)
 31 1
 # 32, 33: reserved for future use
 32 0
 33 0
-# 34: capture flash mode: 0=off, 1=AE, 2=always-on, 3=time-of-day
+# 34: flash mode 0=off 1=AE 2=always-on 3=time-of-day
 34 0
-# 35: time-of-day window start (minutes after midnight UTC) - only used in mode 3
+# 35: time-of-day start (min after midnight UTC)
 35 0
-# 36: time-of-day window duration (minutes, wraps past midnight) - only used in mode 3
+# 36: time-of-day duration (min), wraps past midnight
 36 0

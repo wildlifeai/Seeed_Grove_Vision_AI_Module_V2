@@ -1035,6 +1035,23 @@ static void processGPS(char * gps_line) {
  * @param file name
  * @return error code
  */
+// A truncated/split CONFIG.TXT line (e.g. the tail of an over-long comment
+// that overflowed the f_gets() line buffer) is not a '#' comment and falls
+// through to the index/value parser below. atoi() silently returns 0 for
+// non-numeric input, so without this check such garbage is misread as
+// "set op_parameter[0] = 0". Require both tokens to be purely numeric.
+static bool isNumericToken(const char *token) {
+	if (*token == '\0') {
+		return false;
+	}
+	for (const char *p = token; *p != '\0'; p++) {
+		if (!isdigit((unsigned char)*p)) {
+			return false;
+		}
+	}
+	return true;
+}
+
 static FRESULT load_configuration(const char *filename, directoryManager_t *dirManager) {
 	FRESULT res;
 	char line[64];
@@ -1102,14 +1119,14 @@ static FRESULT load_configuration(const char *filename, directoryManager_t *dirM
 				// token is returned until there are no more tokens.
 				// At that point each function call returns NULL.
 				token = strtok(line, " ");
-				if (token == NULL) {
+				if ((token == NULL) || !isNumericToken(token)) {
 					continue;
 				}
 
 				index = (uint8_t)atoi(token);
 
 				token = strtok(NULL, " ");
-				if (token == NULL) {
+				if ((token == NULL) || !isNumericToken(token)) {
 					continue;
 				}
 

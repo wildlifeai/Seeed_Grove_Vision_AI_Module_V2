@@ -142,6 +142,30 @@ and are coloured cyan. That will make it easier for humans to review these lines
 ---
  ## Completed tasks:
 
+* Fixed a subtle `CONFIG.TXT`/`op_parameter[0]` corruption bug Charles spotted:
+  op0 (`OP_PARAMETER_SEQUENCE_NUMBER`, the image filename counter) never
+  incremented across reboots. Root cause: `load_configuration()`'s (`fatfs_task.c`)
+  line buffer is `char line[64]` - smaller than the `#`-comment lines several
+  op-parameters carry (some over 100 chars, including two of the new op35/36
+  comments added for the flash-mode work above). `f_gets()` reads at most 63
+  bytes; an over-long comment line splits across two calls, and the leftover
+  fragment (e.g. `") - only used in mode 3"`) doesn't start with `#`, so it falls
+  through to the value parser. `strtok()`/`atoi()` silently turns garbage tokens
+  into 0, so the fragment was misread as "set op_parameter[0] = 0" - stomping the
+  counter back to zero on every boot. Confirmed by Python simulation of the exact
+  split/parse. Scanned every comment line in `MANIFEST/CONFIG.TXT` and found 7
+  more pre-existing lines (op23/24/26/27/28/30/31) also over the ~62-char safe
+  threshold, so this predates the flash-mode work and was likely already
+  corrupting op0 on every boot. `save_configuration()` confirmed NOT a source of
+  value corruption - its value-write loop is driven purely from RAM, independent
+  of file content. Two fixes applied (both approved by Charles): (1) shortened
+  all 10 offending comment lines in `MANIFEST/CONFIG.TXT` to fit safely within
+  the buffer; (2) hardened `load_configuration()` with a new `isNumericToken()`
+  check so an index/value pair is only accepted when both tokens are purely
+  digits, rejecting any future truncated-line garbage outright instead of
+  trusting bare `atoi()`'s silent-zero-on-failure behaviour. Not yet
+  build-verified. (complete 4 September 2026, build verification pending)
+
 * Implemented `flash_led_modes_proposal.md`'s final design in full:
   `FlashLedMode_t` (`ledFlash.h`) gains `FLASH_MODE_ALWAYS_ON`/`FLASH_MODE_TIME_OF_DAY`
   (`FLASH_MODE_OFF = 0`); three new op-parameters after Charles's own

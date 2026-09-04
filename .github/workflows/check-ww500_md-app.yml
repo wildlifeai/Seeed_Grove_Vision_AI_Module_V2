@@ -12,10 +12,25 @@ on:
 # Make and build the WW500_MD application
 jobs:
   build:
+    name: build (${{ matrix.cis_model }})
     runs-on: ubuntu-latest
 
+    strategy:
+      fail-fast: false
+      matrix:
+        # Both camera variants must build, so name them here rather than relying
+        # on the CIS_SUPPORT_INAPP_MODEL default in ww500_md.mk. That default is
+        # a developer convenience and gets flipped while working: bf222730 moved
+        # it from cis_hm0360 to cis_imx708, which silently took the HM0360 build
+        # out of this check.
+        cis_model: [cis_imx708, cis_hm0360]
+
     env:
-      COMPILER_VERSION: "14.2"
+      # Matches the pinned toolchain: Arm GNU 14.3.rel1, the same version
+      # build_and_upload_firmware.yml uses and the one the app is developed and
+      # bench-tested against. This check was still on 14.2, so the gate was not
+      # compiling with the compiler anybody actually ships.
+      COMPILER_VERSION: "14.3"
     
     steps:
     - name: Checkout the repository
@@ -38,4 +53,4 @@ jobs:
       run: |
         cd EPII_CM55M_APP_S/
         make clean
-        make
+        make CIS_SUPPORT_INAPP_MODEL=${{ matrix.cis_model }}

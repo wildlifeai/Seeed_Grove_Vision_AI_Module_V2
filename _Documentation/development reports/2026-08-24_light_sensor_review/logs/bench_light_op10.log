@@ -1,0 +1,114 @@
+# Himax console (921600), 2 September 2026, ae_review at 4dc43587, RP3 image. Trimmed on 3 September to the boot and the camera-disabled test (help output and idle waits removed); the full capture was 661 lines.
+Waiting for the boot banner (press reset if nothing appears)...
+1st BL Modem Build DATE=Jan 17 2025, Version: 2.12
+Please input any key to enter X-Modem mode in 30 ms 
+waiting input key...
+slot flash_offset 0x00100000
+New MemDesp himax_sec_SB_image_process PASS
+set_memory_s_ns
+HX_DSP_FLAG 1
+jump_addr=0x10000000
+Compiler Version: ARM GNU, 14.3.1 20250623
+
+**** WW500 MD. (WW500_C02) Built: 12:52:00 Aug 31 2026 ****
+
+Git branch: 'ae_review' e2316223-dirty
+Compiler Version: ARM GNU, 14.3.1 20250623
+
+Wakeup_event = 0x0000, WakeupEvt1 = 0x0000 Cold boot
+Camera: HM0360
+PCA9574 present at 0x20
+DEBUG: ledFlashSelectLED(0)
+Initialised LED Flash
+HM0360 present at 0x24
+Main camera present at 0x24
+
+### Cold Boot ###
+FreeRTOS tickless idle is enabled. configMAX_PRIORITIES = 5
+Initialising FreeRTOS tasks
+Created task 'CLI' Priority 4
+Created task 'IFTask' Priority 3
+Created task 'FAT' Priority 2
+Created task 'IMAGE' Priority 1
+FreeRTOS scheduler started.
+Starting CLI Task
+
+Enter 'help' to view a list of available commands.
+cmd> Starting IFTask
+I2C slave instance 0 configured at address 0x62
+I2C buffers have 256 bytes, payload is 244
+Starting FatFS Task
+Mounting FatFS on SD card OK
+>>>>> setop 10 1
+setop 10 1
+Set OpParam 10 = 1
+cmd> 
+>>>>> light
+light
+Checking light level...
+cmd> IMAGE Task received event 'Image Event Start Capture' (0x0a01). Rx data = 0x00000000
+Images to capture: 1
+Interval: 0ms
+sensor_type: 8
+   Inhibiting MD
+   Changing mode from 0 to 2 with nFrames=1, sleepTime=0 sleepCount = 0xffff
+IMAGE Task state changed from 'Init' (1) to 'Capturing' (2)
+
+IMAGE Task received event 'Image Event Frame Ready' (0x0a04). Rx data = 0x00000000
+   Inhibiting MD
+   Changing mode from 2 to 0 with nFrames=0, sleepTime=0 sleepCount = 0xffff
+DEBUG: ledFlashDisable()
+Image capture 1/1 took 81ms
+
+[LS] Skipping NN processing (AE light check).
+[LS] getAEStats: 16 AE_MEAN samples: 63 63 63 63 63 63 63 63 63 63 63 63 63 63 63 63 
+[LS] AE sampling took 2353ms
+[LS] AE light check: mean AE = 63 (min 63, max 63) over 16 frames, threshold = 65, analog gain = 3, converged = yes, gain railed = no -> DARK (flash wanted)
+
+IF Task received event 'Message to Master' (0x070d). Rx data = 0x30015938
+Assert inter-processor interrupt.
+Sending 156 bytes: Header 4, payload 150, checksum 2 'AE light check: mean AE = 63 (min 63, max 63) over 16 frames, threshold = 65, analog gain = 3, converged = yes, gain railed = no -> DARK (flash wanted)'
+000: 80 04 96 00 41 45 20 6c  69 67 68 74 20 63 68 65 ....AE light che
+010: 63 6b 3a 20 6d 65 61 6e  20 41 45 20 3d 20 36 33 ck: mean AE = 63
+020: 20 28 6d 69 6e 20 36 33  2c 20 6d 61 78 20 36 33  (min 63, max 63
+030: 29 20 6f 76 65 72 20 31  36 20 66 72 61 6d 65 73 ) over 16 frames
+040: 2c 20 74 68 72 65 73 68  6f 6c 64 20 3d 20 36 35 , threshold = 65
+050: 2c 20 61 6e 61 6c 6f 67  20 67 61 69 6e 20 3d 20 , analog gain = 
+>>>>> disable
+disable
+Disabled Camera System
+cmd> 
+>>>>> light
+light
+Checking light level...
+cmd> IMAGE Task received event 'Image Event Start Capture' (0x0a01). Rx data = 0x00000000
+Can't capture - camera system not enabled
+>>>>> enable
+enable
+Enabled Camera System
+cmd> IMAGE Task received event 'Image Event Change Enable' (0x0a08). Rx data = 0x00000001
+>>>>> light
+light
+Checking light level...
+cmd> IMAGE Task received event 'Image Event Start Capture' (0x0a01). Rx data = 0x00000000
+Images to capture: 1
+Interval: 0ms
+sensor_type: 8
+   Inhibiting MD
+   Changing mode from 0 to 2 with nFrames=1, sleepTime=0 sleepCount = 0xffff
+IMAGE Task state changed from 'Init' (1) to 'Capturing' (2)
+
+IMAGE Task received event 'Image Event Frame Ready' (0x0a04). Rx data = 0x00000000
+   Inhibiting MD
+   Changing mode from 2 to 0 with nFrames=0, sleepTime=0 sleepCount = 0xffff
+DEBUG: ledFlashDisable()
+Image capture 1/1 took 55ms
+
+[LS] Skipping NN processing (AE light check).
+[LS] getAEStats: 16 AE_MEAN samples: 63 63 63 63 63 63 63 63 63 63 63 63 63 63 63 63 
+[LS] AE sampling took 2353ms
+[LS] AE light check: mean AE = 63 (min 63, max 63) over 16 frames, threshold = 65, analog gain = 3, converged = yes, gain railed = no -> DARK (flash wanted)
+
+IF Task received event 'Message to Master' (0x070d). Rx data = 0x30015938
+Assert inter-processor interrupt.
+Sending 156 bytes: Header 4, payload 150, checksum 2 'AE light check: mean AE = 63 (min 63, max 63) over 16 frames, threshold = 65, analog gain = 3, converged = yes, gain railed = no -> DARK (flash wanted)'

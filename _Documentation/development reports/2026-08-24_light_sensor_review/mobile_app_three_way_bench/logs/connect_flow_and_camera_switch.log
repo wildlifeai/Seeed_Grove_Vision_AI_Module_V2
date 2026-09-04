@@ -1,0 +1,1294 @@
+# Connect flow: scanner routing + useBleInitialization, non-engineer-console path. App 0.0.64.
+# Started 2026-09-02 10:54:37. Times are MM:SS.mmm from the start of the capture.
+# himax = COM6 @ 921600 (known adapter FTFAERNNA)
+# nrf   = COM5 @ 115200 (known adapter FTH0BZPJA)
+#
+# Filtered on 3 September 2026 to the lines that carry the story: hex dumps, I2C state chatter, boot banners and the app's sync noise removed. The raw capture was 4049 lines.
+[00:20.127] app   | 'Linking prefix:', 'wildlifewatcher:///'
+[00:20.133] app   | Running "main" with {"rootTag":1,"initialProps":{},"fabric":true}
+[00:20.383] app   | 'Initial URL:', null
+[00:20.386] app   | Setting up deep link listener...
+[00:20.460] app   | 🔧 Initializing Supabase client...
+[00:20.468] app   | BLE library initialized
+[00:20.470] app   | BLE is currently: PoweredOn
+[00:20.479] app   | 'DEBUG: initializeSupabaseClient config:', { supabaseUrl: 'https://qegeovogqxiouqbrxmnh.supabase.co',
+[00:20.501] app   | 'DEBUG: initializeSupabaseClient client:', { supabaseUrl: 'https://qegeovogqxiouqbrxmnh.supabase.co',
+[00:20.502] app   | '✅ Supabase client initialized:', { environment: 'Cloud Development',
+[00:20.504] app   | ✅ Supabase client initialized successfully
+[00:20.584] app   | useDeepLinking hook initialized
+[00:20.584] app   | Setting up deep link listener in useDeepLinking...
+[00:20.592] app   | 🔄 Resetting sync state...
+[00:20.599] app   | No connected devices found when checking cached peripherals
+[00:20.603] app   | No connected devices found when checking cached peripherals
+[00:20.625] app   | ✅ Sync state reset complete
+[00:20.638] app   | 📡 Realtime subscription started (debounced)
+[00:22.138] app   | 'Auth state changed:', 'INITIAL_SESSION', 'tui@ww.org'
+[00:22.158] app   | '🔍 JWT DEBUG (using passed session):', { hasSession: true,
+[00:22.158] app   | '📋 Querying user_roles for userId:', 'a0000000-0000-0000-0000-000000000001'
+[00:22.378] app   | '🔔 Setting up realtime invitation subscription for:', 'tui@ww.org'
+[00:22.404] app   | 👤 User authenticated - triggering data sync...
+[00:22.427] app   | ✅ Found 0 pending invitations in local DB
+[00:22.475] app   | '📡 Realtime subscription status:', 'SUBSCRIBED'
+[00:23.356] app   | '✅ Found', 9, 'user roles'
+[00:23.357] app   | '📋 Querying organisations table for IDs:', [ 'b0000000-0000-0000-0000-000000000001',
+[00:23.359] app   | [RefData] Received 4 firmware records from server (Types: himax, himax, himax, ble)
+[00:23.359] app   | [RefData] Himax records: 3
+[00:24.065] app   | '✅ Found', 2, 'organisations'
+[00:24.065] app   | '✅ Fetched user organisations:', { organisations: 
+[00:24.309] app   | [RefData] Received 4 firmware records from server (Types: himax, himax, himax, ble)
+[00:24.309] app   | [RefData] Himax records: 3
+[00:24.350] app   | 📦 Found 0 pending operations in outbox:
+[00:24.350] app   | ✅ No pending changes, applying all server updates
+[00:26.241] app   | ✅ No new device changes
+[00:27.865] app   | [ScanLoop] Flushed stale BLE state
+[00:27.870] app   | [Scanner] New scan session started (15s), session ID: 1
+[00:29.198] app   | [DeviceDiscovery] Auto-connecting to discovered device: D6:47:9B:89:E7:23
+[00:29.200] app   | [AutoConnect] D6:47:9B: DISCOVERED → ROUTING_PENDING
+[00:29.213] app   | Device selected: D6:47:9B:89:E7:23, mode: auto
+[00:29.277] nrf   | <info> app: Advertising Fast.
+[00:30.355] app   | Connecting to device D6:47:9B:89:E7:23...
+[00:31.453] nrf   | <info> app: Connected
+[00:31.453] nrf   | <info> app: Requesting DLE to 251 bytes
+[00:31.453] nrf   | <info> app: ATT MTU exchange completed. MTU set to 247 bytes.
+[00:31.791] app   | Extracting services and characteristics.
+[00:31.793] app   | Available services: ["1800","1801","6e400001-b5a3-f393-e0a9-e50e24dcca9e"]
+[00:31.821] app   | Notifications started for 6e400003-b5a3-f393-e0a9-e50e24dcca9e
+[00:31.827] app   | Connection priority: High
+[00:31.837] app   | MTU negotiated to 512 bytes
+[00:31.844] app   | Device WILD-CNKW connected
+[00:31.943] app   | Connect result: true
+[00:31.943] app   | Proceeding with mode: auto
+[00:31.943] app   | Checking DB for device D6:47:9B:89:E7:23...
+[00:32.074] nrf   | <info> app: NUS start
+[00:32.369] app   | DB Device found: true
+[00:33.219] app   | ✅ Found 5 locally created projects
+[00:33.222] app   | ✅ Total accessible projects (Roles + Created): 5
+[00:33.228] app   | [ProjectService] Enriching project: Sample from: MICA - Muskrat and coypu camera trap observations in Belgium, the Netherlands and Germany (67048790-2f0b-4fbd-ba48-c9aecc313d03)
+[00:33.228] app   | [ProjectService] Enriching project: Sinbad Skink Survey (c0000000-0000-0000-0000-000000000005)
+[00:33.234] app   | [ProjectService] Enriching project: Global Testing Project (c0000000-0000-0000-0000-000000000099)
+[00:33.235] app   | [ProjectService] Enriching project: Access Test — Valid (c0a11111-0000-4000-8000-000000000001)
+[00:33.235] app   | [ProjectService] Enriching project: Tests in New Plymouth (f326edd4-23e9-4f0f-8c53-b80747d23b34)
+[00:33.244] app   | [ProjectService] Enrichment complete for 67048790-2f0b-4fbd-ba48-c9aecc313d03: 0 active out of 4 deployments, 1 members
+[00:33.245] app   | [ProjectService] Enrichment complete for c0000000-0000-0000-0000-000000000005: 7 active out of 9 deployments, 1 members
+[00:33.252] app   | [ProjectService] Enrichment complete for c0000000-0000-0000-0000-000000000099: 0 active out of 0 deployments, 2 members
+[00:33.252] app   | [ProjectService] Enrichment complete for c0a11111-0000-4000-8000-000000000001: 0 active out of 3 deployments, 1 members
+[00:33.252] app   | [ProjectService] Enrichment complete for f326edd4-23e9-4f0f-8c53-b80747d23b34: 0 active out of 3 deployments, 1 members
+[00:33.259] app   | [Pre-Deployment] Running standard BLE initialization...
+[00:33.264] app   | [BLE Init] Checking hardware status prior to time sync...
+[00:33.606] app   | Written selftest to the device WILD-CNKW (10:55:11-426)
+[00:33.646] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: Error bits = 0x0000
+[00:33.670] app   | '[BLE Init] Self-test result:', 'Error bits = 0x0000'
+[00:33.677] app   | [BLE Init] Setting UTC time...
+[00:33.739] app   | Written [REDACTED] to the device WILD-CNKW (10:55:11-566)
+[00:33.741] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: UTC is: 2026-09-01T22:55:11Z
+[00:33.767] app   | [BLE Init] UTC time synchronized successfully
+[00:33.813] app   | Written battery to the device WILD-CNKW (10:55:11-640)
+[00:33.813] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: Battery = 3112mV 3%
+[00:33.831] app   | [Pre-Deployment] AI wake attempt 1/3...
+[00:33.865] app   | Written AI info to the device WILD-CNKW (10:55:11-691)
+[00:33.926] himax | Camera: HM0360
+[00:33.942] nrf   | BLE in: Received   8 bytes 'selftest'
+[00:33.942] nrf   | BLE out: Sent  20 bytes: 'Error bits = 0x0000'
+[00:33.942] nrf   | BLE in: Received  27 bytes 'setutc 2026-09-01T22:55:11Z'
+[00:33.942] nrf   | <info> app: System time set successfully
+[00:33.942] nrf   | BLE out: Sent  29 bytes: 'UTC is: 2026-09-01T22:55:11Z'
+[00:33.942] nrf   | BLE in: Received   7 bytes 'battery'
+[00:33.942] nrf   | BLE out: Sent  20 bytes: 'Battery = 3112mV 3%'
+[00:33.942] nrf   | BLE in: Received   7 bytes 'AI info'
+[00:33.942] nrf   | <info> app: AI state machine bumped with 'Msg to AI' (Current state: SLEEP)
+[00:33.942] nrf   | <info> app: AI processor is in DPD. Waking it. (info)
+[00:34.237] himax | ### Warm Boot ###
+[00:34.237] himax | Inactivity period set at 1000ms
+[00:34.237] himax | Image 640 x 480. Raw buffer 460800. JPEG buffer 115860. JPEG compression x4
+[00:34.237] himax | HM0360 MD sensitivity 1
+[00:34.237] himax | [LS] In ledFlashSetFlashModeFromOpParam with 1 Mode 1
+[00:34.237] himax | Sending 31 bytes: Header 4, payload 25, checksum 2 'Wake 2024-01-01T00:07:02Z'
+[00:34.284] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: Wake
+[00:34.409] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: Error bits = 0x0000
+[00:34.548] himax | Received I2C message.
+[00:34.548] himax | MKL62BA command received: 'selftest'
+[00:34.548] himax | selfTest 0000
+[00:34.548] himax | Sending 19 bytes: Header 4, payload 13, checksum 2 'selfTest 0000'
+[00:34.548] himax | Received I2C message.
+[00:34.548] himax | MKL62BA command received: 'setutc 2026-09-01T22:55:11Z'
+[00:34.563] nrf   | <info> app: AI state machine bumped with 'Wake' (Current state: SLEEP)
+[00:34.563] nrf   | <info> app: BLE and AI time differ by 84235689s - too much!
+[00:34.563] nrf   | <info> app: AI state changed from SLEEP to WOKEN
+[00:34.563] nrf   | BLE out: Sent   5 bytes: 'Wake'
+[00:34.563] nrf   | <info> app: AI State machine scheduler called with event 8 'Send SelfTest'
+[00:34.563] nrf   | <info> app: AI state machine bumped with 'Send SelfTest' (Current state: WOKEN)
+[00:34.563] nrf   | Sending 'selftest' to AI processor (4 ctrl bytes, 8 payload, 2 CRC)<info> app: OK
+[00:34.563] nrf   | <info> app: AI state changed from WOKEN to SELFTEST
+[00:34.563] nrf   | <info> app: I2C TX complete: 14 bytes.
+[00:34.563] nrf   | <info> app: AI state machine bumped with 'Selftest Rx' (Current state: SELFTEST)
+[00:34.563] nrf   | <info> app: AI self test bits = 0x0000 (all bits now 0x0000)
+[00:34.563] nrf   | <info> app: Send 'setutc 2026-09-01T22:55:11Z'
+[00:34.563] nrf   | Sending 'setutc 2026-09-01T22:55:11Z' to AI processor (4 ctrl bytes, 27 payload, 2 CRC)<info> app: AI state changed from SELFTEST to SETUTC
+[00:34.563] nrf   | <info> app: I2C TX complete: 33 bytes.
+[00:34.563] nrf   | BLE out: Sent  20 bytes: 'Error bits = 0x0000'
+[00:36.413] himax | RTC set to 2026-09-01T22:55:11Z (this took 1884ms)
+[00:36.413] himax | Sending 56 bytes: Header 4, payload 50, checksum 2 'RTC set to 2026-09-01T22:55:11Z (this took 1884ms)'
+[00:36.413] himax | Received I2C message.
+[00:36.413] himax | MKL62BA command received: 'info'
+[00:36.413] himax | Label: WW-L
+[00:36.413] himax | Serial No: 0xe6b72dac
+[00:36.413] himax |   15259648 K total drive space.
+[00:36.413] himax |   15237280 K available.
+[00:36.413] himax | Cluster size: 64 sectors (32768 bytes).
+[00:36.413] himax | Sending 137 bytes: Header 4, payload 131, checksum 2 'Label: WW-L
+[00:36.413] himax | Serial No: 0xe6b72dac
+[00:36.413] himax |   15259648 K total drive space.
+[00:36.413] himax |   15237280 K available.
+[00:36.413] himax | Cluster size: 64 sectors (32768 bytes).'
+[00:36.492] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: Label: WW-L
+[00:36.502] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: Serial No: 0xe6b72dac
+[00:36.502] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23:   15259648 K total drive space.
+[00:36.502] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23:   15237280 K available.
+[00:36.505] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: Cluster size: 64 sectors (32768 bytes).
+[00:36.598] app   | Written selftest to the device WILD-CNKW (10:55:14-421)
+[00:36.598] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: Error bits = 0x0000
+[00:36.623] app   | '[Pre-Deployment] Post-wake self-test result:', 'Error bits = 0x0000'
+[00:36.630] app   | [Pre-Deployment:Reset] Reading current parameters...
+[00:36.630] app   | [ResetDefaults] Reading current operational parameters...
+[00:36.667] app   | Written AI getop -1 to the device WILD-CNKW (10:55:14-493)
+[00:36.724] himax | Received I2C message.
+[00:36.724] himax | MKL62BA command received: 'getop -1'
+[00:36.724] himax | OpParams 123 0 0 18 222 1 500 0 1000 80 1 0 100 1 0 0 18 1 0 65 0 2 50 65 15 0 0 0 0 1 110 1 
+[00:36.724] himax | Sending 99 bytes: Header 4, payload 93, checksum 2 'OpParams 123 0 0 18 222 1 500 0 1000 80 1 0 100 1 0 0 18 1 0 65 0 2 50 65 15 0 0 0 0 1 110 1 '
+[00:36.739] nrf   | <info> app: AI state machine bumped with 'UTC Rx' (Current state: SETUTC)
+[00:36.739] nrf   | <info> app: AI state changed from SETUTC to IDLE
+[00:36.739] nrf   | <info> app: AI State machine scheduler called with event 12 'Msg to AI'
+[00:36.739] nrf   | <info> app: AI state machine bumped with 'Msg to AI' (Current state: IDLE)
+[00:36.739] nrf   | Sending 'info' to AI processor (4 ctrl bytes, 4 payload, 2 CRC)<info> app: AI state changed from IDLE to PROCESSING
+[00:36.739] nrf   | <info> app: I2C TX complete: 10 bytes.
+[00:36.739] nrf   | <info> app: AI state machine bumped with 'Msg from AI' (Current state: PROCESSING)
+[00:36.739] nrf   | <info> app: AI processor replies: 'Label: WW-L
+[00:36.739] nrf   | Serial No: 0xe6b72dac
+[00:36.739] nrf   |   15259648 K total drive space.
+[00:36.739] nrf   |   15237280 K available.
+[00:36.739] nrf   | Cluster size: 64 sectors (32768 bytes).'
+[00:36.739] nrf   | <info> app: AI state changed from PROCESSING to IDLE
+[00:36.739] nrf   | BLE out: Sent 132 bytes: 'Label: WW-L
+[00:36.739] nrf   | Serial No: 0xe6b72dac
+[00:36.739] nrf   |   15259648 K total drive space.
+[00:36.739] nrf   |   15237280 K available.
+[00:36.739] nrf   | Cluster size: 64 sectors (32768 bytes).'
+[00:36.739] nrf   | BLE in: Received   8 bytes 'selftest'
+[00:36.739] nrf   | BLE out: Sent  20 bytes: 'Error bits = 0x0000'
+[00:36.810] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: OpParams 123 0 0 18 222 1 500 0 1000 80 1 0 100 1 0 0 18 1 0 65 0 2 50 65 15 0 0 0 0 1 110 1 
+[00:36.832] app   | [ResetDefaults] Current OPs: 123 0 0 18 222 1 500 0 1000 80 1 0 100 1 0 0 18 1 0 65 0 2 50 65 15 0 0 0 0 1 110 1
+[00:36.834] app   | [ResetDefaults] 5 OPs need writing, model loaded: false
+[00:36.834] app   | [ResetDefaults] Setting OP 9 = 5
+[00:36.839] app   | Written AI setop 9 5 to the device WILD-CNKW (10:55:14-664)
+[00:36.989] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: Set OpParam 9 = 5
+[00:37.012] app   | [Pre-Deployment:Reset] Resetting parameter 9...
+[00:37.012] app   | [ResetDefaults] Setting OP 13 = 0
+[00:37.019] app   | Written AI setop 13 0 to the device WILD-CNKW (10:55:14-843)
+[00:37.037] himax | Received I2C message.
+[00:37.037] himax | MKL62BA command received: 'setop 9 5'
+[00:37.037] himax | Set OpParam 9 = 5
+[00:37.037] himax | Sending 23 bytes: Header 4, payload 17, checksum 2 'Set OpParam 9 = 5'
+[00:37.037] himax | Config saved (op params persisted).
+[00:37.053] nrf   | BLE in: Received  11 bytes 'AI getop -1'
+[00:37.053] nrf   | <info> app: AI state machine bumped with 'Msg to AI' (Current state: IDLE)
+[00:37.053] nrf   | Sending 'getop -1' to AI processor (4 ctrl bytes, 8 payload, 2 CRC)<info> app: AI state changed from IDLE to PROCESSING
+[00:37.053] nrf   | <info> app: I2C TX complete: 14 bytes.
+[00:37.053] nrf   | <info> app: AI state machine bumped with 'Msg from AI' (Current state: PROCESSING)
+[00:37.053] nrf   | <info> app: AI processor replies: 'OpParams 123 0 0 18 222 1 500 0 1000 80 1 0 100 1 0 0 18 1 0 65 0 2 50 65 15 0 0 0 0 1 110 1 '
+[00:37.053] nrf   | <info> app: AI state changed from PROCESSING to IDLE
+[00:37.053] nrf   | BLE out: Sent  94 bytes: 'OpParams 123 0 0 18 222 1 500 0 1000 80 1 0 100 1 0 0 18 1 0 65 0 2 50 65 15 0 0 0 0 1 110 1 '
+[00:37.053] nrf   | BLE in: Received  12 bytes 'AI setop 9 5'
+[00:37.053] nrf   | <info> app: AI state machine bumped with 'Msg to AI' (Current state: IDLE)
+[00:37.053] nrf   | Sending 'setop 9 5' to AI processor (4 ctrl bytes, 9 payload, 2 CRC)<info> app: AI state changed from IDLE to PROCESSING
+[00:37.053] nrf   | <info> app: I2C TX complete: 15 bytes.
+[00:37.053] nrf   | <info> app: AI state machine bumped with 'Msg from AI' (Current state: PROCESSING)
+[00:37.053] nrf   | <info> app: AI processor replies: 'Set OpParam 9 = 5'
+[00:37.053] nrf   | <info> app: AI state changed from PROCESSING to IDLE
+[00:37.053] nrf   | BLE out: Sent  18 bytes: 'Set OpParam 9 = 5'
+[00:37.170] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: Set OpParam 13 = 0
+[00:37.192] app   | [Pre-Deployment:Reset] Resetting parameter 13...
+[00:37.192] app   | [ResetDefaults] Setting OP 26 = 1
+[00:37.204] app   | Written AI setop 26 1 to the device WILD-CNKW (10:55:15-020)
+[00:37.318] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: Set OpParam 26 = 1
+[00:37.344] himax | Received I2C message.
+[00:37.344] himax | MKL62BA command received: 'setop 13 0'
+[00:37.344] himax | Set OpParam 13 = 0
+[00:37.344] himax | Sending 24 bytes: Header 4, payload 18, checksum 2 'Set OpParam 13 = 0'
+[00:37.344] himax | Config saved (op params persisted).
+[00:37.344] himax | Received I2C message.
+[00:37.344] himax | MKL62BA command received: 'setop 26 1'
+[00:37.344] himax | Set OpParam 26 = 1
+[00:37.344] himax | Sending 24 bytes: Header 4, payload 18, checksum 2 'Set OpParam 26 = 1'
+[00:37.344] himax | Config saved (op params persisted).
+[00:37.344] app   | [Pre-Deployment:Reset] Resetting parameter 26...
+[00:37.347] app   | [ResetDefaults] Setting OP 27 = 286
+[00:37.347] app   | Written AI setop 27 286 to the device WILD-CNKW (10:55:15-173)
+[00:37.359] nrf   | BLE in: Received  13 bytes 'AI setop 13 0'
+[00:37.359] nrf   | <info> app: AI state machine bumped with 'Msg to AI' (Current state: IDLE)
+[00:37.359] nrf   | Sending 'setop 13 0' to AI processor (4 ctrl bytes, 10 payload, 2 CRC)<info> app: AI state changed from IDLE to PROCESSING
+[00:37.359] nrf   | <info> app: I2C TX complete: 16 bytes.
+[00:37.359] nrf   | <info> app: AI state machine bumped with 'Msg from AI' (Current state: PROCESSING)
+[00:37.359] nrf   | <info> app: AI processor replies: 'Set OpParam 13 = 0'
+[00:37.359] nrf   | <info> app: AI state changed from PROCESSING to IDLE
+[00:37.359] nrf   | BLE out: Sent  19 bytes: 'Set OpParam 13 = 0'
+[00:37.359] nrf   | BLE in: Received  13 bytes 'AI setop 26 1'
+[00:37.359] nrf   | <info> app: AI state machine bumped with 'Msg to AI' (Current state: IDLE)
+[00:37.359] nrf   | Sending 'setop 26 1' to AI processor (4 ctrl bytes, 10 payload, 2 CRC)<info> app: AI state changed from IDLE to PROCESSING
+[00:37.359] nrf   | <info> app: I2C TX complete: 16 bytes.
+[00:37.359] nrf   | <info> app: AI state machine bumped with 'Msg from AI' (Current state: PROCESSING)
+[00:37.359] nrf   | <info> app: AI processor replies: 'Set OpParam 26 = 1'
+[00:37.359] nrf   | <info> app: AI state changed from PROCESSING to IDLE
+[00:37.359] nrf   | BLE out: Sent  19 bytes: 'Set OpParam 26 = 1'
+[00:37.509] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: Set OpParam 27 = 286
+[00:37.542] app   | [Pre-Deployment:Reset] Resetting parameter 27...
+[00:37.542] app   | [ResetDefaults] Setting OP 28 = 326
+[00:37.544] app   | Written AI setop 28 326 to the device WILD-CNKW (10:55:15-369)
+[00:37.651] himax | Received I2C message.
+[00:37.651] himax | MKL62BA command received: 'setop 27 286'
+[00:37.651] himax | Set OpParam 27 = 286
+[00:37.651] himax | Sending 26 bytes: Header 4, payload 20, checksum 2 'Set OpParam 27 = 286'
+[00:37.651] himax | Config saved (op params persisted).
+[00:37.651] himax | Received I2C message.
+[00:37.651] himax | MKL62BA command received: 'setop 28 326'
+[00:37.651] himax | Set OpParam 28 = 326
+[00:37.651] himax | Sending 26 bytes: Header 4, payload 20, checksum 2 'Set OpParam 28 = 326'
+[00:37.651] himax | Config saved (op params persisted).
+[00:37.667] nrf   | BLE in: Received  15 bytes 'AI setop 27 286'
+[00:37.667] nrf   | <info> app: AI state machine bumped with 'Msg to AI' (Current state: IDLE)
+[00:37.667] nrf   | Sending 'setop 27 286' to AI processor (4 ctrl bytes, 12 payload, 2 CRC)<info> app: AI state changed from IDLE to PROCESSING
+[00:37.667] nrf   | <info> app: I2C TX complete: 18 bytes.
+[00:37.667] nrf   | <info> app: AI state machine bumped with 'Msg from AI' (Current state: PROCESSING)
+[00:37.667] nrf   | <info> app: AI processor replies: 'Set OpParam 27 = 286'
+[00:37.667] nrf   | <info> app: AI state changed from PROCESSING to IDLE
+[00:37.667] nrf   | BLE out: Sent  21 bytes: 'Set OpParam 27 = 286'
+[00:37.677] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: Set OpParam 28 = 326
+[00:37.718] app   | [Pre-Deployment:Reset] Resetting parameter 28...
+[00:37.724] app   | [ResetDefaults] Skipping clearing deployment ID (skipIdentityReset = true)
+[00:37.725] app   | [ResetDefaults] Skipping zeroing GPS (skipIdentityReset = true)
+[00:37.725] app   | [Pre-Deployment:Reset] Reset complete
+[00:37.726] app   | [ResetDefaults] Factory reset complete. 5 OPs written.
+[00:37.832] app   | Written ver to the device WILD-CNKW (10:55:15-657)
+[00:37.836] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: WW500-C02 V 00.30.48 21:58:30 Jul 21 2026
+[00:37.913] app   | Written AI ver to the device WILD-CNKW (10:55:15-738)
+[00:37.964] himax | Received I2C message.
+[00:37.964] himax | MKL62BA command received: 'ver'
+[00:37.964] himax | WW500_C02 22:26:26 Sep  1 2026
+[00:37.964] himax | Sending 36 bytes: Header 4, payload 30, checksum 2 'WW500_C02 22:26:26 Sep  1 2026'
+[00:37.980] nrf   | BLE in: Received  15 bytes 'AI setop 28 326'
+[00:37.980] nrf   | <info> app: AI state machine bumped with 'Msg to AI' (Current state: IDLE)
+[00:37.980] nrf   | Sending 'setop 28 326' to AI processor (4 ctrl bytes, 12 payload, 2 CRC)<info> app: AI state changed from IDLE to PROCESSING
+[00:37.980] nrf   | <info> app: I2C TX complete: 18 bytes.
+[00:37.980] nrf   | <info> app: AI state machine bumped with 'Msg from AI' (Current state: PROCESSING)
+[00:37.980] nrf   | <info> app: AI processor replies: 'Set OpParam 28 = 326'
+[00:37.980] nrf   | <info> app: AI state changed from PROCESSING to IDLE
+[00:37.980] nrf   | BLE out: Sent  21 bytes: 'Set OpParam 28 = 326'
+[00:37.980] nrf   | BLE in: Received   3 bytes 'ver'
+[00:37.980] nrf   | BLE out: Sent  42 bytes: 'WW500-C02 V 00.30.48 21:58:30 Jul 21 2026'
+[00:38.007] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: WW500_C02 22:26:26 Sep  1 2026
+[00:38.032] app   | [Pre-Deployment] Himax firmware: WW500_C02 22:26:26 Sep  1 2026
+[00:38.288] nrf   | BLE in: Received   6 bytes 'AI ver'
+[00:38.288] nrf   | <info> app: AI state machine bumped with 'Msg to AI' (Current state: IDLE)
+[00:38.288] nrf   | Sending 'ver' to AI processor (4 ctrl bytes, 3 payload, 2 CRC)<info> app: AI state changed from IDLE to PROCESSING
+[00:38.289] nrf   | <info> app: I2C TX complete: 9 bytes.
+[00:38.289] nrf   | <info> app: AI state machine bumped with 'Msg from AI' (Current state: PROCESSING)
+[00:38.289] nrf   | <info> app: AI processor replies: 'WW500_C02 22:26:26 Sep  1 2026'
+[00:38.289] nrf   | <info> app: AI state changed from PROCESSING to IDLE
+[00:38.289] nrf   | BLE out: Sent  31 bytes: 'WW500_C02 22:26:26 Sep  1 2026'
+[00:38.453] app   | [AutoConnect] D6:47:9B: ROUTING_PENDING → ACCEPTED
+[00:38.700] app   | [Scanner] Scan session stopped — user left the Scanner page
+[00:38.714] app   | '[DeploymentDetails] Loading project:', 'f326edd4-23e9-4f0f-8c53-b80747d23b34'
+[00:38.716] app   | [GPS] Checking existing permissions...
+[00:38.839] app   | '📂 Reading project from WatermelonDB:', 'f326edd4-23e9-4f0f-8c53-b80747d23b34'
+[00:38.840] app   | '✅ Found project in WatermelonDB:', 'Tests in New Plymouth'
+[00:38.840] app   | [ProjectService] Enriching project: Tests in New Plymouth (f326edd4-23e9-4f0f-8c53-b80747d23b34)
+[00:38.996] app   | '[GPS] Existing permission status:', 'granted'
+[00:39.025] app   | [ProjectService] Enrichment complete for f326edd4-23e9-4f0f-8c53-b80747d23b34: 0 active out of 3 deployments, 1 members
+[00:39.028] app   | [FirmwareStatus] Snapshot looks outdated — verifying against the live device
+[00:39.032] app   | ✅ User role for project f326edd4-23e9-4f0f-8c53-b80747d23b34: project_admin
+[00:39.033] app   | '[DeploymentDetails] Project loaded:', 'Tests in New Plymouth', 'capture_method_id:', 1
+[00:39.163] app   | [GPS] Getting current position...
+[00:39.184] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: Sleep
+[00:39.191] app   | ✅ Found 5 locally created projects
+[00:39.197] app   | ✅ Total accessible projects (Roles + Created): 5
+[00:39.197] app   | [ProjectService] Enriching project: Sample from: MICA - Muskrat and coypu camera trap observations in Belgium, the Netherlands and Germany (67048790-2f0b-4fbd-ba48-c9aecc313d03)
+[00:39.197] app   | [ProjectService] Enriching project: Sinbad Skink Survey (c0000000-0000-0000-0000-000000000005)
+[00:39.197] app   | [ProjectService] Enriching project: Global Testing Project (c0000000-0000-0000-0000-000000000099)
+[00:39.197] app   | [ProjectService] Enriching project: Access Test — Valid (c0a11111-0000-4000-8000-000000000001)
+[00:39.199] app   | [ProjectService] Enriching project: Tests in New Plymouth (f326edd4-23e9-4f0f-8c53-b80747d23b34)
+[00:39.208] himax | Inactive for 1000ms
+[00:39.208] himax | IMAGE Task state changed from 'Init' (1) to 'Save State' (5)
+[00:39.208] himax | Saved state to SD card. Image sequence number = 123
+[00:39.208] himax | Image task ready to sleep.
+[00:39.208] himax | IMAGE Task state changed from 'Save State' (5) to 'Uninitialised' (0)
+[00:39.208] himax | Sending 99 bytes: Header 4, payload 93, checksum 2 'Sleep 123 0 0 18 222 1 500 0 1000 5 1 0 100 0 0 0 18 1 0 65 0 2 50 65 15 0 1 286 326 1 110 1 '
+[00:39.208] himax | IF task ready to sleep.
+[00:39.208] himax |  No LED flashes.
+[00:39.208] himax | >>> Entering DPD at 2026:09:01 22:55:14
+[00:39.210] app   | [ProjectService] Enrichment complete for 67048790-2f0b-4fbd-ba48-c9aecc313d03: 0 active out of 4 deployments, 1 members
+[00:39.210] app   | [ProjectService] Enrichment complete for c0000000-0000-0000-0000-000000000005: 7 active out of 9 deployments, 1 members
+[00:39.211] app   | [ProjectService] Enrichment complete for c0000000-0000-0000-0000-000000000099: 0 active out of 0 deployments, 2 members
+[00:39.213] app   | [ProjectService] Enrichment complete for c0a11111-0000-4000-8000-000000000001: 0 active out of 3 deployments, 1 members
+[00:39.213] app   | [ProjectService] Enrichment complete for f326edd4-23e9-4f0f-8c53-b80747d23b34: 0 active out of 3 deployments, 1 members
+[00:39.213] app   | '[DeploymentDetails] Resolving capture method name for ID:', 1
+[00:39.224] nrf   | <info> app: AI state machine bumped with 'Sleep' (Current state: IDLE)
+[00:39.224] nrf   | <info> app: AI processor sends stats: '123 0 0 18 222 1 500 0 1000 5 1 0 100 0 0 0 18 1 0 65 0 2 50 65 15 0 1 286 326 1 110 1 '
+[00:39.224] nrf   | <info> app: AI state changed from IDLE to SLEEP
+[00:39.224] nrf   | BLE out: Sent   6 bytes: 'Sleep'
+[00:39.296] app   | '[DeploymentDetails] Method resolved:', 'activityDetection'
+[00:39.299] app   | Written ver to the device WILD-CNKW (10:55:17-125)
+[00:39.303] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: WW500-C02 V 00.30.48 21:58:30 Jul 21 2026
+[00:39.391] app   | Written AI info to the device WILD-CNKW (10:55:17-217)
+[00:39.519] himax | Camera: HM0360
+[00:39.519] himax | ### Warm Boot ###
+[00:39.534] nrf   | BLE in: Received   3 bytes 'ver'
+[00:39.534] nrf   | BLE out: Sent  42 bytes: 'WW500-C02 V 00.30.48 21:58:30 Jul 21 2026'
+[00:39.534] nrf   | BLE in: Received   7 bytes 'AI info'
+[00:39.534] nrf   | <info> app: AI state machine bumped with 'Msg to AI' (Current state: SLEEP)
+[00:39.534] nrf   | <info> app: AI processor is in DPD. Waking it. (info)
+[00:39.831] himax | Inactivity period set at 1000ms
+[00:39.831] himax | Image 640 x 480. Raw buffer 460800. JPEG buffer 115860. JPEG compression x4
+[00:39.831] himax | HM0360 MD sensitivity 1
+[00:39.831] himax | [LS] In ledFlashSetFlashModeFromOpParam with 0 Mode 0
+[00:39.831] himax | Sending 31 bytes: Header 4, payload 25, checksum 2 'Wake 2026-09-01T22:55:15Z'
+[00:39.885] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: Wake
+[00:39.952] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: Error bits = 0x0000
+[00:40.107] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: Label: WW-L
+[00:40.113] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: Serial No: 0xe6b72dac
+[00:40.113] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23:   15259648 K total drive space.
+[00:40.115] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23:   15237280 K available.
+[00:40.121] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: Cluster size: 64 sectors (32768 bytes).
+[00:40.140] himax | Received I2C message.
+[00:40.140] himax | MKL62BA command received: 'selftest'
+[00:40.140] himax | selfTest 0000
+[00:40.140] himax | Sending 19 bytes: Header 4, payload 13, checksum 2 'selfTest 0000'
+[00:40.140] himax | Received I2C message.
+[00:40.140] himax | MKL62BA command received: 'info'
+[00:40.140] himax | Label: WW-L
+[00:40.140] himax | Serial No: 0xe6b72dac
+[00:40.140] himax |   15259648 K total drive space.
+[00:40.140] himax |   15237280 K available.
+[00:40.140] himax | Cluster size: 64 sectors (32768 bytes).
+[00:40.140] himax | Sending 137 bytes: Header 4, payload 131, checksum 2 'Label: WW-L
+[00:40.140] himax | Serial No: 0xe6b72dac
+[00:40.140] himax |   15259648 K total drive space.
+[00:40.140] himax |   15237280 K available.
+[00:40.140] himax | Cluster size: 64 sectors (32768 bytes).'
+[00:40.156] nrf   | <info> app: AI state machine bumped with 'Wake' (Current state: SLEEP)
+[00:40.156] nrf   | <info> app: BLE and AI time differ by 2s
+[00:40.156] nrf   | <info> app: AI state changed from SLEEP to WOKEN
+[00:40.156] nrf   | BLE out: Sent   5 bytes: 'Wake'
+[00:40.156] nrf   | <info> app: AI State machine scheduler called with event 8 'Send SelfTest'
+[00:40.156] nrf   | <info> app: AI state machine bumped with 'Send SelfTest' (Current state: WOKEN)
+[00:40.156] nrf   | Sending 'selftest' to AI processor (4 ctrl bytes, 8 payload, 2 CRC)<info> app: OK
+[00:40.156] nrf   | <info> app: AI state changed from WOKEN to SELFTEST
+[00:40.156] nrf   | <info> app: I2C TX complete: 14 bytes.
+[00:40.156] nrf   | <info> app: AI state machine bumped with 'Selftest Rx' (Current state: SELFTEST)
+[00:40.156] nrf   | <info> app: AI self test bits = 0x0000 (all bits now 0x0000)
+[00:40.156] nrf   | <info> app: AI state changed from SELFTEST to IDLE
+[00:40.156] nrf   | BLE out: Sent  20 bytes: 'Error bits = 0x0000'
+[00:40.156] nrf   | <info> app: AI State machine scheduler called with event 12 'Msg to AI'
+[00:40.156] nrf   | <info> app: AI state machine bumped with 'Msg to AI' (Current state: IDLE)
+[00:40.156] nrf   | Sending 'info' to AI processor (4 ctrl bytes, 4 payload, 2 CRC)<info> app: AI state changed from IDLE to PROCESSING
+[00:40.156] nrf   | <info> app: I2C TX complete: 10 bytes.
+[00:40.156] nrf   | <info> app: AI state machine bumped with 'Msg from AI' (Current state: PROCESSING)
+[00:40.156] nrf   | <info> app: AI processor replies: 'Label: WW-L
+[00:40.156] nrf   | Serial No: 0xe6b72dac
+[00:40.156] nrf   |   15259648 K total drive space.
+[00:40.156] nrf   |   15237280 K available.
+[00:40.156] nrf   | Cluster size: 64 sectors (32768 bytes).'
+[00:40.156] nrf   | <info> app: AI state changed from PROCESSING to IDLE
+[00:40.156] nrf   | BLE out: Sent 132 bytes: 'Label: WW-L
+[00:40.156] nrf   | Serial No: 0xe6b72dac
+[00:40.156] nrf   |   15259648 K total drive space.
+[00:40.156] nrf   |   15237280 K available.
+[00:40.156] nrf   | Cluster size: 64 sectors (32768 bytes).'
+[00:40.164] app   | Written AI ver to the device WILD-CNKW (10:55:17-974)
+[00:40.285] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: WW500_C02 22:26:26 Sep  1 2026
+[00:40.449] app   | '[GPS] Location received:', { accuracy: 21.280000686645508,
+[00:40.454] himax | Received I2C message.
+[00:40.454] himax | MKL62BA command received: 'ver'
+[00:40.454] himax | WW500_C02 22:26:26 Sep  1 2026
+[00:40.454] himax | Sending 36 bytes: Header 4, payload 30, checksum 2 'WW500_C02 22:26:26 Sep  1 2026'
+[00:40.470] nrf   | BLE in: Received   6 bytes 'AI ver'
+[00:40.470] nrf   | <info> app: AI state machine bumped with 'Msg to AI' (Current state: IDLE)
+[00:40.470] nrf   | Sending 'ver' to AI processor (4 ctrl bytes, 3 payload, 2 CRC)<info> app: AI state changed from IDLE to PROCESSING
+[00:40.470] nrf   | <info> app: I2C TX complete: 9 bytes.
+[00:40.470] nrf   | <info> app: AI state machine bumped with 'Msg from AI' (Current state: PROCESSING)
+[00:40.470] nrf   | <info> app: AI processor replies: 'WW500_C02 22:26:26 Sep  1 2026'
+[00:40.470] nrf   | <info> app: AI state changed from PROCESSING to IDLE
+[00:40.470] nrf   | BLE out: Sent  31 bytes: 'WW500_C02 22:26:26 Sep  1 2026'
+[00:41.388] himax | Inactive for 1000ms
+[00:41.388] himax | IMAGE Task state changed from 'Init' (1) to 'Save State' (5)
+[00:41.388] himax | Saved state to SD card. Image sequence number = 123
+[00:41.388] himax | Image task ready to sleep.
+[00:41.388] himax | IMAGE Task state changed from 'Save State' (5) to 'Uninitialised' (0)
+[00:41.388] himax | Sending 99 bytes: Header 4, payload 93, checksum 2 'Sleep 123 0 0 18 223 1 500 0 1000 5 1 0 100 0 0 0 18 1 0 65 0 2 50 65 15 0 1 286 326 1 110 1 '
+[00:41.388] himax | IF task ready to sleep.
+[00:41.388] himax |  No LED flashes.
+[00:41.388] himax | >>> Entering DPD at 2026:09:01 22:55:17
+[00:41.424] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: Sleep
+[00:41.714] nrf   | <info> app: AI state machine bumped with 'Sleep' (Current state: IDLE)
+[00:41.714] nrf   | <info> app: AI processor sends stats: '123 0 0 18 223 1 500 0 1000 5 1 0 100 0 0 0 18 1 0 65 0 2 50 65 15 0 1 286 326 1 110 1 '
+[00:41.714] nrf   | <info> app: AI state changed from IDLE to SLEEP
+[00:41.714] nrf   | BLE out: Sent   6 bytes: 'Sleep'
+[10:14.533] app   | [Deployment] Intercepting back navigation. Disconnecting and redirecting to Deployments.
+[10:14.630] app   | Written dis to the device WILD-CNKW (11:04:52-468)
+[10:14.923] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: Disconnecting
+[10:14.935] nrf   | BLE in: Received   3 bytes 'dis'
+[10:14.935] nrf   | BLE out: Sent  14 bytes: 'Disconnecting'
+[10:14.974] app   | Peripheral disconnect event triggered. Disconnecting: D6:47:9B:89:E7:23
+[10:15.558] nrf   | <info> app: Disconnected. Conn_handle: 0x0, reason: 0x16
+[10:15.558] nrf   | <info> app:   local
+[12:11.059] app   | SerializableStateInvariantMiddleware took 40ms, which is more than the warning threshold of 32ms. 
+[12:11.059] app   | If your state or actions are very large, you may want to disable the middleware as it might cause too much of a slowdown in development mode. See https://redux-toolkit.js.org/api/getDefaultMiddleware for instructions.
+[12:11.059] app   | It is disabled in production builds, so you don't need to worry about that.
+[13:23.596] app   | [ScanLoop] Flushed stale BLE state
+[13:25.033] nrf   | <info> app: Advertising Fast.
+[13:25.051] app   | [EngineerConnect] Device found during scan, auto-connecting: D6:47:9B:89:E7:23
+[13:25.137] app   | [EngineerConnect] Connecting to WILD-CNKW
+[13:25.968] nrf   | <info> app: Connected
+[13:25.968] nrf   | <info> app: Requesting DLE to 251 bytes
+[13:25.968] nrf   | <info> app: ATT MTU exchange completed. MTU set to 247 bytes.
+[13:26.216] app   | Extracting services and characteristics.
+[13:26.217] app   | Available services: ["1800","1801","6e400001-b5a3-f393-e0a9-e50e24dcca9e"]
+[13:26.263] app   | Notifications started for 6e400003-b5a3-f393-e0a9-e50e24dcca9e
+[13:26.275] app   | Connection priority: High
+[13:26.278] nrf   | <info> app: NUS start
+[13:26.280] app   | MTU negotiated to 512 bytes
+[13:26.283] app   | Device WILD-CNKW connected
+[13:26.393] app   | [EngineerConnect] Connected, navigating to EngineerConsoleScreen
+[13:29.402] nrf   | BLE in: Received  11 bytes 'AI getop -1'
+[13:29.402] nrf   | <info> app: AI state machine bumped with 'Msg to AI' (Current state: SLEEP)
+[13:29.402] nrf   | <info> app: AI processor is in DPD. Waking it. (getop -1)
+[13:29.494] app   | Written AI getop -1 to the device WILD-CNKW (11:08:07-335)
+[13:29.715] himax | Camera: HM0360
+[13:29.715] himax | ### Warm Boot ###
+[13:29.715] himax | Inactivity period set at 1000ms
+[13:29.715] himax | Image 640 x 480. Raw buffer 460800. JPEG buffer 115860. JPEG compression x4
+[13:29.715] himax | HM0360 MD sensitivity 1
+[13:29.715] himax | [LS] In ledFlashSetFlashModeFromOpParam with 0 Mode 0
+[13:29.715] himax | Sending 31 bytes: Header 4, payload 25, checksum 2 'Wake 2026-09-01T22:55:17Z'
+[13:29.771] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: Wake
+[13:29.936] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: Error bits = 0x0000
+[13:29.937] app   | [CameraReadiness] device reports 0x0000
+[13:30.028] himax | Received I2C message.
+[13:30.028] himax | MKL62BA command received: 'selftest'
+[13:30.028] himax | selfTest 0000
+[13:30.028] himax | Sending 19 bytes: Header 4, payload 13, checksum 2 'selfTest 0000'
+[13:30.028] himax | Received I2C message.
+[13:30.028] himax | MKL62BA command received: 'setutc 2026-09-01T23:08:07Z'
+[13:30.028] nrf   | <info> app: AI state machine bumped with 'Wake' (Current state: SLEEP)
+[13:30.028] nrf   | <info> app: BLE and AI time differ by 770s - too much!
+[13:30.028] nrf   | <info> app: AI state changed from SLEEP to WOKEN
+[13:30.028] nrf   | BLE out: Sent   5 bytes: 'Wake'
+[13:30.028] nrf   | <info> app: AI State machine scheduler called with event 8 'Send SelfTest'
+[13:30.028] nrf   | <info> app: AI state machine bumped with 'Send SelfTest' (Current state: WOKEN)
+[13:30.028] nrf   | Sending 'selftest' to AI processor (4 ctrl bytes, 8 payload, 2 CRC)<info> app: OK
+[13:30.028] nrf   | <info> app: AI state changed from WOKEN to SELFTEST
+[13:30.028] nrf   | <info> app: I2C TX complete: 14 bytes.
+[13:30.028] nrf   | <info> app: AI state machine bumped with 'Selftest Rx' (Current state: SELFTEST)
+[13:30.028] nrf   | <info> app: AI self test bits = 0x0000 (all bits now 0x0000)
+[13:30.028] nrf   | <info> app: Send 'setutc 2026-09-01T23:08:07Z'
+[13:30.028] nrf   | Sending 'setutc 2026-09-01T23:08:07Z' to AI processor (4 ctrl bytes, 27 payload, 2 CRC)<info> app: AI state changed from SELFTEST to SETUTC
+[13:30.028] nrf   | <info> app: I2C TX complete: 33 bytes.
+[13:30.028] nrf   | BLE out: Sent  20 bytes: 'Error bits = 0x0000'
+[13:31.279] himax | RTC set to 2026-09-01T23:08:07Z (this took 1299ms)
+[13:31.279] himax | Sending 56 bytes: Header 4, payload 50, checksum 2 'RTC set to 2026-09-01T23:08:07Z (this took 1299ms)'
+[13:31.279] himax | Received I2C message.
+[13:31.279] himax | MKL62BA command received: 'getop -1'
+[13:31.279] himax | OpParams 123 0 0 18 224 1 500 0 1000 5 1 0 100 0 0 0 18 1 0 65 0 2 50 65 15 0 1 286 326 1 110 1 
+[13:31.279] himax | Sending 102 bytes: Header 4, payload 96, checksum 2 'OpParams 123 0 0 18 224 1 500 0 1000 5 1 0 100 0 0 0 18 1 0 65 0 2 50 65 15 0 1 286 326 1 110 1 '
+[13:31.365] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: OpParams 123 0 0 18 224 1 500 0 1000 5 1 0 100 0 0 0 18 1 0 65 0 2 50 65 15 0 1 286 326 1 110 1 
+[13:31.475] app   | Written AI getop -1 to the device WILD-CNKW (11:08:09-317)
+[13:31.590] himax | Received I2C message.
+[13:31.590] himax | MKL62BA command received: 'getop -1'
+[13:31.590] himax | OpParams 123 0 0 18 224 1 500 0 1000 5 1 0 100 0 0 0 18 1 0 65 0 2 50 65 15 0 1 286 326 1 110 1 
+[13:31.590] himax | Sending 102 bytes: Header 4, payload 96, checksum 2 'OpParams 123 0 0 18 224 1 500 0 1000 5 1 0 100 0 0 0 18 1 0 65 0 2 50 65 15 0 1 286 326 1 110 1 '
+[13:31.590] nrf   | <info> app: AI state machine bumped with 'UTC Rx' (Current state: SETUTC)
+[13:31.590] nrf   | <info> app: AI state changed from SETUTC to IDLE
+[13:31.590] nrf   | <info> app: AI State machine scheduler called with event 12 'Msg to AI'
+[13:31.590] nrf   | <info> app: AI state machine bumped with 'Msg to AI' (Current state: IDLE)
+[13:31.590] nrf   | Sending 'getop -1' to AI processor (4 ctrl bytes, 8 payload, 2 CRC)<info> app: AI state changed from IDLE to PROCESSING
+[13:31.590] nrf   | <info> app: I2C TX complete: 14 bytes.
+[13:31.590] nrf   | <info> app: AI state machine bumped with 'Msg from AI' (Current state: PROCESSING)
+[13:31.590] nrf   | <info> app: AI processor replies: 'OpParams 123 0 0 18 224 1 500 0 1000 5 1 0 100 0 0 0 18 1 0 65 0 2 50 65 15 0 1 286 326 1 110 1 '
+[13:31.590] nrf   | <info> app: AI state changed from PROCESSING to IDLE
+[13:31.590] nrf   | BLE out: Sent  97 bytes: 'OpParams 123 0 0 18 224 1 500 0 1000 5 1 0 100 0 0 0 18 1 0 65 0 2 50 65 15 0 1 286 326 1 110 1 '
+[13:31.657] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: OpParams 123 0 0 18 224 1 500 0 1000 5 1 0 100 0 0 0 18 1 0 65 0 2 50 65 15 0 1 286 326 1 110 1 
+[13:31.759] app   | [CameraReadiness] cameraOn=true
+[13:31.903] nrf   | BLE in: Received  11 bytes 'AI getop -1'
+[13:31.903] nrf   | <info> app: AI state machine bumped with 'Msg to AI' (Current state: IDLE)
+[13:31.903] nrf   | Sending 'getop -1' to AI processor (4 ctrl bytes, 8 payload, 2 CRC)<info> app: AI state changed from IDLE to PROCESSING
+[13:31.903] nrf   | <info> app: I2C TX complete: 14 bytes.
+[13:31.903] nrf   | <info> app: AI state machine bumped with 'Msg from AI' (Current state: PROCESSING)
+[13:31.903] nrf   | <info> app: AI processor replies: 'OpParams 123 0 0 18 224 1 500 0 1000 5 1 0 100 0 0 0 18 1 0 65 0 2 50 65 15 0 1 286 326 1 110 1 '
+[13:31.903] nrf   | <info> app: AI state changed from PROCESSING to IDLE
+[13:31.903] nrf   | BLE out: Sent  97 bytes: 'OpParams 123 0 0 18 224 1 500 0 1000 5 1 0 100 0 0 0 18 1 0 65 0 2 50 65 15 0 1 286 326 1 110 1 '
+[13:32.743] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: Sleep
+[13:32.838] nrf   | <info> app: AI state machine bumped with 'Sleep' (Current state: IDLE)
+[13:32.838] nrf   | <info> app: AI processor sends stats: '123 0 0 18 224 1 500 0 1000 5 1 0 100 0 0 0 18 1 0 65 0 2 50 65 15 0 1 286 326 1 110 1 '
+[13:32.838] nrf   | <info> app: AI state changed from IDLE to SLEEP
+[13:32.838] nrf   | BLE out: Sent   6 bytes: 'Sleep'
+[13:32.838] himax | Inactive for 1000ms
+[13:32.838] himax | IMAGE Task state changed from 'Init' (1) to 'Save State' (5)
+[13:32.838] himax | Saved state to SD card. Image sequence number = 123
+[13:32.838] himax | Image task ready to sleep.
+[13:32.838] himax | IMAGE Task state changed from 'Save State' (5) to 'Uninitialised' (0)
+[13:32.838] himax | Sending 99 bytes: Header 4, payload 93, checksum 2 'Sleep 123 0 0 18 224 1 500 0 1000 5 1 0 100 0 0 0 18 1 0 65 0 2 50 65 15 0 1 286 326 1 110 1 '
+[13:32.838] himax | IF task ready to sleep.
+[13:32.838] himax |  No LED flashes.
+[13:32.838] himax | >>> Entering DPD at 2026:09:01 23:08:09
+[13:48.912] app   | Written AI slots to the device WILD-CNKW (11:08:26-755)
+[13:49.016] himax | Camera: HM0360
+[13:49.016] himax | ### Warm Boot ###
+[13:49.016] nrf   | BLE in: Received   8 bytes 'AI slots'
+[13:49.016] nrf   | <info> app: AI state machine bumped with 'Msg to AI' (Current state: SLEEP)
+[13:49.016] nrf   | <info> app: AI processor is in DPD. Waking it. (slots)
+[13:49.327] himax | Inactivity period set at 1000ms
+[13:49.327] himax | Image 640 x 480. Raw buffer 460800. JPEG buffer 115860. JPEG compression x4
+[13:49.327] himax | HM0360 MD sensitivity 1
+[13:49.327] himax | [LS] In ledFlashSetFlashModeFromOpParam with 0 Mode 0
+[13:49.327] himax | Sending 31 bytes: Header 4, payload 25, checksum 2 'Wake 2026-09-01T23:08:26Z'
+[13:49.327] himax | Received I2C message.
+[13:49.327] himax | MKL62BA command received: 'selftest'
+[13:49.327] himax | selfTest 0000
+[13:49.327] himax | Sending 19 bytes: Header 4, payload 13, checksum 2 'selfTest 0000'
+[13:49.424] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: Wake
+[13:49.498] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: Error bits = 0x0000
+[13:49.617] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: Active slot 0 running 'HM0360 (night/IR)'. Slot A: 'HM0360 (night/IR)', Slot B: 'RP3 (day/colour)'. Auto-switch: on
+[13:49.639] nrf   | <info> app: AI state machine bumped with 'Wake' (Current state: SLEEP)
+[13:49.639] nrf   | <info> app: BLE and AI time differ by 0s
+[13:49.639] nrf   | <info> app: AI state changed from SLEEP to WOKEN
+[13:49.639] nrf   | BLE out: Sent   5 bytes: 'Wake'
+[13:49.639] nrf   | <info> app: AI State machine scheduler called with event 8 'Send SelfTest'
+[13:49.639] nrf   | <info> app: AI state machine bumped with 'Send SelfTest' (Current state: WOKEN)
+[13:49.639] nrf   | Sending 'selftest' to AI processor (4 ctrl bytes, 8 payload, 2 CRC)<info> app: OK
+[13:49.639] nrf   | <info> app: AI state changed from WOKEN to SELFTEST
+[13:49.639] nrf   | <info> app: I2C TX complete: 14 bytes.
+[13:49.639] nrf   | <info> app: AI state machine bumped with 'Selftest Rx' (Current state: SELFTEST)
+[13:49.639] nrf   | <info> app: AI self test bits = 0x0000 (all bits now 0x0000)
+[13:49.639] nrf   | <info> app: AI state changed from SELFTEST to IDLE
+[13:49.639] nrf   | BLE out: Sent  20 bytes: 'Error bits = 0x0000'
+[13:49.639] nrf   | <info> app: AI State machine scheduler called with event 12 'Msg to AI'
+[13:49.639] nrf   | <info> app: AI state machine bumped with 'Msg to AI' (Current state: IDLE)
+[13:49.639] nrf   | Sending 'slots' to AI processor (4 ctrl bytes, 5 payload, 2 CRC)<info> app: AI state changed from IDLE to PROCESSING
+[13:49.639] nrf   | <info> app: I2C TX complete: 11 bytes.
+[13:49.639] nrf   | <info> app: AI state machine bumped with 'Msg from AI' (Current state: PROCESSING)
+[13:49.639] nrf   | <info> app: AI processor replies: 'Active slot 0 running 'HM0360 (night/IR)'. Slot A: 'HM0360 (night/IR)', Slot B: 'RP3 (day/colour)'. Auto-switch: on'
+[13:49.639] nrf   | <info> app: AI state changed from PROCESSING to IDLE
+[13:49.639] nrf   | BLE out: Sent 116 bytes: 'Active slot 0 running 'HM0360 (night/IR)'. Slot A: 'HM0360 (night/IR)', Slot B: 'RP3 (day/colour)'. Auto-switch: on'
+[13:49.639] himax | Received I2C message.
+[13:49.639] himax | MKL62BA command received: 'slots'
+[13:49.639] himax | Flash ID 0xEF initialised
+[13:49.639] himax | Active slot 0 running 'HM0360 (night/IR)'. Slot A: 'HM0360 (night/IR)', Slot B: 'RP3 (day/colour)'. Auto-switch: on
+[13:49.639] himax | Sending 121 bytes: Header 4, payload 115, checksum 2 'Active slot 0 running 'HM0360 (night/IR)'. Slot A: 'HM0360 (night/IR)', Slot B: 'RP3 (day/colour)'. Auto-switch: on'
+[13:49.749] app   | Written AI getop -1 to the device WILD-CNKW (11:08:27-591)
+[13:49.950] himax | Received I2C message.
+[13:49.950] himax | MKL62BA command received: 'getop -1'
+[13:49.950] himax | OpParams 123 0 0 18 225 1 500 0 1000 5 1 0 100 0 0 0 18 1 0 65 0 2 50 65 15 0 1 286 326 1 110 1 
+[13:49.950] himax | Sending 102 bytes: Header 4, payload 96, checksum 2 'OpParams 123 0 0 18 225 1 500 0 1000 5 1 0 100 0 0 0 18 1 0 65 0 2 50 65 15 0 1 286 326 1 110 1 '
+[13:50.011] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: OpParams 123 0 0 18 225 1 500 0 1000 5 1 0 100 0 0 0 18 1 0 65 0 2 50 65 15 0 1 286 326 1 110 1 
+[13:50.262] nrf   | BLE in: Received  11 bytes 'AI getop -1'
+[13:50.262] nrf   | <info> app: AI state machine bumped with 'Msg to AI' (Current state: IDLE)
+[13:50.262] nrf   | Sending 'getop -1' to AI processor (4 ctrl bytes, 8 payload, 2 CRC)<info> app: AI state changed from IDLE to PROCESSING
+[13:50.262] nrf   | <info> app: I2C TX complete: 14 bytes.
+[13:50.262] nrf   | <info> app: AI state machine bumped with 'Msg from AI' (Current state: PROCESSING)
+[13:50.262] nrf   | <info> app: AI processor replies: 'OpParams 123 0 0 18 225 1 500 0 1000 5 1 0 100 0 0 0 18 1 0 65 0 2 50 65 15 0 1 286 326 1 110 1 '
+[13:50.262] nrf   | <info> app: AI state changed from PROCESSING to IDLE
+[13:50.262] nrf   | BLE out: Sent  97 bytes: 'OpParams 123 0 0 18 225 1 500 0 1000 5 1 0 100 0 0 0 18 1 0 65 0 2 50 65 15 0 1 286 326 1 110 1 '
+[13:50.887] himax | Inactive for 1000ms
+[13:50.887] himax | IMAGE Task state changed from 'Init' (1) to 'Save State' (5)
+[13:51.181] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: Sleep
+[13:51.201] nrf   | <info> app: AI state machine bumped with 'Sleep' (Current state: IDLE)
+[13:51.201] nrf   | <info> app: AI processor sends stats: '123 0 0 18 225 1 500 0 1000 5 1 0 100 0 0 0 18 1 0 65 0 2 50 65 15 0 1 286 326 1 110 1 '
+[13:51.201] nrf   | <info> app: AI state changed from IDLE to SLEEP
+[13:51.201] nrf   | BLE out: Sent   6 bytes: 'Sleep'
+[13:51.201] himax | Saved state to SD card. Image sequence number = 123
+[13:51.201] himax | Image task ready to sleep.
+[13:51.201] himax | IMAGE Task state changed from 'Save State' (5) to 'Uninitialised' (0)
+[13:51.201] himax | Sending 99 bytes: Header 4, payload 93, checksum 2 'Sleep 123 0 0 18 225 1 500 0 1000 5 1 0 100 0 0 0 18 1 0 65 0 2 50 65 15 0 1 286 326 1 110 1 '
+[13:51.201] himax | IF task ready to sleep.
+[13:51.201] himax |  No LED flashes.
+[13:51.201] himax | >>> Entering DPD at 2026:09:01 23:08:28
+[16:24.150] app   | Written AI slots to the device WILD-CNKW (11:11:01-991)
+[16:24.294] nrf   | BLE in: Received   8 bytes 'AI slots'
+[16:24.294] nrf   | <info> app: AI state machine bumped with 'Msg to AI' (Current state: SLEEP)
+[16:24.294] nrf   | <info> app: AI processor is in DPD. Waking it. (slots)
+[16:24.294] himax | Camera: HM0360
+[16:24.294] himax | ### Warm Boot ###
+[16:24.600] himax | Inactivity period set at 1000ms
+[16:24.600] himax | Image 640 x 480. Raw buffer 460800. JPEG buffer 115860. JPEG compression x4
+[16:24.600] himax | HM0360 MD sensitivity 1
+[16:24.600] himax | [LS] In ledFlashSetFlashModeFromOpParam with 0 Mode 0
+[16:24.600] himax | Sending 31 bytes: Header 4, payload 25, checksum 2 'Wake 2026-09-01T23:11:07Z'
+[16:24.600] himax | Received I2C message.
+[16:24.600] himax | MKL62BA command received: 'selftest'
+[16:24.600] himax | selfTest 0000
+[16:24.600] himax | Sending 19 bytes: Header 4, payload 13, checksum 2 'selfTest 0000'
+[16:24.600] himax | Received I2C message.
+[16:24.600] himax | MKL62BA command received: 'slots'
+[16:24.600] himax | Flash ID 0xEF initialised
+[16:24.600] himax | Active slot 0 running 'HM0360 (night/IR)'. Slot A: 'HM0360 (night/IR)', Slot B: 'RP3 (day/colour)'. Auto-switch: on
+[16:24.600] himax | Sending 121 bytes: Header 4, payload 115, checksum 2 'Active slot 0 running 'HM0360 (night/IR)'. Slot A: 'HM0360 (night/IR)', Slot B: 'RP3 (day/colour)'. Auto-switch: on'
+[16:24.661] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: Wake
+[16:24.792] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: Error bits = 0x0000
+[16:24.905] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: Active slot 0 running 'HM0360 (night/IR)'. Slot A: 'HM0360 (night/IR)', Slot B: 'RP3 (day/colour)'. Auto-switch: on
+[16:24.919] nrf   | <info> app: AI state machine bumped with 'Wake' (Current state: SLEEP)
+[16:24.919] nrf   | <info> app: BLE and AI time differ by 6s
+[16:24.919] nrf   | <info> app: AI state changed from SLEEP to WOKEN
+[16:24.919] nrf   | BLE out: Sent   5 bytes: 'Wake'
+[16:24.919] nrf   | <info> app: AI State machine scheduler called with event 8 'Send SelfTest'
+[16:24.919] nrf   | <info> app: AI state machine bumped with 'Send SelfTest' (Current state: WOKEN)
+[16:24.919] nrf   | Sending 'selftest' to AI processor (4 ctrl bytes, 8 payload, 2 CRC)<info> app: OK
+[16:24.919] nrf   | <info> app: AI state changed from WOKEN to SELFTEST
+[16:24.919] nrf   | <info> app: I2C TX complete: 14 bytes.
+[16:24.919] nrf   | <info> app: AI state machine bumped with 'Selftest Rx' (Current state: SELFTEST)
+[16:24.919] nrf   | <info> app: AI self test bits = 0x0000 (all bits now 0x0000)
+[16:24.919] nrf   | <info> app: AI state changed from SELFTEST to IDLE
+[16:24.919] nrf   | BLE out: Sent  20 bytes: 'Error bits = 0x0000'
+[16:24.919] nrf   | <info> app: AI State machine scheduler called with event 12 'Msg to AI'
+[16:24.919] nrf   | <info> app: AI state machine bumped with 'Msg to AI' (Current state: IDLE)
+[16:24.919] nrf   | Sending 'slots' to AI processor (4 ctrl bytes, 5 payload, 2 CRC)<info> app: AI state changed from IDLE to PROCESSING
+[16:24.919] nrf   | <info> app: I2C TX complete: 11 bytes.
+[16:24.919] nrf   | <info> app: AI state machine bumped with 'Msg from AI' (Current state: PROCESSING)
+[16:24.919] nrf   | <info> app: AI processor replies: 'Active slot 0 running 'HM0360 (night/IR)'. Slot A: 'HM0360 (night/IR)', Slot B: 'RP3 (day/colour)'. Auto-switch: on'
+[16:24.919] nrf   | <info> app: AI state changed from PROCESSING to IDLE
+[16:24.919] nrf   | BLE out: Sent 116 bytes: 'Active slot 0 running 'HM0360 (night/IR)'. Slot A: 'HM0360 (night/IR)', Slot B: 'RP3 (day/colour)'. Auto-switch: on'
+[16:25.017] app   | [useCameraSwitch] switching from HM0360 to RP3
+[16:25.039] app   | Written AI switchslot to the device WILD-CNKW (11:11:02-883)
+[16:25.216] himax | Received I2C message.
+[16:25.216] himax | MKL62BA command received: 'switchslot'
+[16:25.216] himax | write_slot_selector: slot 1 selector written OK
+[16:25.216] himax | switch_slot: selector now points at slot 1
+[16:25.216] himax | Switched to slot 1 ('RP3 (day/colour)'). Reset scheduled.
+[16:25.216] himax | Sending 63 bytes: Header 4, payload 57, checksum 2 'Switched to slot 1 ('RP3 (day/colour)'). Reset scheduled.'
+[16:25.232] nrf   | BLE in: Received  13 bytes 'AI switchslot'
+[16:25.232] nrf   | <info> app: AI state machine bumped with 'Msg to AI' (Current state: IDLE)
+[16:25.232] nrf   | Sending 'switchslot' to AI processor (4 ctrl bytes, 10 payload, 2 CRC)<info> app: AI state changed from IDLE to PROCESSING
+[16:25.232] nrf   | <info> app: I2C TX complete: 16 bytes.
+[16:25.232] nrf   | <info> app: AI state machine bumped with 'Msg from AI' (Current state: PROCESSING)
+[16:25.232] nrf   | <info> app: AI processor replies: 'Switched to slot 1 ('RP3 (day/colour)'). Reset scheduled.'
+[16:25.232] nrf   | <info> app: AI state changed from PROCESSING to IDLE
+[16:25.232] nrf   | BLE out: Sent  58 bytes: 'Switched to slot 1 ('RP3 (day/colour)'). Reset scheduled.'
+[16:25.240] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: Switched to slot 1 ('RP3 (day/colour)'). Reset scheduled.
+[16:26.153] himax | Inactive for 1000ms
+[16:26.153] himax | IMAGE Task state changed from 'Init' (1) to 'Save State' (5)
+[16:26.408] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: Sleep
+[16:26.462] himax | Saved state to SD card. Image sequence number = 123
+[16:26.462] himax | Image task ready to sleep.
+[16:26.462] himax | IMAGE Task state changed from 'Save State' (5) to 'Uninitialised' (0)
+[16:26.462] himax | Sending 99 bytes: Header 4, payload 93, checksum 2 'Sleep 123 0 0 18 226 1 500 0 1000 5 1 0 100 0 0 0 18 1 0 65 0 2 50 65 15 0 1 286 326 1 110 1 '
+[16:26.462] himax | IF task ready to sleep.
+[16:26.462] himax |  No LED flashes.
+[16:26.462] himax | >>> Reset by watchdog
+[16:26.462] himax | hx_drv_watchdog_start
+[16:26.462] himax | Please input any key to enter X-Modem mode in 30 ms 
+[16:26.478] nrf   | <info> app: AI state machine bumped with 'Sleep' (Current state: IDLE)
+[16:26.478] nrf   | <info> app: AI processor sends stats: '123 0 0 18 226 1 500 0 1000 5 1 0 100 0 0 0 18 1 0 65 0 2 50 65 15 0 1 286 326 1 110 1 '
+[16:26.478] nrf   | <info> app: AI state changed from IDLE to SLEEP
+[16:26.478] nrf   | BLE out: Sent   6 bytes: 'Sleep'
+[16:26.774] himax | waiting input key...
+[16:27.397] himax | ### Cold Boot ###
+[16:27.397] himax | FreeRTOS tickless idle is enabled. configMAX_PRIORITIES = 5
+[16:28.959] himax | Inactivity period set at 1000ms
+[16:29.893] himax | Flash ID 0xEF initialised
+[16:30.207] himax | [LS] In ledFlashSetFlashModeFromOpParam with 0 Mode 0
+[16:30.207] himax | HM0360 registers initialised for MD.
+[16:30.207] himax | Sending 31 bytes: Header 4, payload 25, checksum 2 'Wake 2024-01-01T00:00:02Z'
+[16:30.316] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: Wake
+[16:30.520] app   | Written AI slots to the device WILD-CNKW (11:11:08-364)
+[16:30.520] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: Error bits = 0x0000
+[16:30.522] himax | Received I2C message.
+[16:30.522] himax | MKL62BA command received: 'selftest'
+[16:30.522] himax | selfTest 0000
+[16:30.522] himax | Sending 19 bytes: Header 4, payload 13, checksum 2 'selfTest 0000'
+[16:30.522] himax | Received I2C message.
+[16:30.522] himax | MKL62BA command received: 'setutc 2026-09-01T23:11:07Z'
+[16:30.538] nrf   | <info> app: AI state machine bumped with 'Wake' (Current state: SLEEP)
+[16:30.538] nrf   | <info> app: BLE and AI time differ by 84237065s - too much!
+[16:30.538] nrf   | <info> app: AI state changed from SLEEP to WOKEN
+[16:30.538] nrf   | BLE out: Sent   5 bytes: 'Wake'
+[16:30.538] nrf   | <info> app: AI State machine scheduler called with event 8 'Send SelfTest'
+[16:30.538] nrf   | <info> app: AI state machine bumped with 'Send SelfTest' (Current state: WOKEN)
+[16:30.538] nrf   | Sending 'selftest' to AI processor (4 ctrl bytes, 8 payload, 2 CRC)<info> app: OK
+[16:30.538] nrf   | <info> app: AI state changed from WOKEN to SELFTEST
+[16:30.538] nrf   | <info> app: I2C TX complete: 14 bytes.
+[16:30.538] nrf   | <info> app: AI state machine bumped with 'Selftest Rx' (Current state: SELFTEST)
+[16:30.538] nrf   | <info> app: AI self test bits = 0x0000 (all bits now 0x0000)
+[16:30.538] nrf   | <info> app: Send 'setutc 2026-09-01T23:11:07Z'
+[16:30.538] nrf   | Sending 'setutc 2026-09-01T23:11:07Z' to AI processor (4 ctrl bytes, 27 payload, 2 CRC)<info> app: AI state changed from SELFTEST to SETUTC
+[16:30.538] nrf   | <info> app: I2C TX complete: 33 bytes.
+[16:30.538] nrf   | BLE out: Sent  20 bytes: 'Error bits = 0x0000'
+[16:30.538] nrf   | BLE in: Received   8 bytes 'AI slots'
+[16:30.538] nrf   | <info> app: AI state machine bumped with 'Msg to AI' (Current state: SETUTC)
+[16:30.538] nrf   | <info> app: DEBUG: Ignore this in SETUTC for now
+[16:31.776] himax | RTC set to 2026-09-01T23:11:07Z (this took 1235ms)
+[16:31.776] himax | Sending 56 bytes: Header 4, payload 50, checksum 2 'RTC set to 2026-09-01T23:11:07Z (this took 1235ms)'
+[16:31.791] nrf   | <info> app: AI state machine bumped with 'UTC Rx' (Current state: SETUTC)
+[16:31.791] nrf   | <info> app: AI state changed from SETUTC to IDLE
+[16:32.712] himax | Inactive for 1000ms
+[16:32.712] himax | IMAGE Task state changed from 'Init' (1) to 'Save State' (5)
+[16:32.712] himax | Saved state to SD card. Image sequence number = 123
+[16:32.712] himax | Image task ready to sleep.
+[16:32.712] himax | IMAGE Task state changed from 'Save State' (5) to 'Uninitialised' (0)
+[16:32.712] himax | Sending 99 bytes: Header 4, payload 93, checksum 2 'Sleep 123 0 0 19 226 1 500 0 1000 5 1 0 100 0 0 0 18 1 0 65 0 2 50 65 15 0 1 286 326 1 110 1 '
+[16:32.712] himax | IF task ready to sleep.
+[16:32.712] himax |  No LED flashes.
+[16:32.712] himax | >>> Entering DPD at 2026:09:01 23:11:09
+[16:32.852] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: Sleep
+[16:33.043] nrf   | <info> app: AI state machine bumped with 'Sleep' (Current state: IDLE)
+[16:33.043] nrf   | <info> app: AI processor sends stats: '123 0 0 19 226 1 500 0 1000 5 1 0 100 0 0 0 18 1 0 65 0 2 50 65 15 0 1 286 326 1 110 1 '
+[16:33.043] nrf   | <info> app: AI state changed from IDLE to SLEEP
+[16:33.043] nrf   | BLE out: Sent   6 bytes: 'Sleep'
+[16:38.492] app   | Written AI slots to the device WILD-CNKW (11:11:16-331)
+[16:38.956] himax | ### Warm Boot ###
+[16:38.971] nrf   | BLE in: Received   8 bytes 'AI slots'
+[16:38.971] nrf   | <info> app: AI state machine bumped with 'Msg to AI' (Current state: SLEEP)
+[16:38.971] nrf   | <info> app: AI processor is in DPD. Waking it. (slots)
+[16:39.268] himax | Inactivity period set at 1000ms
+[16:39.485] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: Wake
+[16:39.545] himax | [LS] In ledFlashSetFlashModeFromOpParam with 0 Mode 0
+[16:39.545] himax | Sending 31 bytes: Header 4, payload 25, checksum 2 'Wake 2026-09-01T23:11:16Z'
+[16:39.545] himax | Received I2C message.
+[16:39.545] himax | MKL62BA command received: 'selftest'
+[16:39.545] himax | selfTest 0000
+[16:39.545] himax | Sending 19 bytes: Header 4, payload 13, checksum 2 'selfTest 0000'
+[16:39.545] himax | Received I2C message.
+[16:39.545] himax | MKL62BA command received: 'slots'
+[16:39.545] himax | Flash ID 0xEF initialised
+[16:39.545] himax | Active slot 1 running 'RP3 (day/colour)'. Slot A: 'HM0360 (night/IR)', Slot B: 'RP3 (day/colour)'. Auto-switch: on
+[16:39.545] himax | Sending 120 bytes: Header 4, payload 114, checksum 2 'Active slot 1 running 'RP3 (day/colour)'. Slot A: 'HM0360 (night/IR)', Slot B: 'RP3 (day/colour)'. Auto-switch: on'
+[16:39.658] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: Error bits = 0x0000
+[16:39.767] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: Active slot 1 running 'RP3 (day/colour)'. Slot A: 'HM0360 (night/IR)', Slot B: 'RP3 (day/colour)'. Auto-switch: on
+[16:39.912] nrf   | <info> app: AI state machine bumped with 'Wake' (Current state: SLEEP)
+[16:39.912] nrf   | <info> app: BLE and AI time differ by 0s
+[16:39.912] nrf   | <info> app: AI state changed from SLEEP to WOKEN
+[16:39.912] nrf   | BLE out: Sent   5 bytes: 'Wake'
+[16:39.912] nrf   | <info> app: AI State machine scheduler called with event 8 'Send SelfTest'
+[16:39.912] nrf   | <info> app: AI state machine bumped with 'Send SelfTest' (Current state: WOKEN)
+[16:39.912] nrf   | Sending 'selftest' to AI processor (4 ctrl bytes, 8 payload, 2 CRC)<info> app: OK
+[16:39.912] nrf   | <info> app: AI state changed from WOKEN to SELFTEST
+[16:39.912] nrf   | <info> app: I2C TX complete: 14 bytes.
+[16:39.912] nrf   | <info> app: AI state machine bumped with 'Selftest Rx' (Current state: SELFTEST)
+[16:39.912] nrf   | <info> app: AI self test bits = 0x0000 (all bits now 0x0000)
+[16:39.912] nrf   | <info> app: AI state changed from SELFTEST to IDLE
+[16:39.912] nrf   | BLE out: Sent  20 bytes: 'Error bits = 0x0000'
+[16:39.912] nrf   | <info> app: AI State machine scheduler called with event 12 'Msg to AI'
+[16:39.912] nrf   | <info> app: AI state machine bumped with 'Msg to AI' (Current state: IDLE)
+[16:39.912] nrf   | Sending 'slots' to AI processor (4 ctrl bytes, 5 payload, 2 CRC)<info> app: AI state changed from IDLE to PROCESSING
+[16:39.912] nrf   | <info> app: I2C TX complete: 11 bytes.
+[16:39.912] nrf   | <info> app: AI state machine bumped with 'Msg from AI' (Current state: PROCESSING)
+[16:39.912] nrf   | <info> app: AI processor replies: 'Active slot 1 running 'RP3 (day/colour)'. Slot A: 'HM0360 (night/IR)', Slot B: 'RP3 (day/colour)'. Auto-switch: on'
+[16:39.912] nrf   | <info> app: AI state changed from PROCESSING to IDLE
+[16:39.912] nrf   | BLE out: Sent 115 bytes: 'Active slot 1 running 'RP3 (day/colour)'. Slot A: 'HM0360 (night/IR)', Slot B: 'RP3 (day/colour)'. Auto-switch: on'
+[16:39.914] app   | [useCameraSwitch] now running RP3
+[16:39.935] app   | Written AI getop -1 to the device WILD-CNKW (11:11:17-781)
+[16:40.159] himax | Received I2C message.
+[16:40.159] himax | MKL62BA command received: 'getop -1'
+[16:40.159] himax | OpParams 123 0 0 19 227 1 500 0 1000 5 1 0 100 0 0 0 18 1 0 65 0 2 50 65 15 0 1 286 326 1 110 1 
+[16:40.159] himax | Sending 102 bytes: Header 4, payload 96, checksum 2 'OpParams 123 0 0 19 227 1 500 0 1000 5 1 0 100 0 0 0 18 1 0 65 0 2 50 65 15 0 1 286 326 1 110 1 '
+[16:40.219] nrf   | BLE in: Received  11 bytes 'AI getop -1'
+[16:40.219] nrf   | <info> app: AI state machine bumped with 'Msg to AI' (Current state: IDLE)
+[16:40.219] nrf   | Sending 'getop -1' to AI processor (4 ctrl bytes, 8 payload, 2 CRC)<info> app: AI state changed from IDLE to PROCESSING
+[16:40.219] nrf   | <info> app: I2C TX complete: 14 bytes.
+[16:40.219] nrf   | <info> app: AI state machine bumped with 'Msg from AI' (Current state: PROCESSING)
+[16:40.219] nrf   | <info> app: AI processor replies: 'OpParams 123 0 0 19 227 1 500 0 1000 5 1 0 100 0 0 0 18 1 0 65 0 2 50 65 15 0 1 286 326 1 110 1 '
+[16:40.219] nrf   | <info> app: AI state changed from PROCESSING to IDLE
+[16:40.219] nrf   | BLE out: Sent  97 bytes: 'OpParams 123 0 0 19 227 1 500 0 1000 5 1 0 100 0 0 0 18 1 0 65 0 2 50 65 15 0 1 286 326 1 110 1 '
+[16:40.264] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: OpParams 123 0 0 19 227 1 500 0 1000 5 1 0 100 0 0 0 18 1 0 65 0 2 50 65 15 0 1 286 326 1 110 1 
+[16:40.444] app   | [CameraReadiness] cameraOn=true
+[16:40.451] app   | Written selftest to the device WILD-CNKW (11:11:18-296)
+[16:40.839] nrf   | BLE in: Received   8 bytes 'selftest'
+[16:40.839] nrf   | BLE out: Sent  20 bytes: 'Error bits = 0x0000'
+[16:40.848] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: Error bits = 0x0000
+[16:41.402] himax | Inactive for 1000ms
+[16:41.402] himax | IMAGE Task state changed from 'Init' (1) to 'Save State' (5)
+[16:41.402] himax | Saved state to SD card. Image sequence number = 123
+[16:41.402] himax | Image task ready to sleep.
+[16:41.402] himax | IMAGE Task state changed from 'Save State' (5) to 'Uninitialised' (0)
+[16:41.402] himax | Sending 99 bytes: Header 4, payload 93, checksum 2 'Sleep 123 0 0 19 227 1 500 0 1000 5 1 0 100 0 0 0 18 1 0 65 0 2 50 65 15 0 1 286 326 1 110 1 '
+[16:41.402] himax | IF task ready to sleep.
+[16:41.402] himax |  No LED flashes.
+[16:41.402] himax | >>> Entering DPD at 2026:09:01 23:11:17
+[16:41.426] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: Sleep
+[16:41.463] nrf   | <info> app: AI state machine bumped with 'Sleep' (Current state: IDLE)
+[16:41.463] nrf   | <info> app: AI processor sends stats: '123 0 0 19 227 1 500 0 1000 5 1 0 100 0 0 0 18 1 0 65 0 2 50 65 15 0 1 286 326 1 110 1 '
+[16:41.463] nrf   | <info> app: AI state changed from IDLE to SLEEP
+[16:41.463] nrf   | BLE out: Sent   6 bytes: 'Sleep'
+[17:14.812] nrf   | BLE in: Received   8 bytes 'AI slots'
+[17:14.812] nrf   | <info> app: AI state machine bumped with 'Msg to AI' (Current state: SLEEP)
+[17:14.812] nrf   | <info> app: AI processor is in DPD. Waking it. (slots)
+[17:14.912] app   | Written AI slots to the device WILD-CNKW (11:11:52-758)
+[17:15.062] himax | ### Warm Boot ###
+[17:15.373] himax | Inactivity period set at 1000ms
+[17:15.553] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: Wake
+[17:15.621] himax | [LS] In ledFlashSetFlashModeFromOpParam with 0 Mode 0
+[17:15.621] himax | Sending 31 bytes: Header 4, payload 25, checksum 2 'Wake 2026-09-01T23:11:53Z'
+[17:15.621] himax | Received I2C message.
+[17:15.621] himax | MKL62BA command received: 'selftest'
+[17:15.621] himax | selfTest 0000
+[17:15.621] himax | Sending 19 bytes: Header 4, payload 13, checksum 2 'selfTest 0000'
+[17:15.621] himax | Received I2C message.
+[17:15.621] himax | MKL62BA command received: 'slots'
+[17:15.621] himax | Flash ID 0xEF initialised
+[17:15.621] himax | Active slot 1 running 'RP3 (day/colour)'. Slot A: 'HM0360 (night/IR)', Slot B: 'RP3 (day/colour)'. Auto-switch: on
+[17:15.621] himax | Sending 120 bytes: Header 4, payload 114, checksum 2 'Active slot 1 running 'RP3 (day/colour)'. Slot A: 'HM0360 (night/IR)', Slot B: 'RP3 (day/colour)'. Auto-switch: on'
+[17:15.948] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: Error bits = 0x0000
+[17:16.062] nrf   | <info> app: AI state machine bumped with 'Wake' (Current state: SLEEP)
+[17:16.062] nrf   | <info> app: BLE and AI time differ by 1s
+[17:16.062] nrf   | <info> app: AI state changed from SLEEP to WOKEN
+[17:16.062] nrf   | BLE out: Sent   5 bytes: 'Wake'
+[17:16.062] nrf   | <info> app: AI State machine scheduler called with event 8 'Send SelfTest'
+[17:16.062] nrf   | <info> app: AI state machine bumped with 'Send SelfTest' (Current state: WOKEN)
+[17:16.062] nrf   | Sending 'selftest' to AI processor (4 ctrl bytes, 8 payload, 2 CRC)<info> app: OK
+[17:16.062] nrf   | <info> app: AI state changed from WOKEN to SELFTEST
+[17:16.062] nrf   | <info> app: I2C TX complete: 14 bytes.
+[17:16.062] nrf   | <info> app: AI state machine bumped with 'Selftest Rx' (Current state: SELFTEST)
+[17:16.062] nrf   | <info> app: AI self test bits = 0x0000 (all bits now 0x0000)
+[17:16.062] nrf   | <info> app: AI state changed from SELFTEST to IDLE
+[17:16.062] nrf   | BLE out: Sent  20 bytes: 'Error bits = 0x0000'
+[17:16.062] nrf   | <info> app: AI State machine scheduler called with event 12 'Msg to AI'
+[17:16.062] nrf   | <info> app: AI state machine bumped with 'Msg to AI' (Current state: IDLE)
+[17:16.062] nrf   | Sending 'slots' to AI processor (4 ctrl bytes, 5 payload, 2 CRC)<info> app: AI state changed from IDLE to PROCESSING
+[17:16.062] nrf   | <info> app: I2C TX complete: 11 bytes.
+[17:16.062] nrf   | <info> app: AI state machine bumped with 'Msg from AI' (Current state: PROCESSING)
+[17:16.062] nrf   | <info> app: AI processor replies: 'Active slot 1 running 'RP3 (day/colour)'. Slot A: 'HM0360 (night/IR)', Slot B: 'RP3 (day/colour)'. Auto-switch: on'
+[17:16.062] nrf   | <info> app: AI state changed from PROCESSING to IDLE
+[17:16.062] nrf   | BLE out: Sent 115 bytes: 'Active slot 1 running 'RP3 (day/colour)'. Slot A: 'HM0360 (night/IR)', Slot B: 'RP3 (day/colour)'. Auto-switch: on'
+[17:16.125] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: Active slot 1 running 'RP3 (day/colour)'. Slot A: 'HM0360 (night/IR)', Slot B: 'RP3 (day/colour)'. Auto-switch: on
+[17:16.285] app   | [useCameraSwitch] switching from RP3 to HM0360
+[17:16.313] app   | Written AI switchslot to the device WILD-CNKW (11:11:54-158)
+[17:16.374] nrf   | BLE in: Received  13 bytes 'AI switchslot'
+[17:16.374] nrf   | <info> app: AI state machine bumped with 'Msg to AI' (Current state: IDLE)
+[17:16.374] nrf   | Sending 'switchslot' to AI processor (4 ctrl bytes, 10 payload, 2 CRC)<info> app: AI state changed from IDLE to PROCESSING
+[17:16.374] nrf   | <info> app: I2C TX complete: 16 bytes.
+[17:16.529] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: Switched to slot 0 ('HM0360 (night/IR)'). Reset scheduled.
+[17:16.560] himax | Received I2C message.
+[17:16.560] himax | MKL62BA command received: 'switchslot'
+[17:16.560] himax | write_slot_selector: slot 0 selector written OK
+[17:16.560] himax | switch_slot: selector now points at slot 0
+[17:16.560] himax | Switched to slot 0 ('HM0360 (night/IR)'). Reset scheduled.
+[17:16.560] himax | Sending 64 bytes: Header 4, payload 58, checksum 2 'Switched to slot 0 ('HM0360 (night/IR)'). Reset scheduled.'
+[17:16.685] nrf   | <info> app: AI state machine bumped with 'Msg from AI' (Current state: PROCESSING)
+[17:16.685] nrf   | <info> app: AI processor replies: 'Switched to slot 0 ('HM0360 (night/IR)'). Reset scheduled.'
+[17:16.685] nrf   | <info> app: AI state changed from PROCESSING to IDLE
+[17:16.685] nrf   | BLE out: Sent  59 bytes: 'Switched to slot 0 ('HM0360 (night/IR)'). Reset scheduled.'
+[17:17.493] himax | Inactive for 1000ms
+[17:17.493] himax | IMAGE Task state changed from 'Init' (1) to 'Save State' (5)
+[17:17.493] himax | Saved state to SD card. Image sequence number = 123
+[17:17.493] himax | Image task ready to sleep.
+[17:17.493] himax | IMAGE Task state changed from 'Save State' (5) to 'Uninitialised' (0)
+[17:17.493] himax | Sending 99 bytes: Header 4, payload 93, checksum 2 'Sleep 123 0 0 19 228 1 500 0 1000 5 1 0 100 0 0 0 18 1 0 65 0 2 50 65 15 0 1 286 326 1 110 1 '
+[17:17.493] himax | IF task ready to sleep.
+[17:17.619] nrf   | <info> app: AI state machine bumped with 'Sleep' (Current state: IDLE)
+[17:17.619] nrf   | <info> app: AI processor sends stats: '123 0 0 19 228 1 500 0 1000 5 1 0 100 0 0 0 18 1 0 65 0 2 50 65 15 0 1 286 326 1 110 1 '
+[17:17.619] nrf   | <info> app: AI state changed from IDLE to SLEEP
+[17:17.619] nrf   | BLE out: Sent   6 bytes: 'Sleep'
+[17:17.808] himax |  No LED flashes.
+[17:17.808] himax | >>> Reset by watchdog
+[17:17.808] himax | hx_drv_watchdog_start
+[17:17.808] himax | Please input any key to enter X-Modem mode in 30 ms 
+[17:17.808] himax | waiting input key...
+[17:17.808] himax | Camera: HM0360
+[17:17.896] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: Sleep
+[17:18.432] himax | ### Cold Boot ###
+[17:18.432] himax | FreeRTOS tickless idle is enabled. configMAX_PRIORITIES = 5
+[17:20.925] himax | Inactivity period set at 1000ms
+[17:21.857] app   | Written AI slots to the device WILD-CNKW (11:11:59-703)
+[17:21.986] nrf   | BLE in: Received   8 bytes 'AI slots'
+[17:21.986] nrf   | <info> app: AI state machine bumped with 'Msg to AI' (Current state: SLEEP)
+[17:21.986] nrf   | <info> app: AI processor is in DPD. Waking it. (slots)
+[17:22.172] himax | Flash ID 0xEF initialised
+[17:22.172] himax | Image 640 x 480. Raw buffer 460800. JPEG buffer 115860. JPEG compression x4
+[17:22.172] himax | HM0360 Init 
+[17:22.172] himax | HM0360 Init Mirror Off
+[17:22.172] himax | HM0360 Init finished
+[17:22.172] himax | HM0360 MD sensitivity 1
+[17:22.172] himax | Error opening '0:/HM0360EX.BIN': 4
+[17:22.172] himax | [LS] In ledFlashSetFlashModeFromOpParam with 0 Mode 0
+[17:22.172] himax | Sending 31 bytes: Header 4, payload 25, checksum 2 'Wake 2024-01-01T00:00:02Z'
+[17:22.382] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: Wake
+[17:22.482] himax | Received I2C message.
+[17:22.482] himax | MKL62BA command received: 'selftest'
+[17:22.482] himax | selfTest 0000
+[17:22.482] himax | Sending 19 bytes: Header 4, payload 13, checksum 2 'selfTest 0000'
+[17:22.482] himax | Received I2C message.
+[17:22.482] himax | MKL62BA command received: 'setutc 2026-09-01T23:11:59Z'
+[17:22.520] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: Error bits = 0x0000
+[17:22.606] nrf   | <info> app: AI state machine bumped with 'Wake' (Current state: SLEEP)
+[17:22.606] nrf   | <info> app: BLE and AI time differ by 84237117s - too much!
+[17:22.606] nrf   | <info> app: AI state changed from SLEEP to WOKEN
+[17:22.606] nrf   | BLE out: Sent   5 bytes: 'Wake'
+[17:22.606] nrf   | <info> app: AI State machine scheduler called with event 8 'Send SelfTest'
+[17:22.606] nrf   | <info> app: AI state machine bumped with 'Send SelfTest' (Current state: WOKEN)
+[17:22.606] nrf   | Sending 'selftest' to AI processor (4 ctrl bytes, 8 payload, 2 CRC)<info> app: OK
+[17:22.606] nrf   | <info> app: AI state changed from WOKEN to SELFTEST
+[17:22.606] nrf   | <info> app: I2C TX complete: 14 bytes.
+[17:22.606] nrf   | <info> app: AI state machine bumped with 'Selftest Rx' (Current state: SELFTEST)
+[17:22.606] nrf   | <info> app: AI self test bits = 0x0000 (all bits now 0x0000)
+[17:22.606] nrf   | <info> app: Send 'setutc 2026-09-01T23:11:59Z'
+[17:22.606] nrf   | Sending 'setutc 2026-09-01T23:11:59Z' to AI processor (4 ctrl bytes, 27 payload, 2 CRC)<info> app: AI state changed from SELFTEST to SETUTC
+[17:22.606] nrf   | <info> app: I2C TX complete: 33 bytes.
+[17:22.606] nrf   | BLE out: Sent  20 bytes: 'Error bits = 0x0000'
+[17:23.733] himax | RTC set to 2026-09-01T23:11:59Z (this took 1453ms)
+[17:23.733] himax | Sending 56 bytes: Header 4, payload 50, checksum 2 'RTC set to 2026-09-01T23:11:59Z (this took 1453ms)'
+[17:24.048] himax | Received I2C message.
+[17:24.048] himax | MKL62BA command received: 'slots'
+[17:24.048] himax | Active slot 0 running 'HM0360 (night/IR)'. Slot A: 'HM0360 (night/IR)', Slot B: 'RP3 (day/colour)'. Auto-switch: on
+[17:24.048] himax | Sending 121 bytes: Header 4, payload 115, checksum 2 'Active slot 0 running 'HM0360 (night/IR)'. Slot A: 'HM0360 (night/IR)', Slot B: 'RP3 (day/colour)'. Auto-switch: on'
+[17:24.145] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: Active slot 0 running 'HM0360 (night/IR)'. Slot A: 'HM0360 (night/IR)', Slot B: 'RP3 (day/colour)'. Auto-switch: on
+[17:24.172] nrf   | <info> app: AI state machine bumped with 'UTC Rx' (Current state: SETUTC)
+[17:24.172] nrf   | <info> app: AI state changed from SETUTC to IDLE
+[17:24.172] nrf   | <info> app: AI State machine scheduler called with event 12 'Msg to AI'
+[17:24.172] nrf   | <info> app: AI state machine bumped with 'Msg to AI' (Current state: IDLE)
+[17:24.172] nrf   | Sending 'slots' to AI processor (4 ctrl bytes, 5 payload, 2 CRC)<info> app: AI state changed from IDLE to PROCESSING
+[17:24.172] nrf   | <info> app: I2C TX complete: 11 bytes.
+[17:24.172] nrf   | <info> app: AI state machine bumped with 'Msg from AI' (Current state: PROCESSING)
+[17:24.172] nrf   | <info> app: AI processor replies: 'Active slot 0 running 'HM0360 (night/IR)'. Slot A: 'HM0360 (night/IR)', Slot B: 'RP3 (day/colour)'. Auto-switch: on'
+[17:24.172] nrf   | <info> app: AI state changed from PROCESSING to IDLE
+[17:24.172] nrf   | BLE out: Sent 116 bytes: 'Active slot 0 running 'HM0360 (night/IR)'. Slot A: 'HM0360 (night/IR)', Slot B: 'RP3 (day/colour)'. Auto-switch: on'
+[17:24.382] app   | [useCameraSwitch] now running HM0360
+[17:24.405] app   | Written AI getop -1 to the device WILD-CNKW (11:12:02-252)
+[17:24.672] himax | Received I2C message.
+[17:24.672] himax | MKL62BA command received: 'getop -1'
+[17:24.672] himax | OpParams 123 0 0 20 228 1 500 0 1000 5 1 0 100 0 0 0 18 1 0 65 0 2 50 65 15 0 1 286 326 1 110 1 
+[17:24.672] himax | Sending 102 bytes: Header 4, payload 96, checksum 2 'OpParams 123 0 0 20 228 1 500 0 1000 5 1 0 100 0 0 0 18 1 0 65 0 2 50 65 15 0 1 286 326 1 110 1 '
+[17:24.716] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: OpParams 123 0 0 20 228 1 500 0 1000 5 1 0 100 0 0 0 18 1 0 65 0 2 50 65 15 0 1 286 326 1 110 1 
+[17:24.798] nrf   | BLE in: Received  11 bytes 'AI getop -1'
+[17:24.798] nrf   | <info> app: AI state machine bumped with 'Msg to AI' (Current state: IDLE)
+[17:24.798] nrf   | Sending 'getop -1' to AI processor (4 ctrl bytes, 8 payload, 2 CRC)<info> app: AI state changed from IDLE to PROCESSING
+[17:24.798] nrf   | <info> app: I2C TX complete: 14 bytes.
+[17:24.798] nrf   | <info> app: AI state machine bumped with 'Msg from AI' (Current state: PROCESSING)
+[17:24.798] nrf   | <info> app: AI processor replies: 'OpParams 123 0 0 20 228 1 500 0 1000 5 1 0 100 0 0 0 18 1 0 65 0 2 50 65 15 0 1 286 326 1 110 1 '
+[17:24.798] nrf   | <info> app: AI state changed from PROCESSING to IDLE
+[17:24.798] nrf   | BLE out: Sent  97 bytes: 'OpParams 123 0 0 20 228 1 500 0 1000 5 1 0 100 0 0 0 18 1 0 65 0 2 50 65 15 0 1 286 326 1 110 1 '
+[17:24.935] app   | [CameraReadiness] cameraOn=true
+[17:24.939] app   | Written selftest to the device WILD-CNKW (11:12:02-782)
+[17:25.308] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: Error bits = 0x0000
+[17:25.424] nrf   | BLE in: Received   8 bytes 'selftest'
+[17:25.424] nrf   | BLE out: Sent  20 bytes: 'Error bits = 0x0000'
+[17:25.611] himax | Inactive for 1000ms
+[17:25.611] himax | IMAGE Task state changed from 'Init' (1) to 'Save State' (5)
+[17:25.879] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: Sleep
+[17:25.926] himax | Saved state to SD card. Image sequence number = 123
+[17:25.926] himax | Image task ready to sleep.
+[17:25.926] himax | IMAGE Task state changed from 'Save State' (5) to 'Uninitialised' (0)
+[17:25.926] himax | Sending 99 bytes: Header 4, payload 93, checksum 2 'Sleep 123 0 0 20 228 1 500 0 1000 5 1 0 100 0 0 0 18 1 0 65 0 2 50 65 15 0 1 286 326 1 110 1 '
+[17:25.926] himax | IF task ready to sleep.
+[17:25.926] himax |  No LED flashes.
+[17:25.926] himax | >>> Entering DPD at 2026:09:01 23:12:02
+[17:26.052] nrf   | <info> app: AI state machine bumped with 'Sleep' (Current state: IDLE)
+[17:26.052] nrf   | <info> app: AI processor sends stats: '123 0 0 20 228 1 500 0 1000 5 1 0 100 0 0 0 18 1 0 65 0 2 50 65 15 0 1 286 326 1 110 1 '
+[17:26.052] nrf   | <info> app: AI state changed from IDLE to SLEEP
+[17:26.052] nrf   | BLE out: Sent   6 bytes: 'Sleep'
+[17:31.231] himax | Camera: HM0360
+[17:31.231] himax | ### Warm Boot ###
+[17:31.285] app   | Written AI light to the device WILD-CNKW (11:12:09-131)
+[17:31.355] nrf   | BLE in: Received   8 bytes 'AI light'
+[17:31.355] nrf   | <info> app: AI state machine bumped with 'Msg to AI' (Current state: SLEEP)
+[17:31.355] nrf   | <info> app: AI processor is in DPD. Waking it. (light)
+[17:31.544] himax | Inactivity period set at 1000ms
+[17:31.544] himax | Image 640 x 480. Raw buffer 460800. JPEG buffer 115860. JPEG compression x4
+[17:31.544] himax | HM0360 MD sensitivity 1
+[17:31.544] himax | [LS] In ledFlashSetFlashModeFromOpParam with 0 Mode 0
+[17:31.544] himax | Sending 31 bytes: Header 4, payload 25, checksum 2 'Wake 2026-09-01T23:12:08Z'
+[17:31.729] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: Wake
+[17:31.855] himax | Received I2C message.
+[17:31.855] himax | MKL62BA command received: 'selftest'
+[17:31.855] himax | selfTest 0000
+[17:31.855] himax | Sending 19 bytes: Header 4, payload 13, checksum 2 'selfTest 0000'
+[17:31.855] himax | Received I2C message.
+[17:31.855] himax | MKL62BA command received: 'light'
+[17:31.855] himax | Checking light level...
+[17:31.855] himax | Sending 29 bytes: Header 4, payload 23, checksum 2 'Checking light level...'
+[17:31.855] himax | Images to capture: 1
+[17:31.855] himax | Interval: 0ms
+[17:31.855] himax | IMAGE Task state changed from 'Init' (1) to 'Capturing' (2)
+[17:31.855] himax | Image capture 1/1 took 40ms
+[17:31.855] himax | [LS] Skipping NN processing (AE light check).
+[17:31.891] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: Error bits = 0x0000
+[17:31.980] nrf   | <info> app: AI state machine bumped with 'Wake' (Current state: SLEEP)
+[17:31.980] nrf   | <info> app: BLE and AI time differ by 0s
+[17:31.980] nrf   | <info> app: AI state changed from SLEEP to WOKEN
+[17:31.980] nrf   | BLE out: Sent   5 bytes: 'Wake'
+[17:31.980] nrf   | <info> app: AI State machine scheduler called with event 8 'Send SelfTest'
+[17:31.980] nrf   | <info> app: AI state machine bumped with 'Send SelfTest' (Current state: WOKEN)
+[17:31.980] nrf   | Sending 'selftest' to AI processor (4 ctrl bytes, 8 payload, 2 CRC)<info> app: OK
+[17:31.980] nrf   | <info> app: AI state changed from WOKEN to SELFTEST
+[17:31.980] nrf   | <info> app: I2C TX complete: 14 bytes.
+[17:31.980] nrf   | <info> app: AI state machine bumped with 'Selftest Rx' (Current state: SELFTEST)
+[17:31.980] nrf   | <info> app: AI self test bits = 0x0000 (all bits now 0x0000)
+[17:31.980] nrf   | <info> app: AI state changed from SELFTEST to IDLE
+[17:31.980] nrf   | BLE out: Sent  20 bytes: 'Error bits = 0x0000'
+[17:31.980] nrf   | <info> app: AI State machine scheduler called with event 12 'Msg to AI'
+[17:31.980] nrf   | <info> app: AI state machine bumped with 'Msg to AI' (Current state: IDLE)
+[17:31.980] nrf   | Sending 'light' to AI processor (4 ctrl bytes, 5 payload, 2 CRC)<info> app: AI state changed from IDLE to PROCESSING
+[17:31.980] nrf   | <info> app: I2C TX complete: 11 bytes.
+[17:31.980] nrf   | <info> app: AI state machine bumped with 'Msg from AI' (Current state: PROCESSING)
+[17:31.980] nrf   | <info> app: AI processor replies: 'Checking light level...'
+[17:31.980] nrf   | <info> app: AI state changed from PROCESSING to IDLE
+[17:31.980] nrf   | BLE out: Sent  24 bytes: 'Checking light level...'
+[17:32.044] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: Checking light level...
+[17:34.223] himax | [LS] getAEStats: 16 AE_MEAN samples: 74 74 74 74 74 74 74 74 74 74 74 74 74 74 74 74 
+[17:34.223] himax | [LS] AE sampling took 2353ms
+[17:34.223] himax | [LS] AE light check: mean AE = 74 (min 74, max 74) over 16 frames, threshold = 65, analog gain = 0, converged = yes, gain railed = no -> BRIGHT (no flash)
+[17:34.223] himax | Sending 155 bytes: Header 4, payload 149, checksum 2 'AE light check: mean AE = 74 (min 74, max 74) over 16 frames, threshold = 65, analog gain = 0, converged = yes, gain railed = no -> BRIGHT (no flash)'
+[17:34.223] himax | HM0360 AE regs:
+[17:34.223] himax |   Integration time = 62 lines
+[17:34.223] himax |   Analog gain = 0
+[17:34.223] himax |   Digital gain = 64
+[17:34.223] himax |   AE Mean = 74
+[17:34.223] himax |   AEConverged?: Y
+[17:34.223] himax | Sending 122 bytes: Header 4, payload 116, checksum 2 'HM0360 AE regs:
+[17:34.223] himax |   Integration time = 62 lines
+[17:34.223] himax |   Analog gain = 0
+[17:34.223] himax |   Digital gain = 64
+[17:34.223] himax |   AE Mean = 74
+[17:34.223] himax |   AEConverged?: Y'
+[17:34.223] himax | HM0360 motion in 0 blocks:
+[17:34.223] himax | 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 
+[17:34.223] himax | Sending 129 bytes: Header 4, payload 123, checksum 2 'HM0360 motion in 0 blocks:
+[17:34.223] himax | 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 '
+[17:34.261] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: AE light check: mean AE = 74 (min 74, max 74) over 16 frames, threshold = 65, analog gain = 0, converged = yes, gain railed = no -> BRIGHT (no flash)
+[17:34.457] app   | [LightSensor] BRIGHT at AE 74/65
+[17:34.458] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: HM0360 AE regs:
+[17:34.459] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23:   Integration time = 62 lines
+[17:34.461] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23:   Analog gain = 0
+[17:34.464] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23:   Digital gain = 64
+[17:34.464] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23:   AE Mean = 74
+[17:34.464] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23:   AEConverged?: Y
+[17:34.530] himax | ................
+[17:34.530] himax | ................
+[17:34.530] himax | ................
+[17:34.530] himax | ................
+[17:34.530] himax | ................
+[17:34.530] himax | ................
+[17:34.530] himax | ................
+[17:34.530] himax | ................
+[17:34.530] himax | ................
+[17:34.530] himax | ................
+[17:34.530] himax | ................
+[17:34.530] himax | ................
+[17:34.530] himax | ................
+[17:34.530] himax | ................
+[17:34.530] himax | ................
+[17:34.530] himax | ................
+[17:34.530] himax | Skipping file save.
+[17:34.530] himax | IMAGE Task state changed from 'Capturing' (2) to 'NN Processing' (3)
+[17:34.530] himax | Current captures completed: 1
+[17:34.530] himax | Average file write time 0ms
+[17:34.530] himax | Total frames captured since last reset: 1
+[17:34.530] himax | Sending 55 bytes: Header 4, payload 49, checksum 2 'Captured 1 images. Last is  (File write 0ms avg.)'
+[17:34.530] himax | IMAGE Task state changed from 'NN Processing' (3) to 'Init' (1)
+[17:34.615] app   | [LightSensorLog] reading #2: aeMean=74
+[17:34.691] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: HM0360 motion in 0 blocks:
+[17:34.691] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 
+[17:34.779] nrf   | <info> app: AI state machine bumped with 'Msg from AI' (Current state: IDLE)
+[17:34.779] nrf   | BLE out: Sent 150 bytes: 'AE light check: mean AE = 74 (min 74, max 74) over 16 frames, threshold = 65, analog gain = 0, converged = yes, gain railed = no -> BRIGHT (no flash)'
+[17:34.779] nrf   | <info> app: AI state machine bumped with 'Msg from AI' (Current state: IDLE)
+[17:34.779] nrf   | BLE out: Sent 117 bytes: 'HM0360 AE regs:
+[17:34.779] nrf   |   Integration time = 62 lines
+[17:34.779] nrf   |   Analog gain = 0
+[17:34.779] nrf   |   Digital gain = 64
+[17:34.779] nrf   |   AE Mean = 74
+[17:34.779] nrf   |   AEConverged?: Y'
+[17:34.779] nrf   | <info> app: AI state machine bumped with 'Msg from AI' (Current state: IDLE)
+[17:34.779] nrf   | BLE out: Sent 124 bytes: 'HM0360 motion in 0 blocks:
+[17:34.779] nrf   | 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 '
+[17:34.779] nrf   | <info> app: AI state machine bumped with 'Msg from AI' (Current state: IDLE)
+[17:34.779] nrf   | BLE out: Sent  50 bytes: 'Captured 1 images. Last is  (File write 0ms avg.)'
+[17:34.877] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: Captured 1 images. Last is  (File write 0ms avg.)
+[17:35.464] himax | Inactive for 1000ms
+[17:35.464] himax | IMAGE Task state changed from 'Init' (1) to 'Save State' (5)
+[17:35.637] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: Sleep
+[17:35.714] nrf   | <info> app: AI state machine bumped with 'Sleep' (Current state: IDLE)
+[17:35.714] nrf   | <info> app: AI processor sends stats: '124 0 0 20 229 1 500 0 1000 5 1 0 100 0 0 0 18 1 0 65 0 2 50 65 15 0 1 286 326 1 110 1 '
+[17:35.714] nrf   | <info> app: AI state changed from IDLE to SLEEP
+[17:35.714] nrf   | BLE out: Sent   6 bytes: 'Sleep'
+[17:35.777] himax | Saved state to SD card. Image sequence number = 124
+[17:35.777] himax | Image task ready to sleep.
+[17:35.777] himax | IMAGE Task state changed from 'Save State' (5) to 'Uninitialised' (0)
+[17:35.777] himax | Sending 99 bytes: Header 4, payload 93, checksum 2 'Sleep 124 0 0 20 229 1 500 0 1000 5 1 0 100 0 0 0 18 1 0 65 0 2 50 65 15 0 1 286 326 1 110 1 '
+[17:35.777] himax | IF task ready to sleep.
+[17:35.777] himax |  No LED flashes.
+[17:35.777] himax | >>> Entering DPD at 2026:09:01 23:12:12
+[17:41.965] app   | [LightSensorLog] CSV written to file:///data/user/0/com.wildlife.wildlifewatcher/files/light-sensor/light-sensor-readings.csv
+[18:27.594] app   | '📡 Realtime subscription status:', 'CHANNEL_ERROR'
+[18:35.606] nrf   | <info> app: BLE Timeout: disconnecting
+[18:35.916] nrf   | <info> app: Disconnected. Conn_handle: 0x0, reason: 0x16
+[18:35.916] nrf   | <info> app:   local
+[18:35.921] app   | Peripheral disconnect event triggered. Disconnecting: D6:47:9B:89:E7:23
+[23:19.721] app   | '📡 Realtime subscription status:', 'SUBSCRIBED'
+[25:07.667] app   | SerializableStateInvariantMiddleware took 37ms, which is more than the warning threshold of 32ms. 
+[25:07.667] app   | If your state or actions are very large, you may want to disable the middleware as it might cause too much of a slowdown in development mode. See https://redux-toolkit.js.org/api/getDefaultMiddleware for instructions.
+[25:07.667] app   | It is disabled in production builds, so you don't need to worry about that.
+[32:04.175] himax | Camera: HM0360
+[32:04.175] himax | ### Warm Boot ###
+[32:04.175] himax | Timer wake
+[32:04.175] himax | Inactivity period set at 1000ms
+[32:04.175] himax | Image 640 x 480. Raw buffer 460800. JPEG buffer 115860. JPEG compression x4
+[32:04.175] himax | HM0360 MD sensitivity 1
+[32:04.482] nrf   | <info> app: AI state machine bumped with 'Wake (Timer)' (Current state: SLEEP)
+[32:04.482] nrf   | <info> app: BLE and AI time differ by 869s - too much!
+[32:04.482] nrf   | <info> app: AI state changed from SLEEP to WOKEN
+[32:04.482] nrf   | BLE out: Failed to send  13 bytes: 'Wake (Timer)'
+[32:04.482] nrf   | <info> app: AI State machine scheduler called with event 8 'Send SelfTest'
+[32:04.482] nrf   | <info> app: AI state machine bumped with 'Send SelfTest' (Current state: WOKEN)
+[32:04.482] nrf   | Sending 'selftest' to AI processor (4 ctrl bytes, 8 payload, 2 CRC)<info> app: OK
+[32:04.482] nrf   | <info> app: AI state changed from WOKEN to SELFTEST
+[32:04.482] nrf   | <info> app: I2C TX complete: 14 bytes.
+[32:04.482] nrf   | <info> app: AI state machine bumped with 'Selftest Rx' (Current state: SELFTEST)
+[32:04.482] nrf   | <info> app: AI self test bits = 0x0000 (all bits now 0x0000)
+[32:04.482] nrf   | <info> app: Send 'setutc 2026-09-01T23:26:41Z'
+[32:04.482] nrf   | Sending 'setutc 2026-09-01T23:26:41Z' to AI processor (4 ctrl bytes, 27 payload, 2 CRC)<info> app: AI state changed from SELFTEST to SETUTC
+[32:04.482] nrf   | <info> app: I2C TX complete: 33 bytes.
+[32:04.482] nrf   | BLE out: Failed to send  20 bytes: 'Error bits = 0x0000'
+[32:04.482] himax | [LS] In ledFlashSetFlashModeFromOpParam with 0 Mode 0
+[32:04.482] himax | [LS] Timer wake for AE light check
+[32:04.482] himax | Sending 32 bytes: Header 4, payload 26, checksum 2 'Timer 2026-09-01T23:12:12Z'
+[32:04.482] himax | Images to capture: 1
+[32:04.482] himax | Interval: 500ms
+[32:04.482] himax |    Interval of 500ms gives sleep count = 0x4018
+[32:04.482] himax | pCount = 0x4018
+[32:04.482] himax | IMAGE Task state changed from 'Init' (1) to 'Capturing' (2)
+[32:04.482] himax | Image capture 1/1 took 40ms
+[32:04.482] himax | [LS] Skipping NN processing (AE light check).
+[32:04.482] himax | Received I2C message.
+[32:04.482] himax | MKL62BA command received: 'selftest'
+[32:04.482] himax | selfTest 0000
+[32:04.482] himax | Sending 19 bytes: Header 4, payload 13, checksum 2 'selfTest 0000'
+[32:04.482] himax | Received I2C message.
+[32:04.482] himax | MKL62BA command received: 'setutc 2026-09-01T23:26:41Z'
+[32:06.024] nrf   | <info> app: AI state machine bumped with 'UTC Rx' (Current state: SETUTC)
+[32:06.024] nrf   | <info> app: AI state changed from SETUTC to IDLE
+[32:06.024] himax | RTC set to 2026-09-01T23:26:41Z (this took 1439ms)
+[32:06.024] himax | Sending 56 bytes: Header 4, payload 50, checksum 2 'RTC set to 2026-09-01T23:26:41Z (this took 1439ms)'
+[32:07.801] himax | [LS] getAEStats: 16 AE_MEAN samples: 86 86 86 86 86 86 86 86 86 86 86 86 86 86 86 86 
+[32:07.801] himax | [LS] AE sampling took 3384ms
+[32:07.801] himax | [LS] AE light check: mean AE = 86 (min 86, max 86) over 16 frames, threshold = 65, analog gain = 0, converged = yes, gain railed = no -> BRIGHT (no flash)
+[32:07.801] himax | Sending 155 bytes: Header 4, payload 149, checksum 2 'AE light check: mean AE = 86 (min 86, max 86) over 16 frames, threshold = 65, analog gain = 0, converged = yes, gain railed = no -> BRIGHT (no flash)'
+[32:07.801] himax | Flash ID 0xEF initialised
+[32:07.801] himax | write_slot_selector: slot 1 selector written OK
+[32:07.801] himax | switch_slot: selector now points at slot 1
+[32:07.801] himax | [LS] Auto camera switch: light is BRIGHT -> slot 1 ('RP3 (day/colour)'). Reset scheduled.
+[32:07.801] himax | HM0360 AE regs:
+[32:07.801] himax |   Integration time = 61 lines
+[32:07.801] himax |   Analog gain = 0
+[32:07.801] himax |   Digital gain = 64
+[32:07.801] himax |   AE Mean = 86
+[32:07.801] himax |   AEConverged?: Y
+[32:07.801] himax | Sending 122 bytes: Header 4, payload 116, checksum 2 'HM0360 AE regs:
+[32:07.801] himax |   Integration time = 61 lines
+[32:07.801] himax |   Analog gain = 0
+[32:07.801] himax |   Digital gain = 64
+[32:07.801] himax |   AE Mean = 86
+[32:07.801] himax |   AEConverged?: Y'
+[32:07.801] himax | Sending 93 bytes: Header 4, payload 87, checksum 2 'Auto camera switch: light level wants the colour (RP3) camera - switching at next sleep'
+[32:07.801] himax | HM0360 motion in 0 blocks:
+[32:08.102] himax | 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 
+[32:08.102] himax | Sending 129 bytes: Header 4, payload 123, checksum 2 'HM0360 motion in 0 blocks:
+[32:08.102] himax | 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 '
+[32:08.102] himax | ................
+[32:08.102] himax | ................
+[32:08.102] himax | ................
+[32:08.102] himax | ................
+[32:08.102] himax | ................
+[32:08.102] himax | ................
+[32:08.102] himax | ................
+[32:08.102] himax | ................
+[32:08.102] himax | ................
+[32:08.102] himax | ................
+[32:08.102] himax | ................
+[32:08.102] himax | ................
+[32:08.102] himax | ................
+[32:08.102] himax | ................
+[32:08.102] himax | ................
+[32:08.102] himax | ................
+[32:08.102] himax | Skipping file save.
+[32:08.102] himax | IMAGE Task state changed from 'Capturing' (2) to 'NN Processing' (3)
+[32:08.102] himax | Current captures completed: 1
+[32:08.102] himax | Average file write time 0ms
+[32:08.102] himax | Total frames captured since last reset: 1
+[32:08.102] himax | Sending 55 bytes: Header 4, payload 49, checksum 2 'Captured 1 images. Last is  (File write 0ms avg.)'
+[32:08.102] himax | IMAGE Task state changed from 'NN Processing' (3) to 'Init' (1)
+[32:08.103] nrf   | <info> app: AI state machine bumped with 'Msg from AI' (Current state: IDLE)
+[32:08.103] nrf   | BLE out: Failed to send 150 bytes: 'AE light check: mean AE = 86 (min 86, max 86) over 16 frames, threshold = 65, analog gain = 0, converged = yes, gain railed = no -> BRIGHT (no flash)'
+[32:08.103] nrf   | <info> app: AI state machine bumped with 'Msg from AI' (Current state: IDLE)
+[32:08.103] nrf   | BLE out: Failed to send 117 bytes: 'HM0360 AE regs:
+[32:08.103] nrf   |   Integration time = 61 lines
+[32:08.103] nrf   |   Analog gain = 0
+[32:08.103] nrf   |   Digital gain = 64
+[32:08.103] nrf   |   AE Mean = 86
+[32:08.103] nrf   |   AEConverged?: Y'
+[32:08.103] nrf   | <info> app: AI state machine bumped with 'Msg from AI' (Current state: IDLE)
+[32:08.103] nrf   | BLE out: Failed to send  88 bytes: 'Auto camera switch: light level wants the colour (RP3) camera - switching at next sleep'
+[32:08.103] nrf   | <info> app: AI state machine bumped with 'Msg from AI' (Current state: IDLE)
+[32:08.103] nrf   | BLE out: Failed to send 124 bytes: 'HM0360 motion in 0 blocks:
+[32:08.103] nrf   | 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 '
+[32:08.427] nrf   | <info> app: AI state machine bumped with 'Msg from AI' (Current state: IDLE)
+[32:08.427] nrf   | BLE out: Failed to send  50 bytes: 'Captured 1 images. Last is  (File write 0ms avg.)'
+[32:09.333] himax | Inactive for 1000ms
+[32:09.333] himax | IMAGE Task state changed from 'Init' (1) to 'Save State' (5)
+[32:09.333] himax | Saved state to SD card. Image sequence number = 125
+[32:09.333] himax | Image task ready to sleep.
+[32:09.333] himax | IMAGE Task state changed from 'Save State' (5) to 'Uninitialised' (0)
+[32:09.333] himax | Sending 99 bytes: Header 4, payload 93, checksum 2 'Sleep 125 0 0 20 230 1 500 0 1000 5 1 0 100 0 0 0 18 1 0 65 0 2 50 65 15 0 1 286 326 1 110 1 '
+[32:09.333] himax | IF task ready to sleep.
+[32:09.333] himax |  No LED flashes.
+[32:09.333] himax | >>> Reset by watchdog
+[32:09.333] himax | hx_drv_watchdog_start
+[32:09.349] nrf   | <info> app: AI state machine bumped with 'Sleep' (Current state: IDLE)
+[32:09.349] nrf   | <info> app: AI processor sends stats: '125 0 0 20 230 1 500 0 1000 5 1 0 100 0 0 0 18 1 0 65 0 2 50 65 15 0 1 286 326 1 110 1 '
+[32:09.349] nrf   | <info> app: AI state changed from IDLE to SLEEP
+[32:09.349] nrf   | BLE out: Failed to send   6 bytes: 'Sleep'
+[32:09.648] himax | Please input any key to enter X-Modem mode in 30 ms 
+[32:09.648] himax | waiting input key...
+[32:10.265] himax | ### Cold Boot ###
+[32:10.265] himax | FreeRTOS tickless idle is enabled. configMAX_PRIORITIES = 5
+[32:12.715] himax | Inactivity period set at 1000ms
+[32:13.932] himax | Flash ID 0xEF initialised
+[32:13.932] himax | [LS] In ledFlashSetFlashModeFromOpParam with 0 Mode 0
+[32:14.235] himax | HM0360 registers initialised for MD.
+[32:14.235] himax | Sending 31 bytes: Header 4, payload 25, checksum 2 'Wake 2024-01-01T00:00:02Z'
+[32:14.235] himax | Received I2C message.
+[32:14.235] himax | MKL62BA command received: 'selftest'
+[32:14.235] himax | selfTest 0000
+[32:14.235] himax | Sending 19 bytes: Header 4, payload 13, checksum 2 'selfTest 0000'
+[32:14.548] himax | Received I2C message.
+[32:14.548] himax | MKL62BA command received: 'setutc 2026-09-01T23:26:51Z'
+[32:14.566] nrf   | <info> app: AI state machine bumped with 'Wake' (Current state: SLEEP)
+[32:14.566] nrf   | <info> app: BLE and AI time differ by 84238009s - too much!
+[32:14.566] nrf   | <info> app: AI state changed from SLEEP to WOKEN
+[32:14.566] nrf   | BLE out: Failed to send   5 bytes: 'Wake'
+[32:14.566] nrf   | <info> app: AI State machine scheduler called with event 8 'Send SelfTest'
+[32:14.566] nrf   | <info> app: AI state machine bumped with 'Send SelfTest' (Current state: WOKEN)
+[32:14.566] nrf   | Sending 'selftest' to AI processor (4 ctrl bytes, 8 payload, 2 CRC)<info> app: OK
+[32:14.566] nrf   | <info> app: AI state changed from WOKEN to SELFTEST
+[32:14.566] nrf   | <info> app: I2C TX complete: 14 bytes.
+[32:14.566] nrf   | <info> app: AI state machine bumped with 'Selftest Rx' (Current state: SELFTEST)
+[32:14.566] nrf   | <info> app: AI self test bits = 0x0000 (all bits now 0x0000)
+[32:14.566] nrf   | <info> app: Send 'setutc 2026-09-01T23:26:51Z'
+[32:14.566] nrf   | Sending 'setutc 2026-09-01T23:26:51Z' to AI processor (4 ctrl bytes, 27 payload, 2 CRC)<info> app: AI state changed from SELFTEST to SETUTC
+[32:14.566] nrf   | <info> app: I2C TX complete: 33 bytes.
+[32:14.566] nrf   | BLE out: Failed to send  20 bytes: 'Error bits = 0x0000'
+[32:15.781] himax | RTC set to 2026-09-01T23:26:51Z (this took 1234ms)
+[32:15.781] himax | Sending 56 bytes: Header 4, payload 50, checksum 2 'RTC set to 2026-09-01T23:26:51Z (this took 1234ms)'
+[32:15.799] nrf   | <info> app: AI state machine bumped with 'UTC Rx' (Current state: SETUTC)
+[32:15.799] nrf   | <info> app: AI state changed from SETUTC to IDLE
+[32:16.685] himax | Inactive for 1000ms
+[32:16.685] himax | IMAGE Task state changed from 'Init' (1) to 'Save State' (5)
+[32:16.685] himax | Saved state to SD card. Image sequence number = 125
+[32:16.685] himax | Image task ready to sleep.
+[32:16.685] himax | IMAGE Task state changed from 'Save State' (5) to 'Uninitialised' (0)
+[32:16.685] himax | Sending 99 bytes: Header 4, payload 93, checksum 2 'Sleep 125 0 0 21 230 1 500 0 1000 5 1 0 100 0 0 0 18 1 0 65 0 2 50 65 15 0 1 286 326 1 110 1 '
+[32:16.685] himax | IF task ready to sleep.
+[32:16.685] himax |  No LED flashes.
+[32:16.685] himax | >>> Entering DPD at 2026:09:01 23:26:53
+[32:16.717] nrf   | <info> app: AI state machine bumped with 'Sleep' (Current state: IDLE)
+[32:16.717] nrf   | <info> app: AI processor sends stats: '125 0 0 21 230 1 500 0 1000 5 1 0 100 0 0 0 18 1 0 65 0 2 50 65 15 0 1 286 326 1 110 1 '
+[32:16.717] nrf   | <info> app: AI state changed from IDLE to SLEEP
+[32:16.717] nrf   | BLE out: Failed to send   6 bytes: 'Sleep'
+[33:16.763] nrf   | <info> app: BLE Timeout: disconnecting
+[33:18.231] app   | SerializableStateInvariantMiddleware took 57ms, which is more than the warning threshold of 32ms. 
+[33:18.231] app   | If your state or actions are very large, you may want to disable the middleware as it might cause too much of a slowdown in development mode. See https://redux-toolkit.js.org/api/getDefaultMiddleware for instructions.
+[33:18.231] app   | It is disabled in production builds, so you don't need to worry about that.

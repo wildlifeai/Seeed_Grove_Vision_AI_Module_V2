@@ -39,6 +39,10 @@ except Exception as e:
 
 
 def main() -> int:
+    if len(sys.argv) > 1 and sys.argv[1] in ("-h", "--help"):
+        print(__doc__)
+        return 0
+
     now_nz = datetime.now(UTC).astimezone(NZ)
 
     if len(sys.argv) > 1:

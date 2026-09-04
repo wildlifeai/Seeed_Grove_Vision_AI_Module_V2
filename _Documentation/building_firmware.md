@@ -76,12 +76,28 @@ chmod +x we2_local_image_gen arm_none_eabi/arm-none-eabi-objcopy \
 ### ⚠️ A failed certificate step does not fail the build
 
 If the secure-boot content certificates cannot be generated, the tool prints a traceback,
-carries on, and **make still exits 0**. You get an image that is roughly 24 KB short and
-missing its certificates, with no other warning. Check the size:
+carries on, and **make still exits 0**. You get an unsigned image with no other warning.
 
-| Variant | With certificates | Certificate step failed |
-|---|---|---|
-| RP3 (`cis_imx708`) | 487424 | 462848 |
+Size catches this on RP3 and **does not catch it at all on HM0360**. Measured 4 and 5
+September 2026, each variant built twice in one worktree with nothing changed but whether
+the `cert/cfg/` inputs were present:
+
+| Variant | With certificates | Certificate step failed | Does size catch it? |
+|---|---|---|---|
+| RP3 (`cis_imx708`) | 487424 | 462848 | yes, 24576 bytes short |
+| HM0360 (`cis_hm0360`) | 462848 | 462848 | **no, identical size** |
+
+Two traps in that table:
+
+* **462848 is both a good HM0360 image and a certless RP3 image.** A size check that does
+  not also know which variant it is looking at will pass an unsigned RP3 image.
+* **On HM0360 the length tells you nothing.** The content is still substantially wrong:
+  122974 differing bytes against a noise floor of 1648 between two identical builds.
+
+What does catch it, on both variants:
+
+* the `FileNotFoundError` traceback in the build log, thrown once per bootloader image
+* `we2_image_gen_local_dpd/secureboot_tool/cert/ICVSBContent.crt` is never created
 
 The usual cause is a missing build *input* under
 `we2_image_gen_local_dpd/secureboot_tool/cert/cfg/` (`ICVSBContent.cfg`, `OEMSBContent.cfg`),

@@ -75,9 +75,12 @@ What that means for an agent, beyond reading the rules:
   writes both `output_case1_sec_wlcsp/output.img` and an 8.3 `VYMDDHMM.IMG` copy named for
   the variant (`R`/`H`). Do **not** run `we2_local_image_gen` by hand, it destroys the
   image make just built. No renaming between variants is needed.
-* **A failed secure-boot certificate step does not fail the build.** make exits 0 and
-  hands you an image ~24 KB short and unsigned. Check the size (RP3: 487424 good, 462848
-  certless) and never gitignore `secureboot_tool/cert/cfg/*.cfg`, those are build inputs.
+* **A failed secure-boot certificate step does not fail the build**, and size only catches
+  it on one variant. RP3 goes 487424 signed to 462848 certless; **HM0360 is 462848 either
+  way**. So 462848 is both a good HM0360 image and an unsigned RP3 one. Check the build log
+  for the `FileNotFoundError` traceback and that `secureboot_tool/cert/ICVSBContent.crt`
+  exists. Never gitignore `secureboot_tool/cert/cfg/*.cfg`: they are hand-authored build
+  inputs and nothing regenerates them.
 * SD-card firmware files: **8.3 filenames** in `/MANIFEST` (FatFS has no LFN support).
   The `VYMDDHMM.IMG` name make emits already satisfies this.
 * Device consoles: two USB serial ports — the Himax console is the one printing clean
@@ -110,9 +113,12 @@ Verified on the bench (details + serial evidence in
   device awake ~60 s; the `reset` command deliberately does not. Scripting against this
   has its own rules, see §5.
 * **The periodic AE light check only runs if something consumes it.**
-  `aeCheckRequired = lightSensor_isRequired()` is true only when the AE-driven flash (op13)
-  or automatic camera switching (op26) is enabled. With both off, captures come and go with
-  no light check at all. The `light` command is the exception and always forces a reading.
+  `aeCheckRequired = lightSensor_isRequired()`, which is true when the flash mode is
+  `FLASH_MODE_AE` (**op34**, not op13) or automatic camera switching (op26) is on. With
+  both off, captures come and go with no light check at all. The `light` command is the
+  exception and always forces a reading. When it is on, the device also wakes every op24
+  minutes (15 by default) to take a throwaway frame and read the AE registers, which is a
+  battery cost worth knowing about before enabling it.
 * **camreg staged registers** (`RPV3_EX.BIN` etc.) are re-applied after the init tables
   at every sensor init — they override defaults, persist on SD, and survive DPD.
 

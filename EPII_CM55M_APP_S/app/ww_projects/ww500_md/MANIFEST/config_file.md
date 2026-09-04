@@ -132,6 +132,13 @@ OP_PARAMETER_FLASH_LED selects which LED colour(s) are used when the flash is ac
 (0 = none, 1 = visible, 2 = IR) - independent of which mode is selected; brightness is
 OP_PARAMETER_LED_BRIGHTNESS_PERCENT.
 
+Before OP_PARAMETER_FLASH_MODE existed, a non-zero OP_PARAMETER_FLASH_LED was on its own
+enough to arm the AE-driven flash. Cards written for that firmware have no line 34, and
+the default of 0 would silently stop them flashing after an update. `load_configuration()`
+therefore promotes them: if the file has no line 34 but does set a flash LED, the mode
+becomes AE-driven and a line is printed to the console saying so. A file that sets line 34
+explicitly is always taken at its word, including when it sets it to 0.
+
 OP_PARAMETER_FLASH_EVALUATE_INTERVAL (minutes) paces how often the mode is periodically
 re-evaluated while asleep with nothing else waking the device (AE light level, or the
 time-of-day window) - 0 disables the periodic wake. Time-of-day is also re-evaluated

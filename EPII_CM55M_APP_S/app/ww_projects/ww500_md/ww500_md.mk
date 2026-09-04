@@ -76,9 +76,14 @@ override CMSIS_NN_LIB_FORCE_PREBUILT := y
 endif
 
 # Get git info
-GIT_BRANCH := $(shell git rev-parse --abbrev-ref HEAD 2>NUL)
-GIT_COMMIT := $(shell git rev-parse --short HEAD 2>NUL)
-GIT_DIRTY  := $(shell git diff --quiet 2>NUL || echo -dirty)
+# Use $(NULL) (options/scripts.mk: /dev/null on Linux/WSL, NUL on Windows) rather
+# than a literal 2>NUL - the latter creates a stray file called NUL under Linux/WSL
+# (there is no such special device name there), which then breaks Windows-native
+# git.exe (NUL is a reserved device name on Windows, so it can't open a real file
+# with that name) if the working copy is ever also touched by git on Windows.
+GIT_BRANCH := $(shell git rev-parse --abbrev-ref HEAD 2>$(NULL))
+GIT_COMMIT := $(shell git rev-parse --short HEAD 2>$(NULL))
+GIT_DIRTY  := $(shell git diff --quiet 2>$(NULL) || echo -dirty)
 ifeq ($(GIT_BRANCH),)
 GIT_BRANCH := nogit
 endif

@@ -64,6 +64,7 @@
 
 #include "hm0360_md.h"
 #include "hm0360_regs.h"
+#include "lightSensor.h"
 
 #include "ledFlash.h"
 #include "pinmux_cfg.h"
@@ -154,8 +155,6 @@
 
 #define IMAGE_TASK_QUEUE_LEN 10
 
-// This is experimental. TODO check it is ok
-#define MSGTOMASTERLEN 150
 
 // defaults for PWM output on PB9 for Flash LED brightness
 // default 20kHz
@@ -191,8 +190,9 @@ static bool configure_image_sensor(CAMERA_CONFIG_E operation);
 
 static void setupLEDFlash(void);
 
-// Send unsolicited message to the master
-static void sendMsgToMaster(char *str);
+// Send unsolicited message to the master - declared in image_task.h, not
+// static: lightSensor.c also calls this directly to forward its light-check
+// result to the app, the same way this file's own telemetry does.
 
 // When final activity from the FatFS Task and IF Task are complete, enter DPD
 static void sleepWhenPossible(void);
@@ -260,6 +260,23 @@ static uint8_t g_capture_retries;	// in-place retries used for the current captu
 // the flash decision: capture one frame, read the AE registers, save nothing.
 // Cleared on the way into DPD. See _Documentation/AE_Light_Sensor_Roadmap.md
 static bool aeCheckOnlyWake = false;
+static bool aeCheckRequired = false;
+// True for the one aeCheckOnlyWake capture request that came from the on-demand
+// 'light' CLI command (prvLight(), CLI-commands.c) rather than the periodic
+// AE-check-interval timer wake - see the STARTCAPTURE handler in
+// handleEventForInit(). Distinguishes "always force a reading, no side effects"
+// (CLI) from the timer path's existing behaviour, even though both now share
+// the exact same real (throwaway) single-frame capture mechanics.
+static bool aeCheckCliTriggered = false;
+
+// The flash state (0/1/2 = off/visible/IR, per ledFlashIsActive()) actually
+// used to arm THIS frame's capture, snapshotted at APP_MSG_IMAGETASK_FRAME_READY
+// before the post-capture light check (if any) can overwrite ledFlashIsActive()
+// with the decision for the NEXT capture. prepareJpegFile() reads this - not a
+// live ledFlashIsActive() call - so the EXIF/MakerNote flash field describes the
+// image it is attached to, not the following one. See
+// _Documentation/development reports/2026-08-24_light_sensor_review/CLAUDE_light_sensor_review.md.
+static uint8_t lastCaptureFlashState = 0;
 
 static TimerHandle_t captureTimer;
 
@@ -622,17 +639,40 @@ static APP_MSG_DEST_T handleEventForInit(APP_MSG_T img_recv_msg) {
         requested_captures = (uint16_t)img_recv_msg.msg_data;
         requested_period = img_recv_msg.msg_parameter;
 
+        if (requested_captures == 0) {
+        	// Light-check only, via prvLight() in CLI-commands.c - take exactly
+        	// the same real (throwaway) single-frame capture path as the
+        	// periodic AE-check-interval timer wake (aeCheckOnlyWake, set below
+        	// and in vImageTask()'s own setup) rather than a separate shortcut,
+        	// so there is one path for both triggers. aeCheckCliTriggered
+        	// distinguishes this from a timer-triggered aeCheckOnlyWake later
+        	// on, so the reading stays forced and side-effect-free (no flash
+        	// arming, no camera-switch check) as already decided for 'light' -
+        	// only the capture mechanics are shared, not those consequences.
+        	aeCheckCliTriggered = true;
+        	requested_captures = 1;
+        }
+
         if (!cameraSystemEnabled) {
-        	xprintf("Can't capture - camera system not enabled\n");
         	snprintf(msgToMaster, MSGTOMASTERLEN, "Camera system not enabled");
+        	if (aeCheckCliTriggered) {
+        		aeCheckCliTriggered = false;
+        	}
+        	// Send to console:
+        	xprintf("%s\n", msgToMaster);
+        	// and to app
         	sendMsgToMaster(msgToMaster);
         }
         // Check parameters are acceptable
         else if ((requested_captures < MIN_IMAGE_CAPTURES) || (requested_captures > MAX_IMAGE_CAPTURES) ||
             (requested_period < MIN_IMAGE_INTERVAL) || (requested_period > MAX_IMAGE_INTERVAL))  {
             xprintf("Invalid parameter values %d or %d\n", requested_captures, requested_period);
+            aeCheckCliTriggered = false;
         }
         else  {
+            if (aeCheckCliTriggered) {
+            	aeCheckOnlyWake = true;
+            }
             g_captures_to_take = requested_captures;
             g_timer_period = requested_period;
 #ifdef WDTIMOUTFIX
@@ -802,6 +842,13 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
 
         ledFlashDisable(); // finished with the LED flash. Turn it off.
 
+        // Snapshot the flash state that was actually used to arm this capture
+        // (configure_image_sensor(CAMERA_CONFIG_RUN), before this frame existed)
+        // - before the light check below (if it runs) calls ledFlash_setActive()
+        // and overwrites ledFlashIsActive() with the decision for the NEXT
+        // capture. See lastCaptureFlashState's declaration.
+        lastCaptureFlashState = ledFlashIsActive();
+
         // measure time for the frame capture just completed
         // That is, the time since event APP_MSG_IMAGETASK_STARTCAPTURE in handleEventForInit()
         // Note this number is meaningless if taking multiple images using the HM0360 internal timer
@@ -818,7 +865,7 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
         // app_get_raw_addr(), app_get_raw_width(), app_get_raw_height()
         if (aeCheckOnlyWake) {
         	// AE light check only - the AE registers are all we need
-        	xprintf("Skipping NN processing (AE light check).\n");
+        	XP_CYAN xprintf("[LS] Skipping NN processing (AE light check).\n"); XP_WHITE
         	ret = kTfLiteOk;
         	skip_nn = true;
         }
@@ -861,22 +908,37 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
         // the AE-driven flash (op13) or automatic camera switching (op26).
         bool cameraSwitchScheduled = false;
 
-        if ((ledFlashGetFlashMode() == FLASH_MODE_AE)
-        		|| (fatfs_getOperationalParameter(OP_PARAMETER_SLOT_SWITCH) == 1)) {
-            HM0360_AE_STATS_T aeStats;
-            if (hm0360_md_getAEStats(AE_SAMPLE_COUNT, AE_SAMPLE_GAP_MS, &aeStats) == HX_CIS_NO_ERROR) {
-                ledFlashNewAEStats(&aeStats);
+        // Only sample AE after the last image of a (possibly multi-image)
+        // capture request - lightSensor_takeReading() takes a couple of
+        // seconds, so repeating it for every image in e.g. 'capture 3 1000'
+        // would needlessly slow the burst. aeCheckOnlyWake is included here (as
+        // well as aeCheckRequired) so an on-demand 'light' command still gets a
+        // reading even if aeCheckRequired itself happens to be false.
+        if ((aeCheckRequired || aeCheckOnlyWake) && (g_cur_jpegenc_frame == g_captures_to_take)) {
+            if (aeCheckCliTriggered) {
+                // On-demand 'light' command: always force a reading, but stay a
+                // passive diagnostic - no flash arming, no camera-switch check.
+                // Only the capture mechanics are shared with the timer path,
+                // not those consequences.
+                lightSensor_takeReadingForced();
             }
             else {
-                // Sampling failed - fall back to the single reading rather than
-                // leaving the flash decision stale
-                ledFlashNewAEValues(&gain);
-            }
+                lightSensor_takeReading();
 
-            // Automatic day/night camera switching (op26): if the fresh
-            // decision wants the other camera variant, this switches the boot
-            // slot and schedules a reset at the next sleep. See camera_switch.c.
-            cameraSwitchScheduled = cameraSwitch_autoSwitchCheck();
+                // Record the fresh decision as flashActive, ready for the next
+                // real capture (or image_sleepNow()'s STROBE arming) to read.
+                // Does NOT switch the LED on now - nothing needs it lit at this
+                // point.
+                if (ledFlashGetFlashMode() == FLASH_MODE_AE) {
+                    ledFlash_setActive(lightSensor_isDark());
+                }
+
+                // Automatic day/night camera switching (op26): if the fresh
+                // decision wants the other camera variant, this switches the
+                // boot slot and schedules a reset at the next sleep. See
+                // camera_switch.c.
+                cameraSwitchScheduled = cameraSwitch_autoSwitchCheck();
+            }
         }
 
         snprintf(msgToMaster, MSGTOMASTERLEN, "HM0360 AE regs:\n  Integration time = %d lines\n  Analog gain = %d\n  Digital gain = %d\n  AE Mean = %d\n  AEConverged?: %c",
@@ -898,8 +960,7 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
         	// Tell the app the device is about to change camera (and reboot)
         	snprintf(msgToMaster, MSGTOMASTERLEN,
         			"Auto camera switch: light level wants the %s camera - switching at next sleep",
-					(fatfs_getOperationalParameter(OP_PARAMETER_AE_FLASH_STATE) == 1) ?
-							"night (HM0360)" : "colour (RP3)");
+					lightSensor_isDark() ? "night (HM0360)" : "colour (RP3)");
         	sendMsgToMaster(msgToMaster);
         }
 
@@ -1216,6 +1277,13 @@ static APP_MSG_DEST_T handleEventForNNProcessing(APP_MSG_T img_recv_msg) {
         	// Stop the image sensor.
         	// move to earlier: configure_image_sensor(CAMERA_CONFIG_STOP);
         	image_task_state = APP_IMAGE_TASK_STATE_INIT;
+
+        	// This capture request's whole lifecycle is over - clear its
+        	// aeCheckOnlyWake flag now rather than waiting for the next DPD
+        	// sleep, so it can never leak into a later, unrelated capture in
+        	// the same wake (e.g. a real 'capture' sent shortly after 'light').
+        	aeCheckOnlyWake = false;
+        	aeCheckCliTriggered = false;
         }
         else  {
 #ifdef USE_HM0360_CAPTURE_TIMER
@@ -1461,24 +1529,26 @@ static APP_MSG_DEST_T handleEventForSaveState(APP_MSG_T img_recv_msg)
  * Parameters: APP_MSG_T img_recv_msg
  * Returns: APP_MSG_DEST_T send_msg
  */
-static APP_MSG_DEST_T flagUnexpectedEvent(APP_MSG_T img_recv_msg)
-{
+static APP_MSG_DEST_T flagUnexpectedEvent(APP_MSG_T img_recv_msg) {
     APP_MSG_EVENT_E event;
     APP_MSG_DEST_T send_msg;
 
     event = img_recv_msg.msg_event;
     send_msg.destination = NULL;
 
-    XP_LT_RED;
-    if ((event >= APP_MSG_IMAGETASK_FIRST) && (event < APP_MSG_IMAGETASK_LAST))
-    {
-        xprintf("IMAGE task unhandled event '%s' in '%s'\r\n", imageTaskEventString[event - APP_MSG_IMAGETASK_FIRST], imageTaskStateString[image_task_state]);
+    if ((event >= APP_MSG_IMAGETASK_FIRST) && (event < APP_MSG_IMAGETASK_LAST)) {
+    	snprintf(msgToMaster, MSGTOMASTERLEN,
+    		"IMAGE task unhandled event '%s' in '%s'", imageTaskEventString[event - APP_MSG_IMAGETASK_FIRST], imageTaskStateString[image_task_state]);
     }
-    else
-    {
-        xprintf("IMAGE task unhandled event 0x%04x in '%s'\r\n", event, imageTaskStateString[image_task_state]);
+    else  {
+    	snprintf(msgToMaster, MSGTOMASTERLEN,
+    		"IMAGE task unhandled event 0x%04x in '%s'", event, imageTaskStateString[image_task_state]);
     }
-    XP_WHITE;
+
+    // print to console
+    XP_LT_RED; xprintf("%s\n", msgToMaster); XP_WHITE;
+    // and send to BLE - in case it helps with error recovery.
+    sendMsgToMaster(msgToMaster);
 
     // If non-null then our task sends another message to another task
     return send_msg;
@@ -1657,10 +1727,37 @@ static void vImageTask(void *pvParameters) {
 #endif // USE_HM0360_MD
 #endif // USE_HM0360
 
-	// Initialise NN but only if the camera system is enabled
+    // Whether this wake needs to be repeated periodically even with no motion/
+    // BLE activity: a fresh light-level reading (the AE-driven flash, op13, or
+    // automatic day/night camera switching, op26 - lightSensor_isRequired()),
+    // or FLASH_MODE_TIME_OF_DAY needing to notice the window has closed.
+    // lightSensor.c only knows about the light-sensing half of this - the
+    // time-of-day half is a ledFlash/mode concern, added here instead.
+    // Computed once, early (before NN init below, so a light-check-only wake
+    // can skip it) - vImageTask() setup runs once per wake, before any
+    // capture - so the capture loop and sleep planning below just read this
+    // instead of repeating the operational-parameter lookups every time.
+    aeCheckRequired = lightSensor_isRequired()
+    		|| (ledFlashGetFlashMode() == FLASH_MODE_TIME_OF_DAY);
+
+    // A timer wake with timelapse disabled and aeCheckRequired set (AE-driven
+    // flash, automatic camera switching op26, or FLASH_MODE_TIME_OF_DAY) is a
+    // periodic flash-mode re-evaluation (the RTC alarm was set for it on the
+    // way into DPD): capture a single frame to refresh the AE registers (even
+    // if this wake is only for time-of-day, cheaper to reuse this path than
+    // add a separate no-capture one), save nothing - and, since it never runs
+    // NN inference (see skip_nn below), no need to initialise NN either.
+    aeCheckOnlyWake = cameraSystemEnabled && cameraInitialised
+    		&& (woken == APP_WAKE_REASON_TIMER)
+    		&& (fatfs_getOperationalParameter(OP_PARAMETER_TIMELAPSE_INTERVAL) == 0)
+    		&& aeCheckRequired;
+
+	// Initialise NN but only if the camera system is enabled and this isn't a
+	// throwaway light-check wake (which never runs NN inference - see
+	// aeCheckOnlyWake's handling in handleEventForNNProcessing()).
 	startTime = xTaskGetTickCount();
 
-	if (cameraSystemEnabled) {
+	if (cameraSystemEnabled && !aeCheckOnlyWake) {
 		nnStatus = cv_init(true, true,
 				fatfs_getOperationalParameter(OP_PARAMETER_MODEL_PROJECT),
 				fatfs_getOperationalParameter(OP_PARAMETER_MODEL_VERSION),
@@ -1674,9 +1771,12 @@ static void vImageTask(void *pvParameters) {
 		else {
 			xprintf("Initialised neural network.\n");
 		}
-	}
 
-    xprintf("NN Initialisation took %dms TODO - consider doing this after taking the picture!\n\n", app_getElapsedMs(startTime));
+		xprintf("NN Initialisation took %dms TODO - consider doing this after taking the picture!\n\n", app_getElapsedMs(startTime));
+	}
+	else if (aeCheckOnlyWake) {
+		XP_CYAN xprintf("[LS] Skipping NN initialisation (light-check-only wake).\n\n"); XP_WHITE
+	}
 
     // Initial state of the image task (initialized)
     image_task_state = APP_IMAGE_TASK_STATE_INIT;
@@ -1698,6 +1798,7 @@ static void vImageTask(void *pvParameters) {
     xprintf("  Neural network %s.\n", (nnStatus < 0) ? "disabled" : "enabled");
     xprintf("  Flash LED(s) in use: %d\n", fatfs_getOperationalParameter(OP_PARAMETER_FLASH_LED));
     xprintf("  Flash brightness: %d%%\n", (uint8_t) fatfs_getOperationalParameter(OP_PARAMETER_LED_BRIGHTNESS_PERCENT));
+    xprintf("  Flash is currently %s.\n", ledFlashIsActive() ? "armed" : "not armed");
 
 #ifdef USE_HM0360
     // Flash duration is not used when HM0360 is the main camera
@@ -1723,24 +1824,19 @@ static void vImageTask(void *pvParameters) {
 
     XP_WHITE;
 
+    if (aeCheckOnlyWake) {
+    	XP_CYAN xprintf("[LS] Timer wake to re-evaluate the flash\n"); XP_WHITE
+    }
+
     // If we woke because of motion detection or timer then let's send ourselves an initial
     // message to take some photos.
 
     // But only if nnSystemEnabled and cameraInitialised!
 
-    if ((cameraSystemEnabled == 1)  && cameraInitialised && ((woken == APP_WAKE_REASON_MD) || (woken == APP_WAKE_REASON_TIMER))) {
+    if ((cameraSystemEnabled == 1)  && cameraInitialised &&
+    		((woken == APP_WAKE_REASON_MD) || (woken == APP_WAKE_REASON_TIMER))) {
 
-    	// A timer wake with timelapse disabled and a light-decision consumer
-    	// enabled (AE-driven flash, or automatic camera switching op26) is a
-    	// periodic light check (the RTC alarm was set for it on the way into
-    	// DPD): capture a single frame to refresh the AE registers, save nothing.
-    	aeCheckOnlyWake = ((woken == APP_WAKE_REASON_TIMER)
-    			&& (fatfs_getOperationalParameter(OP_PARAMETER_TIMELAPSE_INTERVAL) == 0)
-    			&& ((ledFlashGetFlashMode() == FLASH_MODE_AE)
-    					|| (fatfs_getOperationalParameter(OP_PARAMETER_SLOT_SWITCH) == 1)));
-    	if (aeCheckOnlyWake) {
-    		xprintf("Timer wake for AE light check\n");
-    	}
+        // aeCheckRequired/aeCheckOnlyWake were computed earlier, before NN init.
 
         // Pass the parameters in the ImageTask message queue
         internal_msg.msg_data = aeCheckOnlyWake ? 1 : fatfs_getOperationalParameter(OP_PARAMETER_NUM_PICTURES);
@@ -1973,14 +2069,28 @@ static bool configure_image_sensor(CAMERA_CONFIG_E operation) {
 #endif // USE_HM0360_CAPTURE_TIMER
     		XP_WHITE;
 #ifdef STROBE_CONTROLS_FLASH
-    		// The HM0360 STROBE pin drives drive the LED
-    		hm0360_md_configureStrobe((ledFlashIsActive() > 0));
+    		// The HM0360 STROBE pin drives the LED. For the periodic AE-only
+    		// check's throwaway frame, force it off explicitly - it may
+    		// already be armed from the previous sleep's MD-illumination
+    		// setup, so just skipping this call would not be enough.
+    		// image_sleepNow() re-arms it correctly, from the fresh decision,
+    		// before the next sleep.
+    		if (aeCheckOnlyWake) {
+    			hm0360_md_configureStrobe(false);
+    		}
+    		else {
+    			hm0360_md_configureStrobe((ledFlashIsActive() > 0));
+    		}
 #else
-    		ledFlashActivate();	// Turn on Flash LED (conditionally)
+    		if (!aeCheckOnlyWake) {
+    			ledFlashActivate();	// Turn on Flash LED (conditionally)
+    		}
 #endif //  STROBE_CONTROLS_FLASH
 #else
-    		// turn on the LED for the RP camera
-    		ledFlashActivate();	// Turn on Flash LED (conditionally)
+    		if (!aeCheckOnlyWake) {
+    			// turn on the LED for the RP camera
+    			ledFlashActivate();	// Turn on Flash LED (conditionally)
+    		}
 #endif // USE_HM0360
     		cisdp_sensor_start(); // Starts data path sensor control block
     	}
@@ -2053,9 +2163,10 @@ static void setupLEDFlash(void) {
 	brightnessPercent = (uint8_t)fatfs_getOperationalParameter(OP_PARAMETER_LED_BRIGHTNESS_PERCENT);
 	ledFlashBrightness(brightnessPercent);
 
-	// Set the LED Flash mode (off, or driven by the AE light sensor)
+	// Set the LED Flash mode (off, AE-driven, always on, or time-of-day)
 	ledFlashSetFlashModeFromOpParam(
-			fatfs_getOperationalParameter(OP_PARAMETER_FLASH_LED));
+			fatfs_getOperationalParameter(OP_PARAMETER_FLASH_LED),
+			fatfs_getOperationalParameter(OP_PARAMETER_FLASH_MODE));
 
 	ledFlashDisable(); // This writes the control bits to the PCA9574
 }
@@ -2064,7 +2175,7 @@ static void setupLEDFlash(void) {
  * Send an unsolicited message to the MKL62BA.
  *
  */
-static void sendMsgToMaster(char *str) {
+void sendMsgToMaster(char *str) {
     APP_MSG_T send_msg;
 
 	// Wait till previous I2C comms transmission is done.
@@ -2163,8 +2274,13 @@ static void prepareJpegFile(int8_t * outCategories, uint8_t classCount, fileBuff
 
 	exif_input.software = softwareString;
 
-	// Save info about which LED was used to illuminate the current image: none, visible or IR
-	exif_input.flash_fired = ledFlashIsActive();
+	// Save info about which LED was used to illuminate the current image: none, visible or IR.
+	// lastCaptureFlashState, not a live ledFlashIsActive() call: by the time
+	// prepareJpegFile() runs, the post-capture light check (if it ran for this
+	// frame) has already updated ledFlashIsActive() with the decision for the
+	// NEXT capture - reading it live here would attach the wrong image's flash
+	// state to this one's EXIF. See lastCaptureFlashState's declaration.
+	exif_input.flash_fired = lastCaptureFlashState;
 
 	/* NN data: [total_bytes][count][score...] */
 	if (classCount > MAX_CLASSES) {
@@ -2691,25 +2807,27 @@ void image_sleepNow(void) {
                              timelapseDelay, false); // Does not return
     }
     else  {
-    	// No timelapse. If the light decision has a consumer - AE-driven flash
-    	// (op13) or automatic camera switching (op26) - wake periodically anyway
-    	// to sample the light level (one frame, AE registers only, nothing
-    	// saved) so the decision is fresh before the next motion-detect capture,
-    	// and so the auto camera switch notices dawn/dusk without needing motion.
-    	// See _Documentation/AE_Light_Sensor_Roadmap.md
+    	// No timelapse. If the flash decision has a consumer that can go stale
+    	// without a fresh wake - AE-driven flash (op13), automatic camera
+    	// switching (op26), or FLASH_MODE_TIME_OF_DAY needing to notice the
+    	// window has closed - wake periodically anyway (one throwaway frame,
+    	// nothing saved, for the AE case) so the decision is fresh before the
+    	// next motion-detect capture. See _Documentation/AE_Light_Sensor_Roadmap.md
+    	// and flash_led_modes_proposal.md.
 
     	// TODO - consider merging/syncing the 15 minute wake for AE with a 15 minute LoRaWAN pin interval.
 
-    	if (cameraSystemEnabled && ((ledFlashGetFlashMode() == FLASH_MODE_AE)
-    			|| (fatfs_getOperationalParameter(OP_PARAMETER_SLOT_SWITCH) == 1))) {
-    		// OP_PARAMETER_AE_CHECK_INTERVAL is in minutes, so convert to seconds
-    		aeCheckDelay = (uint32_t) fatfs_getOperationalParameter(OP_PARAMETER_AE_CHECK_INTERVAL) * 60;
+    	if (cameraSystemEnabled && aeCheckRequired) {
+    		// OP_PARAMETER_FLASH_EVALUATE_INTERVAL is in minutes, so convert to seconds
+    		aeCheckDelay = (uint32_t) fatfs_getOperationalParameter(OP_PARAMETER_FLASH_EVALUATE_INTERVAL) * 60;
     		if (aeCheckDelay > 65535) {
     			aeCheckDelay = 65535;	// the RTC alarm parameter is uint16_t seconds (~18h max)
     		}
     	}
 
     	if (aeCheckDelay > 0) {
+    		XP_CYAN xprintf("[LS] Will wake to re-evaluate the flash in %d seconds. Flash is currently %s.\n",
+    				aeCheckDelay, ledFlashIsActive() ? "armed" : "not armed"); XP_WHITE
     		sleep_mode_enter_dpd(SLEEPMODE_WAKE_SOURCE_WAKE_PIN | SLEEPMODE_WAKE_SOURCE_RTC,
     				(uint16_t) aeCheckDelay, false); // Does not return
     	}

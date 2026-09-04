@@ -41,6 +41,6 @@ in `_Documentation/building_firmware.md`; flashing and recovery in
 |---|---|
 | Durable docs | `_Documentation/`, `EPII_CM55M_APP_S/app/ww_projects/ww500_md/doc/` |
 | How the code got this way | `_Documentation/development reports/` |
-| Op parameters | `_Documentation/Operational_Parameters.md`, `MANIFEST/config_file.md` |
+| Op parameters | `EPII_CM55M_APP_S/app/ww_projects/ww500_md/MANIFEST/config_file.md` |
 | Console/BLE commands | `_Documentation/ble_commands.md` (`help` on the console lists all) |
 | PR summary at a branch tip | `REVIEW_PR<N>.md` |

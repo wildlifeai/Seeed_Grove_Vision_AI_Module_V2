@@ -1,5 +1,5 @@
 # Description of the CONFIG.TXT File
-#### CGP - 25 April 2026 (updated 11 July 2026: parameters 29-31 - RP camera auto-exposure and white-balance mode)
+#### CGP - 25 April 2026 (updated 8 July 2026: parameters 21-28, immediate persistence; updated 11 July 2026: parameters 29-31 - RP camera auto-exposure and white-balance mode; updated 4 September 2026: parameters 32-36 - ALWAYS_ON/TIME_OF_DAY flash modes, OP_PARAMETER_AE_CHECK_INTERVAL renamed to OP_PARAMETER_FLASH_EVALUATE_INTERVAL; this is now the canonical copy - see note at the end)
 
 The CONFIG.TXT file contains "Operational Parameters" for the WW500.
 
@@ -61,9 +61,9 @@ captured first.
 |    19 | OP_PARAMETER_IMAGES_COUNT     		| 0             | Count of images in the current image folder. Use this to decide to create a new image folder. |
 |    20 | OP_PARAMETER_IMAGES_FILE_INDEX 		| 0             | Count of image folders |
 |    21 | OP_PARAMETER_MD_FLASH_LED 			| 2             | LED used to illuminate motion-detection frames while asleep: 0 = none, 1 = visible, 2 = IR |
-|    22 | OP_PARAMETER_MD_FLASH_BRIGHTNESS_PERCENT | 50         | Brightness of the motion-detection illumination (percent; 16 hardware levels; approximately, 0 means 'dim', not 'off' - op21 = 0 is the off switch). Default raised from 5 - too dim for night MD |
+|    22 | OP_PARAMETER_MD_FLASH_BRIGHTNESS_PERCENT | 50         | Brightness of the motion-detection illumination (percent; 16 hardware levels; approximately, 0 means 'dim', not 'off' - op21 = 0 is the off switch). Default raised from 5 (too dim for night MD in the field); the LED remains STROBE-gated to each MD frame's ~15 ms integration window, so this scales pulse amplitude, not duty cycle |
 |    23 | OP_PARAMETER_AE_DARK_THRESHOLD 		| 65            | AE Mean (0-255) below this means the scene is dark and the flash is needed |
-|    24 | OP_PARAMETER_AE_CHECK_INTERVAL 		| 15            | Interval (minutes) between periodic AE light-level checks. 0 disables |
+|    24 | OP_PARAMETER_FLASH_EVALUATE_INTERVAL 	| 15            | Interval (minutes) between periodic flash-mode re-evaluations (AE light level or time-of-day window). 0 disables |
 |    25 | OP_PARAMETER_AE_FLASH_STATE 			| 0             | Last AE flash decision (0/1). Runtime state - leave as 0 |
 |    26 | OP_PARAMETER_SLOT_SWITCH 				| 0             | Automatic light-based camera image switching: 0 = off (manual `switchslot` only), 1 = automatic (night image in the dark, colour image in daylight; reboots at the next sleep) |
 |    27 | OP_PARAMETER_WB_RED_GAIN 				| 286           | Software white-balance RED gain, Q8.8 (256 = 1.0x, 0 = correction off). RP3 colour camera only |
@@ -71,10 +71,11 @@ captured first.
 |    29 | OP_PARAMETER_CAM_AE_ENABLE 			| 1             | RP camera auto-exposure: 0 = off (init-table exposure), 1 = on. Highlight-metered loop steps sensor exposure (8-5000 lines) then analog gain (to 16x) toward the target - see `ae.c` |
 |    30 | OP_PARAMETER_CAM_AE_TARGET 			| 110           | Auto-exposure target: raw bright-quartile (p75) luma, 0-250 (0 = built-in default 95). Bright parts of the scene render just below white after the tone curve |
 |    31 | OP_PARAMETER_CAM_WB_MODE 				| 1             | RP camera white balance: 0 = off (hardware JPEG), 1 = auto (warmth-biased grey-world measured per frame), 2 = manual op27/op28. Auto falls back to manual for flash-lit or too-dark frames - see `img_correct.c` |
-
-## More Details
-
-For more details of how the Operational Parameters are used, see [Operational_Parameters.md](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/blob/dev/_Documentation/Operational_Parameters.md)
+|    32 | OP_PARAMETER_RFU_1 					| 0             | Reserved for future use |
+|    33 | OP_PARAMETER_RFU_2 					| 0             | Reserved for future use |
+|    34 | OP_PARAMETER_FLASH_MODE 				| 0             | Capture flash mode: 0 = off, 1 = AE-driven, 2 = always on, 3 = time of day |
+|    35 | OP_PARAMETER_FLASH_TOD_START 			| 0             | FLASH_MODE_TIME_OF_DAY only: minutes after midnight UTC when the flash turns on |
+|    36 | OP_PARAMETER_FLASH_TOD_DURATION 		| 0             | FLASH_MODE_TIME_OF_DAY only: duration (minutes) the flash stays on, wraps past midnight |
 
 ## GPS location
 
@@ -118,16 +119,42 @@ block has been removed.
 
 ## LED Flash operation
 
-The flash is driven by the AE light sensor: the HM0360 auto-exposure registers are read
-after each capture (and periodically - see OP_PARAMETER_AE_CHECK_INTERVAL), and the flash
-operates when the scene is dark. The time-of-day and always-on modes have been removed.
+The capture flash has four modes, set by OP_PARAMETER_FLASH_MODE:
+
+| Mode          | Value | Behaviour |
+|---------------|-------|-----------|
+| Off           | 0     | Never fires |
+| AE-driven     | 1     | Fires when the AE light sensor judges the scene dark - see OP_PARAMETER_AE_DARK_THRESHOLD |
+| Always on     | 2     | Fires on every capture |
+| Time of day   | 3     | Fires within a UTC window: OP_PARAMETER_FLASH_TOD_START (minutes after midnight) for OP_PARAMETER_FLASH_TOD_DURATION minutes (wraps past midnight) |
+
+OP_PARAMETER_FLASH_LED selects which LED colour(s) are used when the flash is active
+(0 = none, 1 = visible, 2 = IR) - independent of which mode is selected; brightness is
+OP_PARAMETER_LED_BRIGHTNESS_PERCENT.
+
+OP_PARAMETER_FLASH_EVALUATE_INTERVAL (minutes) paces how often the mode is periodically
+re-evaluated while asleep with nothing else waking the device (AE light level, or the
+time-of-day window) - 0 disables the periodic wake. Time-of-day is also re-evaluated
+immediately whenever the RTC is set (e.g. from the app). Neither mode adjusts for date,
+season, or sunrise/sunset - the flash does not need to switch at precise times.
+
+Motion-detection illumination is independent of the capture-flash mode - see
+OP_PARAMETER_MD_FLASH_LED / OP_PARAMETER_MD_FLASH_BRIGHTNESS_PERCENT below, also gated
+by whether the capture flash is currently armed.
 
 | Case                       | Setting |
 |----------------------------|---------|
-| Capture flash off          | OP_PARAMETER_FLASH_LED = 0 |
-| Capture flash by AE sensor | OP_PARAMETER_FLASH_LED = 1 (visible) or 2 (IR); brightness = OP_PARAMETER_LED_BRIGHTNESS_PERCENT |
-| MD illumination            | OP_PARAMETER_MD_FLASH_LED / OP_PARAMETER_MD_FLASH_BRIGHTNESS_PERCENT (also gated by the AE dark decision) |
+| MD illumination            | OP_PARAMETER_MD_FLASH_LED / OP_PARAMETER_MD_FLASH_BRIGHTNESS_PERCENT |
 
 Tuning: OP_PARAMETER_AE_DARK_THRESHOLD (dark below this AE Mean value; default 65) and
-OP_PARAMETER_AE_CHECK_INTERVAL (minutes between light checks when no timelapse runs).
-See _Documentation/AE_Light_Sensor_Roadmap.md in the firmware repository.
+OP_PARAMETER_FLASH_EVALUATE_INTERVAL (minutes between re-evaluations when no timelapse
+runs). See _Documentation/AE_Light_Sensor_Roadmap.md and
+_Documentation/development reports/2026-08-24_light_sensor_review/flash_led_modes_proposal.md
+in the firmware repository.
+
+## Canonical copy
+
+This file is the canonical description of CONFIG.TXT / the Operational Parameters -
+it ships alongside the firmware it describes. `_Documentation/Operational_Parameters.md`
+now just points here instead of duplicating the table, after the two drifted out of
+sync (4 September 2026).

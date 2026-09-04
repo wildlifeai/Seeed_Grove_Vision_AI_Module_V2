@@ -39,11 +39,21 @@
 
 # Various build files
 EPII_CM55M_APP_S/obj_*/**
+# Linker response file (options/rules.mk) - normally deleted by the same recipe
+# right after linking, but can linger if a build is killed/crashes mid-link
+EPII_CM55M_APP_S/objs.in
 we2_image_gen_local/output_*/**
 we2_image_gen_local/Images*.txt
+we2_image_gen_local_dpd/Images*.txt
 *.elf
 *.map
 *.img
+
+# Runtime copies we2_local_image_gen makes of itself into its own working
+# directory on every run (the real tracked tool binaries live one level down,
+# in arm_none_eabi/)
+/we2_image_gen_local_dpd/arm-none-eabi-objcopy
+/we2_image_gen_local_dpd/arm-none-eabi-objdump
 
 # ---------------------------
 # DPD generated files
@@ -62,6 +72,21 @@ we2_image_gen_local_dpd/output_case1_sec_wlcsp/**
 we2_image_gen_local_dpd/secureboot_tool/**/*.crt
 we2_image_gen_local_dpd/secureboot_tool/**/*.txt
 we2_image_gen_local_dpd/secureboot_tool/**/*.log
+
+# Do NOT ignore secureboot_tool/**/*.cfg. cert/cfg/ICVSBContent.cfg and
+# OEMSBContent.cfg are hand-authored inputs to the content-certificate tool,
+# not build outputs, and nothing regenerates them. Without them in the tree a
+# clean clone has no cert/cfg directory at all, and the failure is silent:
+# generate_secureboot_certificates throws FileNotFoundError, ICVSBContent.crt is
+# never produced, make still exits 0, and the image is still exactly 462848
+# bytes for HM0360. A size check does not catch this. Measured against the noise
+# floor of two identical builds (1648 bytes), the resulting image differs in
+# 122974 bytes.
+#
+# The build rewrites ICVSBContent.cfg byte-for-byte with LF line endings, so on
+# Windows with core.autocrlf=true it shows as modified in 'git status' after a
+# build. That is a line-ending stat artifact, not a change: 'git diff' is empty
+# and it hashes to the same blob. Do not re-add an ignore rule to silence it.
 
 # Track all other subfolders normally (do not ignore their contents)
 # No need to do anything else � they are tracked by default
@@ -83,3 +108,4 @@ node_modules/
 
 .claude/
 **/claude/
+/CLAUDE_CGP.md

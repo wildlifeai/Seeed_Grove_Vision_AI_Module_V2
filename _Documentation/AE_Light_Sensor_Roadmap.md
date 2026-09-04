@@ -244,7 +244,7 @@ python ae_threshold_analysis.py --csvs ae_data.csv --outdir <output>
 
 ## 8. Flash Configuration (Simplified) and Motion-Detection Illumination
 
-### 8.1 Time-of-day mode removed
+### 8.1 Time-of-day mode removed (superseded - reinstated 4 September 2026)
 
 To remove complexity, the flash no longer has a time-of-day mode (or an always-on mode).
 `OP_PARAMETER_FLASH_LED_START_TIME` (21) and `OP_PARAMETER_FLASH_LED_DURATION` (22) have been
@@ -252,6 +252,16 @@ removed, along with `FLASH_MODE_TIME_OF_DAY`, `FLASH_MODE_ALWAYS_ON` and `ledFla
 The capture flash is now either **off** (`OP_PARAMETER_FLASH_LED` = 0) or **driven by the AE
 light sensor** (`OP_PARAMETER_FLASH_LED` = 1 or 2), tuned with `AE_DARK_THRESHOLD` /
 `AE_CHECK_INTERVAL`; `AE_FLASH_STATE` (default 0) carries the decision across sleep.
+
+**Update, 4 September 2026**: both modes have been reinstated, using new parameter slots
+(34/35/36, not the old 21/22 - those are now permanently the MD-illumination settings from
+§8.3) and a dedicated `OP_PARAMETER_FLASH_MODE` rather than inferring the mode from another
+parameter's value as the original design did. `OP_PARAMETER_AE_CHECK_INTERVAL` was renamed to
+`OP_PARAMETER_FLASH_EVALUATE_INTERVAL` (same index, 24) since it now paces time-of-day
+re-evaluation too. See
+[flash_led_modes_proposal.md](development%20reports/2026-08-24_light_sensor_review/flash_led_modes_proposal.md)
+for the full design and `MANIFEST/config_file.md` for the current parameter table - the
+description below is retained for history but the "removed" framing no longer applies.
 
 ### 8.2 How motion detection uses the flash (research findings)
 

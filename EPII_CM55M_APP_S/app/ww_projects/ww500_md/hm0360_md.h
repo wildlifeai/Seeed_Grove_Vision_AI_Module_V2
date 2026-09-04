@@ -34,25 +34,6 @@ typedef struct {
 	uint8_t aeConverged;	// Value of AE_CONVERGED
 } HM0360_GAIN_T;
 
-// Aggregated AE statistics over several successive frames. A single AE_MEAN
-// reading is unreliable as a light sensor: bench testing in a fully dark box
-// showed AE_MEAN oscillating between ~3 and ~66 (across the dark threshold),
-// because it is the output of the sensor's own AE control loop, not a raw
-// brightness measure. Averaging several frames - and noting whether the AE has
-// railed its gain to maximum (an unambiguous "darker than the sensor can
-// expose for" signal) - gives a robust dark/bright decision.
-// See _Documentation/AE_Light_Sensor_Roadmap.md
-typedef struct {
-	uint8_t  samples;		// number of frames actually read
-	uint16_t meanAE;		// mean of AE_MEAN over the samples (0-255)
-	uint8_t  minAE;			// smallest AE_MEAN seen
-	uint8_t  maxAE;			// largest AE_MEAN seen
-	uint8_t  maxAnalogGain;	// largest ANALOG_GAIN index seen
-	uint16_t maxDigitalGain;// largest DIGITAL_GAIN seen
-	uint8_t  railedCount;	// frames where gain reached the configured maximum
-	bool     gainRailed;	// true if the majority of frames had gain at maximum
-} HM0360_AE_STATS_T;
-
 // Select streaming mode by writing to 0x0100.
 // See data sheet 6.1 & 10.2
 typedef enum {
@@ -91,15 +72,28 @@ HX_CIS_ERROR_E hm0360_md_disableInterrupt(void);
 HX_CIS_ERROR_E hm0360_md_prepare(bool cameraSystemEnabled, uint16_t mdFrameInterval);
 HX_CIS_ERROR_E hm0360_md_getGainRegs(HM0360_GAIN_T * val);
 
-// Sample AE_MEAN and the gain registers over 'nSamples' successive frames
-// (waiting 'gapMs' between reads) and return aggregated statistics. Use this
-// rather than a single hm0360_md_getGainRegs() reading for the light-sensor
-// dark/bright decision, because the raw AE loop output oscillates.
-HX_CIS_ERROR_E hm0360_md_getAEStats(uint8_t nSamples, uint16_t gapMs, HM0360_AE_STATS_T * stats);
+// Read the AE gain ceilings (MAX_AGAIN, MAX_DGAIN_H/L) - used by lightSensor.c
+// to detect when the AE loop has railed its gain to maximum.
+HX_CIS_ERROR_E hm0360_md_getGainCeilings(uint8_t *maxAnalogGain, uint16_t *maxDigitalGain);
+
+// Read the current MODE_SELECT value. Side-effect-free counterpart to
+// hm0360_md_setModeSelectOnly() - do not use hm0360_md_setMode() to restore a
+// mode read via this getter.
+HX_CIS_ERROR_E hm0360_md_getMode(mode_select_t *mode);
+
+// Write MODE_SELECT directly, with none of hm0360_md_setMode()'s side effects
+// (no forced sleep interlude, no PMU_CFG rewrite, no MD interrupt toggle).
+// For a transient streaming nudge (e.g. waking the sensor to sample AE
+// registers, then restoring the mode read via hm0360_md_getMode() beforehand).
+HX_CIS_ERROR_E hm0360_md_setModeSelectOnly(mode_select_t mode);
 
 uint16_t hm0360_md_getMDOutput(uint8_t * regTable, uint8_t length);
 
 void hm0360_md_printGrid(uint8_t *roiOut, uint16_t numBlocks, char *msg, uint16_t msgLen);
+
+// Read whether the STROBE pin is currently configured to drive the flash.
+// Side-effect-free counterpart to hm0360_md_configureStrobe().
+HX_CIS_ERROR_E hm0360_md_getStrobe(bool *flashEnabled);
 
 // Configure the HM0360 STROBE pin which can drive the flash cct
 HX_CIS_ERROR_E hm0360_md_configureStrobe(bool flashRequired);

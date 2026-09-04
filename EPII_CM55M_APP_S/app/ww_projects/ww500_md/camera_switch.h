@@ -16,7 +16,7 @@
  *     issues 'switchslot'.
  *   - AUTOMATIC (OP_PARAMETER_SLOT_SWITCH == 1): after each AE light check
  *     (HM0360 AE registers, sampled around captures and every
- *     OP_PARAMETER_AE_CHECK_INTERVAL minutes) the hysteresis-filtered
+ *     OP_PARAMETER_FLASH_EVALUATE_INTERVAL minutes) the hysteresis-filtered
  *     dark/bright decision (OP_PARAMETER_AE_FLASH_STATE) is compared with the
  *     running variant; when they disagree - and the other slot is labelled
  *     with the wanted variant - cameraSwitch_autoSwitchCheck() switches the

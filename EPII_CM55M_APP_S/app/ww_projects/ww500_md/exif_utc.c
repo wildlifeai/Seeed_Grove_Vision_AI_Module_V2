@@ -51,11 +51,12 @@ static bool timeHasBeenSet = false;
  * Check if a year is a leap year
  * Helper function for exif_utc_add_seconds_to_tm()
  *
- * @param year rtc_time.tm_year is years since 1900
+ * @param year rtc_time.tm_year is a full 4-digit year (e.g. 2026), not years
+ *             since 1900 - see exif_utc_utc_string_to_time(), which parses it
+ *             straight from the "YYYY" of an ISO string with no offset.
  * @return 1 if a leap year
  */
 static int is_leap_year(int year) {
-    year += 1900;  // rtc_time.tm_year is years since 1900
     return ((year % 4 == 0) && (year % 100 != 0 || year % 400 == 0));
 }
 
@@ -64,15 +65,20 @@ static int is_leap_year(int year) {
  * Get number of days in a given month/year
  * Helper function for exif_utc_add_seconds_to_tm()
  *
- * @param mon = month (0-11)
- * @param year = year
+ * @param mon = month, 1-12 (rtc_time.tm_mon's convention throughout this
+ *              file - see exif_utc_utc_string_to_time()/exif_utc_time_to_utc_string(),
+ *              which read/write it straight from/to the "MM" of an ISO string)
+ * @param year = year (full 4-digit year, see is_leap_year())
  * @return the number of days in the month
  */
 static int days_in_month(int mon, int year) {
     static const int days[12] = { 31,28,31,30,31,30,31,31,30,31,30,31 };
-    if (mon == 1 && is_leap_year(year)) // February in a leap year
+    if (mon < 1 || mon > 12) {
+        return 31; // defensive fallback; should not happen
+    }
+    if (mon == 2 && is_leap_year(year)) // February in a leap year
         return 29;
-    return days[mon];
+    return days[mon - 1];
 }
 
 /**************************************** Global function definitions  *************************************/
@@ -570,8 +576,10 @@ rtc_time exif_utc_add_seconds_to_tm(rtc_time input_rtc, time_t seconds_to_add) {
         t.tm_mday -= dim;
         t.tm_mon += 1;
 
-        if (t.tm_mon >= 12) {
-            t.tm_mon = 0;
+        // 1-indexed months (1-12): only wrap once we go PAST December, not
+        // when we merely arrive at it, and wrap to January (1), not 0.
+        if (t.tm_mon > 12) {
+            t.tm_mon = 1;
             t.tm_year += 1;
         }
     }

@@ -84,7 +84,6 @@
 
 #include "barrier.h"
 #include "selfTest.h"
-#include "ledFlash.h"		// for FlashLedMode_t, used by the op34 config migration
 #include "cvapp.h"
 #include "exif_gps.h"
 
@@ -1060,7 +1059,6 @@ static FRESULT load_configuration(const char *filename, directoryManager_t *dirM
 	char *token;
 	uint8_t index;
 	uint16_t value;
-	bool sawFlashMode = false;	// did this file mention op34 at all? See the migration below
 
     if (!fatfs_mounted()) {
         xprintf("SD card not mounted.\n");
@@ -1148,31 +1146,10 @@ static FRESULT load_configuration(const char *filename, directoryManager_t *dirM
 				// Set array value if index is in range
 				if (index >= 0 && index < OP_PARAMETER_NUM_ENTRIES) {
 					op_parameter[index] = value;
-					if (index == OP_PARAMETER_FLASH_MODE) {
-						sawFlashMode = true;
-					}
 					// debug only:
 					// xprintf("   op_parameter[%d] = %d\n", index, value);
 				}
 			}
-		}
-
-		// Migration for CONFIG.TXT files written before op34 existed.
-		//
-		// Until FLASH_MODE was added, a non-zero op13 (FLASH_LED) was on its own
-		// enough to arm the AE-driven capture flash. That decision now belongs to
-		// op34, which defaults to off, so a card already in the field would stop
-		// flashing after a firmware update without a single line of its CONFIG.TXT
-		// changing, and nothing would say why. Where the file asks for a flash LED
-		// but says nothing about op34, assume the behaviour it was written for.
-		//
-		// A file that sets op34 explicitly is left alone, including when it sets
-		// it to 0. That is a deliberate choice, not a gap.
-		if (!sawFlashMode && (op_parameter[OP_PARAMETER_FLASH_LED] != 0)) {
-			op_parameter[OP_PARAMETER_FLASH_MODE] = FLASH_MODE_AE;
-			xprintf("No op%d in CONFIG.TXT but op%d = %d, so flash mode set to AE (%d).\n",
-					OP_PARAMETER_FLASH_MODE, OP_PARAMETER_FLASH_LED,
-					op_parameter[OP_PARAMETER_FLASH_LED], FLASH_MODE_AE);
 		}
 	}
 

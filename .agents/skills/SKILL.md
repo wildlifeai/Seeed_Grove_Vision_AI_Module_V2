@@ -71,11 +71,26 @@ What that means for an agent, beyond reading the rules:
 * Toolchain is pinned: **Arm GNU 14.3.rel1**. Build under WSL/Linux;
   `make clean` between camera variants is **mandatory** (objects don't encode the `-D`
   flags). Both variants must build — a change that compiles for one only is broken.
-* Image generation uses `we2_image_gen_local_dpd` with the **RC24M** profile; both
-  variants emit the same `output.img` path — rename between runs.
+* **`make` runs image generation itself** (`ww500_md/mk/image_gen.mk`, RC24M profile) and
+  writes both `output_case1_sec_wlcsp/output.img` and an 8.3 `VYMDDHMM.IMG` copy named for
+  the variant (`R`/`H`). Do **not** run `we2_local_image_gen` by hand, it destroys the
+  image make just built. No renaming between variants is needed.
+* **A failed secure-boot certificate step does not fail the build**, and size only catches
+  it on one variant. RP3 goes 487424 signed to 462848 certless; **HM0360 is 462848 either
+  way**. So 462848 is both a good HM0360 image and an unsigned RP3 one. Check the build log
+  for the `FileNotFoundError` traceback and that `secureboot_tool/cert/ICVSBContent.crt`
+  exists. Never gitignore `secureboot_tool/cert/cfg/*.cfg`: they are hand-authored build
+  inputs and nothing regenerates them.
 * SD-card firmware files: **8.3 filenames** in `/MANIFEST` (FatFS has no LFN support).
+  The `VYMDDHMM.IMG` name make emits already satisfies this.
 * Device consoles: two USB serial ports — the Himax console is the one printing clean
-  text at **921600 baud**; the other is the BLE debug UART.
+  text at **921600 baud**; the other is the BLE debug UART. Probe for it every session
+  (§5), never hard-code the COM number.
+* **X-Modem is a normal bench path, not only recovery**, the way to get locally built
+  images onto a device with no SD card. Each burn writes the **backup** slot and makes it
+  active, so two consecutive burns fill both slots, and a final `switchslot` re-labels the
+  one left behind. Runbook: `_Documentation/firmware_update_and_recovery.md`; the script
+  timing that matters is in §5.
 
 # 4. Hardware behaviour that will trap you
 
@@ -88,11 +103,22 @@ Verified on the bench (details + serial evidence in
 * **Deliberate reboots are deferred watchdog resets** (`reset`, `switchslot`,
   auto-switch): they execute at the next sleep and the following boot classifies as a
   **cold** boot (PMU wakeup registers read zero).
-* **Cold-boot IMX708 first captures are flaky** (instant retries all fail); DPD-wake
-  captures are reliable — prefer wake-path captures for bench validation.
+* **Cold-boot IMX708 first captures fail, full stop**. Every in-place retry times out
+  (`Frame timed out - restarting sensor, retry n/5`) and the image task then goes
+  Uninitialised. The progressive-dwell retry does not rescue it. DPD-wake captures are
+  reliable and take ~52 ms, so **always get past one wake cycle before believing a capture
+  or light-sensor result**. Cheapest way in: `setop 7 1` (timelapse a minute), wait for
+  `Wakeup_event = 0x0002 ... RTC Timer`, test, then `setop 7 0`.
 * **Console sessions**: an untouched boot sleeps after ~1 s; most commands hold the
   device awake ~60 s; the `reset` command deliberately does not. Scripting against this
   has its own rules, see §5.
+* **The periodic AE light check only runs if something consumes it.**
+  `aeCheckRequired = lightSensor_isRequired()`, which is true when the flash mode is
+  `FLASH_MODE_AE` (**op34**, not op13) or automatic camera switching (op26) is on. With
+  both off, captures come and go with no light check at all. The `light` command is the
+  exception and always forces a reading. When it is on, the device also wakes every op24
+  minutes (15 by default) to take a throwaway frame and read the AE registers, which is a
+  battery cost worth knowing about before enabling it.
 * **camreg staged registers** (`RPV3_EX.BIN` etc.) are re-applied after the init tables
   at every sensor init — they override defaults, persist on SD, and survive DPD.
 

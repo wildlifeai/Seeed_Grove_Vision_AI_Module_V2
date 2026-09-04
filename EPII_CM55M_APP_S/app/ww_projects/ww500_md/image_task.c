@@ -1727,10 +1727,37 @@ static void vImageTask(void *pvParameters) {
 #endif // USE_HM0360_MD
 #endif // USE_HM0360
 
-	// Initialise NN but only if the camera system is enabled
+    // Whether this wake needs to be repeated periodically even with no motion/
+    // BLE activity: a fresh light-level reading (the AE-driven flash, op13, or
+    // automatic day/night camera switching, op26 - lightSensor_isRequired()),
+    // or FLASH_MODE_TIME_OF_DAY needing to notice the window has closed.
+    // lightSensor.c only knows about the light-sensing half of this - the
+    // time-of-day half is a ledFlash/mode concern, added here instead.
+    // Computed once, early (before NN init below, so a light-check-only wake
+    // can skip it) - vImageTask() setup runs once per wake, before any
+    // capture - so the capture loop and sleep planning below just read this
+    // instead of repeating the operational-parameter lookups every time.
+    aeCheckRequired = lightSensor_isRequired()
+    		|| (ledFlashGetFlashMode() == FLASH_MODE_TIME_OF_DAY);
+
+    // A timer wake with timelapse disabled and aeCheckRequired set (AE-driven
+    // flash, automatic camera switching op26, or FLASH_MODE_TIME_OF_DAY) is a
+    // periodic flash-mode re-evaluation (the RTC alarm was set for it on the
+    // way into DPD): capture a single frame to refresh the AE registers (even
+    // if this wake is only for time-of-day, cheaper to reuse this path than
+    // add a separate no-capture one), save nothing - and, since it never runs
+    // NN inference (see skip_nn below), no need to initialise NN either.
+    aeCheckOnlyWake = cameraSystemEnabled && cameraInitialised
+    		&& (woken == APP_WAKE_REASON_TIMER)
+    		&& (fatfs_getOperationalParameter(OP_PARAMETER_TIMELAPSE_INTERVAL) == 0)
+    		&& aeCheckRequired;
+
+	// Initialise NN but only if the camera system is enabled and this isn't a
+	// throwaway light-check wake (which never runs NN inference - see
+	// aeCheckOnlyWake's handling in handleEventForNNProcessing()).
 	startTime = xTaskGetTickCount();
 
-	if (cameraSystemEnabled) {
+	if (cameraSystemEnabled && !aeCheckOnlyWake) {
 		nnStatus = cv_init(true, true,
 				fatfs_getOperationalParameter(OP_PARAMETER_MODEL_PROJECT),
 				fatfs_getOperationalParameter(OP_PARAMETER_MODEL_VERSION),
@@ -1744,9 +1771,12 @@ static void vImageTask(void *pvParameters) {
 		else {
 			xprintf("Initialised neural network.\n");
 		}
-	}
 
-    xprintf("NN Initialisation took %dms TODO - consider doing this after taking the picture!\n\n", app_getElapsedMs(startTime));
+		xprintf("NN Initialisation took %dms TODO - consider doing this after taking the picture!\n\n", app_getElapsedMs(startTime));
+	}
+	else if (aeCheckOnlyWake) {
+		XP_CYAN xprintf("[LS] Skipping NN initialisation (light-check-only wake).\n\n"); XP_WHITE
+	}
 
     // Initial state of the image task (initialized)
     image_task_state = APP_IMAGE_TASK_STATE_INIT;
@@ -1794,19 +1824,9 @@ static void vImageTask(void *pvParameters) {
 
     XP_WHITE;
 
-
-    // Whether this wake needs to be repeated periodically even with no motion/
-    // BLE activity: a fresh light-level reading (the AE-driven flash, op13, or
-    // automatic day/night camera switching, op26 - lightSensor_isRequired()),
-    // or FLASH_MODE_TIME_OF_DAY needing to notice the window has closed.
-    // lightSensor.c only knows about the light-sensing half of this - the
-    // time-of-day half is a ledFlash/mode concern, added here instead.
-    // Computed once, early - vImageTask() setup runs once per wake, before any
-    // capture - so the capture loop and sleep planning below just read this
-    // instead of repeating the operational-parameter lookups every time.
-    aeCheckRequired = lightSensor_isRequired()
-    		|| (ledFlashGetFlashMode() == FLASH_MODE_TIME_OF_DAY);
-
+    if (aeCheckOnlyWake) {
+    	XP_CYAN xprintf("[LS] Timer wake to re-evaluate the flash\n"); XP_WHITE
+    }
 
     // If we woke because of motion detection or timer then let's send ourselves an initial
     // message to take some photos.
@@ -1816,18 +1836,7 @@ static void vImageTask(void *pvParameters) {
     if ((cameraSystemEnabled == 1)  && cameraInitialised &&
     		((woken == APP_WAKE_REASON_MD) || (woken == APP_WAKE_REASON_TIMER))) {
 
-    	// A timer wake with timelapse disabled and aeCheckRequired set (AE-driven
-    	// flash, automatic camera switching op26, or FLASH_MODE_TIME_OF_DAY) is a
-    	// periodic flash-mode re-evaluation (the RTC alarm was set for it on the
-    	// way into DPD): capture a single frame to refresh the AE registers (even
-    	// if this wake is only for time-of-day, cheaper to reuse this path than
-    	// add a separate no-capture one), save nothing.
-    	aeCheckOnlyWake = ((woken == APP_WAKE_REASON_TIMER)
-    			&& (fatfs_getOperationalParameter(OP_PARAMETER_TIMELAPSE_INTERVAL) == 0)
-    			&& aeCheckRequired);
-    	if (aeCheckOnlyWake) {
-    		XP_CYAN xprintf("[LS] Timer wake to re-evaluate the flash\n"); XP_WHITE
-    	}
+        // aeCheckRequired/aeCheckOnlyWake were computed earlier, before NN init.
 
         // Pass the parameters in the ImageTask message queue
         internal_msg.msg_data = aeCheckOnlyWake ? 1 : fatfs_getOperationalParameter(OP_PARAMETER_NUM_PICTURES);

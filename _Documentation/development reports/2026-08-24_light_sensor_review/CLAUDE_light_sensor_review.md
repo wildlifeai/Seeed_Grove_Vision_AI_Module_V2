@@ -39,11 +39,11 @@ broken into several sub-tasks, which will be listed here:
 5. Add CLI on-demand "just check the light" command (done)
 6. Create a python script to run the new 'light' command continuously. (done)
 7. Change the light/dark decision algorithm. (done)
-8. Add other options for enabling the flash LED
+8. Add other options for enabling the flash LED (done)
 
 (Further tasks may follow).
 
-## Add other options for enabling the flash LED
+## Add other options for enabling the flash LED ___completed___
 
 1. I am still unsure that either light sensor algorthm is reliable. Maybe we can refine the light
   sensor algorithm in the future.
@@ -141,6 +141,64 @@ and are coloured cyan. That will make it easier for humans to review these lines
 
 ---
  ## Completed tasks:
+
+* Implemented `flash_led_modes_proposal.md`'s final design in full:
+  `FlashLedMode_t` (`ledFlash.h`) gains `FLASH_MODE_ALWAYS_ON`/`FLASH_MODE_TIME_OF_DAY`
+  (`FLASH_MODE_OFF = 0`); three new op-parameters after Charles's own
+  `OP_PARAMETER_RFU_1`/`_2` placeholders - `OP_PARAMETER_FLASH_MODE` (34),
+  `OP_PARAMETER_FLASH_TOD_START`/`_TOD_DURATION` (35/36); `OP_PARAMETER_AE_CHECK_INTERVAL`
+  renamed to `OP_PARAMETER_FLASH_EVALUATE_INTERVAL` (same index, 24, broadened
+  meaning - also paces time-of-day re-checks now); `ledFlashSetFlashModeFromOpParam()`
+  takes the new mode parameter directly and switches on it; new `evaluateTimeOfDay()`
+  (simple wrap-around window, no sunrise/sunset math - deliberately, per Charles) and
+  exported `ledFlash_reevaluateTimeOfDay()` (called from `prvSetUtc()` so a fresh RTC
+  set takes effect immediately, not just at the next wake); `lightSensor.c` untouched
+  throughout, kept exclusively about light sensing per Charles's explicit constraint -
+  the periodic-wake-for-TIME_OF_DAY condition lives in `image_task.c` instead
+  (`aeCheckRequired` widened there, not in `lightSensor_isRequired()`); both
+  DARK/LIGHT console lines reworded to mode-agnostic `ledFlashIsActive()`-based
+  "Flash is currently armed/not armed" wording. Docs updated: `MANIFEST/config_file.md`
+  (now canonical - see below) and `MANIFEST/CONFIG.TXT` (new default lines),
+  `AE_Light_Sensor_Roadmap.md` §8.1 annotated as superseded.
+  Also consolidated `_Documentation/Operational_Parameters.md` (a near-total,
+  already-drifting duplicate of `MANIFEST/config_file.md`) into a short pointer -
+  `config_file.md` is now the single canonical op-parameter doc; `AGENTS.md`'s
+  routing table updated to match. Created `_Tools/nz_to_utc.py` (NZST/NZDT-aware,
+  stdlib `zoneinfo` with a fixed-offset fallback if `tzdata` isn't installed) to
+  help compute `OP_PARAMETER_FLASH_TOD_START` values for bench testing.
+  Also added the one-line note flagged in the proposal's §7 to `light_sensor.md` §6.4 -
+  the `light` CLI command's DARK/BRIGHT verdict may not correspond to what's actually
+  controlling the flash under `ALWAYS_ON`/`TIME_OF_DAY`.
+  Not yet build-verified. (complete 4 September 2026, build verification pending)
+
+* Skip NN initialisation entirely for a throwaway light-check-only wake
+  (`aeCheckOnlyWake`, `image_task.c`) - Charles noticed, after installing a real NN
+  model, that `cv_init()` ran (visible in the console: "Initialising NN with
+  2412/ETHOS-U 2411 library...") on a periodic timer wake whose sole purpose was to
+  re-evaluate the flash mode, between `ledFlashSetFlashModeFromOpParam()` and
+  "Timer wake to re-evaluate the flash" - wasted work, since `aeCheckOnlyWake` was
+  already known to skip NN *inference* later (`skip_nn` in the FRAME_READY handler).
+  Root cause: `aeCheckRequired`/`aeCheckOnlyWake` were computed *after* `cv_init()`
+  ran, even though every input they need (`woken`, `cameraInitialised`,
+  `OP_PARAMETER_TIMELAPSE_INTERVAL`, and `lightSensor_isRequired()`/
+  `ledFlashGetFlashMode()` - already set by `setupLEDFlash()`, which runs earlier)
+  was available before it. Fixed by moving both computations earlier (still "once,
+  early" per the existing comment, just earlier still) and gating `cv_init()` on
+  `!aeCheckOnlyWake`; the later block that queues `APP_MSG_IMAGETASK_STARTCAPTURE`
+  now just reads the already-computed flag instead of recomputing it. Verified every
+  consumer of `nnStatus` (a local variable, defaults to -1/"disabled", used only for
+  one console line - correctly still says "disabled" when skipped) and `cv_modelLoaded()`
+  (the other call site is inside `prepareJpegFile()`, never reached for
+  `aeCheckOnlyWake` since file save is already skipped) - nothing else depends on
+  `cv_init()` having run for this wake type. A second idea from the same
+  conversation - moving NN init to run *after* the picture is triggered, to reduce
+  wake-to-capture latency (there's already a `TODO` comment on this) - was
+  deliberately left alone: it needs restructuring how the *first* capture is
+  triggered relative to task startup (the `STARTCAPTURE` message currently isn't
+  processed until the task's main loop starts, after all of this init work
+  completes, so simply reordering two adjacent calls would not achieve real
+  overlap) - treated as a separate, bigger investigation if wanted later.
+  Not yet build-verified. (complete 4 September 2026, build verification pending)
 
 * Fixed a STROBE-flicker bug in `decideDarkBrightGainBased()` (`lightSensor.c`),
   found by Charles bench-testing `ae_stream.py --capture` with the flash enabled

@@ -286,6 +286,12 @@ path (`lightSensor_takeReading()`, gated on `lightSensor_isRequired()`), the for
 always samples regardless of whether the AE flash (op13) or auto camera-switch (op26) is
 currently enabled, so it works for bench tuning before either is turned on.
 
+Note (4 Sept 2026): since `flash_led_modes_proposal.md`, the capture flash can also
+run in `FLASH_MODE_ALWAYS_ON`/`FLASH_MODE_TIME_OF_DAY`, not just AE-driven. `light`
+still always forces a fresh AE reading regardless of mode, so its DARK/BRIGHT verdict
+may not correspond to what's actually controlling the flash on a device running one
+of those other modes - that's expected, not a bug.
+
 ### 6.5 `ae_monitor.py` needs a human validation pass
 
 It was fixed against the current firmware by a different Claude session (not this one) after

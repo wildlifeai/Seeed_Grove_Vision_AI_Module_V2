@@ -23,12 +23,16 @@
 #include "ledFlash.h"
 #include "lightSensor.h"
 #include "pca9574.h"
+#include "exif_utc.h"	// exif_utc_get_rtc_as_time() for FLASH_MODE_TIME_OF_DAY
 
 #include "hx_drv_rtc.h"
 
 /*************************************** Defines **************************************/
 
 #define LF_NUMCHANNELS 	8
+
+// There are 1440 minutes in a day
+#define MINUTES_PER_DAY (24 * 60)
 
 // Defines for bits on the  PCA9574
 #define LF_BRSEL0		(1 << 0)
@@ -46,6 +50,8 @@
 #ifdef TIMER_TURNS_OFF_FLASH
 static void FlashOffTimerCallback(TimerHandle_t xTimer);
 #endif // TIMER_TURNS_OFF_FLASH
+
+static void evaluateTimeOfDay(void);
 
 /*************************************** External variables *******************************************/
 
@@ -325,41 +331,78 @@ uint8_t ledFlashIsActive(void) {
 }
 
 /**
- * Setter for flashMode from operational parameter values
+ * Sets flashMode and flashActive from operational parameter values.
  *
- * Call when the Operational Parameters have been loaded from SD card
+ * Call when the Operational Parameters have been loaded from SD card (also
+ * called at every wake - see setupLEDFlash(), image_task.c).
  *
- * The flash for captures is either off, or driven by the AE light sensor
- * (on when the scene is dark). See _Documentation/AE_Light_Sensor_Roadmap.md
-
-| No. |  Case                    | OP_PARAMETER_FLASH_LED |
-|-----|--------------------------|------------------------|
-| 1   | Always off               | 0                      |
-| 2   | Selected by AE           | 1 (visible) or 2 (IR)  |
+ * See _Documentation/AE_Light_Sensor_Roadmap.md and
+ * _Documentation/development reports/2026-08-24_light_sensor_review/flash_led_modes_proposal.md
  *
+ * @param ledInUse which LED colour(s) to use when the flash is active - 0 = none, 1 = visible, 2 = IR (OP_PARAMETER_FLASH_LED)
+ * @param flashModeParam capture flash mode - maps directly onto FlashLedMode_t (OP_PARAMETER_FLASH_MODE)
  */
-void ledFlashSetFlashModeFromOpParam(uint16_t ledInUse) {
+void ledFlashSetFlashModeFromOpParam(uint16_t ledInUse, uint16_t flashModeParam) {
 
-	// ledFlashSelectLED
 	ledFlashSelectLED(ledInUse);
+	flashMode = (FlashLedMode_t) flashModeParam;
 
-	if (ledInUse == 0) {
-		// No LEDs
-		flashMode = FLASH_MODE_OFF;
+	switch (flashMode) {
+	case FLASH_MODE_OFF:
 		flashActive = false;
-	}
-	else {
-		// Determined by AE registers (the AE light sensor)
-		flashMode = FLASH_MODE_AE;
+		break;
+
+	case FLASH_MODE_ALWAYS_ON:
+		flashActive = true;
+		break;
+
+	case FLASH_MODE_TIME_OF_DAY:
+		evaluateTimeOfDay();
+		break;
+
+	case FLASH_MODE_AE:
+	default:
 		// Restore the last AE light decision. It is persisted as an Operational
 		// Parameter because RAM is lost in DPD, and the first capture after a
 		// motion-detect wake happens before any fresh AE reading exists.
 		flashActive = lightSensor_isDark();
+		break;
 	}
 
 	// debug
 	XP_CYAN xprintf("[LS] In ledFlashSetFlashModeFromOpParam with %d Mode %d\n",
 			ledInUse, flashMode); XP_WHITE
+}
+
+/**
+ * Sets flashActive from the current UTC time and OP_PARAMETER_FLASH_TOD_START/
+ * OP_PARAMETER_FLASH_TOD_DURATION - a single wrap-around window, deliberately
+ * no sunrise/sunset or seasonal adjustment (the flash does not need to switch
+ * at precise times). A GPS-based sunrise/sunset refinement was discussed
+ * separately and deferred:
+ * https://chatgpt.com/share/6a97cda3-32f0-83ec-ad6f-bee5b1845321
+ */
+static void evaluateTimeOfDay(void) {
+	rtc_time now;
+	uint16_t minutesAfterMidnight;
+	uint16_t start;
+	uint16_t duration;
+
+	if (exif_utc_get_rtc_as_time(&now) != RTC_NO_ERROR) {
+		return;	// no fresh time available - leave flashActive as it was
+	}
+
+	minutesAfterMidnight = (uint16_t)((now.tm_hour * 60) + now.tm_min);
+	start    = (uint16_t) fatfs_getOperationalParameter(OP_PARAMETER_FLASH_TOD_START);
+	duration = (uint16_t) fatfs_getOperationalParameter(OP_PARAMETER_FLASH_TOD_DURATION);
+
+	flashActive = ((minutesAfterMidnight - start + MINUTES_PER_DAY) % MINUTES_PER_DAY) < duration;
+}
+
+void ledFlash_reevaluateTimeOfDay(void) {
+	if (flashMode == FLASH_MODE_TIME_OF_DAY) {
+		evaluateTimeOfDay();
+	}
 }
 
 

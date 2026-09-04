@@ -1273,6 +1273,9 @@ static BaseType_t prvSetUtc(char *pcWriteBuffer, size_t xWriteBufferLen, const c
 
 
 		if (ret == RTC_NO_ERROR) {
+			// The RTC just changed - refresh the flash decision immediately if
+			// it depends on time of day, rather than waiting for the next wake.
+			ledFlash_reevaluateTimeOfDay();
 			snprintf(pcWriteBuffer, xWriteBufferLen, "RTC set to %s (this took %dms)", pcParameter, (int) elapsedMs);
 		}
 		else {

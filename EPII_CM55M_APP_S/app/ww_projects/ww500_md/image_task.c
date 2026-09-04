@@ -1768,7 +1768,7 @@ static void vImageTask(void *pvParameters) {
     xprintf("  Neural network %s.\n", (nnStatus < 0) ? "disabled" : "enabled");
     xprintf("  Flash LED(s) in use: %d\n", fatfs_getOperationalParameter(OP_PARAMETER_FLASH_LED));
     xprintf("  Flash brightness: %d%%\n", (uint8_t) fatfs_getOperationalParameter(OP_PARAMETER_LED_BRIGHTNESS_PERCENT));
-    xprintf("  Light is currently %s.\n", lightSensor_isDark() ? "DARK" : "LIGHT");
+    xprintf("  Flash is currently %s.\n", ledFlashIsActive() ? "armed" : "not armed");
 
 #ifdef USE_HM0360
     // Flash duration is not used when HM0360 is the main camera
@@ -1795,12 +1795,17 @@ static void vImageTask(void *pvParameters) {
     XP_WHITE;
 
 
-    // Whether anything actually consumes a fresh light-level reading this wake:
-    // the AE-driven flash (op13) or automatic day/night camera switching (op26).
+    // Whether this wake needs to be repeated periodically even with no motion/
+    // BLE activity: a fresh light-level reading (the AE-driven flash, op13, or
+    // automatic day/night camera switching, op26 - lightSensor_isRequired()),
+    // or FLASH_MODE_TIME_OF_DAY needing to notice the window has closed.
+    // lightSensor.c only knows about the light-sensing half of this - the
+    // time-of-day half is a ledFlash/mode concern, added here instead.
     // Computed once, early - vImageTask() setup runs once per wake, before any
     // capture - so the capture loop and sleep planning below just read this
     // instead of repeating the operational-parameter lookups every time.
-    aeCheckRequired = lightSensor_isRequired();
+    aeCheckRequired = lightSensor_isRequired()
+    		|| (ledFlashGetFlashMode() == FLASH_MODE_TIME_OF_DAY);
 
 
     // If we woke because of motion detection or timer then let's send ourselves an initial
@@ -1811,15 +1816,17 @@ static void vImageTask(void *pvParameters) {
     if ((cameraSystemEnabled == 1)  && cameraInitialised &&
     		((woken == APP_WAKE_REASON_MD) || (woken == APP_WAKE_REASON_TIMER))) {
 
-    	// A timer wake with timelapse disabled and a light-decision consumer
-    	// enabled (AE-driven flash, or automatic camera switching op26) is a
-    	// periodic light check (the RTC alarm was set for it on the way into
-    	// DPD): capture a single frame to refresh the AE registers, save nothing.
+    	// A timer wake with timelapse disabled and aeCheckRequired set (AE-driven
+    	// flash, automatic camera switching op26, or FLASH_MODE_TIME_OF_DAY) is a
+    	// periodic flash-mode re-evaluation (the RTC alarm was set for it on the
+    	// way into DPD): capture a single frame to refresh the AE registers (even
+    	// if this wake is only for time-of-day, cheaper to reuse this path than
+    	// add a separate no-capture one), save nothing.
     	aeCheckOnlyWake = ((woken == APP_WAKE_REASON_TIMER)
     			&& (fatfs_getOperationalParameter(OP_PARAMETER_TIMELAPSE_INTERVAL) == 0)
     			&& aeCheckRequired);
     	if (aeCheckOnlyWake) {
-    		XP_CYAN xprintf("[LS] Timer wake for AE light check\n"); XP_WHITE
+    		XP_CYAN xprintf("[LS] Timer wake to re-evaluate the flash\n"); XP_WHITE
     	}
 
         // Pass the parameters in the ImageTask message queue
@@ -2147,9 +2154,10 @@ static void setupLEDFlash(void) {
 	brightnessPercent = (uint8_t)fatfs_getOperationalParameter(OP_PARAMETER_LED_BRIGHTNESS_PERCENT);
 	ledFlashBrightness(brightnessPercent);
 
-	// Set the LED Flash mode (off, or driven by the AE light sensor)
+	// Set the LED Flash mode (off, AE-driven, always on, or time-of-day)
 	ledFlashSetFlashModeFromOpParam(
-			fatfs_getOperationalParameter(OP_PARAMETER_FLASH_LED));
+			fatfs_getOperationalParameter(OP_PARAMETER_FLASH_LED),
+			fatfs_getOperationalParameter(OP_PARAMETER_FLASH_MODE));
 
 	ledFlashDisable(); // This writes the control bits to the PCA9574
 }
@@ -2790,26 +2798,27 @@ void image_sleepNow(void) {
                              timelapseDelay, false); // Does not return
     }
     else  {
-    	// No timelapse. If the light decision has a consumer - AE-driven flash
-    	// (op13) or automatic camera switching (op26) - wake periodically anyway
-    	// to sample the light level (one frame, AE registers only, nothing
-    	// saved) so the decision is fresh before the next motion-detect capture,
-    	// and so the auto camera switch notices dawn/dusk without needing motion.
-    	// See _Documentation/AE_Light_Sensor_Roadmap.md
+    	// No timelapse. If the flash decision has a consumer that can go stale
+    	// without a fresh wake - AE-driven flash (op13), automatic camera
+    	// switching (op26), or FLASH_MODE_TIME_OF_DAY needing to notice the
+    	// window has closed - wake periodically anyway (one throwaway frame,
+    	// nothing saved, for the AE case) so the decision is fresh before the
+    	// next motion-detect capture. See _Documentation/AE_Light_Sensor_Roadmap.md
+    	// and flash_led_modes_proposal.md.
 
     	// TODO - consider merging/syncing the 15 minute wake for AE with a 15 minute LoRaWAN pin interval.
 
     	if (cameraSystemEnabled && aeCheckRequired) {
-    		// OP_PARAMETER_AE_CHECK_INTERVAL is in minutes, so convert to seconds
-    		aeCheckDelay = (uint32_t) fatfs_getOperationalParameter(OP_PARAMETER_AE_CHECK_INTERVAL) * 60;
+    		// OP_PARAMETER_FLASH_EVALUATE_INTERVAL is in minutes, so convert to seconds
+    		aeCheckDelay = (uint32_t) fatfs_getOperationalParameter(OP_PARAMETER_FLASH_EVALUATE_INTERVAL) * 60;
     		if (aeCheckDelay > 65535) {
     			aeCheckDelay = 65535;	// the RTC alarm parameter is uint16_t seconds (~18h max)
     		}
     	}
 
     	if (aeCheckDelay > 0) {
-    		XP_CYAN xprintf("[LS] Will wake to check light level in %d seconds. Currently it is %s\n",
-    				aeCheckDelay, lightSensor_isDark() ? "DARK" : "LIGHT"); XP_WHITE
+    		XP_CYAN xprintf("[LS] Will wake to re-evaluate the flash in %d seconds. Flash is currently %s.\n",
+    				aeCheckDelay, ledFlashIsActive() ? "armed" : "not armed"); XP_WHITE
     		sleep_mode_enter_dpd(SLEEPMODE_WAKE_SOURCE_WAKE_PIN | SLEEPMODE_WAKE_SOURCE_RTC,
     				(uint16_t) aeCheckDelay, false); // Does not return
     	}

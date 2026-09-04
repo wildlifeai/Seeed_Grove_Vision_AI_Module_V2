@@ -28,14 +28,14 @@ typedef enum flashLeds {
 } FlashLeds_t;
 
 
-// The LED flash is either off or driven by the AE light sensor
-// (see _Documentation/AE_Light_Sensor_Roadmap.md)
-// NOTE: could consider also these:
-// FLASH_MODE_ALWAYS_ON,	// On all the time
-// FLASH_MODE_TIME_OF_DAY	// Determined by time of day timer
+// Capture flash mode, set directly from OP_PARAMETER_FLASH_MODE
+// (see _Documentation/AE_Light_Sensor_Roadmap.md and
+// _Documentation/development reports/2026-08-24_light_sensor_review/flash_led_modes_proposal.md)
 typedef enum flashLedMode {
-    FLASH_MODE_OFF,			// Off all the time
+    FLASH_MODE_OFF = 0,		// Off all the time
     FLASH_MODE_AE,			// Determined by light levels
+    FLASH_MODE_ALWAYS_ON,	// On all the time
+    FLASH_MODE_TIME_OF_DAY,	// On within a configured UTC time window (OP_PARAMETER_FLASH_TOD_START/_DURATION)
 } FlashLedMode_t;
 
 // Add some limits for duration of flash
@@ -71,11 +71,16 @@ void ledFlashSetFlashMode(FlashLedMode_t mode);
 // Getter for flashMode
 FlashLedMode_t ledFlashGetFlashMode(void);
 
-void ledFlashSetFlashModeFromOpParam(uint16_t ledInUse);
+void ledFlashSetFlashModeFromOpParam(uint16_t ledInUse, uint16_t flashModeParam);
 
 // Setter for flashActive - records a dark/bright decision (image_task.c, from
 // the light sensor) for the next real capture / DPD-entry STROBE arming to
 // read. Does NOT drive the flash hardware itself - see ledFlash.c.
 void ledFlash_setActive(bool active);
+
+// Re-evaluate FLASH_MODE_TIME_OF_DAY immediately after the RTC is set (e.g.
+// prvSetUtc()) - no-op in any other mode. Only updates the flashActive flag,
+// same reasoning as ledFlash_setActive() - does not drive hardware directly.
+void ledFlash_reevaluateTimeOfDay(void);
 
 #endif /* LEDFLASH_H_ */

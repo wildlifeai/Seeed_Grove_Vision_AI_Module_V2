@@ -118,7 +118,7 @@ void cameraSwitch_labelBootSlot(void) {
  * @brief Automatic day/night camera switching (OP_PARAMETER_SLOT_SWITCH == 1).
  *
  * Called by the image task after each AE light check (every capture, and the
- * periodic OP_PARAMETER_AE_CHECK_INTERVAL wakes). If the hysteresis-filtered
+ * periodic OP_PARAMETER_FLASH_EVALUATE_INTERVAL wakes). If the hysteresis-filtered
  * light decision (OP_PARAMETER_AE_FLASH_STATE: 1 = dark) wants the OTHER
  * camera variant - dark while running the day/colour image, or bright while
  * running the night/IR image - and the other slot is labelled with exactly

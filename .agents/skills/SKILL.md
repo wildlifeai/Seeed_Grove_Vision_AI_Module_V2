@@ -72,6 +72,12 @@ What that means for an agent, beyond reading the rules:
   branches; they are cherry-picked across after discussion.
 * Ask the maintainer before pushing to any shared branch. Commit messages use
   conventional prefixes (`feat:`, `fix:`, `docs:`, `ci:`).
+* **Check whether the clone is shallow before any branch analysis.** A shallow clone makes
+  `git merge-base` return *empty* rather than fail, so ahead/behind counts, fork points and
+  overlap tables come out confidently wrong, and a trial merge dies with `refusing to merge
+  unrelated histories`. Test with `test -f "$(git rev-parse --git-common-dir)/shallow"` and
+  fix with `git fetch --unshallow`, about a minute. Two-dot `git diff A B` compares trees
+  directly and stays correct either way.
 * **Never commit build churn**: `prebuilt_libs/**/*.a` deltas, `we2_image_gen_local*/`
   outputs, stray `NUL` files, `obj_*` trees. Check `git status` before staging.
 
@@ -116,11 +122,20 @@ Verified on the bench (details and serial evidence in
   (`Frame timed out - restarting sensor, retry n/5`) and the image task then goes
   Uninitialised. The progressive-dwell retry does not rescue it. DPD-wake captures are
   reliable and take ~52 ms, so **always get past one wake cycle before believing a capture
-  or light-sensor result**. Cheapest way in: `setop 7 1` (timelapse a minute), wait for
-  `Wakeup_event = 0x0002 ... RTC Timer`, test, then `setop 7 0`.
+  or light-sensor result**. Cheapest way in: `setop 7 1`, wait for
+  `Wakeup_event = 0x0002 ... RTC Timer`, test, then `setop 7 0`. **op7 is in seconds**, so
+  that is a one-second timelapse: the device will capture repeatedly and faster than a
+  script polling `getop` can follow, which reads as a counter jumping by two.
 * **Console sessions**: an untouched boot sleeps after ~1 s; most commands hold the
   device awake ~60 s; the `reset` command deliberately does not. Scripting against this
   has its own rules, see §5.
+* **`CONFIG.TXT` is also `STATE_FILE`** (`directory_manager.h`), so the device rewrites it
+  on the first sleep and after every `setop`. **A card you prepared stops being that card
+  before you can read the result**, and the file you then find is the device's own: all 37
+  parameters, comments hoisted to the top, LF endings, RTC-unset timestamp. To test how a
+  particular file parses, set the **FAT read-only attribute** on it, which the firmware
+  respects, and the card survives the boot intact. Two bench runs were spent measuring the
+  device's own file before this was understood.
 * **The periodic AE light check only runs if something consumes it.**
   `aeCheckRequired = lightSensor_isRequired()`, which is true when the flash mode is
   `FLASH_MODE_AE` (**op34**, not op13) or automatic camera switching (op26) is on. With

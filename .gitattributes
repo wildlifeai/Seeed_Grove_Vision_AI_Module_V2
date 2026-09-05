@@ -1,2 +1,9 @@
 
 .husky/* text eol=lf
+
+# Bench logs and captured device files are evidence. Never rewrite their line
+# endings: one of them is a CONFIG.TXT taken off a card to show that the device
+# writes LF, which a CRLF checkout would quietly disprove.
+**/logs/*.log -text
+**/logs/*.txt -text
+**/logs/*.TXT -text

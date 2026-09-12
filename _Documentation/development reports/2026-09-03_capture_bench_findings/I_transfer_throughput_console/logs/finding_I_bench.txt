@@ -1,0 +1,604 @@
+# Finding I bench log, 4 September 2026, filtered by filter_I.py: hex dumps removed, per-packet chatter kept only around the key events of each transfer
+[03:46.088] app   | [useBleListeners] RAW_TX received for D6:47:9B:89:E7:23: ver
+[03:46.358] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: WW500-C02 V 00.30.48 21:58:30 Jul 21 2026
+[03:46.485] nrf   | BLE in: Received   3 bytes 'ver'
+[03:46.485] nrf   | BLE out: Sent  42 bytes: 'WW500-C02 V 00.30.48 21:58:30 Jul 21 2026'
+[03:46.786] nrf   | <info> app: NUS TX Ready
+[04:32.432] app   | [FileTransfer] ftx-1788467786317-lq58yg: LARGE.BIN 512000 bytes, 2125 packets, CRC=0x0300 [sliding-window(12)]
+[04:32.437] app   | [FileTransfer] Pre-built 2125 packets
+[04:32.437] app   | [BleTransport] Lock acquired by 'ftx-1788467786317-lq58yg'
+[04:32.681] app   | [FileTransfer] Requested high connection priority
+[04:32.681] app   | [BLE Heartbeat] UART heartbeat paused state changed to: true
+[04:32.945] app   | [FileTransfer] FILE_START sent: LARGE.BIN (512000 bytes) [attempt 1]
+[04:32.954] nrf   | BLE in: File Tx Packet type 7, 17 bytes
+[04:32.954] nrf   | <info> app: AI state machine bumped with 'TxFile to AI' (Current state: SLEEP)
+[04:32.954] nrf   | <info> app: AI processor is in DPD. Waking it. (File TX packet)
+[04:32.954] himax | 1st BL Modem Build DATE=Jan 17 2025, Version: 2.12
+[04:32.954] himax | slot flash_offset 0x00100000
+[04:32.954] himax | New MemDesp himax_sec_SB_image_process PASS
+[04:32.954] himax | set_memory_s_ns
+[04:32.954] himax | HX_DSP_FLAG 1
+[04:32.954] himax | jump_addr=0x10000000
+[04:32.954] himax | Compiler Version: ARM GNU, 14.3.1 20250623
+[04:32.954] himax | **** WW500 MD. (WW500_C02) Built: 13:32:59 Sep  3 2026 ****
+[04:32.954] himax | Git branch: 'nogit' nogit-dirty
+[04:32.954] himax | Compiler Version: ARM GNU, 14.3.1 20250623
+[04:32.954] himax | Wakeup_event = 0x0000, WakeupEvt1 = 0x0001 WAKE signal
+[04:32.954] himax | Camera: RP v3 (IMX708)
+[04:32.954] himax | Enabling RP SENSOR_ENABLE
+[04:32.954] himax | PCA9574 present at 0x20
+[04:32.954] himax | DEBUG: ledFlashSelectLED(0)
+[04:32.954] himax | Initialised LED Flash
+[04:32.954] himax | HM0360 present at 0x24
+[04:32.954] himax | Main camera present at 0x1a
+[04:32.954] himax | Disabling RP SENSOR_ENABLE
+[04:32.954] himax | ### Warm Boot ###
+[04:32.954] himax | Woke at 2024:01:01 00:00:31 
+[04:32.954] himax | BLE wake
+[04:32.954] himax | Initialising FreeRTOS tasks
+[04:32.954] himax | Created task 'CLI' Priority 4
+[04:32.954] himax | Created task 'IFTask' Priority 3
+[04:32.954] himax | Created task 'FAT' Priority 2
+[04:32.954] himax | Created task 'IMAGE' Priority 1
+[04:32.954] himax | FreeRTOS scheduler started.
+[04:32.954] himax | Starting CLI Task
+[04:32.954] himax | Enter 'help' to view a list of available commands.
+[04:32.954] himax | cmd> Starting IFTask
+[04:32.954] himax | I2C slave instance 0 configured at address 0x62
+[04:32.954] himax | I2C buffers have 256 bytes, payload is 244
+[04:32.954] himax | Starting FatFS Task
+[04:33.259] himax | Mounting FatFS on SD card OK
+[04:33.259] himax | Directory '/MANIFEST' exists
+[04:33.259] himax | SD card initialised. CWD is '0:/'
+[04:33.259] himax | Loading configuration: CWD is '0:/MANIFEST'
+[04:33.259] himax | 'CONFIG.TXT' found. (Next image #27), camera enabled. Flash brightness 89
+[04:33.259] himax | Retaining existing images directory (20 <= 100) '/MEDIA/00000000/IMAGES.000'
+[04:33.259] himax | Directory '/MEDIA/00000000/IMAGES.000' exists
+[04:33.259] himax | FatFs setup took 247ms
+[04:33.259] himax | Inactivity period set at 1000ms
+            ... 1 per-packet lines ...
+[04:33.259] himax | Starting Image Task
+[04:33.259] himax | Image 2304 x 1296. Raw buffer 460800. JPEG buffer 115860. JPEG compression x4
+[04:33.259] himax | Enabling RP SENSOR_ENABLE
+[04:33.259] himax | Initialising IMX708 at 0x1a (p.u. delay 100ms)
+[04:33.259] himax | Memory allocated: 460800 for raw buffer, 115860 for JPEG, 100 for JPEG header
+[04:33.259] himax | mclk DIV3, xshutdown_pin=82
+            ... 1 per-packet lines ...
+[04:33.570] himax | IMX708 Init by app (IMX708_common_setting)
+[04:33.570] himax | Get IMX708_REG_BASE_SPC_GAINS_L = 0x40
+[04:33.570] himax | Init IMX708 Default PDAF pixel correction gains 
+[04:33.570] himax | IMX708 Init by app (IMX708_2304x1296_setting)
+[04:33.570] himax | IMX708 EXPOSURE(0x0940) by app (IMX708_exposure_setting)
+[04:33.570] himax | IMX708 Init by app (IMX708_link_450Mhz_regs)
+[04:33.570] himax | Quad Bayer re-mosaic adjustments ON
+[04:33.570] himax | IMX708 Init by app (IMX708_mirror_setting)
+[04:33.570] himax | CWD is '0:/MANIFEST'
+[04:33.570] himax | Error opening '0:/RPV3_EX.BIN': 4
+[04:33.570] himax | WD1[340a6ba0], WD2_J[340a6ba0], WD3_RAW[340363a0], JPAuto[34036320]
+[04:33.570] himax | MIPI CLK change to PLL freq:(400000000 / 2)
+[04:33.570] himax | MIPI TX CLK: 200M
+[04:33.570] himax | t_input: 12943ns
+[04:33.570] himax | t_output: 11520ns
+[04:33.570] himax | t_preload: 185ns
+[04:33.570] himax | MIPI RX FIFO FILL: 70
+[04:33.570] himax | MIPI TX FIFO FILL: 0
+[04:33.570] himax | RESET MIPI CSI RX/TX
+[04:33.570] himax | sensor_type: 15
+[04:33.570] himax | DEBUG: ledFlashBrightness(89%) [brbits = 0xd]
+[04:33.570] himax | DEBUG: ledFlashSelectLED(0)
+[04:33.570] himax | [LS] In ledFlashSetFlashModeFromOpParam with 0 Mode 0
+[04:33.570] himax | DEBUG: ledFlashDisable()
+[04:33.570] himax | Not initialising NN (project ID is 0)
+[04:33.570] himax | No model found.
+[04:33.570] himax | NN Initialisation took 9ms TODO - consider doing this after taking the picture!
+[04:33.570] himax | Image sensor and data path initialised for camera RP v3
+[04:33.570] himax |   Camera system enabled.
+[04:33.570] himax |   Neural network disabled.
+[04:33.570] himax |   Flash LED(s) in use: 0
+[04:33.570] himax |   Flash brightness: 89%
+[04:33.570] himax |   Light is currently LIGHT.
+[04:33.570] himax |   Flash duration 100ms
+[04:33.570] himax |   MD disabled.
+[04:33.570] himax |   Timelapse disabled.
+            ... 2 per-packet lines ...
+[04:33.570] himax | Sending 31 bytes: Header 4, payload 25, checksum 2 'Wake 2024-01-01T00:00:32Z'
+            ... 6 per-packet lines ...
+[04:33.570] himax | Received I2C message.
+[04:33.570] himax | MKL62BA command received: 'selftest'
+[04:33.570] himax | selfTest 0000
+            ... 1 per-packet lines ...
+[04:33.570] himax | IF Task received event 'String Response' (0x0703). Rx data = 0x3000ea30
+[04:33.570] himax | Assert inter-processor interrupt.
+[04:33.570] himax | Sending 19 bytes: Header 4, payload 13, checksum 2 'selfTest 0000'
+[04:33.570] himax | Negate inter-processor interrupt.
+[04:33.570] himax | IF Task state changed from 'I2C RX State' (2) to 'I2C TX State' (3)
+[04:33.570] himax | IF Task received event 'I2C Tx' (0x0701). Rx data = 0x00000000
+[04:33.570] himax | I2C transmission complete.
+[04:33.570] himax | IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+[04:33.740] app   | [FileTransfer] FILE_START ACKed (1048ms)
+[04:33.742] app   | [FileTransfer] DATA phase: credit streaming (window=12)
+[04:33.880] himax | IF Task received event 'I2C Rx' (0x0700). Rx data = 0x00000000
+[04:33.880] himax | Received I2C message.
+[04:33.880] himax | FileTX: Receiving 'LARGE.BIN' (512000 bytes)
+[04:33.880] himax | Opened 'LARGE.BIN' for writing
+[04:33.880] nrf   | <info> app: I2C RX payload 25/250 bytes. Response type is 4. CRC OK (0xE601)
+[04:33.880] nrf   | <info> app: AI state machine bumped with 'Wake' (Current state: SLEEP)
+[04:33.880] nrf   | <info> app: BLE and AI time differ by 2286s - too much!
+[04:33.880] nrf   | <info> app: AI state changed from SLEEP to WOKEN
+[04:33.880] nrf   | BLE out: Sent   5 bytes: 'Wake'
+[04:33.880] nrf   | <info> app: AI State machine scheduler called with event 8 'Send SelfTest'
+[04:33.880] nrf   | <info> app: AI state machine bumped with 'Send SelfTest' (Current state: WOKEN)
+[04:33.880] nrf   | Sending 'selftest' to AI processor (4 ctrl bytes, 8 payload, 2 CRC)<info> app: OK
+[04:33.880] nrf   | <info> app: AI state changed from WOKEN to SELFTEST
+[04:33.880] nrf   | <info> app: I2C TX complete: 14 bytes.
+            ... 2 per-packet lines ...
+[04:33.880] nrf   | <info> app: AI state machine bumped with 'Selftest Rx' (Current state: SELFTEST)
+[04:33.880] nrf   | <info> app: AI self test bits = 0x0000 (all bits now 0x0000)
+[04:33.880] nrf   | <info> app: Can't send UTC
+[04:33.880] nrf   | <info> app: AI state changed from SELFTEST to IDLE
+[04:33.880] nrf   | BLE out: Sent  20 bytes: 'Error bits = 0x0000'
+[04:33.880] nrf   | <info> app: AI State machine scheduler called with event 13 'TxFile to AI'
+[04:33.880] nrf   | <info> app: AI state machine bumped with 'TxFile to AI' (Current state: IDLE)
+[04:33.880] nrf   | Sending 'File Tx Message 7' to AI processor (4 ctrl bytes, 14 payload, 2 CRC)<info> app: Requested fast (15-30ms) conn params
+[04:33.880] nrf   | <info> app: fileTx: FILE_START sent, file=LARGE.BIN
+[04:33.880] nrf   | <info> app:   File setup time 40ms
+[04:33.880] nrf   | BLE out: Sent  10 bytes: 'ftx ack 0'
+[04:33.880] nrf   | <info> app: NUS TX Ready
+[04:33.880] nrf   | <info> app: NUS TX Ready
+[04:34.186] nrf   | <info> app: NUS TX Ready
+[04:35.414] nrf   | <info> app: Conn params applied: interval 12 units (15ms), timeout 5000ms
+[04:35.414] nrf   | <info> app: ftx ack 4 | pkt time 15ms
+[04:35.414] nrf   | BLE out: Sent  10 bytes: 'ftx ack 4'
+[04:35.414] nrf   | <info> app: NUS TX Ready
+[04:35.716] nrf   | <info> app: ftx ack 8 | pkt time 12ms
+            ... 2 per-packet lines ...
+[04:35.716] nrf   | <info> app: Conn params applied: interval 24 units (30ms), timeout 6000ms
+            ... 15 per-packet lines ...
+[04:36.620] nrf   | <info> app:   BLE idle time 18ms
+[04:36.620] nrf   | <info> app: fileTx: FILE_DATA pkt 32 sent (241 bytes)
+            ... 24 per-packet lines ...
+[04:37.855] nrf   | <info> app:   BLE idle time 18ms
+[04:37.855] nrf   | <info> app: fileTx: FILE_DATA pkt 64 sent (241 bytes)
+            ... 24 per-packet lines ...
+[04:39.401] nrf   | <info> app:   BLE idle time 17ms
+[04:39.401] nrf   | <info> app: fileTx: FILE_DATA pkt 96 sent (241 bytes)
+            ... 24 per-packet lines ...
+[04:40.954] nrf   | <info> app:   BLE idle time 18ms
+[04:40.954] nrf   | <info> app: fileTx: FILE_DATA pkt 128 sent (241 bytes)
+            ... 14 per-packet lines ...
+[04:41.570] nrf   | <info> app: AI State machine scheduler called with event 13 'TxFile to AI'
+            ... 10 per-packet lines ...
+[04:42.186] nrf   | <info> app:   BLE idle time 18ms
+[04:42.186] nrf   | <info> app: fileTx: FILE_DATA pkt 160 sent (241 bytes)
+            ... 24 per-packet lines ...
+[04:43.717] nrf   | <info> app:   BLE idle time 18ms
+[04:43.717] nrf   | <info> app: fileTx: FILE_DATA pkt 192 sent (241 bytes)
+            ... 24 per-packet lines ...
+[04:44.970] nrf   | <info> app:   BLE idle time 18ms
+[04:44.970] nrf   | <info> app: fileTx: FILE_DATA pkt 224 sent (241 bytes)
+            ... 16 per-packet lines ...
+[04:46.201] nrf   | BLE out: Sent  12 bytes: 'ftx ack 244'
+[04:46.201] nrf   | <info> app: NUS TX Ready
+[04:46.201] nrf   | <info> app: ftx ack 248 | pkt time 12ms
+[04:46.201] nrf   | BLE out: Sent  12 bytes: 'ftx ack 248'
+[04:46.201] nrf   | <info> app: NUS TX Ready
+[04:46.201] nrf   | <info> app: ftx ack 252 | pkt time 12ms
+[04:46.201] nrf   | BLE out: Sent  12 bytes: 'ftx ack 252'
+[04:46.201] nrf   | <info> app: NUS TX Ready
+[04:46.508] nrf   | <info> app: ftx ack 1 | pkt time 16ms
+[04:46.508] nrf   | BLE out: Sent  10 bytes: 'ftx ack 1'
+[04:46.508] nrf   | <info> app: NUS TX Ready
+[04:46.508] nrf   | <info> app: ftx ack 5 | pkt time 13ms
+[04:46.508] nrf   | BLE out: Sent  10 bytes: 'ftx ack 5'
+[04:46.508] nrf   | <info> app: NUS TX Ready
+[04:47.122] nrf   | <info> app: ftx ack 9 | pkt time 12ms
+[04:47.122] nrf   | BLE out: Sent  10 bytes: 'ftx ack 9'
+[04:47.122] nrf   | <info> app: NUS TX Ready
+            ... 15 per-packet lines ...
+[04:47.739] nrf   | <info> app:   BLE idle time 18ms
+[04:47.739] nrf   | <info> app: fileTx: FILE_DATA pkt 32 sent (241 bytes)
+            ... 24 per-packet lines ...
+[04:48.967] nrf   | <info> app:   BLE idle time 18ms
+[04:48.967] nrf   | <info> app: fileTx: FILE_DATA pkt 64 sent (241 bytes)
+            ... 24 per-packet lines ...
+[04:50.514] nrf   | <info> app:   BLE idle time 17ms
+[04:50.514] nrf   | <info> app: fileTx: FILE_DATA pkt 96 sent (241 bytes)
+            ... 24 per-packet lines ...
+[04:51.746] nrf   | <info> app:   BLE idle time 17ms
+[04:51.746] nrf   | <info> app: fileTx: FILE_DATA pkt 128 sent (241 bytes)
+            ... 24 per-packet lines ...
+[04:53.285] nrf   | <info> app:   BLE idle time 17ms
+[04:53.285] nrf   | <info> app: fileTx: FILE_DATA pkt 160 sent (241 bytes)
+            ... 2 per-packet lines ...
+[04:53.285] nrf   | <info> app: AI State machine scheduler called with event 13 'TxFile to AI'
+            ... 1 per-packet lines ...
+[04:53.586] nrf   | <info> app: AI State machine scheduler called with event 13 'TxFile to AI'
+            ... 21 per-packet lines ...
+[04:54.816] nrf   | <info> app:   BLE idle time 198ms
+[04:54.816] nrf   | <info> app: fileTx: FILE_DATA pkt 192 sent (241 bytes)
+            ... 24 per-packet lines ...
+[04:56.354] nrf   | <info> app:   BLE idle time 18ms
+[04:56.354] nrf   | <info> app: fileTx: FILE_DATA pkt 224 sent (241 bytes)
+            ... 48 per-packet lines ...
+[04:59.155] nrf   | <info> app:   BLE idle time 78ms
+[04:59.155] nrf   | <info> app: fileTx: FILE_DATA pkt 32 sent (241 bytes)
+            ... 2 per-packet lines ...
+[04:59.470] nrf   | <info> app: AI State machine scheduler called with event 13 'TxFile to AI'
+            ... 1 per-packet lines ...
+[04:59.470] nrf   | <info> app: AI State machine scheduler called with event 13 'TxFile to AI'
+            ... 21 per-packet lines ...
+[05:00.702] nrf   | <info> app:   BLE idle time 18ms
+[05:00.702] nrf   | <info> app: fileTx: FILE_DATA pkt 64 sent (241 bytes)
+            ... 24 per-packet lines ...
+[05:01.927] nrf   | <info> app:   BLE idle time 18ms
+[05:01.927] nrf   | <info> app: fileTx: FILE_DATA pkt 96 sent (241 bytes)
+            ... 24 per-packet lines ...
+[05:03.154] nrf   | <info> app:   BLE idle time 18ms
+[05:03.154] nrf   | <info> app: fileTx: FILE_DATA pkt 128 sent (241 bytes)
+            ... 24 per-packet lines ...
+[05:04.715] nrf   | <info> app:   BLE idle time 18ms
+[05:04.715] nrf   | <info> app: fileTx: FILE_DATA pkt 160 sent (241 bytes)
+            ... 14 per-packet lines ...
+[05:05.641] nrf   | <info> app: AI State machine scheduler called with event 13 'TxFile to AI'
+            ... 1 per-packet lines ...
+[05:05.641] nrf   | <info> app: AI State machine scheduler called with event 13 'TxFile to AI'
+            ... 9 per-packet lines ...
+[05:05.953] nrf   | <info> app:   BLE idle time 17ms
+[05:05.953] nrf   | <info> app: fileTx: FILE_DATA pkt 192 sent (241 bytes)
+            ... 24 per-packet lines ...
+[05:07.489] nrf   | <info> app:   BLE idle time 18ms
+[05:07.489] nrf   | <info> app: fileTx: FILE_DATA pkt 224 sent (241 bytes)
+            ... 47 per-packet lines ...
+[05:10.254] nrf   | <info> app:   BLE idle time 18ms
+[05:10.254] nrf   | <info> app: fileTx: FILE_DATA pkt 32 sent (241 bytes)
+            ... 15 per-packet lines ...
+[05:11.157] nrf   | <info> app: AI State machine scheduler called with event 13 'TxFile to AI'
+            ... 1 per-packet lines ...
+[05:11.157] nrf   | <info> app: AI State machine scheduler called with event 13 'TxFile to AI'
+[05:11.157] nrf   | <info> app: AI State machine scheduler called with event 13 'TxFile to AI'
+            ... 8 per-packet lines ...
+[05:11.772] nrf   | <info> app:   BLE idle time 18ms
+[05:11.772] nrf   | <info> app: fileTx: FILE_DATA pkt 64 sent (241 bytes)
+            ... 24 per-packet lines ...
+[05:12.988] nrf   | <info> app:   BLE idle time 18ms
+[05:12.988] nrf   | <info> app: fileTx: FILE_DATA pkt 96 sent (241 bytes)
+            ... 24 per-packet lines ...
+[05:14.507] nrf   | <info> app:   BLE idle time 18ms
+[05:14.507] nrf   | <info> app: fileTx: FILE_DATA pkt 128 sent (241 bytes)
+            ... 24 per-packet lines ...
+[05:16.040] nrf   | <info> app:   BLE idle time 18ms
+[05:16.040] nrf   | <info> app: fileTx: FILE_DATA pkt 160 sent (241 bytes)
+            ... 24 per-packet lines ...
+[05:17.273] nrf   | <info> app:   BLE idle time 18ms
+[05:17.273] nrf   | <info> app: fileTx: FILE_DATA pkt 192 sent (241 bytes)
+            ... 3 per-packet lines ...
+[05:17.573] nrf   | <info> app: AI State machine scheduler called with event 13 'TxFile to AI'
+            ... 1 per-packet lines ...
+[05:17.573] nrf   | <info> app: AI State machine scheduler called with event 13 'TxFile to AI'
+            ... 20 per-packet lines ...
+[05:18.505] nrf   | <info> app:   BLE idle time 18ms
+[05:18.505] nrf   | <info> app: fileTx: FILE_DATA pkt 224 sent (241 bytes)
+            ... 46 per-packet lines ...
+[05:21.240] nrf   | <info> app:   BLE idle time 18ms
+[05:21.240] nrf   | <info> app: fileTx: FILE_DATA pkt 32 sent (241 bytes)
+            ... 24 per-packet lines ...
+[05:22.772] nrf   | <info> app:   BLE idle time 18ms
+[05:22.772] nrf   | <info> app: fileTx: FILE_DATA pkt 64 sent (241 bytes)
+            ... 5 per-packet lines ...
+[05:23.073] nrf   | <info> app: AI State machine scheduler called with event 13 'TxFile to AI'
+            ... 1 per-packet lines ...
+[05:23.073] nrf   | <info> app: AI State machine scheduler called with event 13 'TxFile to AI'
+[05:23.073] nrf   | <info> app: AI State machine scheduler called with event 13 'TxFile to AI'
+            ... 18 per-packet lines ...
+[05:23.990] nrf   | <info> app:   BLE idle time 18ms
+[05:23.990] nrf   | <info> app: fileTx: FILE_DATA pkt 96 sent (241 bytes)
+            ... 24 per-packet lines ...
+[05:25.523] nrf   | <info> app:   BLE idle time 18ms
+[05:25.523] nrf   | <info> app: fileTx: FILE_DATA pkt 128 sent (241 bytes)
+            ... 24 per-packet lines ...
+[05:26.756] nrf   | <info> app:   BLE idle time 18ms
+[05:26.756] nrf   | <info> app: fileTx: FILE_DATA pkt 160 sent (241 bytes)
+            ... 24 per-packet lines ...
+[05:28.272] nrf   | <info> app:   BLE idle time 18ms
+[05:28.272] nrf   | <info> app: fileTx: FILE_DATA pkt 192 sent (241 bytes)
+            ... 17 per-packet lines ...
+[05:29.190] nrf   | <info> app: AI State machine scheduler called with event 13 'TxFile to AI'
+            ... 1 per-packet lines ...
+[05:29.190] nrf   | <info> app: AI State machine scheduler called with event 13 'TxFile to AI'
+            ... 6 per-packet lines ...
+[05:29.806] nrf   | <info> app:   BLE idle time 197ms
+[05:29.806] nrf   | <info> app: fileTx: FILE_DATA pkt 224 sent (241 bytes)
+            ... 16 per-packet lines ...
+[05:30.707] nrf   | BLE out: Sent  12 bytes: 'ftx ack 244'
+[05:30.707] nrf   | <info> app: NUS TX Ready
+[05:30.707] nrf   | <info> app: ftx ack 248 | pkt time 12ms
+[05:30.707] nrf   | BLE out: Sent  12 bytes: 'ftx ack 248'
+[05:30.707] nrf   | <info> app: NUS TX Ready
+[05:31.021] nrf   | <info> app: ftx ack 252 | pkt time 12ms
+[05:31.021] nrf   | BLE out: Sent  12 bytes: 'ftx ack 252'
+[05:31.021] nrf   | <info> app: NUS TX Ready
+[05:31.021] nrf   | <info> app: ftx ack 1 | pkt time 13ms
+[05:31.021] nrf   | BLE out: Sent  10 bytes: 'ftx ack 1'
+[05:31.021] nrf   | <info> app: NUS TX Ready
+[05:31.021] nrf   | <info> app: ftx ack 5 | pkt time 17ms
+[05:31.021] nrf   | BLE out: Sent  10 bytes: 'ftx ack 5'
+[05:31.326] nrf   | <info> app: NUS TX Ready
+[05:31.638] nrf   | <info> app: ftx ack 9 | pkt time 13ms
+[05:31.638] nrf   | BLE out: Sent  10 bytes: 'ftx ack 9'
+[05:31.638] nrf   | <info> app: NUS TX Ready
+            ... 15 per-packet lines ...
+[05:32.567] nrf   | <info> app:   BLE idle time 18ms
+[05:32.567] nrf   | <info> app: fileTx: FILE_DATA pkt 32 sent (241 bytes)
+            ... 24 per-packet lines ...
+[05:33.800] nrf   | <info> app:   BLE idle time 18ms
+[05:33.800] nrf   | <info> app: fileTx: FILE_DATA pkt 64 sent (241 bytes)
+            ... 24 per-packet lines ...
+[05:35.337] nrf   | <info> app:   BLE idle time 18ms
+[05:35.337] nrf   | <info> app: fileTx: FILE_DATA pkt 96 sent (241 bytes)
+            ... 24 per-packet lines ...
+[05:36.571] nrf   | <info> app:   BLE idle time 18ms
+[05:36.571] nrf   | <info> app: fileTx: FILE_DATA pkt 128 sent (241 bytes)
+            ... 24 per-packet lines ...
+[05:38.120] nrf   | <info> app:   BLE idle time 18ms
+[05:38.120] nrf   | <info> app: fileTx: FILE_DATA pkt 160 sent (241 bytes)
+            ... 24 per-packet lines ...
+[05:39.325] nrf   | <info> app:   BLE idle time 18ms
+[05:39.325] nrf   | <info> app: fileTx: FILE_DATA pkt 192 sent (241 bytes)
+            ... 24 per-packet lines ...
+[05:40.871] nrf   | <info> app:   BLE idle time 18ms
+[05:40.871] nrf   | <info> app: fileTx: FILE_DATA pkt 224 sent (241 bytes)
+            ... 5 per-packet lines ...
+[05:41.174] nrf   | <info> app: AI State machine scheduler called with event 13 'TxFile to AI'
+            ... 1 per-packet lines ...
+[05:41.174] nrf   | <info> app: AI State machine scheduler called with event 13 'TxFile to AI'
+            ... 42 per-packet lines ...
+[05:43.622] nrf   | <info> app:   BLE idle time 48ms
+[05:43.622] nrf   | <info> app: fileTx: FILE_DATA pkt 32 sent (241 bytes)
+            ... 24 per-packet lines ...
+[05:45.156] nrf   | <info> app:   BLE idle time 17ms
+[05:45.156] nrf   | <info> app: fileTx: FILE_DATA pkt 64 sent (241 bytes)
+            ... 17 per-packet lines ...
+[05:46.071] nrf   | <info> app: AI State machine scheduler called with event 13 'TxFile to AI'
+            ... 1 per-packet lines ...
+[05:46.071] nrf   | <info> app: AI State machine scheduler called with event 13 'TxFile to AI'
+            ... 6 per-packet lines ...
+[05:46.373] nrf   | <info> app:   BLE idle time 108ms
+[05:46.373] nrf   | <info> app: fileTx: FILE_DATA pkt 96 sent (241 bytes)
+            ... 5 per-packet lines ...
+[05:46.674] nrf   | <info> app: AI State machine scheduler called with event 13 'TxFile to AI'
+            ... 1 per-packet lines ...
+[05:46.674] nrf   | <info> app: AI State machine scheduler called with event 13 'TxFile to AI'
+[05:46.674] nrf   | <info> app: AI State machine scheduler called with event 13 'TxFile to AI'
+            ... 18 per-packet lines ...
+[05:47.605] nrf   | <info> app:   BLE idle time 18ms
+[05:47.605] nrf   | <info> app: fileTx: FILE_DATA pkt 128 sent (241 bytes)
+            ... 24 per-packet lines ...
+[05:49.421] nrf   | <info> app:   BLE idle time 18ms
+[05:49.421] nrf   | <info> app: fileTx: FILE_DATA pkt 160 sent (241 bytes)
+            ... 24 per-packet lines ...
+[05:50.640] nrf   | <info> app:   BLE idle time 18ms
+[05:50.640] nrf   | <info> app: fileTx: FILE_DATA pkt 192 sent (241 bytes)
+            ... 24 per-packet lines ...
+[05:52.157] nrf   | <info> app:   BLE idle time 17ms
+[05:52.157] nrf   | <info> app: fileTx: FILE_DATA pkt 224 sent (241 bytes)
+            ... 17 per-packet lines ...
+[05:53.071] nrf   | <info> app: AI State machine scheduler called with event 13 'TxFile to AI'
+            ... 1 per-packet lines ...
+[05:53.071] nrf   | <info> app: AI State machine scheduler called with event 13 'TxFile to AI'
+            ... 29 per-packet lines ...
+[05:54.905] nrf   | <info> app:   BLE idle time 18ms
+[05:54.905] nrf   | <info> app: fileTx: FILE_DATA pkt 32 sent (241 bytes)
+            ... 24 per-packet lines ...
+[05:56.423] nrf   | <info> app:   BLE idle time 48ms
+[05:56.423] nrf   | <info> app: fileTx: FILE_DATA pkt 64 sent (241 bytes)
+            ... 24 per-packet lines ...
+[05:57.650] nrf   | <info> app:   BLE idle time 18ms
+[05:57.650] nrf   | <info> app: fileTx: FILE_DATA pkt 96 sent (241 bytes)
+            ... 18 per-packet lines ...
+[05:58.571] nrf   | <info> app: AI State machine scheduler called with event 13 'TxFile to AI'
+            ... 6 per-packet lines ...
+[05:59.188] nrf   | <info> app:   BLE idle time 18ms
+[05:59.188] nrf   | <info> app: fileTx: FILE_DATA pkt 128 sent (241 bytes)
+            ... 24 per-packet lines ...
+[06:00.722] nrf   | <info> app:   BLE idle time 17ms
+[06:00.722] nrf   | <info> app: fileTx: FILE_DATA pkt 160 sent (241 bytes)
+            ... 24 per-packet lines ...
+[06:01.939] nrf   | <info> app:   BLE idle time 17ms
+[06:01.939] nrf   | <info> app: fileTx: FILE_DATA pkt 192 sent (241 bytes)
+            ... 24 per-packet lines ...
+[06:03.157] nrf   | <info> app:   BLE idle time 18ms
+[06:03.157] nrf   | <info> app: fileTx: FILE_DATA pkt 224 sent (241 bytes)
+            ... 30 per-packet lines ...
+[06:05.004] nrf   | <info> app: AI State machine scheduler called with event 13 'TxFile to AI'
+[06:05.004] nrf   | <info> app: AI State machine scheduler called with event 13 'TxFile to AI'
+            ... 16 per-packet lines ...
+[06:05.906] nrf   | <info> app:   BLE idle time 17ms
+[06:05.906] nrf   | <info> app: fileTx: FILE_DATA pkt 32 sent (241 bytes)
+            ... 24 per-packet lines ...
+[06:07.438] nrf   | <info> app:   BLE idle time 17ms
+[06:07.438] nrf   | <info> app: fileTx: FILE_DATA pkt 64 sent (241 bytes)
+            ... 15 per-packet lines ...
+[06:08.356] himax | FileTX: Received 'LARGE.BIN' OK (85 packets, 512000 bytes, CRC 0x0300)
+[06:08.356] himax | Assert inter-processor interrupt.
+[06:08.356] himax | Sending 17 bytes: Header 4, payload 11, checksum 2 'ftx ack end'
+[06:08.356] himax | Negate inter-processor interrupt.
+[06:08.356] himax | IF Task state changed from 'Disk Op State' (7) to 'I2C TX State' (3)
+[06:08.356] himax | FatFS task sending event 0x070b. Tx data = 0x00000000
+[06:08.356] himax | IF Task received event 'I2C Tx' (0x0701). Rx data = 0x00000000
+[06:08.356] himax | I2C transmission complete.
+[06:08.356] himax | IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+[06:08.356] app   | [FileTransfer] FILE_END sent: CRC=0x0300
+[06:08.356] nrf   | <info> app: ftx ack 84 | pkt time 12ms
+[06:08.356] nrf   | BLE out: Sent  11 bytes: 'ftx ack 84'
+[06:08.356] nrf   | <info> app: AI State machine scheduler called with event 13 'TxFile to AI'
+[06:08.356] nrf   | <info> app: AI State machine scheduler called with event 13 'TxFile to AI'
+[06:08.356] nrf   | <info> app:   BLE idle time 8ms
+[06:08.356] nrf   | <info> app: fileTx: FILE_END sent
+[06:08.356] nrf   | <info> app: NUS TX Ready
+[06:08.356] nrf   | <info> app:   File close time 17ms
+[06:08.356] nrf   | <info> app:   File tx time 94658ms
+[06:08.356] nrf   | <info> app: Requested standard (100-200ms) conn params
+[06:08.356] nrf   | <info> app: AI state changed from PROCESSING to IDLE
+[06:08.356] nrf   | BLE out: Sent   9 bytes: 'ftx done'
+[06:08.356] app   | [FileTransfer] Ignored: "ftx ack 84" — Expected 'ftx done', got 'ftx ack 84'
+[06:08.356] app   | [FileTransfer] Transfer complete: "ftx done" received (FILE_END took 230ms)
+[06:08.356] app   | [FileTransfer] LOG: {"transferId":"ftx-1788467786317-lq58yg","deviceId":"D6:47:9B:89:E7:23","filename":"LARGE.BIN","sizeBytes":512000,"crc":768,"maxPayloadBytes":241,"totalPackets":2125,"startTime":"2026-09-03T20:36:26.317Z","endTime":"2026-09-03T20:38:02.415Z","durationMs":96098,"packetsAcked":2125,"lastAckedPacket":85,"wrapCycles":0,"finalStatus":"success","disconnectOccurred":false,"crcVerified":true,"platform":"android","appVersion":"0.0.64"}
+[06:08.356] app   | [TextStreamScope] Destroyed for device D6:47:9B
+[06:08.356] app   | [BleTransport] Lock released by 'ftx-1788467786317-lq58yg'
+[06:08.356] app   | [BLE Heartbeat] UART heartbeat paused state changed to: false
+[06:08.356] app   | [FileTransfer] Pipeline cleanup complete
+[06:08.657] nrf   | <info> app: NUS TX Ready
+[06:08.657] nrf   | <info> app: Conn params applied: interval 156 units (195ms), timeout 4000ms
+[06:09.571] nrf   | <info> app: !120 
+[06:09.571] nrf   | <info> app: I2C RX payload 92/250 bytes. Response type is 4. CRC OK (0xADCD)
+[06:09.571] nrf   | <info> app: AI state machine bumped with 'Sleep' (Current state: IDLE)
+[06:09.571] nrf   | <info> app: AI processor sends stats: '27 0 0 11 96 1 500 0 1000 89 1 0 100 0 0 0 18 1 0 20 0 2 50 65 15 0 0 286 326 1 110 1 '
+[06:09.571] nrf   | <info> app: AI state changed from IDLE to SLEEP
+[06:09.571] nrf   | BLE out: Sent   6 bytes: 'Sleep'
+[06:09.571] himax | Inactive for 1000ms
+[06:09.571] himax | IMAGE Task received event 'Image Event Inactivity' (0x0a00). Rx data = 0x00000000
+[06:09.571] himax | IMAGE Task state changed from 'Init' (1) to 'Save State' (5)
+[06:09.571] himax | FatFS Task received event 'Save State' (0x0904). Rx data = 0x00000000
+[06:09.571] himax | Saved state to SD card. Image sequence number = 27
+[06:09.571] himax | FatFS task sending event 0x0a06. Tx data = 0x00000000
+[06:09.571] himax | IMAGE task sending event 0x0904. Rx data = 0x00000000
+[06:09.571] himax | IMAGE Task received event 'Image Event Disk Write Complete' (0x0a06). Rx data = 0x00000000
+[06:09.571] himax | Image task ready to sleep.
+[06:09.571] himax | IMAGE Task state changed from 'Save State' (5) to 'Uninitialised' (0)
+            ... 2 per-packet lines ...
+[06:09.571] himax | Sending 98 bytes: Header 4, payload 92, checksum 2 'Sleep 27 0 0 11 96 1 500 0 1000 89 1 0 100 0 0 0 18 1 0 20 0 2 50 65 15 0 0 286 326 1 110 1 '
+            ... 4 per-packet lines ...
+[06:09.571] himax | IF task ready to sleep.
+[06:09.571] himax | DEBUG: ledFlashDisable()
+[06:09.571] himax | Preparing HM0360 for MD:   HM0360 Motion Detection off.
+[06:09.571] himax |    Inhibiting MD
+[06:09.571] himax |    Changing mode from 2 to 2 with nFrames=1, sleepTime=0 sleepCount = 0xffff
+[06:09.571] himax |  No LED flashes.
+[06:09.571] himax | >>> Entering DPD at 2024:01:01 00:02:11
+[06:09.590] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: Sleep
+            ... 1 per-packet lines ...
+[06:10.174] nrf   | <info> app: Conn params applied: interval 36 units (45ms), timeout 5000ms
+[06:30.673] nrf   | <info> app: Conn params applied: interval 156 units (195ms), timeout 4000ms
+[07:07.623] app   | [BLE Heartbeat] 58s idle — sending heartbeat (get heartbeat)...
+[07:07.629] app   | TX Hex: 67657420686561727462656174
+[07:07.641] app   | Written get heartbeat to the device WILD-CNKW (08:39:01-689)
+[07:07.641] app   | [useBleListeners] RAW_TX received for D6:47:9B:89:E7:23: get heartbeat
+[07:07.837] nrf   | BLE in: Received  13 bytes 'get heartbeat'
+[07:07.837] nrf   | BLE out: Sent  17 bytes: 'heartbeat is 12h'
+[07:07.844] app   | [BLE Heartbeat] Heartbeat sent. Timer will reset on response.
+[07:07.888] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: heartbeat is 12h
+            ... 1 per-packet lines ...
+[08:05.908] app   | [BLE Heartbeat] 58s idle — sending heartbeat (get heartbeat)...
+[08:05.908] app   | TX Hex: 67657420686561727462656174
+[08:05.921] app   | Written get heartbeat to the device WILD-CNKW (08:39:59-974)
+[08:05.922] app   | [useBleListeners] RAW_TX received for D6:47:9B:89:E7:23: get heartbeat
+[08:06.036] nrf   | BLE in: Received  13 bytes 'get heartbeat'
+[08:06.036] nrf   | BLE out: Sent  17 bytes: 'heartbeat is 12h'
+[08:06.096] app   | [BLE Heartbeat] Heartbeat sent. Timer will reset on response.
+[08:06.198] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: heartbeat is 12h
+            ... 1 per-packet lines ...
+[09:02.201] nrf   | BLE in: File Tx Packet type 10, 8 bytes
+[09:02.201] nrf   | <info> app:   BLE fileTx LOOPBACK 8 bytes
+[09:04.217] app   | [BLE Heartbeat] 58s idle — sending heartbeat (get heartbeat)...
+[09:04.222] app   | TX Hex: 67657420686561727462656174
+[09:04.222] app   | Written get heartbeat to the device WILD-CNKW (08:40:58-278)
+[09:04.222] app   | [useBleListeners] RAW_TX received for D6:47:9B:89:E7:23: get heartbeat
+[09:04.362] nrf   | BLE in: Received  13 bytes 'get heartbeat'
+[09:04.362] nrf   | BLE out: Sent  17 bytes: 'heartbeat is 12h'
+[09:04.374] app   | [BLE Heartbeat] Heartbeat sent. Timer will reset on response.
+[09:04.498] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: heartbeat is 12h
+            ... 1 per-packet lines ...
+[09:07.120] nrf   | BLE in: File Tx Packet type 10, 8 bytes
+[09:07.120] nrf   | <info> app:   BLE fileTx LOOPBACK 8 bytes
+[09:12.374] nrf   | BLE in: File Tx Packet type 10, 8 bytes
+[09:12.374] nrf   | <info> app:   BLE fileTx LOOPBACK 8 bytes
+[09:17.613] nrf   | BLE in: File Tx Packet type 10, 8 bytes
+[09:17.613] nrf   | <info> app:   BLE fileTx LOOPBACK 8 bytes
+[09:22.852] nrf   | BLE in: File Tx Packet type 10, 8 bytes
+[09:22.852] nrf   | <info> app:   BLE fileTx LOOPBACK 8 bytes
+[09:28.384] nrf   | BLE in: File Tx Packet type 10, 8 bytes
+[09:28.384] nrf   | <info> app:   BLE fileTx LOOPBACK 8 bytes
+[09:33.643] nrf   | BLE in: File Tx Packet type 10, 8 bytes
+[09:33.643] nrf   | <info> app:   BLE fileTx LOOPBACK 8 bytes
+[09:38.887] nrf   | BLE in: File Tx Packet type 10, 8 bytes
+[09:38.887] nrf   | <info> app:   BLE fileTx LOOPBACK 8 bytes
+[09:44.164] nrf   | BLE in: File Tx Packet type 10, 8 bytes
+[09:44.164] nrf   | <info> app:   BLE fileTx LOOPBACK 8 bytes
+[09:49.448] nrf   | BLE in: File Tx Packet type 10, 8 bytes
+[09:49.448] nrf   | <info> app:   BLE fileTx LOOPBACK 8 bytes
+[09:54.723] nrf   | BLE in: File Tx Packet type 10, 103 bytes
+[09:54.723] nrf   | <info> app:   BLE fileTx LOOPBACK 103 bytes
+[09:59.986] nrf   | BLE in: File Tx Packet type 10, 103 bytes
+[09:59.986] nrf   | <info> app:   BLE fileTx LOOPBACK 103 bytes
+[10:02.507] app   | [BLE Heartbeat] 58s idle — sending heartbeat (get heartbeat)...
+[10:02.510] app   | TX Hex: 67657420686561727462656174
+[10:02.510] app   | Written get heartbeat to the device WILD-CNKW (08:41:56-573)
+[10:02.510] app   | [useBleListeners] RAW_TX received for D6:47:9B:89:E7:23: get heartbeat
+[10:02.647] app   | [BLE Heartbeat] Heartbeat sent. Timer will reset on response.
+[10:02.750] nrf   | BLE in: Received  13 bytes 'get heartbeat'
+[10:02.750] nrf   | BLE out: Sent  17 bytes: 'heartbeat is 12h'
+[10:02.808] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: heartbeat is 12h
+            ... 1 per-packet lines ...
+[10:05.229] nrf   | BLE in: File Tx Packet type 10, 103 bytes
+[10:05.229] nrf   | <info> app:   BLE fileTx LOOPBACK 103 bytes
+[10:10.483] nrf   | BLE in: File Tx Packet type 10, 103 bytes
+[10:10.483] nrf   | <info> app:   BLE fileTx LOOPBACK 103 bytes
+[10:15.722] nrf   | BLE in: File Tx Packet type 10, 103 bytes
+[10:15.722] nrf   | <info> app:   BLE fileTx LOOPBACK 103 bytes
+[10:20.948] nrf   | BLE in: File Tx Packet type 10, 103 bytes
+[10:20.948] nrf   | <info> app:   BLE fileTx LOOPBACK 103 bytes
+[10:26.200] nrf   | BLE in: File Tx Packet type 10, 103 bytes
+[10:26.200] nrf   | <info> app:   BLE fileTx LOOPBACK 103 bytes
+[10:31.436] nrf   | BLE in: File Tx Packet type 10, 103 bytes
+[10:31.436] nrf   | <info> app:   BLE fileTx LOOPBACK 103 bytes
+[10:36.725] nrf   | BLE in: File Tx Packet type 10, 103 bytes
+[10:36.725] nrf   | <info> app:   BLE fileTx LOOPBACK 103 bytes
+[10:41.982] nrf   | BLE in: File Tx Packet type 10, 103 bytes
+[10:41.982] nrf   | <info> app:   BLE fileTx LOOPBACK 103 bytes
+[10:47.231] nrf   | BLE in: File Tx Packet type 10, 244 bytes
+[10:47.231] nrf   | <info> app:   BLE fileTx LOOPBACK 244 bytes
+[10:52.518] nrf   | BLE in: File Tx Packet type 10, 244 bytes
+[10:52.518] nrf   | <info> app:   BLE fileTx LOOPBACK 244 bytes
+[10:57.788] nrf   | BLE in: File Tx Packet type 10, 244 bytes
+[10:57.788] nrf   | <info> app:   BLE fileTx LOOPBACK 244 bytes
+[11:00.821] app   | [BLE Heartbeat] 58s idle — sending heartbeat (get heartbeat)...
+[11:00.822] app   | TX Hex: 67657420686561727462656174
+[11:00.827] app   | Written get heartbeat to the device WILD-CNKW (08:42:54-887)
+[11:00.827] app   | [useBleListeners] RAW_TX received for D6:47:9B:89:E7:23: get heartbeat
+[11:00.934] app   | [BLE Heartbeat] Heartbeat sent. Timer will reset on response.
+[11:01.111] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: heartbeat is 12h
+[11:01.208] nrf   | BLE in: Received  13 bytes 'get heartbeat'
+[11:01.208] nrf   | BLE out: Sent  17 bytes: 'heartbeat is 12h'
+            ... 1 per-packet lines ...
+[11:03.064] nrf   | BLE in: File Tx Packet type 10, 244 bytes
+[11:03.064] nrf   | <info> app:   BLE fileTx LOOPBACK 244 bytes
+[11:08.330] nrf   | BLE in: File Tx Packet type 10, 244 bytes
+[11:08.330] nrf   | <info> app:   BLE fileTx LOOPBACK 244 bytes
+[11:13.573] nrf   | BLE in: File Tx Packet type 10, 244 bytes
+[11:13.573] nrf   | <info> app:   BLE fileTx LOOPBACK 244 bytes
+[11:18.818] nrf   | BLE in: File Tx Packet type 10, 244 bytes
+[11:18.818] nrf   | <info> app:   BLE fileTx LOOPBACK 244 bytes
+[11:24.074] nrf   | BLE in: File Tx Packet type 10, 244 bytes
+[11:24.074] nrf   | <info> app:   BLE fileTx LOOPBACK 244 bytes
+[11:29.644] nrf   | BLE in: File Tx Packet type 10, 244 bytes
+[11:29.644] nrf   | <info> app:   BLE fileTx LOOPBACK 244 bytes
+[11:34.567] nrf   | BLE in: File Tx Packet type 10, 244 bytes
+[11:34.567] nrf   | <info> app:   BLE fileTx LOOPBACK 244 bytes
+[11:59.136] app   | [BLE Heartbeat] 58s idle — sending heartbeat (get heartbeat)...
+[11:59.140] app   | TX Hex: 67657420686561727462656174
+[11:59.145] app   | Written get heartbeat to the device WILD-CNKW (08:43:53-208)
+[11:59.146] app   | [useBleListeners] RAW_TX received for D6:47:9B:89:E7:23: get heartbeat
+[11:59.246] nrf   | BLE in: Received  13 bytes 'get heartbeat'
+[11:59.246] nrf   | BLE out: Sent  17 bytes: 'heartbeat is 12h'
+[11:59.336] app   | [BLE Heartbeat] Heartbeat sent. Timer will reset on response.
+[11:59.414] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: heartbeat is 12h
+            ... 1 per-packet lines ...
+[12:57.434] app   | [BLE Heartbeat] 58s idle — sending heartbeat (get heartbeat)...
+[12:57.434] app   | TX Hex: 67657420686561727462656174
+[12:57.451] app   | Written get heartbeat to the device WILD-CNKW (08:44:51-508)
+[12:57.451] app   | [useBleListeners] RAW_TX received for D6:47:9B:89:E7:23: get heartbeat
+[12:57.659] app   | [BLE Heartbeat] Heartbeat sent. Timer will reset on response.
+[12:57.721] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: heartbeat is 12h
+[12:57.781] nrf   | BLE in: Received  13 bytes 'get heartbeat'
+[12:57.781] nrf   | BLE out: Sent  17 bytes: 'heartbeat is 12h'
+            ... 1 per-packet lines ...

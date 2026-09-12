@@ -1,0 +1,15 @@
+AI capture 3 1900:
+
+  [+ 0.000] capture in          nrf   | BLE in: Received  17 bytes 'AI capture 3 1900'
+  [+ 0.725] image               himax | Image capture 1/3 took 51ms
+  [+ 0.725] AE regs out         himax | Sending 124 bytes: Header 4, payload 118, checksum 2 'HM0360 AE regs:
+  [+ 1.965] inactive            himax | Inactive for 1000ms
+  [+ 1.965] image task ignores  himax | Inactive - expect WDT timeout soon?
+  [+ 1.965] IF ready            himax | IF task ready to sleep.
+  [+ 2.067] Sleep to nRF        nrf   | BLE out: Sent   6 bytes: 'Sleep'
+  [+ 2.568] image               himax | Image capture 2/3 took 1864ms
+  [+ 2.568] AE regs out         himax | Sending 124 bytes: Header 4, payload 118, checksum 2 'HM0360 AE regs:
+  [+ 2.568] IF ready            himax | IF task ready to sleep.
+  [+ 2.568] DPD                 himax | >>> Entering DPD at 2024:01:01 00:00:06
+
+HIT: entered DPD after image 2 of 3, 'Captured' never sent; IF task declared ready 2 times

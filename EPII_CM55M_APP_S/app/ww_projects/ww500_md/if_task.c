@@ -543,10 +543,13 @@ static void i2cRxDataReady(void) {
 			}
 		}
 
-		// Suppress the high-volume per-packet console logging for the duration of
-		// the transfer (restored in restoreInactivityPeriod()). At 921600 baud the
-		// hex dumps + state/event traces measurably throttle the packet loop.
-		g_fileRxActive = true;
+		// g_fileRxActive (suppresses the high-volume per-packet console logging,
+		// restored in restoreInactivityPeriod()) is deliberately NOT set here.
+		// It's set once OPEN_FILE actually succeeds (handleEventForStateDiskOp(),
+		// DISK_PHASE_FILE_OPEN) so a failure right at the start - e.g. no SD card
+		// mounted - is never silenced by "quiet" mode before we even know the
+		// transfer can proceed (found 14 Sep 2026: an SD-card-absent failure was
+		// hard to see on the console because logging was already suppressed).
 
 		fileRxOp.fileName      = (char *)fileRx_getFileName();
 		fileRxOp.buffer        = NULL;
@@ -1369,6 +1372,12 @@ static APP_MSG_DEST_T  handleEventForStateDiskOp(APP_MSG_T rxMessage) {
 			}
 			else {
 				sendI2CMessage((uint8_t *)"ftx ack 0", AI_PROCESSOR_MSG_RX_STRING, 9);
+
+				// Transfer is actually proceeding now - safe to suppress the
+				// high-volume per-packet logging from here on (restored in
+				// restoreInactivityPeriod()). See the comment in
+				// AI_PROCESSOR_MSG_FILE_START for why this isn't set any earlier.
+				g_fileRxActive = true;
 			}
 			if_task_state = APP_IF_STATE_I2C_TX;
 			break;

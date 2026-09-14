@@ -102,14 +102,40 @@ APPL_DEFINES += \
     -DGIT_COMMIT=\"$(GIT_COMMIT)\" \
     -DGIT_DIRTY=\"$(GIT_DIRTY)\"
 
-# Force rebuild of the main .c file which has __TIME__ and __DATE__ so the latest time and date is printed on every build.
+# Force rebuild of files containing __TIME__/__DATE__ so the printed build
+# timestamp is always current, even on an incremental (non-clean) build.
+# Mirrors FILES_TO_FORCE_REBUILD in the nRF/ww-hardware Makefile
+# (ww-hardware/MokoTech/Workspace/WildlifeWatcher_1/ww500_c02/s132/armgcc/Makefile):
+# a phony prerequisite with no recipe is always "out of date", so any object
+# rule that depends on it always re-runs, regardless of the .c file's mtime.
+#
 # Define a place where the object file is placed:
 OBJECT_DESTINATION = obj_epii_evb_icv30_bdv10/gnu_epii_evb_WLCSP65
+#
+# BUG FIXED HERE: OBJECT_DESTINATION above is a bare, unprefixed path - it's
+# what clean_legacy_obj (below) needs, since that specifically targets the
+# old in-project object folder from before the D:\hxbuild redirect existed.
+# But on a native Windows build, the *real* object tree lives under
+# OUT_DIR_ROOT (=D:/hxbuild, set above) - $(OUT_DIR) itself isn't set yet at
+# this point in the include chain (same reason clean_legacy_obj's comment
+# gives), so reconstruct the D:\hxbuild-aware path here rather than reusing
+# OUT_DIR. Without this the force-rebuild rule silently targeted a path make
+# never builds, so __TIME__/__DATE__ went stale on any non-clean Windows
+# build (found 14 Sep 2026). On WSL/Linux OUT_DIR_ROOT is empty (see the
+# HOST_OS guard above) so this is unchanged from before.
+FORCE_REBUILD_OBJ_DIR := $(if $(strip $(OUT_DIR_ROOT)),$(strip $(OUT_DIR_ROOT))/,)$(OBJECT_DESTINATION)
+
+# Files relative to EPII_ROOT, without extension. Add more here (one per
+# line, same form) if another file starts using __TIME__/__DATE__.
+FILES_TO_FORCE_REBUILD := app/ww_projects/$(APP_TYPE)/$(APP_TYPE)
+
 .PHONY: force_rebuild_main
 force_rebuild_main:
 	@echo Forcing rebuild
-#obj_epii_evb_icv30_bdv10/gnu_epii_evb_WLCSP65/app/ww_projects/$(APP_TYPE)/$(APP_TYPE).o: force_rebuild_main
-$(OBJECT_DESTINATION)/app/ww_projects/$(APP_TYPE)/$(APP_TYPE).o: force_rebuild_main
+
+$(foreach f,$(FILES_TO_FORCE_REBUILD), \
+	$(eval $(FORCE_REBUILD_OBJ_DIR)/$(f).o: force_rebuild_main) \
+)
 all: force_rebuild_main
 
 ##
@@ -207,14 +233,14 @@ CIS_SUPPORT_INAPP = cis_sensor
 # RP3 is the default because it is the day/colour camera most development and
 # bench work targets. The HM0360 remains present for motion detection either
 # way (USE_HM0360_MD below).
-#CIS_SUPPORT_INAPP_MODEL = cis_hm0360
+CIS_SUPPORT_INAPP_MODEL = cis_hm0360
 # OV5647 for RP v1 camera
 #CIS_SUPPORT_INAPP_MODEL = cis_ov5647
 # IMX219 for RP v2 camera
 #CIS_SUPPORT_INAPP_MODEL = cis_imx219
 #CIS_SUPPORT_INAPP_MODEL = cis_imx477
 # IMX708 for RP v3 camera (main camera; HM0360 remains for motion detection via USE_HM0360_MD)
-CIS_SUPPORT_INAPP_MODEL = cis_imx708
+#CIS_SUPPORT_INAPP_MODEL = cis_imx708
 
 # CGP added to indicate HM0360 is used:
 

@@ -162,8 +162,18 @@ building on any of them:
   #33); **its console hex dump holds the download to about 1 KB/s** while its upload path is
   already gated quiet (#34); **`Failed to send` on its console is normal back-pressure**
   (#35); **the app's loopback benchmark never echoes** (#36).
-* **The bench nRF runs ww-hardware `dev` (0.30.48, 75406df), not `main`.** `ver` reports the
-  nRF build, `AI ver` the Himax build; cite nRF line numbers from `dev`.
+* **The bench nRF runs ww-hardware `dev`, not `main`.** `ver` reports the nRF build, `AI ver`
+  the Himax build; cite nRF line numbers from `dev`. **The device lags the branch**: it was
+  flashed at 0.30.48 (75406df) while `dev` has since released 0.30.50, so read the version
+  off the device rather than assuming it matches the tip.
+* **Releasing nRF firmware takes two workflows, in order:** **Build BLE Firmware** compiles
+  and signs at whatever `version.mk` declares and opens a PR with the `.zip` and `.hex`, then
+  **Upload BLE Firmware to Supabase** publishes it. Editing `version.mk` alone ships nothing:
+  the upload silently falls back to the newest zip present and takes the version from *its*
+  filename, so a bump with no build republishes the old image under the old number and then
+  fails on a duplicate key. The version is compiled into the image and written into the DFU
+  package, so renaming a zip is never a shortcut. nRF5 SDK 16.0.0 needs **GCC 10.3.1**; 12
+  and newer fail on `-Werror=array-bounds` in `nrf_section.h`.
 
 # 5. Driving the bench from a script
 

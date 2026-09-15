@@ -748,6 +748,7 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 		if (fatfs_mounted()) {
 			res = save_configuration(STATE_FILE, &dirManager);
 			f_unmount(DRV);
+			mounted = false;	// fatfs_mounted() must reflect the unmount, not just fatFsInit()
 
 			if (res) {
 				xprintf("Error %d saving state\n", res);

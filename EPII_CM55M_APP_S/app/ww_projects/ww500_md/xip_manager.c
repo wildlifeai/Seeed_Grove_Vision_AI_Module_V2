@@ -75,9 +75,8 @@
 // that is always performed inside write_firmware_from_sd().
 #define XIP_FIRMWARE_VERIFY_AFTER_WRITE    1
 
-// Maximum bare filename length for firmware images (no path, including NUL).
-// Firmware files are 8.3 format — same constraint as IMAGEFILENAMELEN in image_task.h.
-#define MAX_FIRMWARE_NAME_LEN    IMAGEFILENAMELEN
+// MAX_FIRMWARE_NAME_LEN now lives in xip_manager.h so callers can validate a
+// name against the same limit this file enforces (see issue #155).
 
 // Flash physical address layout
 #define FLASH_START_SAFE_ADDR   0x00200000          // Physical start of model area (after 2 MB firmware slots)

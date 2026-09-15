@@ -1,0 +1,253 @@
+===== op34 2026-09-04 23:12:37 =====
+[00:27.984] nrf   | <info> app: 'Reset' switch pressed. Software reset when released.
+[00:28.094] himax | 1st BL Modem Build DATE=Jan 17 2025, Version: 2.12
+[00:28.094] himax | Please input any key to enter X-Modem mode in 30 ms 
+[00:28.156] himax | waiting input key...
+[00:28.156] himax | slot flash_offset 0x00100000
+[00:28.156] himax | New MemDesp himax_sec_SB_image_process PASS
+[00:28.156] himax | set_memory_s_ns
+[00:28.156] himax | HX_DSP_FLAG 1
+[00:28.156] himax | jump_addr=0x10000000
+[00:28.156] himax | Compiler Version: ARM GNU, 14.3.1 20250623
+[00:28.156] himax | **** WW500 MD. (WW500_C02) Built: 22:52:08 Sep  4 2026 ****
+[00:28.156] himax | Git branch: 'nogit' nogit-dirty
+[00:28.156] himax | Compiler Version: ARM GNU, 14.3.1 20250623
+[00:28.156] himax | Wakeup_event = 0x0000, WakeupEvt1 = 0x0000 Cold boot
+[00:28.156] himax | Camera: RP v3 (IMX708)
+[00:28.156] himax | Enabling RP SENSOR_ENABLE
+[00:28.281] himax | PCA9574 present at 0x20
+[00:28.281] himax | DEBUG: ledFlashSelectLED(0)
+[00:28.281] himax | Initialised LED Flash
+[00:28.281] himax | [hx_drv_i2cm_read_data]-L:759, Fail:-60 
+[00:28.281] himax | HM0360 not present at 0x24
+[00:28.281] himax | Main camera present at 0x1a
+[00:28.281] himax | Disabling RP SENSOR_ENABLE
+[00:28.531] nrf   | <info> app: 
+[00:28.531] nrf   | **** Secure Bootloader (WW500_A00) Ver: 00.01.01 Built: 19:01:29 Oct 31 2025 ****
+[00:28.531] nrf   | <info> nrf_dfu_settings: Backing up settings page to address 0x7E000.
+[00:28.531] nrf   | <info> app: No firmware to activate.
+[00:28.531] nrf   | <info> nrf_dfu_settings: Backing up settings page to address 0x7E000.
+[00:28.891] himax | ### Cold Boot ###
+[00:28.891] himax | FreeRTOS tickless idle is enabled. configMAX_PRIORITIES = 5
+[00:30.328] himax | Initialising FreeRTOS tasks
+[00:30.328] himax | Created task 'CLI' Priority 4
+[00:30.328] himax | Created task 'IFTask' Priority 3
+[00:30.328] himax | Created task 'FAT' Priority 2
+[00:30.328] himax | Created task 'IMAGE' Priority 1
+[00:30.328] himax | FreeRTOS scheduler started.
+[00:30.328] himax | Starting CLI Task
+[00:30.328] himax | Enter 'help' to view a list of available commands.
+[00:30.328] himax | cmd> Starting IFTask
+[00:30.328] himax | I2C slave instance 0 configured at address 0x62
+[00:30.328] himax | I2C buffers have 256 bytes, payload is 244
+[00:30.328] himax | Starting FatFS Task
+[00:30.391] himax | Mounting FatFS on SD card 
+[00:30.391] himax | Command not recognised.  Enter 'help' to view a list of available commands.
+[00:30.578] nrf   | <info> app: 
+[00:30.578] himax | cmd> OK
+[00:30.578] himax | Directory '/MANIFEST' exists
+[00:30.578] himax | SD card initialised. CWD is '0:/'
+[00:30.578] himax | Loading configuration: CWD is '0:/MANIFEST'
+[00:30.578] himax | 'CONFIG.TXT' found. (Next image #0), camera enabled. Flash brightness 5
+[00:30.578] himax | Retaining existing images directory (0 <= 100) '/MEDIA/00000000/IMAGES.000'
+[00:30.578] himax | Directory '/MEDIA/00000000/IMAGES.000' exists
+[00:30.578] himax | FatFs setup took 239ms
+[00:30.578] himax | Inactivity period set at 1000ms
+[00:30.578] nrf   | **** Wildlife Watcher 1 (WW500-C02) Ver: 00.30.48 Built: 21:58:30 Jul 21 2026 ****
+[00:30.578] nrf   | <info> app: BOARDTYPE bytes: 0x04 0x22
+[00:30.578] nrf   | <info> app: GCC version: 10.3.1
+[00:30.578] nrf   | <info> app: Compiler Version: ARM GNU, 10.3.1 20210824 (release)
+[00:30.578] nrf   | <info> app: Git branch: 'fix/ios-conn-param-retry' 75406df-dirty
+[00:30.578] nrf   | <info> app_timer: RTC: initialized.
+[00:30.578] nrf   | <info> app: System time set successfully
+[00:30.578] nrf   | <info> app: 
+[00:30.578] nrf   | Initialising LoRaWAN
+[00:30.578] nrf   | <info> app: Initializing fds...
+[00:30.578] nrf   | <info> app: Reading flash usage statistics...
+[00:30.578] nrf   | <info> app: Found 6 valid records.
+[00:30.578] nrf   | <info> app: Found 116 dirty records (ready to be garbage collected).
+[00:30.578] nrf   | <debug> app: Record 6 at 6E008
+[00:30.578] nrf   | <debug> app: Record 4650 at 6E02C
+[00:30.578] nrf   | <debug> app: Record 4664 at 6E1DC
+[00:30.578] nrf   | <debug> app: Record 4665 at 6E340
+[00:30.578] nrf   | <debug> app: Record 5812 at 6EA78
+[00:30.578] nrf   | <debug> app: Record 5813 at 6EAB8
+[00:30.578] nrf   | <info> app: >>> LoraMac version = 0x01000300
+[00:30.578] nrf   | <info> app: Data restored from NVM: 1064 bytes
+[00:30.578] nrf   | <info> app:    DevEui = 23:E7:89:FE:FF:9B:47:D6
+[00:30.578] nrf   | <info> app:    AppEui = 70:B3:D5:7E:D0:03:C8:D4
+[00:30.578] nrf   | <info> app:    SE Pin = 00:00:00:00
+[00:30.578] nrf   | <info> app: LoRaWAN initialised
+[00:30.578] nrf   | <info> app: BLE initialised for WILD-CNKW - disconnect interval 60s
+[00:30.578] nrf   | <info> app: Max BLE packet length is 244. PDU length = 251
+[00:30.578] nrf   | <info> app: Board name: WILD-CNKW
+[00:30.578] nrf   | <info> app: Tests Wildlife Watcher BLE and LoRaWAN communications. Uses NUS
+[00:30.578] nrf   | <info> app: TODO - clean up LoRaWAN processing - esp. failures, incl. failure to join.
+[00:30.578] nrf   | <info> app: TODO - check RSSI outgoing vs incoming differences
+[00:30.578] nrf   | <info> app: Device Addr:   56:47:9B:89:E7:23
+[00:30.578] nrf   | <info> app: BLE address:   D6:47:9B:89:E7:23
+[00:30.578] nrf   | <info> app: BLE Name:      WILD-CNKW
+[00:30.578] nrf   | <info> app: Target DevEui: 23:E7:89:FE:FF:9B:47:D6
+[00:30.578] nrf   | <info> app: Target AppEui: TBD
+[00:30.578] nrf   | <info> app: Softdevice ver: 0x00CB
+[00:30.578] nrf   | <info> app: Reset reason:  0x00000004 CPU
+[00:30.578] nrf   | <info> app: Firmware version 0.30.48
+[00:30.578] nrf   | <info> app: Temperature: 17.50C
+[00:30.578] nrf   | <info> app: Press SW1 to start BLE advertising.
+[00:30.578] nrf   | <info> app: Press SW1 at power-on to reset credentials
+[00:30.578] nrf   | <info> app: Press SW1 for > 10s to start Device Firmware Upgrade (DFU)
+[00:30.578] nrf   | <info> app: Press SW2 - prohibited. This signal is asserted by AI processor.
+[00:30.578] nrf   | <info> app: Hold magnet close at power-on to start Device Firmware Upgrade (DFU)
+[00:30.578] nrf   | <info> app: Press RESET button for a software reset.
+[00:30.578] nrf   | <info> app: UART RX Pin 2 is driven
+[00:30.578] nrf   | <info> app: SW1 Pin 22 is not driven
+[00:30.578] nrf   | <info> app: SW2 Pin 27 is not driven
+[00:30.578] nrf   | <info> app: Mag sensor Pin 25 is driven
+[00:30.578] nrf   | <info> app: Current DevEui is:   23:E7:89:FE:FF:9B:47:D6
+[00:30.578] nrf   | <info> app: Current JoinEui is:  70:B3:D5:7E:D0:03:C8:D4
+[00:30.578] nrf   | <info> app: Current ShortId is:   CNKW
+[00:30.578] nrf   | <info> app: InitCred DevEui is:  00:80:E1:01:01:01:01:01
+[00:30.578] nrf   | <info> app: InitCred JoinEui is: 70:B3:D5:7E:D0:03:C8:00
+[00:30.578] nrf   | <info> app: We have no need to fetch parameters
+[00:30.578] nrf   | <info> app: Enabled I2C (instance 1) on pins 7 and 8
+[00:30.578] nrf   | <info> app: I2C buffer sizes 250 and 250
+[00:30.578] nrf   | <info> app: AI processor initialised.
+[00:30.578] nrf   | <info> app: 
+[00:30.578] nrf   | Initialisation finished! Starting state machine.
+[00:30.578] nrf   | <info> app: Bumping state machine with 'Initialised' (Current state: RESET)
+[00:30.578] nrf   | <info> app:  Joining now...
+[00:30.578] nrf   | <info> app: MLME-Request: MLME_JOIN, OK
+[00:30.578] nrf   | <info> app: State changed from RESET to JOINING
+[00:30.578] nrf   | <info> app: AI state machine bumped with 'Initialised' (Current state: RESET)
+[00:30.578] nrf   | <info> app: AI state changed from RESET to SLEEP
+[00:30.891] nrf   | <info> app: MAC txDone
+[00:31.609] himax | IF Task received event 'Awake' (0x070f). Rx data = 0x00000000
+[00:31.609] himax | Starting Image Task
+[00:31.609] himax | Flash ID 0xEF initialised
+[00:31.609] himax | Image 2304 x 1296. Raw buffer 460800. JPEG buffer 115860. JPEG compression x4
+[00:31.609] himax | Enabling RP SENSOR_ENABLE
+[00:31.609] himax | Initialising IMX708 at 0x1a (p.u. delay 100ms)
+[00:31.609] himax | Memory allocated: 460800 for raw buffer, 115860 for JPEG, 100 for JPEG header
+[00:31.609] himax | mclk DIV3, xshutdown_pin=82
+[00:31.734] himax | IMX708 Init by app (IMX708_common_setting)
+[00:31.734] himax | Get IMX708_REG_BASE_SPC_GAINS_L = 0x40
+[00:31.734] himax | Init IMX708 Default PDAF pixel correction gains 
+[00:31.797] himax | IMX708 Init by app (IMX708_2304x1296_setting)
+[00:31.797] himax | IMX708 EXPOSURE(0x0940) by app (IMX708_exposure_setting)
+[00:31.797] himax | IMX708 Init by app (IMX708_link_450Mhz_regs)
+[00:31.797] himax | Quad Bayer re-mosaic adjustments ON
+[00:31.797] himax | IMX708 Init by app (IMX708_mirror_setting)
+[00:31.797] himax | CWD is '0:/MANIFEST'
+[00:31.797] himax | Error opening '0:/RPV3_EX.BIN': 4
+[00:31.797] himax | WD1[340a6ba0], WD2_J[340a6ba0], WD3_RAW[340363a0], JPAuto[34036320]
+[00:31.797] himax | MIPI CLK change to PLL freq:(400000000 / 2)
+[00:31.797] himax | MIPI TX CLK: 200M
+[00:31.859] nrf   | <info> app: !0 
+[00:31.859] himax | t_input: 12943ns
+[00:31.859] himax | t_output: 11520ns
+[00:31.859] himax | t_preload: 185ns
+[00:31.859] himax | MIPI RX FIFO FILL: 70
+[00:31.859] himax | MIPI TX FIFO FILL: 0
+[00:31.859] himax | RESET MIPI CSI RX/TX
+[00:31.859] himax | sensor_type: 15
+[00:31.859] himax | DEBUG: ledFlashBrightness(5%) [brbits = 0x0]
+[00:31.859] himax | DEBUG: ledFlashSelectLED(0)
+[00:31.859] himax | [LS] In ledFlashSetFlashModeFromOpParam with 0 Mode 0
+[00:31.859] himax | DEBUG: ledFlashDisable()
+[00:31.859] himax | HM0360 missing...
+[00:31.859] himax | Not initialising NN (project ID is 0)
+[00:31.859] himax | No model found.
+[00:31.859] himax | NN Initialisation took 8ms TODO - consider doing this after taking the picture!
+[00:31.859] himax | Image sensor and data path initialised for camera RP v3
+[00:31.859] himax |   Camera system enabled.
+[00:31.859] himax |   Neural network disabled.
+[00:31.859] himax |   Flash LED(s) in use: 0
+[00:31.859] himax |   Flash brightness: 5%
+[00:31.859] himax |   Flash is currently not armed.
+[00:31.859] himax |   Flash duration 100ms
+[00:31.859] himax |   MD disabled.
+[00:31.859] himax |   Timelapse disabled.
+[00:31.859] himax | IF Task received event 'FreeRTOS Initialised' (0x0710). Rx data = 0x00000000
+[00:31.859] himax | Assert inter-processor interrupt.
+[00:31.859] himax | Sending 31 bytes: Header 4, payload 25, checksum 2 'Wake 2024-01-01T00:00:02Z'
+[00:31.859] himax | 000: 80 04 19 00 57 61 6b 65  20 32 30 32 34 2d 30 31 ....Wake 2024-01
+[00:31.859] himax | 010: 2d 30 31 54 30 30 3a 30  30 3a 30 32 5a bf 51    -01T00:00:02Z.Q 
+[00:31.859] himax | Negate inter-processor interrupt.
+[00:31.859] himax | IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+[00:31.859] himax | IF Task received event 'I2C Tx' (0x0701). Rx data = 0x00000000
+[00:31.859] himax | I2C transmission complete.
+[00:31.859] himax | IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+[00:31.922] himax | IF Task received event 'I2C Rx' (0x0700). Rx data = g0x00000000
+[00:31.922] himax | Received I2C message.
+[00:31.922] himax | 000: 80 01 08 00 73 65 6c 66  74 65 73 74 38 a9       ....selftest8.  
+[00:31.922] himax | MKL62BA command received: 'selftest'
+[00:31.922] himax | selfTest 0200
+[00:31.922] himax | IF Task state changed from 'Idle' (1) to 'I2C RX State' (2)
+[00:31.922] himax | IF Task received event 'String Response' (0x0703). Rx data = 0x3000eaf0
+[00:31.922] himax | Assert inter-processor interrupt.
+[00:31.922] himax | Sending 19 bytes: Header 4, payload 13, checksum 2 'selfTest 0200'
+[00:31.922] himax | 000: 80 04 0d 00 73 65 6c 66  54 65 73 74 20 30 32 30 ....selfTest 020
+[00:31.922] himax | 010: 30 11 d8  e                                       0..             
+[00:31.922] himax | Negate inter-processor interrupt.
+[00:31.922] himax | IF Task state changed from 'I2C RX State' (2) to 'I2C TX State' (3)
+[00:31.922] himax | top 
+[00:31.922] himax | IF Task received event 'I2C Tx' (0x0701). Rx data = 0x00000000
+[00:31.922] himax | I2C transmission complete.
+[00:31.922] himax | IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+[00:31.984] himax | 6
+[00:31.984] nrf   | <info> app: I2C RX payload 25/250 bytes. Response type is 4. CRC OK (0xBF51)
+[00:31.984] himax | OpParam 6 = 500
+[00:31.984] nrf   | 000: 80 04 19 00 57 61 6B 65  20 32 30 32 34 2D 30 31  ....Wake 2024-01
+[00:31.984] nrf   | 010: 2D 30 31 54 30 30 3A 30  30 3A 30 32 5A 00 51 FF  -01T00:00:02Z.Q.
+[00:31.984] nrf   | <info> app: AI state machine bumped with 'Wake' (Current state: SLEEP)
+[00:31.984] nrf   | <info> app: BLE and AI time differ by 0s
+[00:31.984] nrf   | <info> app: AI state changed from SLEEP to WOKEN
+[00:31.984] nrf   | BLE out: Failed to send   5 bytes: 'Wake'
+[00:31.984] nrf   | <info> app: AI State machine scheduler called with event 8 'Send SelfTest'
+[00:31.984] nrf   | <info> app: AI state machine bumped with 'Send SelfTest' (Current state: WOKEN)
+[00:31.984] nrf   | Sending 'selftest' to AI processor (4 ctrl bytes, 8 payload, 2 CRC)<info> app: OK
+[00:31.984] nrf   | <info> app: AI state changed from WOKEN to SELFTEST
+[00:31.984] nrf   | <info> app: I2C TX complete: 14 bytes.
+[00:31.984] nrf   | <info> app: !1 
+[00:31.984] nrf   | 000: 80 01 08 00 73 65 6C 66  74 65 73 74 38 A9 00 00  ....selftest8...
+[00:31.984] nrf   | <info> app: I2C RX payload 13/250 bytes. Response type is 4. CRC OK (0x11D8)
+[00:31.984] nrf   | 000: 80 04 0D 00 73 65 6C 66  54 65 73 74 20 30 32 30  ....selfTest 020
+[00:31.984] nrf   | 010: 30 00 D8 FF FF FF FF FF  FF FF FF FF FF FF FF FF  0...............
+[00:31.984] nrf   | <info> app: AI state machine bumped with 'Selftest Rx' (Current state: SELFTEST)
+[00:31.984] nrf   | <info> app: AI self test bits = 0x0200 (all bits now 0x0200)
+[00:31.984] nrf   | <info> app: AI state changed from SELFTEST to IDLE
+[00:31.984] nrf   | BLE out: Failed to send  20 bytes: 'Error bits = 0x0200'
+[00:32.938] himax | cmd> getop 7
+[00:32.938] himax | OpParam 7 = 0
+[00:33.891] himax | cmd> getop 9
+[00:33.891] himax | OpParam 9 = 5
+[00:34.875] himax | cmd> getop 12
+[00:34.875] himax | OpParam 12 = 100
+[00:35.813] himax | cmd> getop 13
+[00:35.813] himax | OpParam 13 = 0
+[00:35.984] nrf   | <info> app: MAC rxTimeOut
+[00:36.797] himax | cmd> getop 16
+[00:36.797] himax | OpParam 16 = 18
+[00:37.047] nrf   | <info> app: MAC rxTimeOut
+[00:37.047] nrf   | Join failed. Status code -1
+[00:37.047] nrf   | <info> app: Bumping state machine with 'Joined' (Current state: JOINING)
+[00:37.047] nrf   | <info> app: Retry (attempt 1/6) in 5 seconds (0 minutes)
+[00:37.047] nrf   | <debug> app: FDS update success! FileId: 0x3E8 RecKey:0x1
+[00:37.047] nrf   | <debug> app: FDS update success! FileId: 0x3E8 RecKey:0x2
+[00:37.047] nrf   | <info> app: Data stored on NVM: 76 bytes
+[00:37.047] nrf   | BLE out: Failed to send  16 bytes: 'Failed to join.'
+[00:37.766] himax | cmd> getop 22
+[00:37.766] himax | OpParam 22 = 50
+[00:38.703] himax | cmd> getop 23
+[00:38.703] himax | OpParam 23 = 65
+[00:39.688] himax | cmd> getop 26
+[00:39.688] himax | OpParam 26 = 0
+[00:40.672] himax | cmd> getop 27
+[00:40.672] himax | OpParam 27 = 286
+[00:41.625] himax | cmd> getop 34
+[00:41.625] himax | OpParam 34 = 0
+[00:42.000] nrf   | <info> app: Retrying transmission now.
+[00:42.000] nrf   | BLE out: Failed to send  27 bytes: 'Retrying transmission now.'
+[00:42.000] nrf   | <info> app: Bumping state machine with 'Retry Tx' (Current state: JOINING)
+[00:42.000] nrf   | <info> app: MLME-Request: MLME_JOIN, OK
+[00:42.375] nrf   | <info> app: MAC txDone

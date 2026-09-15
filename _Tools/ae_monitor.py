@@ -4,8 +4,8 @@
 Holds the device awake and repeatedly triggers an on-demand capture, printing
 the firmware's own light-sensor decision each time:
 
-    AE light check: mean AE = 64 (min 64, max 64) over 16 frames,
-    threshold = 65, gain railed = no -> DARK (flash wanted)
+    AE light check: mean AE=64 (min 64, max 64, 16 frames) thr=65,
+    AGain=1, conv=Y, gain railed = N -> DARK
 
 Every 'capture' command is a console keystroke sequence, which resets the CLI
 inactivity timer to 60 s (INACTIVITYTIMEOUTCLI), so sending one every <60 s
@@ -27,15 +27,34 @@ With neither set, captures still run but the device only logs the raw
 'HM0360 AE regs:' register dump, which this monitor cannot parse - you'll see
 'Device is awake' and then nothing (use --verbose to confirm this is why).
 
-READING THE OUTPUT - each line is one capture:
+lightSensor.c has two dark/bright algorithms selected by its AE_DECISION_GAIN_BASED
+#define. The gain-based algorithm has no mean-AE/threshold concept at all - its
+line is just "AE light check: AGain = N, conv=Y|N -> DARK|BRIGHT". When AE_RE
+matches that shorter line, 'AE=.../thr.../RAILED/bar' below are not available
+and the script prints a leaner line instead - see READING THE OUTPUT.
+
+READING THE OUTPUT - each line is one capture. With the default
+AE_DECISION_GAIN_BASED algorithm:
+
+    [19:25:35] #2   flash ON  aGain=4 conv=N integ= 376 aGain= 2 dGain= 65
+
+    flash     the firmware's decision (lightSensor.c's
+              decideDarkBrightGainBased()): dark if AE hasn't converged, or
+              analog gain exceeds DARK_ANALOG_GAIN_THRESHOLD. No hysteresis.
+    aGain/conv  the analog gain and AE_CONVERGED values the decision above was
+              actually based on (from the light check line itself).
+    integ/aGain/dGain  same telemetry as below, from the separate 'HM0360 AE
+              regs' dump - see that entry for the one-reading-behind caveat.
+
+With AE_DECISION_GAIN_BASED undefined (the original algorithm):
 
     [19:25:35] #2   AE= 65(thr65) BRIGHT flash ON  up   RAILED integ= 376 aGain= 2 dGain= 65  |####...|
 
     AE=/thr   raw AE Mean reading and the configured dark threshold
               (OP_PARAMETER_AE_DARK_THRESHOLD, 'setop 23 <value>').
     state     this script's own naive ae < thr check - for quick reference only.
-    flash     the firmware's REAL decision (ledFlash.c: ledFlashNewAEStats). It
-              applies hysteresis (stays ON until well above threshold) and a
+    flash     the firmware's REAL decision (lightSensor.c's decideDarkBright()).
+              It applies hysteresis (stays ON until well above threshold) and a
               gain-railed override, so it can legitimately disagree with
               'state' near the boundary - that is not a bug.
     arrow     up/down/= vs the previous reading's AE value.
@@ -64,11 +83,24 @@ import time
 import serial
 
 ANSI_RE = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
-# Matches both the legacy single-frame line ("AE Mean = 46, threshold = 65 -> flash ON")
-# and the current aggregated line ("mean AE = 34 (min 3, max 66) over 8 frames,
-# threshold = 65, gain railed = yes -> DARK (flash wanted)" / "-> BRIGHT (no flash)").
-AE_RE = re.compile(r"(?:AE Mean|mean AE)\s*=\s*(\d+).*?threshold\s*=\s*(\d+).*?->\s*(DARK|BRIGHT|flash ON|flash OFF)")
-RAILED_RE = re.compile(r"gain railed\s*=\s*(yes|no)")
+# Two alternatives, matched independently so neither weakens the other. Field
+# names/values here must track lightSensor.c's actual snprintf() exactly -
+# Charles shortened the message on 2026-09-02 ('AGain'/'conv=Y/N'/'thr', not
+# 'analog gain'/'converged=yes/no'/'threshold'):
+#   1) the legacy single-frame line ("AE Mean = 46, threshold = 65 -> flash ON")
+#      and the aggregated line ("mean AE=34 (min 3, max 66, 8 frames) thr=65,
+#      AGain=1, conv=Y, gain railed = N -> DARK") - groups 1-3.
+#   2) lightSensor.c's AE_DECISION_GAIN_BASED algorithm's line, which has no
+#      mean/threshold concept at all ("AE light check: AGain = 4, conv=N
+#      -> DARK ...") - groups 4-6.
+# A match has either group(1) or group(4) set (never both) - see which branch
+# fired in the code below.
+AE_RE = re.compile(
+    r"(?:AE Mean|mean AE)\s*=\s*(\d+).*?thr(?:eshold)?\s*=\s*(\d+).*?->\s*(DARK|BRIGHT|flash ON|flash OFF)"
+    r"|"
+    r"AGain\s*=\s*(\d+).*?conv\s*=\s*(Y|N).*?->\s*(DARK|BRIGHT|flash ON|flash OFF)"
+)
+RAILED_RE = re.compile(r"gain railed\s*=\s*(Y|N)")
 INTEG_RE = re.compile(r"Integration time\s*=\s*(\d+)")
 AGAIN_RE = re.compile(r"Analog gain\s*=\s*(\d+)")
 DGAIN_RE = re.compile(r"Digital gain\s*=\s*(\d+)")
@@ -162,26 +194,39 @@ def main() -> int:
                     m = AE_RE.search(line)
                     if m:
                         reading_num += 1
-                        ae = int(m.group(1))
-                        thr = int(m.group(2))
-                        decision = m.group(3)
-                        flash = "ON" if decision in ("DARK", "flash ON") else "OFF"
-                        mr = RAILED_RE.search(line)
-                        railed = (mr.group(1) == "yes") if mr else False
-                        state = "DARK " if ae < thr else "BRIGHT"
-                        arrow = ""
-                        if last_ae is not None:
-                            arrow = "up  " if ae > last_ae else ("down" if ae < last_ae else "=   ")
-                        last_ae = ae
-                        bar = "#" * min(40, ae * 40 // 255)
                         # gain/integration rise in the dark - a more robust dark signal
                         # than AE Mean, which the sensor's own AE re-converges upward
                         gains = f"integ={integ if integ is not None else '?':>4} " \
                                 f"aGain={again if again is not None else '?':>2} " \
                                 f"dGain={dgain if dgain is not None else '?':>3}"
-                        railtag = "RAILED " if railed else "       "
-                        print(f"[{wallclock()}] #{reading_num:<3} AE={ae:3d}(thr{thr}) "
-                              f"{state} flash {flash:<3} {arrow} {railtag}{gains}  |{bar:<40}|", flush=True)
+
+                        if m.group(1) is not None:
+                            # mean-AE/threshold branch (legacy or the original
+                            # aggregated algorithm) - full display as before.
+                            ae = int(m.group(1))
+                            thr = int(m.group(2))
+                            decision = m.group(3)
+                            flash = "ON" if decision in ("DARK", "flash ON") else "OFF"
+                            mr = RAILED_RE.search(line)
+                            railed = (mr.group(1) == "Y") if mr else False
+                            state = "DARK " if ae < thr else "BRIGHT"
+                            arrow = ""
+                            if last_ae is not None:
+                                arrow = "up  " if ae > last_ae else ("down" if ae < last_ae else "=   ")
+                            last_ae = ae
+                            bar = "#" * min(40, ae * 40 // 255)
+                            railtag = "RAILED " if railed else "       "
+                            print(f"[{wallclock()}] #{reading_num:<3} AE={ae:3d}(thr{thr}) "
+                                  f"{state} flash {flash:<3} {arrow} {railtag}{gains}  |{bar:<40}|", flush=True)
+                        else:
+                            # AE_DECISION_GAIN_BASED branch - no mean AE/threshold
+                            # at all, just the register-based decision itself.
+                            re_again = int(m.group(4))
+                            converged = m.group(5) == "Y"
+                            decision = m.group(6)
+                            flash = "ON" if decision in ("DARK", "flash ON") else "OFF"
+                            print(f"[{wallclock()}] #{reading_num:<3} flash {flash:<3} "
+                                  f"aGain={re_again} conv={'Y' if converged else 'N'} {gains}", flush=True)
 
         print(f"[{wallclock()}] Session finished ({reading_num} readings).")
         return 0

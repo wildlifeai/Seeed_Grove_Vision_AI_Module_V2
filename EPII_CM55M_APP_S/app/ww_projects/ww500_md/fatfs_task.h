@@ -84,7 +84,7 @@ typedef enum {
 	OP_PARAMETER_MD_FLASH_LED,			// 21 LED used to illuminate motion-detection frames while asleep: 0 = none, 1 = visible, 2 = IR
 	OP_PARAMETER_MD_FLASH_BRIGHTNESS_PERCENT,	// 22 Brightness of the motion-detection illumination (percent, 16 hardware levels)
 	OP_PARAMETER_AE_DARK_THRESHOLD,		// 23 AE Mean (0-255) below this means the scene is dark and the flash is needed. See AE_Light_Sensor_Roadmap.md
-	OP_PARAMETER_AE_CHECK_INTERVAL,		// 24 Interval (minutes) between periodic AE light-level checks when the flash is in AE mode. 0 disables
+	OP_PARAMETER_FLASH_EVALUATE_INTERVAL,	// 24 Interval (minutes) between periodic flash-mode re-evaluations (AE light level or time-of-day window). 0 disables
 	OP_PARAMETER_AE_FLASH_STATE,		// 25 Last AE flash decision (0/1). Runtime state, persisted so it survives DPD - not user-set
 	OP_PARAMETER_SLOT_SWITCH,		// 26 Automatic light-based camera image switching: 0 = off (manual 'switchslot' only), 1 = automatic (PLANNED - see camera_switch.c)
 	OP_PARAMETER_WB_RED_GAIN,		// 27 Software white-balance red gain, Q8.8 (256 = 1.0x, 0 = correction off). RP camera only - see img_correct.c
@@ -92,6 +92,11 @@ typedef enum {
 	OP_PARAMETER_CAM_AE_ENABLE,		// 29 RP camera auto-exposure: 0 = off (init-table exposure), 1 = on. See ae.c
 	OP_PARAMETER_CAM_AE_TARGET,		// 30 RP camera auto-exposure target mean luma (0-250; 0 = built-in default 110). See ae.c
 	OP_PARAMETER_CAM_WB_MODE,		// 31 RP camera white balance: 0 = off, 1 = auto (grey-world per frame), 2 = manual op27/op28. See img_correct.c
+	OP_PARAMETER_RFU_1,				// 32 RFU
+	OP_PARAMETER_RFU_2,				// 33 RFU
+	OP_PARAMETER_FLASH_MODE,			// 34 Capture flash mode: 0=off, 1=AE, 2=always-on, 3=time-of-day
+	OP_PARAMETER_FLASH_TOD_START,		// 35 FLASH_MODE_TIME_OF_DAY: minutes after midnight UTC when the flash turns on
+	OP_PARAMETER_FLASH_TOD_DURATION,	// 36 FLASH_MODE_TIME_OF_DAY: duration (minutes) the flash stays on, wraps past midnight
 
 	OP_PARAMETER_NUM_ENTRIES		// Not an Operational Parameters - serves to define the size of the op_parameter[] array
 } OP_PARAMETERS_E;

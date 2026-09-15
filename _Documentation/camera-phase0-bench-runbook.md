@@ -20,7 +20,7 @@ From the **serial console** type the commands directly. From the **mobile app / 
 ## Setup
 
 1. In `EPII_CM55M_APP_S/app/ww_projects/ww500_md/ww500_md.mk` select the RP v3 camera:
-   `CIS_SUPPORT_INAPP_MODEL = cis_imx708` (the default in the repo is `cis_hm0360`).
+   `CIS_SUPPORT_INAPP_MODEL = cis_imx708` (the repo default, so no override needed).
 2. Build, flash, insert SD card, attach the Camera Module 3 (standard).
 3. Bench lighting: stable, daylight-ish if possible. Have a grey card (or plain white paper) filling most of the frame for the WB tests.
 4. Keep the device awake while working: `setop 8 60000` extends the delay before DPD to 60 s. **Restore afterwards** (`setop 8 1000`).

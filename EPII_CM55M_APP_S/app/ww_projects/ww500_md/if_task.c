@@ -1020,6 +1020,10 @@ static APP_MSG_DEST_T  handleEventForStateI2CRx(APP_MSG_T rxMessage) {
 	case APP_MSG_IFTASK_I2CCOMM_PA0_INT_OUT:
 		// This can happen if the CLI command processor sees "int 200" or similar.
 		// We shouln't execute this right away, as we still have to send the I2C response to the ww130
+		// fall through deliberately - handled the same way as INACTIVITY below
+	case APP_MSG_IFTASK_INACTIVITY:
+		// GitHub issue #205 - see handleEventForStateI2CTx() for why this must
+		// be deferred, not dropped.
 		XP_BROWN;
 		xprintf("Deferring event 0x%04x\n", event);
 		XP_WHITE;
@@ -1109,6 +1113,21 @@ static APP_MSG_DEST_T  handleEventForStateI2CTx(APP_MSG_T rxMessage) {
 		// Not used at the moment
 		break;
 
+	case APP_MSG_IFTASK_INACTIVITY:
+		// GitHub issue #205: this can genuinely arrive mid-I2C-exchange - the
+		// inactivity detector (inactivity.c, USEIDLETASK) fires whenever the
+		// CPU idle task has run continuously for OP_PARAMETER_INTERVAL_BEFORE_DPD
+		// (default 1000ms), which can happen here if the exchange is just
+		// waiting on the master to read the data (bounded by the much longer
+		// Missing Master timer), not because "activity" in the everyday sense
+		// stopped. Previously fell to the default case below and was silently
+		// dropped with no retry - IDLE's handler (the only one that acts on
+		// this event, sending the final "Sleep" message) would then never see
+		// it, so the device never entered DPD until power-cycled. Defer it
+		// the same way as the other events below, so it is replayed once we
+		// are back in IDLE.
+		// fall through deliberately
+
 	case APP_MSG_IFTASK_I2CCOMM_RX_READY:
 		// Message has arrive while we are trying to send one ourselves!
 		// TODO check this is safe to defer this event
@@ -1176,6 +1195,15 @@ static APP_MSG_DEST_T  handleEventForStateI2CSlaveTx(APP_MSG_T rxMessage) {
 		i2cError();
 		break;
 
+	case APP_MSG_IFTASK_INACTIVITY:
+		// GitHub issue #205 - see handleEventForStateI2CTx() for why this must
+		// be deferred, not dropped.
+		XP_BROWN;
+		xprintf("Deferring event 0x%04x\n", event);
+		XP_WHITE;
+		savedMessage = rxMessage;
+		break;
+
 // TODO think abot what is expected!
 //	case APP_MSG_IFTASK_I2CCOMM_PA0_INT_IN:
 //		// Not used at the moment
@@ -1229,6 +1257,14 @@ static APP_MSG_DEST_T  handleEventForStateI2CSlaveRx(APP_MSG_T rxMessage) {
 		i2cRxDataReady();
 		break;
 
+	case APP_MSG_IFTASK_INACTIVITY:
+		// GitHub issue #205 - see handleEventForStateI2CTx() for why this must
+		// be deferred, not dropped.
+		XP_BROWN;
+		xprintf("Deferring event 0x%04x\n", event);
+		XP_WHITE;
+		savedMessage = rxMessage;
+		break;
 
 	default:
 		// Here for events that are not expected in this state.
@@ -1271,6 +1307,15 @@ static APP_MSG_DEST_T  handleEventForStatePA0(APP_MSG_T rxMessage) {
 	case APP_MSG_IFTASK_I2CCOMM_ERR:
 		// Unexpected. Could be caused by WW130 doing an unexpected I2C read. Ignore.
 		i2cError();
+		break;
+
+	case APP_MSG_IFTASK_INACTIVITY:
+		// GitHub issue #205 - see handleEventForStateI2CTx() for why this must
+		// be deferred, not dropped.
+		XP_BROWN;
+		xprintf("Deferring event 0x%04x\n", event);
+		XP_WHITE;
+		savedMessage = rxMessage;
 		break;
 
 	default:

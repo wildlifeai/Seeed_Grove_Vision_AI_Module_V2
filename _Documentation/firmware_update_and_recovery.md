@@ -28,6 +28,19 @@ rest = build time) and ship in the Setup Folder's MANIFEST directory — see
 Each app/console update writes the *inactive* slot: a failed write leaves the
 running image untouched (the selector is only updated after a full verify).
 
+### Filenames must be 8.3
+
+Image filenames are limited to 8.3 format, so a maximum of 12 characters plus the
+NUL: eight for the name, a dot, three for the extension, as in `H6818C33.IMG`.
+This is not a buffer we can enlarge. The app builds FatFs with `FF_USE_LFN 0`
+(`ww500_md/ffconf.h`), so the SD card has no long-filename support and a longer
+name cannot be opened at all.
+
+Website-generated and locally built images already follow this. It matters when
+you rename one by hand, or copy in a file from CI with a descriptive name such as
+`WW500_RP3_20260818.img`: rename it to 8.3 first. The console rejects an over-long
+name up front and says so.
+
 ## Safety rules
 
 - ⚠️ **Devices built before 14 Jun 2026** have a defect in the on-device
@@ -52,14 +65,32 @@ running image untouched (the selector is only updated after a full verify).
 
    ```
    cd xmodem
-   python xmodem_send.py --port COM13 --baudrate 921600 --file <path>\R6707N35.IMG
+   PYTHONIOENCODING=utf-8 python xmodem_send.py --port COM13 --baudrate 921600 --file <path>\R6707N35.IMG
    ```
 
    then power-cycle when the script says `Please press reset button!!`. The
-   bootloader burns the image into the slot it was trying to boot and restarts.
+   bootloader burns the image into the **backup** slot and restarts into it,
+   leaving the previously running image where it was. Bench log, booting slot A:
+
+   ```
+   slot flash_offset 0x00000000        <- was booting slot A
+   slot FlashOffset 0x00100000         <- burns slot B
+   backup slot header
+   ```
+
+   So recovery does not overwrite the image you are recovering from. This
+   matches the rest of the update model, where every path writes the inactive
+   slot.
+
+   `PYTHONIOENCODING=utf-8` is not optional on Windows: the script's progress
+   bar uses a block character the cp1252 console cannot encode, and the
+   resulting `UnicodeEncodeError` kills the transfer **mid-flash**. If that
+   happens, just re-run — the bootloader is in a separate flash region and
+   still accepts a fresh transfer.
 3. **Verify:** the boot banner shows the image's build time and camera; `ver`
    and `slots` confirm. Repeat with the other variant's image if the second
-   slot also needs restoring (the bootloader alternates to the backup slot).
+   slot also needs restoring (each burn targets whichever slot is inactive at
+   the time, so consecutive burns alternate).
 4. **Labels:** X-Modem burns reset the per-slot camera labels — each slot
    re-labels itself the first time it boots, so `'unknown'` after recovery is
    normal and self-heals on the next `switchslot`.

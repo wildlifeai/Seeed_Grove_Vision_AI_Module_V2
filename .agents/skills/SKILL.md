@@ -28,20 +28,41 @@ website and backend consume this firmware's EXIF fields, op-parameters and BLE c
 
 # 1. Development conversations and documentation
 
-**Docs are the record; GitHub issues are the tracker** (project board:
-`https://github.com/orgs/wildlifeai/projects/3`, auto-add is enabled for this repo).
+**The rules live in [`_Documentation/development reports/README.md`](../../_Documentation/development%20reports/README.md).
+Read it before starting or closing a thread.** In short: docs are the record, GitHub
+issues are the tracker (project board: `https://github.com/orgs/wildlifeai/projects/3`,
+auto-add is enabled for this repo); every thread README carries Status, Outcome and Open
+items; and threads record *how the work happened*, not how the code works.
 
-* Substantive investigation, review exchange or design discussion goes in a dated thread
-  under `_Documentation/development reports/YYYY-MM_topic/` — see the README there. Never
-  leave that material only in a chat transcript, email or PR comment.
-* Every thread README keeps **Status / Outcome / Open items** current. Open items are
-  GitHub issue links, nothing else — a document must never be the only place an open item
-  lives. File issues with the `review-finding` template.
-* When something is agreed, update the affected topic doc (the "what") and the thread's
-  Outcome (the "why") in the same change. A thread closes only when its checklist is
-  ticked.
-* Keep hardware evidence: bench/serial logs supporting a claim belong in the thread's
-  `logs/` folder, referenced from the write-up.
+What that means for an agent, beyond reading the rules:
+
+* **Never leave substantive material only in a chat transcript, email or PR comment.** An
+  investigation, review exchange or design discussion belongs in a dated thread under
+  `_Documentation/development reports/YYYY-MM-DD_short-description/`. This is the failure
+  mode to watch for: the work is done, the finding is real, and it evaporates because it
+  only ever existed in a conversation.
+* **Two homes, and do not confuse them.** How the firmware behaves now goes in the durable
+  docs (`_Documentation/*.md`, `ww500_md/doc/*.md`); how it got that way goes in the
+  thread. When something is agreed, update both in the same change: the topic doc gets the
+  "what", the thread's Outcome gets the "why".
+* **Never edit a thread to keep it true.** Threads are an append-only audit trail. If
+  behaviour changes, the durable doc changes; the thread stays as the record of what was
+  believed and decided at the time.
+* **Open items are GitHub issue links, nothing else.** A document must never be the only
+  place an open item lives. File with the `review-finding` template. Before closing a
+  thread, check its issues are actually still open work: an issue already fixed and merged
+  reads as available work and wastes someone's afternoon.
+* **Keep hardware evidence.** Bench and serial logs supporting a claim belong in the
+  thread's `logs/` folder, referenced from the write-up.
+* **Bench findings: one folder each, reproduced before filed, updated in place.** A finding
+  gets `<Letter>_short_name/` under its thread with `explanation.md` in the issue template's
+  four sections, the script that reproduces it and `logs/` with the filtered three-way log.
+  Nothing is filed until it has been reproduced on demand and section 2 says how; a finding
+  that cannot be reproduced is not an issue (one was dropped that way). The issue body is the
+  explanation without its header, with evidence as permalinks to the commit. When more is
+  learned, edit the explanation and the issue body together; never add a comment that a
+  reader has to reconcile with the document. Worked example:
+  `2026-09-03_capture_bench_findings/`.
 
 # 2. Git guardrails
 
@@ -51,6 +72,12 @@ website and backend consume this firmware's EXIF fields, op-parameters and BLE c
   branches; they are cherry-picked across after discussion.
 * Ask the maintainer before pushing to any shared branch. Commit messages use
   conventional prefixes (`feat:`, `fix:`, `docs:`, `ci:`).
+* **Check whether the clone is shallow before any branch analysis.** A shallow clone makes
+  `git merge-base` return *empty* rather than fail, so ahead/behind counts, fork points and
+  overlap tables come out confidently wrong, and a trial merge dies with `refusing to merge
+  unrelated histories`. Test with `test -f "$(git rev-parse --git-common-dir)/shallow"` and
+  fix with `git fetch --unshallow`, about a minute. Two-dot `git diff A B` compares trees
+  directly and stays correct either way.
 * **Never commit build churn**: `prebuilt_libs/**/*.a` deltas, `we2_image_gen_local*/`
   outputs, stray `NUL` files, `obj_*` trees. Check `git status` before staging.
 
@@ -59,16 +86,31 @@ website and backend consume this firmware's EXIF fields, op-parameters and BLE c
 * Toolchain is pinned: **Arm GNU 14.3.rel1**. Build under WSL/Linux;
   `make clean` between camera variants is **mandatory** (objects don't encode the `-D`
   flags). Both variants must build — a change that compiles for one only is broken.
-* Image generation uses `we2_image_gen_local_dpd` with the **RC24M** profile; both
-  variants emit the same `output.img` path — rename between runs.
+* **`make` runs image generation itself** (`ww500_md/mk/image_gen.mk`, RC24M profile) and
+  writes both `output_case1_sec_wlcsp/output.img` and an 8.3 `VYMDDHMM.IMG` copy named for
+  the variant (`R`/`H`). Do **not** run `we2_local_image_gen` by hand, it destroys the
+  image make just built. No renaming between variants is needed.
+* **A failed secure-boot certificate step does not fail the build**, and size only catches
+  it on one variant. RP3 goes 487424 signed to 462848 certless; **HM0360 is 462848 either
+  way**. So 462848 is both a good HM0360 image and an unsigned RP3 one. Check the build log
+  for the `FileNotFoundError` traceback and that `secureboot_tool/cert/ICVSBContent.crt`
+  exists. Never gitignore `secureboot_tool/cert/cfg/*.cfg`: they are hand-authored build
+  inputs and nothing regenerates them.
 * SD-card firmware files: **8.3 filenames** in `/MANIFEST` (FatFS has no LFN support).
+  The `VYMDDHMM.IMG` name make emits already satisfies this.
 * Device consoles: two USB serial ports — the Himax console is the one printing clean
-  text at **921600 baud**; the other is the BLE debug UART.
+  text at **921600 baud**; the other is the BLE debug UART. Probe for it every session
+  (§5), never hard-code the COM number.
+* **X-Modem is a normal bench path, not only recovery**, the way to get locally built
+  images onto a device with no SD card. Each burn writes the **backup** slot and makes it
+  active, so two consecutive burns fill both slots, and a final `switchslot` re-labels the
+  one left behind. Runbook: `_Documentation/firmware_update_and_recovery.md`; the script
+  timing that matters is in §5.
 
 # 4. Hardware behaviour that will trap you
 
-Verified on the bench (details + serial evidence in
-`_Documentation/development reports/2026-07_pr141-review-cgp/`):
+Verified on the bench (details and serial evidence in
+`_Documentation/development reports/2026-08-06_pr141-camera-features-review/`):
 
 * **Slot labels self-heal at first boot** — flashing clears the target slot's label to
   `unknown`; each image labels its own slot on every boot. `slots` showing `unknown` for
@@ -76,13 +118,52 @@ Verified on the bench (details + serial evidence in
 * **Deliberate reboots are deferred watchdog resets** (`reset`, `switchslot`,
   auto-switch): they execute at the next sleep and the following boot classifies as a
   **cold** boot (PMU wakeup registers read zero).
-* **Cold-boot IMX708 first captures are flaky** (instant retries all fail); DPD-wake
-  captures are reliable — prefer wake-path captures for bench validation.
+* **Cold-boot IMX708 first captures fail, full stop**. Every in-place retry times out
+  (`Frame timed out - restarting sensor, retry n/5`) and the image task then goes
+  Uninitialised. The progressive-dwell retry does not rescue it. DPD-wake captures are
+  reliable and take ~52 ms, so **always get past one wake cycle before believing a capture
+  or light-sensor result**. Cheapest way in: `setop 7 1`, wait for
+  `Wakeup_event = 0x0002 ... RTC Timer`, test, then `setop 7 0`. **op7 is in seconds**, so
+  that is a one-second timelapse: the device will capture repeatedly and faster than a
+  script polling `getop` can follow, which reads as a counter jumping by two.
 * **Console sessions**: an untouched boot sleeps after ~1 s; most commands hold the
   device awake ~60 s; the `reset` command deliberately does not. Scripting against this
   has its own rules, see §5.
+* **`CONFIG.TXT` is also `STATE_FILE`** (`directory_manager.h`), so the device rewrites it
+  on the first sleep and after every `setop`. **A card you prepared stops being that card
+  before you can read the result**, and the file you then find is the device's own: all 37
+  parameters, comments hoisted to the top, LF endings, RTC-unset timestamp. To test how a
+  particular file parses, set the **FAT read-only attribute** on it, which the firmware
+  respects, and the card survives the boot intact. Two bench runs were spent measuring the
+  device's own file before this was understood.
+* **The periodic AE light check only runs if something consumes it.**
+  `aeCheckRequired = lightSensor_isRequired()`, which is true when the flash mode is
+  `FLASH_MODE_AE` (**op34**, not op13) or automatic camera switching (op26) is on. With
+  both off, captures come and go with no light check at all. The `light` command is the
+  exception and always forces a reading. When it is on, the device also wakes every op24
+  minutes (15 by default) to take a throwaway frame and read the AE registers, which is a
+  battery cost worth knowing about before enabling it.
 * **camreg staged registers** (`RPV3_EX.BIN` etc.) are re-applied after the init tables
   at every sensor init — they override defaults, persist on SD, and survive DPD.
+
+Verified 3 and 4 September 2026 (`2026-09-03_capture_bench_findings/`, `ae_review`
+e8b7feb5 and nRF 0.30.48). All were open issues when written; check the issue before
+building on any of them:
+
+* **The inactivity detector measures idle time only** (the FreeRTOS idle hook), and a capture
+  waiting for a frame is idle. A multi-image capture with a gap above op8 is abandoned in
+  DPD and `Captured` never comes; the IF task sends `Sleep` and completes the shutdown
+  barrier on its own, because the barrier counts calls, not tasks (#208).
+* **A command that reaches the Himax between Save State and DPD strands it awake** until a
+  power cycle (#205): the IF task drops the inactivity event while transmitting. An ordinary
+  wake-then-command can do it. In that state the nRF parks in SELFTEST and drops every app
+  command. A `setop` in the same window is acknowledged and never saved (#207).
+* **The nRF forwards any command mid-`txfile` and restarts its packet counter** (ww-hardware
+  #33); **its console hex dump holds the download to about 1 KB/s** while its upload path is
+  already gated quiet (#34); **`Failed to send` on its console is normal back-pressure**
+  (#35); **the app's loopback benchmark never echoes** (#36).
+* **The bench nRF runs ww-hardware `dev` (0.30.48, 75406df), not `main`.** `ver` reports the
+  nRF build, `AI ver` the Himax build; cite nRF line numbers from `dev`.
 
 # 5. Driving the bench from a script
 
@@ -107,6 +188,16 @@ the fact is not enough, the timing has to be built in.
 * **`PYTHONIOENCODING=utf-8` for any serial or flashing tool.** `xmodem_send.py`'s
   progress bar uses a block character cp1252 cannot encode, and the exception lands
   **mid-flash**. Re-running recovers, since the bootloader is in a separate flash region.
+* **To send commands from a script, drive the app's Engineer Console over adb**, not the
+  Himax console: `adb shell input text` (spaces as `%s`), wait about 1.5 s for the text to
+  land, then tap send. It wakes a sleeping device, and its typed line bypasses the app's
+  queue, so it can land mid-transfer when a test needs that. Opening the Himax port with
+  pyserial's default DTR resets the board, and the device never wakes on serial input.
+* **Three-way logging** (`bench_log.py`, light sensor thread) is what makes a cross-processor
+  finding provable: app over `adb logcat`, nRF and Himax consoles in one file. Its stamps are
+  read time and the nRF flushes its deferred log in bursts, so order events by the Himax
+  lines. Strip NULs (`tr -d '\000'`) from any excerpt before committing it, or git stores it
+  as binary.
 
 Windows shell, unrelated to the hardware but the same class of silent failure:
 

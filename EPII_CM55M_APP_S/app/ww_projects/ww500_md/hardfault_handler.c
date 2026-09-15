@@ -122,14 +122,82 @@ void BusFault_Handler(void) {
 	for (;;) {
 	}
 }
-void UsageFault_Handler(void) {
-	xprintf("\r\nEntering UsageFault_Handler interrupt!\r\n");
-	for (;;) {
-	}
-}
 void SecureFault_Handler(void) {
 	xprintf("\r\nEntering SecureFault_Handler interrupt!\r\n");
 	for (;;) {
 	}
 }
 
+#if 0
+void UsageFault_Handler(void) {
+	xprintf("\r\nEntering UsageFault_Handler interrupt!\r\n");
+	for (;;) {
+	}
+}
+#else
+// CGP - at the suggestion of ChatGPT after receiving this error
+// just after this line:
+// FatFS Task received event 'Save State' (0x0904). Rx data = 0x00000000
+// https://chatgpt.com/share/6a8ce031-293c-83ec-a335-41a849572b5e
+
+void UsageFault_Handler_C(uint32_t *stacked_regs)
+{
+    uint32_t cfsr = SCB->CFSR;
+    uint32_t hfsr = SCB->HFSR;
+    uint32_t shcsr = SCB->SHCSR;
+
+    xprintf("\r\n*** USAGE FAULT ***\r\n");
+    xprintf("CFSR  = 0x%08lX\r\n", cfsr);
+    xprintf("HFSR  = 0x%08lX\r\n", hfsr);
+    xprintf("SHCSR = 0x%08lX\r\n", shcsr);
+    xprintf("UFSR  = 0x%04lX\r\n", (cfsr >> 16) & 0xFFFFUL);
+
+    if (cfsr & SCB_CFSR_UNDEFINSTR_Msk)
+        xprintf("  UNDEFINSTR: Undefined instruction\r\n");
+
+    if (cfsr & SCB_CFSR_INVSTATE_Msk)
+        xprintf("  INVSTATE: Invalid processor state\r\n");
+
+    if (cfsr & SCB_CFSR_INVPC_Msk)
+        xprintf("  INVPC: Invalid PC or EXC_RETURN\r\n");
+
+    if (cfsr & SCB_CFSR_NOCP_Msk)
+        xprintf("  NOCP: No coprocessor\r\n");
+
+    if (cfsr & SCB_CFSR_UNALIGNED_Msk)
+        xprintf("  UNALIGNED: Unaligned memory access\r\n");
+
+    if (cfsr & SCB_CFSR_DIVBYZERO_Msk)
+        xprintf("  DIVBYZERO: Divide by zero\r\n");
+
+    xprintf("\r\nStacked registers:\r\n");
+    xprintf("R0   = 0x%08lX\r\n", stacked_regs[0]);
+    xprintf("R1   = 0x%08lX\r\n", stacked_regs[1]);
+    xprintf("R2   = 0x%08lX\r\n", stacked_regs[2]);
+    xprintf("R3   = 0x%08lX\r\n", stacked_regs[3]);
+    xprintf("R12  = 0x%08lX\r\n", stacked_regs[4]);
+    xprintf("LR   = 0x%08lX\r\n", stacked_regs[5]);
+    xprintf("PC   = 0x%08lX\r\n", stacked_regs[6]);
+    xprintf("xPSR = 0x%08lX\r\n", stacked_regs[7]);
+
+    xprintf("\r\nCPU halted.\r\n");
+
+    for (;;)
+    {
+    }
+}
+
+
+__attribute__((naked))
+void UsageFault_Handler(void)
+{
+    __asm volatile (
+        "TST   lr, #4       \n"
+        "ITE   EQ           \n"
+        "MRSEQ r0, MSP      \n"
+        "MRSNE r0, PSP      \n"
+        "B     UsageFault_Handler_C \n"
+    );
+}
+
+#endif

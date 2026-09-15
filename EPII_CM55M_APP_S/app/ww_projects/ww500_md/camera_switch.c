@@ -17,10 +17,12 @@
 #include "camera_switch.h"
 
 #include "xprintf.h"
+#include "printf_x.h"
 
 #include "xip_manager.h"
 #include "fatfs_task.h"
 #include "ww500_md.h"
+#include "lightSensor.h"
 
 /*********************************************** Local Defines **********************************************/
 
@@ -116,7 +118,7 @@ void cameraSwitch_labelBootSlot(void) {
  * @brief Automatic day/night camera switching (OP_PARAMETER_SLOT_SWITCH == 1).
  *
  * Called by the image task after each AE light check (every capture, and the
- * periodic OP_PARAMETER_AE_CHECK_INTERVAL wakes). If the hysteresis-filtered
+ * periodic OP_PARAMETER_FLASH_EVALUATE_INTERVAL wakes). If the hysteresis-filtered
  * light decision (OP_PARAMETER_AE_FLASH_STATE: 1 = dark) wants the OTHER
  * camera variant - dark while running the day/colour image, or bright while
  * running the night/IR image - and the other slot is labelled with exactly
@@ -147,7 +149,7 @@ bool cameraSwitch_autoSwitchCheck(void) {
 		return false;	// this build does not participate (e.g. RP2)
 	}
 
-	bool dark = (fatfs_getOperationalParameter(OP_PARAMETER_AE_FLASH_STATE) == 1);
+	bool dark = lightSensor_isDark();
 	uint8_t wanted = dark ? XIP_SLOT_VARIANT_HM0360 : XIP_SLOT_VARIANT_RP3;
 	if (wanted == self) {
 		return false;	// already running the right camera for the light level
@@ -162,21 +164,21 @@ bool cameraSwitch_autoSwitchCheck(void) {
 	// wanted variant - never into an unknown or mismatched image.
 	int otherVariant = xip_get_slot_variant((activeSlot == 0) ? 1 : 0);
 	if (otherVariant != (int)wanted) {
-		xprintf("Auto camera switch: light wants '%s' but other slot holds '%s' - staying\n",
+		XP_CYAN xprintf("[LS] Auto camera switch: light wants '%s' but other slot holds '%s' - staying\n",
 				cameraSwitch_variantName(wanted),
-				cameraSwitch_variantName((uint8_t)((otherVariant < 0) ? 0 : otherVariant)));
+				cameraSwitch_variantName((uint8_t)((otherVariant < 0) ? 0 : otherVariant))); XP_WHITE
 		return false;
 	}
 
 	int newSlot = xip_switch_slot();
 	if (newSlot < 0) {
-		xprintf("Auto camera switch failed (%d)\n", newSlot);
+		XP_CYAN xprintf("[LS] Auto camera switch failed (%d)\n", newSlot); XP_WHITE
 		return false;
 	}
 
 	switchScheduled = true;
 	app_setResetRequest(true);	// reboot into the other image at the next sleep
-	xprintf("Auto camera switch: light is %s -> slot %d ('%s'). Reset scheduled.\n",
-			dark ? "DARK" : "BRIGHT", newSlot, cameraSwitch_variantName(wanted));
+	XP_CYAN xprintf("[LS] Auto camera switch: light is %s -> slot %d ('%s'). Reset scheduled.\n",
+			dark ? "DARK" : "BRIGHT", newSlot, cameraSwitch_variantName(wanted)); XP_WHITE
 	return true;
 }

@@ -47,6 +47,7 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <ctype.h>
+#include <string.h>		// strlen/strchr/strtok: used here, previously only pulled in transitively
 
 #include "WE2_device.h"
 #include "WE2_debug.h"
@@ -99,7 +100,7 @@
 // Length of lines in configuration.txt
 #define MAXCOMMENTLENGTH 80
 // Max number of comment lines in configuration.txt
-#define MAXNUMCOMMENTS OP_PARAMETER_NUM_ENTRIES + 5
+#define MAXNUMCOMMENTS (OP_PARAMETER_NUM_ENTRIES + 5)
 
 /*************************************** Local Function Declarations *****************************/
 
@@ -241,7 +242,7 @@ uint16_t op_parameter[OP_PARAMETER_NUM_ENTRIES] = {
 	2,	    	   		// 21 OP_PARAMETER_MD_FLASH_LED (2 = IR)
 	50,	    	   		// 22 OP_PARAMETER_MD_FLASH_BRIGHTNESS_PERCENT (STROBE-gated ~15ms pulses; 5% too dim in the field)
 	65,	    	   		// 23 OP_PARAMETER_AE_DARK_THRESHOLD ('moderate' setting - see AE_Light_Sensor_Roadmap.md)
-	15,	    	   		// 24 OP_PARAMETER_AE_CHECK_INTERVAL (minutes; 0 disables)
+	15,	    	   		// 24 OP_PARAMETER_FLASH_EVALUATE_INTERVAL (minutes; 0 disables)
 	0,	    	   		// 25 OP_PARAMETER_AE_FLASH_STATE (runtime state)
 	0,	    	   		// 26 OP_PARAMETER_SLOT_SWITCH (0 = off/manual only; 1 = automatic light-based switching)
 	286,	   			// 27 OP_PARAMETER_WB_RED_GAIN (Q8.8: 286 = x1.117, the bench-measured neutralising gain; 0 disables)
@@ -249,6 +250,11 @@ uint16_t op_parameter[OP_PARAMETER_NUM_ENTRIES] = {
 	1,	    	   		// 29 OP_PARAMETER_CAM_AE_ENABLE (RP camera auto-exposure on/off - see ae.c)
 	110,	   			// 30 OP_PARAMETER_CAM_AE_TARGET (target mean luma; 0 = built-in default)
 	1,	    	   		// 31 OP_PARAMETER_CAM_WB_MODE (1 = auto grey-world; 2 = manual op27/28; 0 = off)
+	0,	    	   		// 32 OP_PARAMETER_RFU_1
+	0,	    	   		// 33 OP_PARAMETER_RFU_2
+	0,	    	   		// 34 OP_PARAMETER_FLASH_MODE (0 = off - matches today's default behaviour)
+	0,	    	   		// 35 OP_PARAMETER_FLASH_TOD_START
+	0,	    	   		// 36 OP_PARAMETER_FLASH_TOD_DURATION
 };
 
 // Deployment ID UUID string — loaded from 'I ' line in CONFIG.TXT or set via setdid CLI command
@@ -1030,6 +1036,23 @@ static void processGPS(char * gps_line) {
  * @param file name
  * @return error code
  */
+// A truncated/split CONFIG.TXT line (e.g. the tail of an over-long comment
+// that overflowed the f_gets() line buffer) is not a '#' comment and falls
+// through to the index/value parser below. atoi() silently returns 0 for
+// non-numeric input, so without this check such garbage is misread as
+// "set op_parameter[0] = 0". Require both tokens to be purely numeric.
+static bool isNumericToken(const char *token) {
+	if (*token == '\0') {
+		return false;
+	}
+	for (const char *p = token; *p != '\0'; p++) {
+		if (!isdigit((unsigned char)*p)) {
+			return false;
+		}
+	}
+	return true;
+}
+
 static FRESULT load_configuration(const char *filename, directoryManager_t *dirManager) {
 	FRESULT res;
 	char line[64];
@@ -1062,10 +1085,20 @@ static FRESULT load_configuration(const char *filename, directoryManager_t *dirM
 
 		// Read lines from the file
 		while (f_gets(line, sizeof(line), &dirManager->configFile)) {
-			// Remove trailing newline if present
-			char *newline = strchr(line, '\n');
-			if (newline) {
-				*newline = '\0';
+			// Strip the line terminator, the CR as well as the LF.
+			//
+			// FatFS here is built with FF_USE_STRFUNC 1, "Enable without LF-CRLF
+			// conversion" (ffconf.h), so a CONFIG.TXT written on Windows still
+			// carries its CR at this point. Stripping only at '\n' leaves it on the
+			// last token of every line, and isNumericToken() rejects "2\r", so the
+			// whole file would be silently ignored and every parameter would fall
+			// back to its compiled-in default. MANIFEST/CONFIG.TXT is itself CRLF,
+			// so this is the ordinary case rather than an edge case.
+			//
+			// It also keeps a trailing CR out of the 'I ' deployment ID string.
+			size_t len = strlen(line);
+			while ((len > 0) && ((line[len - 1] == '\n') || (line[len - 1] == '\r'))) {
+				line[--len] = '\0';
 			}
 
 			// Skip comments which start with #
@@ -1097,14 +1130,14 @@ static FRESULT load_configuration(const char *filename, directoryManager_t *dirM
 				// token is returned until there are no more tokens.
 				// At that point each function call returns NULL.
 				token = strtok(line, " ");
-				if (token == NULL) {
+				if ((token == NULL) || !isNumericToken(token)) {
 					continue;
 				}
 
 				index = (uint8_t)atoi(token);
 
 				token = strtok(NULL, " ");
-				if (token == NULL) {
+				if ((token == NULL) || !isNumericToken(token)) {
 					continue;
 				}
 
@@ -1149,7 +1182,12 @@ FRESULT save_configuration(const char *filename, directoryManager_t *dirManager)
 	FRESULT res;
 	UINT bytesWritten;
 	char line[MAXCOMMENTLENGTH];
-	char comment_lines[MAXNUMCOMMENTS][MAXCOMMENTLENGTH];
+	// Static, NOT a stack local: MAXNUMCOMMENTS * MAXCOMMENTLENGTH bytes (currently
+	// ~2.6KB, growing by MAXCOMMENTLENGTH with every operational parameter added)
+	// overflowed the FAT task's ~4.3KB stack once the parameter table grew large
+	// enough - a UsageFault on every boot's first config save. Only the FAT task
+	// calls this function, so a single static buffer is safe.
+	static char comment_lines[MAXNUMCOMMENTS][MAXCOMMENTLENGTH];
 	uint16_t comment_count = 0;
 
     if (!fatfs_mounted()) {

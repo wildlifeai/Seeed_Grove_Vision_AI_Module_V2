@@ -19,7 +19,7 @@ branch `feat/uart-live-preview` so I can identify and examine the files identifi
 
 ## PR #140
 
-This is summarised by [REVIEW_PR140.md](../../../../../REVIEW_PR140.md) which identifies 3 areas of change:
+This is summarised by [REVIEW_PR140.md](REVIEW_PR140.md) which identifies 3 areas of change:
 
 1. Live preview over the console UART
 2. Highlight-metered auto-exposure
@@ -39,21 +39,21 @@ These relate to the auto-exposure and white balance changes.
 |    30 | OP_PARAMETER_CAM_AE_TARGET 			| 110           | Auto-exposure target: raw bright-quartile (p75) luma, 0-250 (0 = built-in default 95). Bright parts of the scene render just below white after the tone curve |
 |    31 | OP_PARAMETER_CAM_WB_MODE 				| 1             | RP camera white balance: 0 = off (hardware JPEG), 1 = auto (warmth-biased grey-world measured per frame), 2 = manual op27/op28. Auto falls back to manual for flash-lit or too-dark frames - see `img_correct.c` |
 
-These are reflected in the MANIFEST directory and [_Documentation/Operational_Parameters.md](../../../../../_Documentation/Operational_Parameters.md)
+These are reflected in the MANIFEST directory and [_Documentation/Operational_Parameters.md](../../Operational_Parameters.md)
  as well as the source code. 
 
 #### New documentation:
 
-* [_Documentation/live_preview.md](../../../../../_Documentation/live_preview.md) - documents the live streaming of video over UART.
-* [_Documentation/rp3-image-quality-plan.md](../../../../../_Documentation/rp3-image-quality-plan.md) - documents a sophisticated process to improve the quality of RP3 images. Exact process is not 
+* [_Documentation/live_preview.md](../../live_preview.md) - documents the live streaming of video over UART.
+* [_Documentation/rp3-image-quality-plan.md](../../rp3-image-quality-plan.md) - documents a sophisticated process to improve the quality of RP3 images. Exact process is not 
 described, nor are the results and what is done with the results.
 
 #### New Python Tools:
 
 These are related to the live preview feature.
 
-* [_Tools/live_view.py](../../../../../_Tools/live_view.py) - streams JPEG images through the UART.
-* [_Tools/tune_stats.py](../../../../../_Tools/tune_stats.py) "scores frames against reference photos"
+* [_Tools/live_view.py](../../../_Tools/live_view.py) - streams JPEG images through the UART.
+* [_Tools/tune_stats.py](../../../_Tools/tune_stats.py) "scores frames against reference photos"
 
 `live_view.py` works with the new CLI `preview` command to accept live stream of JPEG images and display it on a laptop.
 

@@ -1,5 +1,17 @@
 name: Build and Test Functions on ww500_md
 
+# PR gate for the ww500_md application: compiles BOTH camera variants with the
+# same pinned toolchain the release workflow and the developers use, so a change
+# that breaks one variant cannot pass review.
+#
+# Camera variants (see build_and_upload_firmware.yml, which ships them):
+#   RP3    = RP v3 colour camera (IMX708) as main camera  (CIS_SUPPORT_INAPP_MODEL=cis_imx708)
+#   HM0360 = HM0360 night/IR camera as main camera        (CIS_SUPPORT_INAPP_MODEL=cis_hm0360)
+#
+# This is a compile gate, not a release build: it does not upload anything. It
+# does run the default 'all' target, which includes image generation, so a
+# broken image-generation chain is caught here too.
+
 on:
   push:
     branches:
@@ -9,33 +21,68 @@ on:
       - dev
   workflow_dispatch:
 
-# Make and build the WW500_MD application
+env:
+  # Keep in step with build_and_upload_firmware.yml and with the toolchain
+  # developers build with locally (_Documentation/building_firmware.md).
+  # Previously this gate used 14.2, so PRs were checked against a compiler that
+  # nothing else in the project uses.
+  ARM_TOOLCHAIN_VERSION: 14.3.rel1
+
 jobs:
   build:
     runs-on: ubuntu-latest
 
-    env:
-      COMPILER_VERSION: "14.2"
-    
+    strategy:
+      # Report both variants even when one fails - knowing whether a break is
+      # variant-specific or common is most of the diagnosis.
+      fail-fast: false
+      matrix:
+        include:
+          - variant: RP3
+            cis_model: cis_imx708
+          - variant: HM0360
+            cis_model: cis_hm0360
+
+    name: build (${{ matrix.variant }})
+
     steps:
     - name: Checkout the repository
       uses: actions/checkout@v4
 
-    - name: Set up build dependencies
+    - name: Cache Arm GNU Toolchain
+      id: cache-toolchain
+      uses: actions/cache@v4
+      with:
+        path: ~/arm-gnu-toolchain
+        key: arm-gnu-toolchain-${{ env.ARM_TOOLCHAIN_VERSION }}-x86_64
+
+    - name: Download Arm GNU Toolchain
+      if: steps.cache-toolchain.outputs.cache-hit != 'true'
       run: |
-        TOOLCHAIN_URL="https://developer.arm.com/-/media/Files/downloads/gnu/${COMPILER_VERSION}.rel1/binrel/"
-        TOOL_XZ="arm-gnu-toolchain-${COMPILER_VERSION}.rel1-x86_64-arm-none-eabi.tar.xz"
-        wget -q $TOOLCHAIN_URL$TOOL_XZ
-        tar -xf $TOOL_XZ
-        sudo cp -r arm-gnu-toolchain-${COMPILER_VERSION}.rel1-x86_64-arm-none-eabi /usr/local/
-        echo "/usr/local/arm-gnu-toolchain-${COMPILER_VERSION}.rel1-x86_64-arm-none-eabi/bin" >> $GITHUB_PATH
+        mkdir -p ~/arm-gnu-toolchain
+        cd ~/arm-gnu-toolchain
+        wget -q "https://developer.arm.com/-/media/Files/downloads/gnu/${ARM_TOOLCHAIN_VERSION}/binrel/arm-gnu-toolchain-${ARM_TOOLCHAIN_VERSION}-x86_64-arm-none-eabi.tar.xz"
+        tar -xf "arm-gnu-toolchain-${ARM_TOOLCHAIN_VERSION}-x86_64-arm-none-eabi.tar.xz"
+        rm "arm-gnu-toolchain-${ARM_TOOLCHAIN_VERSION}-x86_64-arm-none-eabi.tar.xz"
 
     - name: Update APP_TYPE variable to ww500_md
       run: |
             sed -i 's/APP_TYPE = .*/APP_TYPE = ww500_md/' EPII_CM55M_APP_S/app/ww_projects/ww.mk
 
-    - name: Build ww500_md
+    - name: Build ww500_md (${{ matrix.variant }})
       run: |
+        export PATH="$HOME/arm-gnu-toolchain/arm-gnu-toolchain-${ARM_TOOLCHAIN_VERSION}-x86_64-arm-none-eabi/bin:$PATH"
+        arm-none-eabi-gcc --version | head -n 1
+
         cd EPII_CM55M_APP_S/
+        # 'clean' first so the clean targets themselves stay exercised.
         make clean
-        make
+        # actions/checkout leaves a detached HEAD, so pass the branch name
+        # explicitly. CIS_SUPPORT_INAPP_MODEL selects this leg's camera variant.
+        make -j"$(nproc)" GIT_BRANCH="$GITHUB_REF_NAME" CIS_SUPPORT_INAPP_MODEL="${{ matrix.cis_model }}"
+
+    - name: Confirm the build produced an .elf (${{ matrix.variant }})
+      run: |
+        ELF=EPII_CM55M_APP_S/obj_epii_evb_icv30_bdv10/gnu_epii_evb_WLCSP65/EPII_CM55M_gnu_epii_evb_WLCSP65_s.elf
+        test -s "$ELF" || { echo "::error::no .elf produced for ${{ matrix.variant }}"; exit 1; }
+        ls -la "$ELF"

@@ -130,6 +130,7 @@
 #include "xip_manager.h"
 #include "camera_switch.h"
 #include "hm0360_md.h"
+#include "lightSensor.h"
 
 #include "barrier.h"
 #include "cisdp_sensor.h"
@@ -168,6 +169,10 @@ extern QueueHandle_t xImageTaskQueue;
 extern SemaphoreHandle_t xI2CTxSemaphore;
 
 extern internal_state_t internalStates[NUMBEROFTASKS];
+// Number of internalStates[] entries actually populated in app_main() - NUMBEROFTASKS
+// is just the array's capacity (sized to include the optional, usually-compiled-out
+// timer task), not a count of what's really there.
+extern uint8_t numTasksRegistered;
 
 // GPS location of device can be set by this file
 extern GPS_Coordinate exif_gps_deviceLat;
@@ -296,6 +301,9 @@ static BaseType_t prvReinitHM0360(char *pcWriteBuffer, size_t xWriteBufferLen, c
 static BaseType_t prvVer(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 static BaseType_t prvCamera(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 
+// On-demand light-sensor check for bench tuning - see light_sensor.md §6.4
+static BaseType_t prvLight(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
+
 // Camera sensor register access for field/bench tuning (exposure, gain, white balance etc.)
 static BaseType_t prvCamReg(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 #ifdef USE_RP3
@@ -395,6 +403,14 @@ static const CLI_Command_Definition_t xSwitchSlot = {
 	"switchslot:\r\n Boot the firmware in the other slot (day/night camera change)."
 	"\r\n The device resets when it next sleeps\r\n",
 	prvSwitchSlot, /* The function to run. */
+	0		   /* No parameters expected */
+};
+
+/* Structure that defines the "light" command line command. */
+static const CLI_Command_Definition_t xLight = {
+	"light", /* The command string to type. */
+	"light:\r\n Take a fresh light-sensor reading and report the AE value and dark/bright state\r\n",
+	prvLight, /* The function to run. */
 	0		   /* No parameters expected */
 };
 
@@ -732,7 +748,7 @@ static BaseType_t prvTaskStateCmd(char *pcWriteBuffer, size_t xWriteBufferLen, c
 		return pdTRUE;
 	}
 
-	if (i < NUMBEROFTASKS) {
+	if (i < numTasksRegistered) {
 		// for some reason this returns 0 always, so no point in printing it:
 		// uxTaskGetTaskNumber(internalStates[i].task_id)
 		snprintf(pcWriteBuffer, xWriteBufferLen, "%s\t%d\t%s\t%d",
@@ -743,7 +759,7 @@ static BaseType_t prvTaskStateCmd(char *pcWriteBuffer, size_t xWriteBufferLen, c
 		i++;
 	}
 
-	if (i == NUMBEROFTASKS) {
+	if (i == numTasksRegistered) {
 		// Done. reset static variables
 		listing = false;
 		i = 0;
@@ -857,6 +873,57 @@ static BaseType_t prvCamera(char *pcWriteBuffer, size_t xWriteBufferLen, const c
 	configASSERT(pcWriteBuffer);
 
 	cli_append(&pcWriteBuffer, &xWriteBufferLen, "%s", app_get_camera_string());
+
+	return pdFALSE;
+}
+
+/**
+ * Implements "light" command.
+ *
+ * Triggers a fresh light-sensor reading on demand (ignoring whether the AE
+ * flash or auto camera-switch would normally want one) - see light_sensor.md
+ * §6.4. The actual result is reported asynchronously, on the console (the
+ * "[LS] AE light check: ..." line, printed unconditionally by
+ * lightSensor.c regardless of trigger source) and to the app via the normal
+ * "HM0360 AE regs" telemetry - not as this command's own CLI response.
+ *
+ * Deliberately fire-and-forget, like prvCapture(): sends
+ * APP_MSG_IMAGETASK_STARTCAPTURE with msg_data = 0 (see handleEventForInit())
+ * and returns immediately, rather than blocking for the image task's result.
+ * An earlier version blocked here on a semaphore given once the reading was
+ * ready - that deadlocked when 'light' was invoked over BLE: the IF task's
+ * I2C_RX state doesn't clear until the CLI produces a reply for the command
+ * that arrived, but the image task's own reply-enabling step
+ * (sendMsgToMaster(), for the AE-regs telemetry) needs that same I2C link
+ * free to run - so a blocking reply here and an async telemetry send there
+ * waited on each other. Firing the request and replying immediately (like
+ * every other capture-triggering command) avoids that entirely.
+ *
+ * The msg_data = 0 sentinel still routes through exactly the same real
+ * (throwaway) single-frame capture path the periodic AE-check-interval timer
+ * wake already uses (aeCheckOnlyWake) - one path for both triggers - while
+ * aeCheckCliTriggered keeps this specific call forced and side-effect-free
+ * (no flash arming, no camera-switch check). Doing this on the image task
+ * also keeps all HM0360 I2C access serialised through one task - calling it
+ * directly from here could otherwise race a real capture's own HM0360 access
+ * from the image task at the same time.
+ */
+static BaseType_t prvLight(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) {
+	APP_MSG_T send_msg;
+
+	(void)pcCommandString;
+	configASSERT(pcWriteBuffer);
+
+	send_msg.msg_data = 0;	// 0 = light-check only, see handleEventForInit()
+	send_msg.msg_parameter = 0;
+	send_msg.msg_event = APP_MSG_IMAGETASK_STARTCAPTURE;
+
+	if (xQueueSend(xImageTaskQueue, (void *)&send_msg, __QueueSendTicksToWait) != pdTRUE) {
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "Failed to queue light check");
+		return pdFALSE;
+	}
+
+	cli_append(&pcWriteBuffer, &xWriteBufferLen, "Checking light level...");
 
 	return pdFALSE;
 }
@@ -1206,6 +1273,9 @@ static BaseType_t prvSetUtc(char *pcWriteBuffer, size_t xWriteBufferLen, const c
 
 
 		if (ret == RTC_NO_ERROR) {
+			// The RTC just changed - refresh the flash decision immediately if
+			// it depends on time of day, rather than waiting for the next wake.
+			ledFlash_reevaluateTimeOfDay();
 			snprintf(pcWriteBuffer, xWriteBufferLen, "RTC set to %s (this took %dms)", pcParameter, (int) elapsedMs);
 		}
 		else {
@@ -2737,6 +2807,7 @@ static void vRegisterCLICommands(void)
 	FreeRTOS_CLIRegisterCommand(&xCamera);
 	FreeRTOS_CLIRegisterCommand(&xSlots);		// Report firmware slots and camera variants
 	FreeRTOS_CLIRegisterCommand(&xSwitchSlot);	// Boot the other slot (day/night camera change)
+	FreeRTOS_CLIRegisterCommand(&xLight);		// On-demand light-sensor check
 	FreeRTOS_CLIRegisterCommand(&xEnable);
 	FreeRTOS_CLIRegisterCommand(&xDisable);
 

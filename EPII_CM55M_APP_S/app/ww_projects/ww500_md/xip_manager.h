@@ -51,6 +51,18 @@ extern "C" {
 #define MAX_LABEL_LEN           20          // Maximum bytes per class label string (including NUL)
 #define MAX_MODEL_NAME_LEN      IMAGEFILENAMELEN          // 8.3 format filename + NUL (e.g. "1V2.TFL\0")
 
+// Maximum bare filename length for firmware images (no path, including NUL).
+// Firmware files are 8.3 format - same constraint as IMAGEFILENAMELEN in
+// image_task.h - because this app builds FatFs with FF_USE_LFN 0 (see
+// ww500_md/ffconf.h), so long names cannot be opened at all.
+//
+// Public rather than private to xip_manager.c so callers can reject an
+// over-long name before doing any work. They previously could not see this
+// limit, so the CLI accepted names up to 63 characters, checked the CRC of the
+// real file, and only then failed "not found" once the path was silently
+// truncated to fit. See issue #155.
+#define MAX_FIRMWARE_NAME_LEN   IMAGEFILENAMELEN
+
 /*
  * Camera image variant labels, stored per slot in a small metadata record in the
  * spare bytes of the slot selector sector. Each firmware image labels its own

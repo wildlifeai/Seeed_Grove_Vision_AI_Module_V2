@@ -30,7 +30,8 @@ in `_Documentation/building_firmware.md`; flashing and recovery in
   `obj_*`).
 - Docs are the record, GitHub issues are the tracker: substantive findings go in
   `_Documentation/development reports/`, open items become issues (they auto-add to the
-  [project board](https://github.com/orgs/wildlifeai/projects/3)).
+  [project board](https://github.com/orgs/wildlifeai/projects/3)). Rules for starting and
+  closing a thread: [`development reports/README.md`](_Documentation/development%20reports/README.md).
 - EXIF fields, op-parameters and BLE commands are cross-repo contracts (app, website,
   backend, ww-hardware) — never change unilaterally.
 
@@ -40,6 +41,6 @@ in `_Documentation/building_firmware.md`; flashing and recovery in
 |---|---|
 | Durable docs | `_Documentation/`, `EPII_CM55M_APP_S/app/ww_projects/ww500_md/doc/` |
 | How the code got this way | `_Documentation/development reports/` |
-| Op parameters | `_Documentation/Operational_Parameters.md`, `MANIFEST/config_file.md` |
+| Op parameters | `EPII_CM55M_APP_S/app/ww_projects/ww500_md/MANIFEST/config_file.md` |
 | Console/BLE commands | `_Documentation/ble_commands.md` (`help` on the console lists all) |
 | PR summary at a branch tip | `REVIEW_PR<N>.md` |

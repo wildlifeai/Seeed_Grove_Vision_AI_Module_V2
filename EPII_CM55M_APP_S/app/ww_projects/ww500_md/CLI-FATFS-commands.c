@@ -782,6 +782,26 @@ static BaseType_t prvFirmwareCommand( char *pcWriteBuffer, size_t xWriteBufferLe
         return pdFALSE;
     }
 
+    /*
+     * Reject an over-long name here rather than letting it fail later.
+     * xip_update_firmware_from_sd() builds its path in a MAX_FIRMWARE_NAME_LEN
+     * buffer, so a longer name was silently truncated: with a CRC argument the
+     * CRC below reads the real file and reports a match, and only then does the
+     * update fail "not found" against the truncated path. See issue #155.
+     *
+     * The limit is FatFs 8.3, not a buffer we could simply enlarge: this app
+     * builds with FF_USE_LFN 0 (ww500_md/ffconf.h), so a longer name cannot be
+     * opened at all. CI-style names like "WW500_RP3_20260818.img" hit this.
+     */
+    if (lParameterStringLength > (BaseType_t)(MAX_FIRMWARE_NAME_LEN - 1)) {
+        cli_append(&pcWriteBuffer, &xWriteBufferLen,
+                   "Error: '%.*s' is %d chars; firmware names are 8.3 format, max %d "
+                   "(e.g. H6818C33.IMG). The SD card has no long-filename support.",
+                   (int)lParameterStringLength, pcParameter,
+                   (int)lParameterStringLength, MAX_FIRMWARE_NAME_LEN - 1);
+        return pdFALSE;
+    }
+
     memcpy(filename, pcParameter, lParameterStringLength);
     filename[lParameterStringLength] = '\0';
 

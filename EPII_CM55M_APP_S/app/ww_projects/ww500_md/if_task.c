@@ -99,8 +99,6 @@ static void vIfTask(void *pvParameters);
 static APP_MSG_DEST_T  handleEventForIdle(APP_MSG_T rxMessage);
 static APP_MSG_DEST_T  handleEventForStateI2CRx(APP_MSG_T rxMessage);
 static APP_MSG_DEST_T  handleEventForStateI2CTx(APP_MSG_T rxMessage);
-static APP_MSG_DEST_T  handleEventForStateI2CSlaveTx(APP_MSG_T rxMessage);
-static APP_MSG_DEST_T  handleEventForStateI2CSlaveRx(APP_MSG_T rxMessage);
 static APP_MSG_DEST_T  handleEventForStatePA0(APP_MSG_T rxMessage);
 static APP_MSG_DEST_T  handleEventForStateDiskOp(APP_MSG_T rxMessage);
 
@@ -192,8 +190,6 @@ const char * ifTaskStateString[APP_IF_STATE_NUMSTATES] = {
 		"Idle",
 		"I2C RX State",
 		"I2C TX State",
-		"I2C TX State (slave)",
-		"I2C RX State (slave)",
 		"PA0 State",
 		"Disk Op State",
 };
@@ -868,10 +864,10 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 
 
 	case APP_MSG_IFTASK_MSG_TO_MASTER:
-		// Here when this processor initiates communications with MKL62BA
+		// Here when this processor initiates communications with MKL62BA.
+		// This shares APP_IF_STATE_I2C_TX with MKL62BA-initiated exchanges rather
+		// than using a dedicated "slave-initiated" state - see if_task.h for why.
 		sendI2CMessage((uint8_t *) data, AI_PROCESSOR_MSG_RX_STRING, (uint16_t) length);
-		// TODO - think carefully whether we need this state...
-		//if_task_state = APP_IF_STATE_I2C_SLAVE_TX;
 		if_task_state = APP_IF_STATE_I2C_TX;
 		break;
 
@@ -960,6 +956,7 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 		}
 
 		// TODO think about this state...
+		// It is only used for testing via a CLI command and might be deleted.
 		if_task_state = APP_IF_STATE_PA0;
 		break;
 
@@ -1142,127 +1139,6 @@ static APP_MSG_DEST_T  handleEventForStateI2CTx(APP_MSG_T rxMessage) {
 	case APP_MSG_IFTASK_I2CCOMM_CLI_STRING_RESPONSE ... APP_MSG_IFTASK_I2CCOMM_CLI_BINARY_CONTINUES:
 		// This could happen if the ifTask is still sending a previous message
 		// and APP_MSG_IFTASK_I2CCOMM_TX has not yet arrived. So save the response and process it when we return to IDLE
-		XP_BROWN;
-		xprintf("Deferring event 0x%04x\n", event);
-		XP_WHITE;
-		savedMessage = rxMessage;
-		break;
-
-	default:
-		// Here for events that are not expected in this state.
-		flagUnexpectedEvent(rxMessage);
-		break;
-	}
-
-	// If non-null then our task sends another message to another task
-	return sendMsg;
-}
-
-/**
- * Implements state machine when in APP_IF_STATE_I2C_SLAVE_TX
- *
- * This is the state when the I2C interface is transmitting to the MKL62BA
- * (an exchange initiated by an HX6538 request)
- *
- * It is initiated when some other task needs to send a messages to the MKL62BA.
- *
- */
-static APP_MSG_DEST_T  handleEventForStateI2CSlaveTx(APP_MSG_T rxMessage) {
-	APP_MSG_EVENT_E event;
-	APP_MSG_DEST_T sendMsg;
-	sendMsg.destination = NULL;
-
-	event = rxMessage.msg_event;
-
-	switch (event) {
-	case APP_MSG_IFTASK_I2CCOMM_TX_DONE:
-		// I2C transmission has finished. Expecting a response from the MKL62BA soon.
-		if_task_state = APP_IF_STATE_I2C_SLAVE_RX;
-		i2cTransmissionComplete();
-		// Starts Missing Master timer
-		//evt_i2ccomm_tx_cb();
-		break;
-
-	case APP_MSG_IFTASK_I2CCOMM_MM_TIMER:
-		// Missing Master timer expired. Master failed to respond to our attempt to send I2C data
-		XP_LT_RED;
-		xprintf("I2C master did not read our I2C message\n");
-		XP_WHITE;
-
-		i2cTransmissionComplete();
-		if_task_state = APP_IF_STATE_IDLE;
-		break;
-
-	case APP_MSG_IFTASK_I2CCOMM_ERR:
-		if_task_state = APP_IF_STATE_IDLE;
-		i2cError();
-		break;
-
-	case APP_MSG_IFTASK_INACTIVITY:
-		// GitHub issue #205 - see handleEventForStateI2CTx() for why this must
-		// be deferred, not dropped.
-		XP_BROWN;
-		xprintf("Deferring event 0x%04x\n", event);
-		XP_WHITE;
-		savedMessage = rxMessage;
-		break;
-
-// TODO think abot what is expected!
-//	case APP_MSG_IFTASK_I2CCOMM_PA0_INT_IN:
-//		// Not used at the moment
-//		break;
-//
-//	case APP_MSG_IFTASK_I2CCOMM_CLI_STRING_RESPONSE ... APP_MSG_IFTASK_I2CCOMM_CLI_BINARY_CONTINUES:
-//		// This could happen if the ifTask is still sending a previous message
-//		// and APP_MSG_IFTASK_I2CCOMM_TX has not yet arrived. So save the response and process it when we return to IDLE
-//		XP_BROWN;
-//		xprintf("Deferring event 0x%04x\n", event);
-//		XP_WHITE;
-//		savedMessage = rxMessage;
-//		break;
-
-	default:
-		// Here for events that are not expected in this state.
-		flagUnexpectedEvent(rxMessage);
-		break;
-	}
-
-	// If non-null then our task sends another message to another task
-	return sendMsg;
-}
-
-/**
- * Implements state machine when in APP_IF_STATE_I2C_SLAVE_RX
- *
- * This state is entered when an I2C message arrives from the MKL62BA
- * (initiated by HX6538)
- */
-static APP_MSG_DEST_T  handleEventForStateI2CSlaveRx(APP_MSG_T rxMessage) {
-	APP_MSG_EVENT_E event;
-	APP_MSG_DEST_T sendMsg;
-	sendMsg.destination = NULL;
-
-	event = rxMessage.msg_event;
-//	data = rxMessage.msg_data;
-//	length = rxMessage.msg_parameter;
-//	if (length > WW130_MAX_PAYLOAD_SIZE) {
-//		length = WW130_MAX_PAYLOAD_SIZE;
-//	}
-
-	switch (event) {
-
-		// TODO - which event?
-	case APP_MSG_IFTASK_I2CCOMM_CLI_STRING_RESPONSE:
-	case APP_MSG_IFTASK_I2CCOMM_RX_READY:
-		// Here when I2C message arrived
-		if_task_state = APP_IF_STATE_I2C_RX;
-		// Read and parse the incoming data. Messages of type  AI_PROCESSOR_MSG_TX_STRING are passed to the CLI task for parsing and executing
-		i2cRxDataReady();
-		break;
-
-	case APP_MSG_IFTASK_INACTIVITY:
-		// GitHub issue #205 - see handleEventForStateI2CTx() for why this must
-		// be deferred, not dropped.
 		XP_BROWN;
 		xprintf("Deferring event 0x%04x\n", event);
 		XP_WHITE;
@@ -1586,16 +1462,6 @@ static void vIfTask(void *pvParameters) {
 			case APP_IF_STATE_I2C_TX:
 				// When I2C interface is transmitting (exchanges initiated by MKL62BA)
 				txMessage = handleEventForStateI2CTx(rxMessage);
-				break;
-
-			case APP_IF_STATE_I2C_SLAVE_TX:
-				// When I2C interface is transmitting (exchanges initiated by HX6538)
-				txMessage = handleEventForStateI2CSlaveTx(rxMessage);
-				break;
-
-			case APP_IF_STATE_I2C_SLAVE_RX:
-				// When a message arrives from the MKL62BA (exchanges initiated by HX6538)
-				txMessage = handleEventForStateI2CSlaveRx(rxMessage);
 				break;
 
 			case APP_IF_STATE_PA0:

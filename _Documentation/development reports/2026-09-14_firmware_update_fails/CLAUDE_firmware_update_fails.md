@@ -141,3 +141,44 @@ tree first as a checkpoint before any of it is touched, so the pre-removal state
 recoverable. The removal procedure itself (order of edits, how to verify nothing was
 silently reachable some other way) is still to be agreed before Claude touches anything.
 
+## Progress (Claude, 16 September 2026): dead SLAVE_TX/RX states removed
+
+Before removing, checked two more states Charles queried against the same suspicion:
+**`APP_IF_STATE_PA0` and `APP_IF_STATE_DISK_OP` are both live, not dead.** `DISK_OP` is
+assigned from six sites in the `AI_PROCESSOR_MSG_FILE_START`/`FILE_DATA`/`FILE_END`
+handlers and its handler `handleEventForStateDiskOp()` is exactly the file-receive
+protocol (`ftx ack N`/`ftx err N`) seen firing in `ai_log.txt` during the `LARGE.BIN`
+transfer above. `PA0` is gated behind `#ifdef TEST_INT_PULSE`, but that macro is
+unconditionally defined (`if_task.c:56`) in every build, and it's reachable from the CLI
+`int` command (`CLI-commands.c:1341`) — live, just narrow-purpose (manually pulsing the
+inter-processor interrupt line to test the handshake). Neither touched.
+
+Removed `APP_IF_STATE_I2C_SLAVE_TX`/`APP_IF_STATE_I2C_SLAVE_RX` and everything only
+reachable through them, in `if_task.h`/`if_task.c`:
+
+- Both enum values, and the two dispatcher `case` labels in `vIfTask()`'s switch.
+- The whole `handleEventForStateI2CSlaveTx()` and `handleEventForStateI2CSlaveRx()`
+  functions (including their forward declarations) — this also removed the unreachable
+  duplicate of the `"I2C master did not read our I2C message"` print that lived only in
+  the dead `SlaveTx` copy; the live copy (`handleEventForStateI2CTx()`) is untouched.
+- The two now-orphaned entries in `ifTaskStateString[]`. Since that array is indexed
+  positionally by the enum (not designated initializers), removing two values from the
+  middle required renumbering the survivors (`PA0` 0x0006→0x0004, `DISK_OP`
+  0x0007→0x0005, `NUMSTATES` 0x0008→0x0006) to keep the array aligned — this changes the
+  numeric state code shown in console logs (e.g. "Disk Op State" was `(7)`, now `(5)`),
+  which is a pure display value with no other consumer (`ifTask_getState()`'s only
+  external callers, in `ww500_md.c`, are generic per-task status callbacks that print
+  whatever they're given).
+- The stale commented-out `if_task_state = APP_IF_STATE_I2C_SLAVE_TX;` line and its TODO
+  in the `APP_MSG_IFTASK_MSG_TO_MASTER` case, replaced with a comment explaining why that
+  path shares `APP_IF_STATE_I2C_TX` instead.
+
+Checked and left alone: every `APP_MSG_IFTASK_*` event the dead handlers touched
+(`TX_DONE`, `MM_TIMER`, `ERR`, `INACTIVITY`, `CLI_STRING_RESPONSE`, `RX_READY`) is still
+used by live handlers elsewhere, so nothing in `app_msg.h` needed to change.
+
+**Both camera variants (`cis_imx708`, `cis_hm0360`) built and ran clean on device, 16
+September 2026.** Charles is committing this as a checkpoint; the mid-stream BLE-transfer
+stall (the actual open problem — see the two sections above) is still unfixed and is
+what we return to next.
+

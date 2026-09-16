@@ -180,6 +180,16 @@ static bool transferFileOpen = false;
 // f_write() failures ("ftx err 7") seen on transfers beyond ~3-7KB.
 // 16 x 241-byte chunks ≈ 3.9KB between syncs; each f_sync costs ~50-100ms,
 // amortised to a few ms per packet.
+//
+// 16 September 2026: this interval is a multiple of the BLE side's
+// FILETX_ACK_EVERY (4), so every periodic sync lands on a packet the BLE
+// processor actually samples for round-trip timing - the AI/BLE log
+// correlation in the "firmware update fails" development report attributes
+// several of the largest observed per-packet round-trip times (up to ~76ms)
+// to this. 16 may be more aggressive than needed now that the failure mode
+// above is understood; a larger interval (e.g. 64 or 128) would likely
+// reduce that overhead, but hasn't been tried - retest for "ftx err 7"
+// recurrence on long transfers before loosening this.
 #define TRANSFER_WRITES_PER_SYNC 16
 static uint16_t transferWritesSinceSync = 0;
 
@@ -271,6 +281,16 @@ static FRESULT fileWrite(fileOperation_t *fileOp) {
 	FRESULT res; // FatFs function common result code
 	UINT bw;	 // Bytes written
 
+	// No card-detect signal on this board (MMC_CD() is hardcoded true in
+	// mmc_we2_spi.c) - the boot-time mount is the only trustworthy check, so gate
+	// on it rather than letting f_open() retry FatFS's own mount logic.
+	if (!fatfs_mounted()) {
+		xprintf("SD card not mounted.\n");
+		fileOp->length = 0;
+		fileOp->res = FR_NO_FILESYSTEM;
+		return FR_NO_FILESYSTEM;
+	}
+
 	// TODO omit this soon as it might not handle long files or binary files
 	// xprintf("DEBUG: writing %d bytes to '%s' from address 0x%08x. Contents:\n%s\n",
 	//		fileOp->length, fileOp->fileName, fileOp->buffer, fileOp->buffer );
@@ -331,6 +351,15 @@ static FRESULT fileWriteImage(fileOperation_t *fileOp, fileBufferInfo_t * extraB
 	UINT bw;         	// Bytes written
 	UINT bwTotal;
 	rtc_time time;
+
+	// No card-detect signal on this board (MMC_CD() is hardcoded true in
+	// mmc_we2_spi.c) - the boot-time mount is the only trustworthy check, so gate
+	// on it rather than letting f_open() retry FatFS's own mount logic.
+	if (!fatfs_mounted()) {
+		xprintf("SD card not mounted.\n");
+		fileOp->res = FR_NO_FILESYSTEM;
+		return FR_NO_FILESYSTEM;
+	}
 
 	// Guard: capture dir must be set. An empty string causes f_chdir("") to silently
 	// leave the CWD unchanged (wherever it was — often /MANIFEST after load_configuration).
@@ -427,6 +456,16 @@ static FRESULT fileRead(fileOperation_t *fileOp) {
 	FRESULT res; // FatFs function common result code
 	UINT br;	 // Bytes read
 
+	// No card-detect signal on this board (MMC_CD() is hardcoded true in
+	// mmc_we2_spi.c) - the boot-time mount is the only trustworthy check, so gate
+	// on it rather than letting f_open() retry FatFS's own mount logic.
+	if (!fatfs_mounted()) {
+		xprintf("SD card not mounted.\n");
+		fileOp->length = 0;
+		fileOp->res = FR_NO_FILESYSTEM;
+		return FR_NO_FILESYSTEM;
+	}
+
 	//	xprintf("DEBUG: reading file %s to buffer at address 0x%08x (%d bytes)\n",
 	//			fileOp->fileName, fileOp->buffer, fileOp->length);
 
@@ -485,7 +524,9 @@ static APP_MSG_DEST_T handleEventForUninit(APP_MSG_T rxMessage) {
 	case APP_MSG_FATFSTASK_WRITE_FILE:
 		// Someone wants a file written. Send back an error message
 
-		// Inform the if task that the disk operation is complete
+		// Inform the if task that the disk operation is complete. Set fileOp->res,
+		// not just msg_data below: callers check the struct field, not the message payload.
+		fileOp->res = FR_NO_FILESYSTEM;
 		sendMsg.message.msg_data = (uint32_t)FR_NO_FILESYSTEM;
 		sendMsg.message.msg_parameter = (uint32_t)fileOp;
 		sendMsg.destination = fileOp->senderQueue;
@@ -507,7 +548,9 @@ static APP_MSG_DEST_T handleEventForUninit(APP_MSG_T rxMessage) {
 	case APP_MSG_FATFSTASK_READ_FILE:
 		// someone wants a file read. Send back an error message
 
-		// Inform the if task that the disk operation is complete
+		// Inform the if task that the disk operation is complete (fileOp->res, not
+		// just msg_data - see APP_MSG_FATFSTASK_WRITE_FILE above).
+		fileOp->res = FR_NO_FILESYSTEM;
 		sendMsg.message.msg_data = (uint32_t)FR_NO_FILESYSTEM;
 		sendMsg.destination = fileOp->senderQueue;
 		// The message to send depends on the destination! In retrospect it would have been better
@@ -540,7 +583,9 @@ static APP_MSG_DEST_T handleEventForUninit(APP_MSG_T rxMessage) {
 	case APP_MSG_FATFSTASK_OPEN_FILE:
 	case APP_MSG_FATFSTASK_APPEND_FILE:
 	case APP_MSG_FATFSTASK_CLOSE_FILE:
-		// SD card not mounted — report failure
+		// SD card not mounted — report failure. Set fileOp->res, not just
+		// msg_data below: callers check the struct field, not the message payload.
+		fileOp->res = FR_NO_FILESYSTEM;
 		sendMsg.message.msg_data = (uint32_t)FR_NO_FILESYSTEM;
 		sendMsg.destination = fileOp->senderQueue;
 		sendMsg.message.msg_event = APP_MSG_IFTASK_DISK_WRITE_COMPLETE;
@@ -713,6 +758,7 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 		if (fatfs_mounted()) {
 			res = save_configuration(STATE_FILE, &dirManager);
 			f_unmount(DRV);
+			mounted = false;	// fatfs_mounted() must reflect the unmount, not just fatFsInit()
 
 			if (res) {
 				xprintf("Error %d saving state\n", res);
@@ -762,13 +808,24 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 			transferFileOpen = false;
 		}
 
-		// fileOp->fileName is a bare 8.3 name; resolve it in the config directory.
-		res = f_chdir(dirManager.current_config_dir);
-		if (res != FR_OK) {
-			xprintf("Failed to chdir to '%s' (err %d)\n", dirManager.current_config_dir, res);
+		// No card-detect signal on this board (MMC_CD() is hardcoded true in
+		// mmc_we2_spi.c) - the boot-time mount is the only trustworthy check, so
+		// gate on it rather than letting f_chdir()/f_open() retry FatFS's own
+		// mount logic and risk a different answer mid-session (e.g. a firmware
+		// update transfer reporting success while nothing was actually written).
+		if (!fatfs_mounted()) {
+			xprintf("SD card not mounted - refusing '%s'\n", fileOp->fileName);
+			res = FR_NO_FILESYSTEM;
 		}
 		else {
-			res = f_open(&transferFile, fileOp->fileName, FA_WRITE | FA_CREATE_ALWAYS);
+			// fileOp->fileName is a bare 8.3 name; resolve it in the config directory.
+			res = f_chdir(dirManager.current_config_dir);
+			if (res != FR_OK) {
+				xprintf("Failed to chdir to '%s' (err %d)\n", dirManager.current_config_dir, res);
+			}
+			else {
+				res = f_open(&transferFile, fileOp->fileName, FA_WRITE | FA_CREATE_ALWAYS);
+			}
 		}
 
 		if (res == FR_OK) {

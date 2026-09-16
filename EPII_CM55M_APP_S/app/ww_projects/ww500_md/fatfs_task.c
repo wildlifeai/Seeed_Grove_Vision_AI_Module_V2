@@ -180,6 +180,16 @@ static bool transferFileOpen = false;
 // f_write() failures ("ftx err 7") seen on transfers beyond ~3-7KB.
 // 16 x 241-byte chunks ≈ 3.9KB between syncs; each f_sync costs ~50-100ms,
 // amortised to a few ms per packet.
+//
+// 16 September 2026: this interval is a multiple of the BLE side's
+// FILETX_ACK_EVERY (4), so every periodic sync lands on a packet the BLE
+// processor actually samples for round-trip timing - the AI/BLE log
+// correlation in the "firmware update fails" development report attributes
+// several of the largest observed per-packet round-trip times (up to ~76ms)
+// to this. 16 may be more aggressive than needed now that the failure mode
+// above is understood; a larger interval (e.g. 64 or 128) would likely
+// reduce that overhead, but hasn't been tried - retest for "ftx err 7"
+// recurrence on long transfers before loosening this.
 #define TRANSFER_WRITES_PER_SYNC 16
 static uint16_t transferWritesSinceSync = 0;
 

@@ -52,8 +52,19 @@
 
 /*************************************** Definitions *******************************************/
 
+// Uncomment and define to add delay to inter-processor interrupt pulse width 9MS)
+//#define INTERRUPT_PULSE_WIDTH 5
+
 // Uncomment to allow testing of the interprocessor interrupt ppin
 #define TEST_INT_PULSE
+
+// /IP_INT (PB11/GPIO2) was designed to be bidirectional - either side can drive it low
+// to interrupt the other - see interprocessor_interrupt_init()'s comment. Confirmed
+// 16 Sep 2026 that the BLE processor (nRF52832) never actually drives this pin on this
+// board (WW500.C02): it configures it PIN_INPUT-only (main.c:523 in the ww-hardware
+// repo). Uncomment to reinstate this side's interrupt-input handling if a future board
+// revision or firmware change needs it again.
+//#define BIDIRECTIONAL_INTERRUPT
 
 #define EVT_I2CS_0_SLV_ADDR     0x62
 
@@ -72,6 +83,13 @@
 // 4000ms window rides through the renegotiation while staying under the 5s file
 // session inactivity and the app's 15s silence timeout.
 #define MISSINGMASTERTIME	4000
+
+// Added 16 Sep 2026 while investigating BLE file-transfer round-trip time
+// variability (see the "firmware update fails" development report): a single
+// disk operation this slow is unusual enough to flag even during a transfer's
+// otherwise-quiet g_fileRxActive session - e.g. a periodic f_sync() landing on
+// a card that happens to be busy with internal wear-levelling/GC.
+#define SLOW_DISK_OP_WARNING_MS	100
 
 #define DBG_EVT_IICS_CMD_LOG 1
 #if DBG_EVT_IICS_CMD_LOG
@@ -308,10 +326,16 @@ static void i2csTxDoneEvent(void *param) {
 	//HX_DRV_DEV_IIC *iic_obj = param;
 	//HX_DRV_DEV_IIC_INFO *iic_info_ptr = &(iic_obj->iic_info);
 	APP_MSG_T send_msg;
-	BaseType_t xHigherPriorityTaskWoken;
+	// This callback runs in ISR context (see the function comment above), so this
+	// must be initialised: xTimerStopFromISR()/xQueueSendFromISR() below only ever
+	// set it to pdTRUE when a yield is needed, never reset it to pdFALSE.
+	BaseType_t xHigherPriorityTaskWoken = pdFALSE;
 
-	// Stop the timer in case the master does not read our data
-	if (xTimerStop(timerHndlMissingMaster, 0) != pdPASS) {
+	// Stop the timer in case the master does not read our data.
+	// Must be the FromISR variant - this callback runs in ISR context, and the
+	// plain xTimerStop() is a task-context-only API (it was previously used here
+	// in error; see if_task.c dead-code/ISR-audit notes).
+	if (xTimerStopFromISR(timerHndlMissingMaster, &xHigherPriorityTaskWoken) != pdPASS) {
 		configASSERT(0);	// TODO add debug messages?
 	}
 
@@ -1236,6 +1260,16 @@ static APP_MSG_DEST_T  handleEventForStateDiskOp(APP_MSG_T rxMessage) {
 	        xprintf("   FileTX: disk operation took %dms\n", elapsedTime);
 	        XP_WHITE;
 	    }
+	    else if (elapsedTime > SLOW_DISK_OP_WARNING_MS) {
+	        // Quiet mode normally suppresses this per-packet timing (see above),
+	        // but an unusually slow individual disk operation is worth flagging
+	        // even mid-transfer - this print is rare by construction, so it
+	        // shouldn't itself perturb the timing it's reporting on.
+	    	// Not an error - due to slow SD card operations sometimes
+	        XP_LT_RED;
+	        xprintf("   FileTX: disk operation took %dms (slow!)\n", elapsedTime);
+	        XP_WHITE;
+	    }
 
 		switch (diskPhase) {
 
@@ -1390,6 +1424,11 @@ static void vIfTask(void *pvParameters) {
 	dbg_printf(DBG_LESS_INFO, "I2C slave instance %d configured at address 0x%02x\n", iic_id, EVT_I2CS_0_SLV_ADDR);
 	dbg_printf(DBG_LESS_INFO, "I2C buffers have %d bytes, payload is %d\n",
 			WW130_MAX_WBUF_SIZE, WW130_MAX_PAYLOAD_SIZE);
+#ifdef INTERRUPT_PULSE_WIDTH
+	dbg_printf(DBG_LESS_INFO, "Inter-processor interrupt pulse >= %dms\n", INTERRUPT_PULSE_WIDTH);
+#else
+	dbg_printf(DBG_LESS_INFO, "Inter-processor interrupt pulse short\n");
+#endif // INTERRUPT_PULSE_WIDTH
 
 	// TODO can we do something to detect whether there is a WW130 present, and
 	// maybe stay in the UNINIT or ERROR state if not?
@@ -1531,6 +1570,8 @@ static void vIfTask(void *pvParameters) {
 /*********************************** Interprocessor Interrupt Functions ************************************************/
 
 #ifdef WW500
+
+#ifdef BIDIRECTIONAL_INTERRUPT
 /**
  * Interrupt callback for interprocessor interrupt pin (interrupt from MKL63BA).
  *
@@ -1540,6 +1581,11 @@ static void vIfTask(void *pvParameters) {
  * PB11 is connected to the SW2 (FTDI) switch on the WWIF100 breakout board. (P18 on the MKL62BA).
  * (on the WW500.A01 this is a wire link).
  * You can press the SW2 button for a short time. If you press it for a long time, the MKL62BA will enter DFU mode.
+ *
+ * Not used at present: only registered under BIDIRECTIONAL_INTERRUPT (undefined by
+ * default) - see interprocessor_interrupt_init(). Confirmed 16 Sep 2026 that the BLE
+ * processor (nRF52832) never drives /IP_INT as an output on this board, so it never
+ * asserts this line to interrupt us.
  */
 static void interprocessor_interrupt_cb(uint8_t group, uint8_t aIndex) {
     uint8_t value;
@@ -1563,6 +1609,7 @@ static void interprocessor_interrupt_cb(uint8_t group, uint8_t aIndex) {
 
 	hx_drv_gpio_clr_int_status(AON_GPIO0);
 }
+#endif // BIDIRECTIONAL_INTERRUPT
 
 /**
  * Configure PB11 as GPIO2 to be used as the inter-processor interrupt signal
@@ -1572,6 +1619,12 @@ static void interprocessor_interrupt_cb(uint8_t group, uint8_t aIndex) {
  *
  * When PB11 is an input then it can be enabled as an interrupt. This allows the MKL62BA to interrupt this chip
  * by driving PB11 low. That is - the same PB11 signal can be used by either side to interrupt the other.
+ *
+ * Not used at present: confirmed 16 Sep 2026 that the BLE processor (nRF52832) never
+ * drives /IP_INT as an output on this board (WW500.C02) - it configures the pin
+ * PIN_INPUT-only (main.c:523 in the ww-hardware repo). So the interrupt-input side of
+ * this pin (below) is currently dead - guarded by BIDIRECTIONAL_INTERRUPT, undefined by
+ * default. Define it to reinstate this if a future board revision needs it again.
  *
  * This registers a callback to interprocessor_interrupt_cb() which in turn sends an event to the comm_task loop,
  * which in turn sends a message to main_task
@@ -1593,13 +1646,14 @@ static void interprocessor_interrupt_init(void) {
 	pad_pull_cfg.pb11.pull_sel = SCU_PAD_PULL_UP;
     hx_drv_scu_set_all_pull_cfg(&pad_pull_cfg);
 
-
-	// The next commands prepare PB11 to be an interrupt input
+#ifdef BIDIRECTIONAL_INTERRUPT
+	// Not used at present - see function comment above and BIDIRECTIONAL_INTERRUPT.
 	hx_drv_gpio_clr_int_status(GPIO2);
 	hx_drv_gpio_cb_register(GPIO2, interprocessor_interrupt_cb);	// define ISR
 	hx_drv_gpio_set_int_type(GPIO2, GPIO_IRQ_TRIG_TYPE_EDGE_FALLING);	// only when PB11 goes low
 	//hx_drv_gpio_set_int_type(GPIO2, GPIO_IRQ_TRIG_TYPE_EDGE_BOTH);	// When PB11 goes low, then when it goes high
 	hx_drv_gpio_set_int_enable(GPIO2, 1);	// 1 means enable interrupt
+#endif // BIDIRECTIONAL_INTERRUPT
 
 	//hx_drv_gpio_get_in_value(GPIO2, &gpio_value);
 	//xprintf("Initialised PB11 (GPIO2) as input. Read %d\n", gpio_value);
@@ -1615,8 +1669,10 @@ static void interprocessor_interrupt_init(void) {
  */
 static void interprocessor_interrupt_assert(void) {
 
+#ifdef BIDIRECTIONAL_INTERRUPT
 	// disable the interrupt, so we don't interrupt ourself
 	hx_drv_gpio_set_int_enable(GPIO2, 0);	// 0 means disable interrupt
+#endif // BIDIRECTIONAL_INTERRUPT
 
 	// Sets PA0 as an output and drive low, then delay, then high, then set as an input
     hx_drv_gpio_set_output(GPIO2, GPIO_OUT_LOW);
@@ -1645,8 +1701,19 @@ static void interprocessor_interrupt_assert(void) {
  */
 static void interprocessor_interrupt_negate(void) {
 
+#ifdef INTERRUPT_PULSE_WIDTH
+	// Add a deliberate delay to ensure the GPIO has a minimum low and high time
+	// This was an attempt to fix apparent missing interrupts at the BLE processor.
+	// Actual fix was to change BLE interrupt detection code.
+	vTaskDelay(pdMS_TO_TICKS(INTERRUPT_PULSE_WIDTH));
 	hx_drv_gpio_set_out_value(GPIO2, GPIO_OUT_HIGH);
-#if 0
+	vTaskDelay(pdMS_TO_TICKS(INTERRUPT_PULSE_WIDTH));
+#else
+	// Minimal pulse width
+	hx_drv_gpio_set_out_value(GPIO2, GPIO_OUT_HIGH);
+#endif //INTERRUPT_PULSE_WIDTH
+
+	#if 0
 	// This for testing:
 	uint8_t pinValue;
 	hx_drv_gpio_get_in_value(GPIO2, &pinValue);
@@ -1662,12 +1729,15 @@ static void interprocessor_interrupt_negate(void) {
 	}
 #endif
 
-	// Now set PB11 as an input and prepare it to respond to interrupts from the MKL62BA.
+	// Set PB11 back to an input - the idle state between messages.
 	hx_drv_gpio_set_input(GPIO2);
 
+#ifdef BIDIRECTIONAL_INTERRUPT
+	// Not used at present - see interprocessor_interrupt_init() and BIDIRECTIONAL_INTERRUPT.
 	// The next commands prepare PB11 to be an interrupt input
 	hx_drv_gpio_clr_int_status(GPIO2);
 	hx_drv_gpio_set_int_enable(GPIO2, 1);	// 1 means enable interrupt
+#endif // BIDIRECTIONAL_INTERRUPT
 }
 
 #else

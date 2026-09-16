@@ -1,8 +1,16 @@
-# Task: Fix formware update failure
+# Task: Fix Firmware Update Failure
 
 #### File: CLAUDE_firmware_update_fails.md
 #### Author: Charles Palmer
-#### Date: 14 September 2026
+#### Date: 14-17 September 2026
+
+## Summary
+
+After debugging the problem seems related to the BLE processor not always seeing the interrupt on the GPIO pin
+from the AI processor. Fixed by changing interrupt code in the BLE processor.
+
+At the same time, we cleared out some unused code and states, fixed bugs, and identified a new
+issue to be dealt with as a separate task (Understand and fix Unresponsive BLE processor).
 
 ## Background
 
@@ -181,4 +189,155 @@ used by live handlers elsewhere, so nothing in `app_msg.h` needed to change.
 September 2026.** Charles is committing this as a checkpoint; the mid-stream BLE-transfer
 stall (the actual open problem — see the two sections above) is still unfixed and is
 what we return to next.
+
+## Progress (Claude, 16 September 2026): AI-side ISR/FreeRTOS-API bug found and fixed
+
+Follow-up question on the `MISSINGMASTERTIME` print from the log-correlation section
+above: is it a genuine 4.0s timer expiry, does traffic actually flow before it fires,
+and is there a bug in the timer itself? Checked directly against the code:
+
+- The print corresponds exactly to `timerHndlMissingMaster`, a one-shot FreeRTOS timer
+  (period `MISSINGMASTERTIME` = 4000ms, `if_task.c:74`), started in
+  `i2ccomm_write_enable()` (`:792`, now `:798` after the fix below) every time this
+  processor sends anything, and reported via `missingMasterExpired()`
+  (`:1888`-ish)/`APP_MSG_IFTASK_I2CCOMM_MM_TIMER`. All three captured stall episodes
+  fired 4.00-4.02s after their triggering send — exactly on schedule, no drift.
+- Confirmed many prior successful exchanges before each stall (episode 1: at least 8
+  ack round-trips succeeded in the ~2.6s immediately before it) — an intermittent
+  mid-stream failure, not a cold-start bug.
+- Found a real bug while checking the timer's own management: the *only* place that
+  stops this timer, `i2csTxDoneEvent()` (`if_task.c:307`) — the I2C driver's slave-TX-done
+  callback, registered into `hx_lib_i2ccomm_init()`'s callback table and documented in
+  its own comment as running "in the ISR context" — called the **non-ISR** `xTimerStop()`
+  instead of `xTimerStopFromISR()`. Calling a task-context-only FreeRTOS API from real
+  interrupt context is undefined per FreeRTOS's own rules. The failure path is guarded
+  by `configASSERT(0)`, and this build's `configASSERT` (`FreeRTOSConfig.h`) is a hard
+  hang (disables interrupts, spins forever) rather than a no-op — so this specific call
+  evidently didn't outright fail during the captured episodes (no hang observed), but
+  "didn't fail this time" isn't proof it's safe.
+
+**Exhaustive check for the same mistake elsewhere:** identified every function in
+`ww500_md` (36 `.c` files) actually registered as a hardware ISR callback — via driver
+registration calls (`hx_drv_gpio_cb_register`, the `I2CCOMM_CFG_T` callback table) and
+the code's own "ISR context" doc comments — then checked each for FreeRTOS calls that
+have `FromISR` counterparts. Found exactly 5 such callbacks, all in `if_task.c`:
+`i2csTxDoneEvent()`, `i2csRxReadyEvent()`, `i2csErrorEvent()` (I2C driver callbacks), and
+two board-variant (`#if`/`#else`, WW500.A00 vs A01) copies of `interprocessor_interrupt_cb()`
+(GPIO ISR for `/IP_INT`). Only `i2csTxDoneEvent()` had the bug — the other four already
+correctly use `xQueueSendFromISR()` + guarded `taskYIELD()`. Not checked: HX SDK/driver
+internals (vendor code) and `ww130_cli`'s separate, less-active copy of `if_task.c`.
+
+**Fixed** (`if_task.c:307-343`): `xTimerStop()` → `xTimerStopFromISR()`. Also initialised
+`xHigherPriorityTaskWoken = pdFALSE` at declaration — it was previously read
+uninitialised whenever `xQueueSendFromISR()` didn't need to set it (that function, like
+all FreeRTOS `...FromISR` calls, only ever writes `pdTRUE` into the flag, never resets it
+to `pdFALSE`), and now that two `FromISR` calls feed the same flag in sequence this was
+no longer just latent but load-bearing.
+
+**Not yet fixed / worth a decision:** the same uninitialised-`xHigherPriorityTaskWoken`
+pattern (declared but never explicitly set to `pdFALSE`) exists in the other 4 ISR
+functions too, each of which only makes one `FromISR` call. There it's lower-stakes (only
+ISR: harmless spurious yield, or in the worst case a missed one delaying that queue
+message's processing until the next scheduling point — a latency effect, not corruption
+or a hang) since there's nothing to OR together — but it's the same class of relying on
+unspecified stack contents. Not fixed pending Charles's call on whether it's worth
+touching now or leaving alone.
+
+Whether this bug is a contributor to the actual open stall (the TWI-race hypothesis on
+the BLE side, documented above) is still unknown — it's a separate, independently-found
+correctness issue on the AI side. Returning to the main BLE-stall problem next.
+
+## Progress (Claude, 16 September 2026): duplicate-reschedule mystery resolved, retest shows big improvement, and a new pkt-time-variability lead
+
+**Instrumented** `aiStateMachine.c` (BLE processor, `ww-hardware` repo) behind a single
+`TXFILE_RESCHEDULE_DIAG` macro (`#ifdef`/`#else`, trivially revertible): logged the
+*triggering* event at the file-FIFO-drain reschedule site (`aiStateMachine.c:897-907`),
+and gated `deferredAiBump()`'s previously-ungated synchronous log+flush behind
+`!g_fileTxActive` (`:718-737`), matching the sibling "bumped with..." print a few lines
+into `aiStateMachine_bump()` that was already gated for exactly this cost reason.
+
+**Retest (`ai_log_4.txt`/`ble_log_4.txt`) vs. a same-day baseline on the old build
+(`ai_log_3.txt`/`ble_log_3.txt`, 0 diagnostic lines, still 9 stalls — confirms it's a
+fair before/after):**
+
+- Stall count dropped from 9 to **1** on the new build.
+- Worst per-packet round-trip ("pkt time") dropped from 478ms to **76ms** — no more
+  multi-hundred-ms outliers outside the one real stall.
+- The "duplicate reschedule" mystery is resolved: 170 of 172 diagnostic lines are the
+  identical, correct, one-per-real-ack case (`trigger event 14 'TxFile response'`,
+  `oldState PROCESSING`) — the design working as intended, not a bug. The 2 exceptions
+  are the one real stall's recovery (`event 15 'Response timeout'`) and one harmless
+  startup RTC-sync exchange (`event 6 'UTC Rx'`). The earlier appearance of "many
+  identical prints in a burst" was real acks that had backed up during the (now-removed)
+  synchronous-flush cost and were drained in a rapid catch-up once unblocked — not
+  duplicate scheduling.
+- The one remaining stall is structurally identical to the earlier ones (silence, then
+  each side's own independent timeout, no NACK/error path) — still unexplained by this
+  instrumentation; the TWI-race hypothesis (above) remains the leading candidate.
+
+**New lead on the *other* symptom (pkt-time variability, distinct from the full stalls):**
+traced exactly what "pkt time" measures (`fileTx.c:652`/`:706`/`:756`, BLE side) — the
+full round trip from BLE dispatching a FILE_DATA chunk to receiving its ack, sampled only
+1-in-4 (`FILETX_ACK_EVERY = 4`) and reflecting only the *last* of each sampled group of 4
+(`startPacketTime` is overwritten on every dispatch, not just sampled ones). Checked
+whether the AI processor's 241-byte I2C chunks get aggregated before hitting the SD card:
+
+- Our own code (`fatfs_task.c:859`) does one `f_write()` per I2C packet, no batching.
+- FatFS itself does aggregate: `ffconf.h` confirms `FF_FS_TINY = 0` (each open file has
+  its own 512-byte write-behind buffer), so only roughly every 2nd `f_write()` actually
+  reaches the card.
+- Our own code separately forces an `f_sync()` every 16 writes
+  (`TRANSFER_WRITES_PER_SYNC`, `fatfs_task.c:183`) — a much heavier FAT+directory flush,
+  run synchronously before that packet's ack goes out. 16 is an exact multiple of the
+  BLE side's 4-packet sampling interval, so **every periodic sync boundary is guaranteed
+  to land on a sampled pkt-time value** — a strong structural candidate for the recurring
+  37-76ms bumps (as opposed to the one full 10s stall, a separate phenomenon).
+- Ruled out with direct evidence: the pre-existing transient-SD-busy retry path
+  (`fatfs_task.c:854-873`, up to 3 retries with a 15ms delay, logs
+  `"SD write err %d, retry %d/3"` when it fires) never fired in either `ai_log_3.txt` or
+  `ai_log_4.txt` — not the explanation here.
+
+**Two small changes made as a result, not yet retested:**
+1. `fatfs_task.c:183` — added a comment noting `TRANSFER_WRITES_PER_SYNC = 16` was a
+   deliberate fix for a real prior bug (unbounded dirty state causing non-deterministic
+   `"ftx err 7"` on transfers beyond ~3-7KB, per the existing comment there), but is worth
+   retuning (larger, e.g. 64/128) now that we have direct cost evidence — flagged as
+   needing a retest for `"ftx err 7"` recurrence before loosening, not changed yet.
+2. `if_task.c` — added `SLOW_DISK_OP_WARNING_MS` (100ms) and a warning print in the
+   `APP_MSG_IFTASK_DISK_WRITE_COMPLETE` handler (`:1243-1254`): the existing per-operation
+   timing print is normally fully suppressed during a transfer (`g_fileRxActive`), so we
+   currently have zero visibility into individual SD-write duration for the bulk of any
+   transfer; this surfaces only the rare slow one (by construction infrequent, so
+   shouldn't itself perturb the timing it reports on) without reintroducing the
+   ~40ms/packet cost of printing every operation.
+
+## Progress (Claude/Charles, 16 September 2026): likely root cause found and fixed on the BLE side — /IP_INT pulse too short for a low-priority, low-accuracy GPIO interrupt
+
+Charles asked how the AI-side `MISSINGMASTERTIME` handshake actually works mechanically
+(assert/negate the shared `/IP_INT` line, BLE reacts on the rising edge). Tracing the
+BLE-side detection path (`ww-hardware` repo) found it uses the nRF52832's low-power
+**PORT event** mechanism (`hi_accuracy = false`, hardcoded in
+`WW500-C02/gpio-board.c`), at NVIC priority 6 (low — the code's own `IRQ_HIGH_PRIORITY`
+request is documented as ignored: "priority is set in sdk_config.h"). Traced Nordic's
+actual PORT-event handler: it only recognises a transition if the pin is still at the
+new level when the CPU eventually services the shared event — a pulse shorter than that
+servicing latency under load (active BLE + TWI traffic, exactly a file transfer) is
+**silently missed, not delayed**.
+
+Charles added a 1ms `vTaskDelay()` either side of driving the pin high in
+`interprocessor_interrupt_negate()` (AI side, stretching the pulse) as a quick empirical
+test: 3 runs (log files 8/9/10) gave 0, 1, and 0 stalls respectively — down from the
+usual 6-9 per run, strong support for the theory, though not a full fix.
+
+**Fix implemented on the BLE side (`ww-hardware` repo, not yet tested)**: `/IP_INT` now
+switches to a dedicated, hardware-latched GPIOTE channel (`hi_accuracy = true`) only for
+the duration of a file-transfer session, reverting to the default low-power interrupt
+afterward — mirrors the existing `ble_actions_setFastConnParams()` session lifecycle in
+`fileTx.c`. New `GpioSetInterruptHiAccuracy()` in `gpio-board.h`/`WW500-C02/gpio-board.c`
+(other boards unaffected), new `aiInt_setHighAccuracy()` in `main.c` (declared in
+`aiProcessor.h`), called from `fileTx.c` alongside the connection-parameter switch. Kept
+transfer-scoped deliberately: a dedicated GPIOTE channel costs a small continuous current
+draw, negligible during an already power-hungry transfer but not worth paying 24/7 on a
+battery/solar device that spends most of its life asleep. Charles is removing the 1ms
+pulse-stretch delay to test this fix in isolation.
 

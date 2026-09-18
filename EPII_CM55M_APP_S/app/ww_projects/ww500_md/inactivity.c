@@ -34,6 +34,9 @@
 #define USEIDLETASK
 //#define USETIMER
 
+// Best stop unreasonable times, such as 0
+#define MINIMUMINACTIVEPERIOD	200
+
 // Missing from FreeRTOS - c.f. pdMS_TO_TICKS()
 #define pdTICKS_TO_MS(xTicks)    ((xTicks) * 1000U / configTICK_RATE_HZ)
 
@@ -56,9 +59,11 @@ static BaseType_t inactivity_enabled = pdFALSE;
 
 // Idle hook state
 static TickType_t idle_start_tick = 0;
+// This ensure that the inactivity callback is not called too often
 static BaseType_t inactivity_triggered = pdFALSE;
 
 static uint32_t tasksInactivePeriod = 0;
+// This is the number of ticks that must happen before 'inactivity' is declared.
 static TickType_t tasksInactiveTicks = 0;
 
 /**************************************** Local function definitions  *************************************/
@@ -83,37 +88,45 @@ static void inactivity_timer_callback(TimerHandle_t xTimer) {
 /**************************************** Global function definitions  *************************************/
 
 /**
- * Initialise a one-shot timer and start it.
+ * Initialise inactivity detection.
  *
- * @param timeout_ms the duration of the timer.
+ * Called once from fatfs task, after OP_PARAMETER_INTERVAL_BEFORE_DPD has been
+ * read from the SD card (or the default value 1000 is used)
+ *
+ * If timeout_ms = 0 then inactivity detection is inhibited.
+ *
+ * @param timeout_ms the duration of the timer. (0 disables)
  * @param callback - the function to call when it expires.
  */
 void inactivity_init(uint32_t timeout_ms, void (*callback)(void)) {
 
-    if (callback == NULL || timeout_ms == 0) {
-        return; // Invalid input
-    }
+	inactivity_triggered = pdFALSE;
+	idle_start_tick = 0;
 
-    inactivity_setPeriod(timeout_ms);
+	if (callback == NULL ) {
+		inactivity_enabled = pdFALSE;
+	}
+	else {
+		inactivity_callback = callback;	// likely to call app_onInactivityDetection()
+		inactivity_enabled = pdTRUE;
+		tasksInactivePeriod = timeout_ms;
+		tasksInactiveTicks = pdMS_TO_TICKS(tasksInactivePeriod);
+	}
 
-    inactivity_callback = callback;	// likely to call app_onInactivityDetection()
-    inactivity_triggered = pdFALSE;
-    idle_start_tick = 0;
-    inactivity_enabled = pdTRUE;
 
 #ifdef USETIMER
 
-    if (inactivity_timer == NULL) {
-        inactivity_timer = xTimerCreate("InactivityTimer",
-                                        tasksInactiveTicks,
-                                        pdFALSE,
-                                        NULL,
-                                        inactivity_timer_callback);
-    }
+	if (inactivity_timer == NULL) {
+		inactivity_timer = xTimerCreate("InactivityTimer",
+				tasksInactiveTicks,
+				pdFALSE,
+				NULL,
+				inactivity_timer_callback);
+	}
 
-    if (inactivity_timer != NULL) {
-        xTimerStart(inactivity_timer, 0);
-    }
+	if (inactivity_timer != NULL) {
+		xTimerStart(inactivity_timer, 0);
+	}
 #endif // USETIMER
 
 }
@@ -162,7 +175,7 @@ void inactivity_IdleHook(void) {
     TickType_t now;
     TickType_t timeSinceActivity;
 
-    if (!inactivity_enabled || tasksInactiveTicks == 0) {
+    if (!inactivity_enabled || (tasksInactiveTicks == 0)) {
     	return;
     }
 
@@ -176,8 +189,7 @@ void inactivity_IdleHook(void) {
     // calculate the time since one of our tasks ran
     timeSinceActivity = now - idle_start_tick;
 
-    if (!inactivity_triggered
-    		&& (timeSinceActivity >= tasksInactiveTicks)) {
+    if (!inactivity_triggered && (timeSinceActivity >= tasksInactiveTicks)) {
         inactivity_triggered = pdTRUE;
 
         // Execute some code that will end up entering deep power down (DPD)
@@ -203,6 +215,9 @@ void inactivity_IdleHook(void) {
  */
 #ifdef USEIDLETASK
 
+/**
+ * This is called when vApplicationTaskSwitchedIn() is called
+ */
 void inactivity_on_task_switched_in(void) {
     if (!inactivity_enabled) {
     	return;
@@ -238,6 +253,14 @@ uint32_t inactivity_getPeriod(void) {
  * @param period inactivity period in ms
  */
 void inactivity_setPeriod(uint32_t timeout_ms) {
-    tasksInactivePeriod = timeout_ms;
+
+	// Prevent unreasonable period, such as 0!
+    if (timeout_ms < MINIMUMINACTIVEPERIOD) {
+    	tasksInactivePeriod = MINIMUMINACTIVEPERIOD;
+    }
+    else {
+    	tasksInactivePeriod = timeout_ms;
+    }
+
     tasksInactiveTicks = pdMS_TO_TICKS(tasksInactivePeriod);
 }

@@ -1,0 +1,156 @@
+[2026-09-18 17:25:00.746] <info> app: 
+[2026-09-18 17:25:00.747] **** Secure Bootloader (WW500_A00) Ver: 00.01.01 Built: 19:01:29 Oct 31 2025 ****
+[2026-09-18 17:25:00.747] <info> nrf_dfu_settings: Backing up settings page to address 0x7E000.
+[2026-09-18 17:25:00.747] <info> app: No firmware to activate.
+[2026-09-18 17:25:00.748] <info> nrf_dfu_settings: Backing up settings page to address 0x7E000.
+[2026-09-18 17:25:02.697] <info> app: 
+[2026-09-18 17:25:02.698] **** Wildlife Watcher 1 (WW500-C02) Ver: 00.30.50 Built: 02:56:03 Sep 15 2026 ****
+[2026-09-18 17:25:03.002] <info> app: BOARDTYPE bytes: 0x04 0x22
+[2026-09-18 17:25:03.002] <info> app: GCC version: 10.3.1
+[2026-09-18 17:25:03.002] <info> app: Compiler Version: ARM GNU, 10.3.1 20210824 (release)
+[2026-09-18 17:25:03.002] <info> app: Git branch: 'dev' c4d3e50-dirty
+[2026-09-18 17:25:03.003] 
+[2026-09-18 17:25:03.003] <info> app_timer: RTC: initialized.
+[2026-09-18 17:25:03.003] <info> app: System time set successfully
+[2026-09-18 17:25:03.003] <info> app: 
+[2026-09-18 17:25:03.003] Initialising LoRaWAN
+[2026-09-18 17:25:03.003] <info> app: Initializing fds...
+[2026-09-18 17:25:03.003] <info> app: Reading flash usage statistics...
+[2026-09-18 17:25:03.003] <info> app: Found 6 valid records.
+[2026-09-18 17:25:03.004] <info> app: Found 178 dirty records (ready to be garbage collected).
+[2026-09-18 17:25:03.004] <debug> app: Record 6 at 6D008
+[2026-09-18 17:25:03.004] <debug> app: Record 424 at 6E008
+[2026-09-18 17:25:03.004] <debug> app: Record 436 at 6E1B8
+[2026-09-18 17:25:03.004] <debug> app: Record 437 at 6E31C
+[2026-09-18 17:25:03.004] <debug> app: Record 958 at 6F710
+[2026-09-18 17:25:03.004] <debug> app: Record 959 at 6F750
+[2026-09-18 17:25:03.004] <info> app: >>> LoraMac version = 0x01000300
+[2026-09-18 17:25:03.005] <info> app: Data restored from NVM: 1064 bytes
+[2026-09-18 17:25:03.005] <info> app:    DevEui = DA:EF:67:FE:FF:7A:0A:D9
+[2026-09-18 17:25:03.005] <info> app:    AppEui = 70:B3:D5:7E:D0:03:C8:D4
+[2026-09-18 17:25:03.005] <info> app:    SE Pin = 00:00:00:00
+[2026-09-18 17:25:03.005] <info> app: LoRaWAN initialised
+[2026-09-18 17:25:03.006] 
+[2026-09-18 17:25:03.006] <info> app: BLE initialised for WILD-CMSS - disconnect interval 60s
+[2026-09-18 17:25:03.006] 
+[2026-09-18 17:25:03.006] <info> app: Max BLE packet length is 244. PDU length = 251
+[2026-09-18 17:25:03.006] <info> app: Board name: WILD-CMSS
+[2026-09-18 17:25:03.006] <info> app: Tests Wildlife Watcher BLE and LoRaWAN communications. Uses NUS
+[2026-09-18 17:25:03.007] <info> app: TODO - clean up LoRaWAN processing - esp. failures, incl. failure to join.
+[2026-09-18 17:25:03.007] <info> app: TODO - check RSSI outgoing vs incoming differences
+[2026-09-18 17:25:03.007] <info> app: Device Addr:   99:0A:7A:67:EF:DA
+[2026-09-18 17:25:03.007] <info> app: BLE address:   D9:0A:7A:67:EF:DA
+[2026-09-18 17:25:03.007] <info> app: BLE Name:      WILD-CMSS
+[2026-09-18 17:25:03.009] <info> app: Target DevEui: DA:EF:67:FE:FF:7A:0A:D9
+[2026-09-18 17:25:03.009] <info> app: Target AppEui: TBD
+[2026-09-18 17:25:03.009] <info> app: Softdevice ver: 0x00CB
+[2026-09-18 17:25:03.009] <info> app: Reset reason:  0x00000000 POR or BOR
+[2026-09-18 17:25:03.009] <info> app: Firmware version 0.30.50
+[2026-09-18 17:25:03.009] 
+[2026-09-18 17:25:03.009] <info> app: Temperature: 24.50C
+[2026-09-18 17:25:03.009] 
+[2026-09-18 17:25:03.009] <info> app: Press SW1 to start BLE advertising.
+[2026-09-18 17:25:03.009] <info> app: Press SW1 at power-on to reset credentials
+[2026-09-18 17:25:03.009] <info> app: Press SW1 for > 10s to start Device Firmware Upgrade (DFU)
+[2026-09-18 17:25:03.009] <info> app: Press SW2 - prohibited. This signal is asserted by AI processor.
+[2026-09-18 17:25:03.009] <info> app: Hold magnet close at power-on to start Device Firmware Upgrade (DFU)
+[2026-09-18 17:25:03.009] <info> app: Press RESET button for a software reset.
+[2026-09-18 17:25:03.009] <info> app: UART RX Pin 2 is driven
+[2026-09-18 17:25:03.009] <info> app: SW1 Pin 22 is not driven
+[2026-09-18 17:25:03.009] <info> app: SW2 Pin 27 is not driven
+[2026-09-18 17:25:03.009] <info> app: Mag sensor Pin 25 is driven
+[2026-09-18 17:25:03.009] <info> app: Current DevEui is:   DA:EF:67:FE:FF:7A:0A:D9
+[2026-09-18 17:25:03.009] <info> app: Current JoinEui is:  70:B3:D5:7E:D0:03:C8:D4
+[2026-09-18 17:25:03.009] <info> app: Current ShortId is:   CMSS
+[2026-09-18 17:25:03.009] <info> app: InitCred DevEui is:  00:80:E1:01:01:01:01:01
+[2026-09-18 17:25:03.009] <info> app: InitCred JoinEui is: 70:B3:D5:7E:D0:03:C8:00
+[2026-09-18 17:25:03.011] <info> app: We have no need to fetch parameters
+[2026-09-18 17:25:03.011] 
+[2026-09-18 17:25:03.011] <info> app: Enabled I2C (instance 1) on pins 7 and 8
+[2026-09-18 17:25:03.011] <info> app: I2C buffer sizes 250 and 250
+[2026-09-18 17:25:03.011] <info> app: AI processor initialised.
+[2026-09-18 17:25:03.011] <info> app: 
+[2026-09-18 17:25:03.011] Initialisation finished! Starting state machine.
+[2026-09-18 17:25:03.011] 
+[2026-09-18 17:25:03.012] <info> app: Bumping state machine with 'Initialised' (Current state: RESET)
+[2026-09-18 17:25:03.012] 
+[2026-09-18 17:25:03.012] <info> app:  Joining now...
+[2026-09-18 17:25:03.012] 
+[2026-09-18 17:25:03.012] <info> app: MLME-Request: MLME_JOIN, OK
+[2026-09-18 17:25:03.012] <info> app: State changed from RESET to JOINING
+[2026-09-18 17:25:03.012] 
+[2026-09-18 17:25:03.012] <info> app: AI state machine bumped with 'Initialised' (Current state: RESET)
+[2026-09-18 17:25:03.012] 
+[2026-09-18 17:25:03.012] <info> app: AI state changed from RESET to SLEEP
+[2026-09-18 17:25:03.012] 
+[2026-09-18 17:25:03.316] <info> app: MAC txDone
+[2026-09-18 17:25:14.388] <info> app: Retrying transmission now.
+[2026-09-18 17:25:14.419] BLE out: Failed to send  27 bytes: 'Retrying transmission now.'
+[2026-09-18 17:25:14.420] <info> app: Bumping state machine with 'Retry Tx' (Current state: JOINING)
+[2026-09-18 17:25:14.420] 
+[2026-09-18 17:25:14.422] <info> app: MLME-Request: MLME_JOIN, OK
+[2026-09-18 17:25:14.798] <info> app: MAC txDone
+[2026-09-18 17:25:19.858] <info> app: MAC rxTimeOut
+[2026-09-18 17:25:20.387] <info> app: !4 
+[2026-09-18 17:25:20.387] <info> app: I2C error: address NACK
+[2026-09-18 17:25:20.387] <info> app: AI processor not responding. Waking it.
+[2026-09-18 17:25:20.387] BLE out: Failed to send   8 bytes: 'AI NACK'
+[2026-09-18 17:25:20.858] <info> app: MAC rxTimeOut
+[2026-09-18 17:25:20.859] Join failed. Status code -1
+[2026-09-18 17:25:20.920] <info> app: Bumping state machine with 'Joined' (Current state: JOINING)
+[2026-09-18 17:25:20.920] 
+[2026-09-18 17:25:20.920] <info> app: Retry (attempt 2/6) in 10 seconds (0 minutes)
+[2026-09-18 17:25:20.920] 
+[2026-09-18 17:25:20.920] <debug> app: FDS update success! FileId: 0x3E8 RecKey:0x1
+[2026-09-18 17:25:20.920] <debug> app: FDS update success! FileId: 0x3E8 RecKey:0x2
+[2026-09-18 17:25:20.920] <info> app: Data stored on NVM: 76 bytes
+[2026-09-18 17:25:20.920] BLE out: Failed to send  16 bytes: 'Failed to join.'
+[2026-09-18 17:25:24.389] <info> app: !5 
+[2026-09-18 17:25:24.389] <info> app: I2C error: address NACK
+[2026-09-18 17:25:24.389] <info> app: AI processor not responding. Waking it.
+[2026-09-18 17:25:24.389] BLE out: Failed to send   8 bytes: 'AI NACK'
+[2026-09-18 17:25:28.382] <info> app: !6 
+[2026-09-18 17:25:28.392] <info> app: I2C error: address NACK
+[2026-09-18 17:25:28.393] <info> app: AI processor not responding. Waking it.
+[2026-09-18 17:25:28.393] BLE out: Failed to send   8 bytes: 'AI NACK'
+[2026-09-18 17:25:31.326] <info> app: Retrying transmission now.
+[2026-09-18 17:25:31.327] BLE out: Failed to send  27 bytes: 'Retrying transmission now.'
+[2026-09-18 17:25:31.327] <info> app: Bumping state machine with 'Retry Tx' (Current state: JOINING)
+[2026-09-18 17:25:31.327] 
+[2026-09-18 17:25:31.327] <info> app: MLME-Request: MLME_JOIN, OK
+[2026-09-18 17:25:31.676] <info> app: MAC txDone
+[2026-09-18 17:25:32.425] <info> app: !7 
+[2026-09-18 17:25:32.425] <info> app: I2C error: address NACK
+[2026-09-18 17:25:32.425] <info> app: AI processor not responding. Waking it.
+[2026-09-18 17:25:32.425] BLE out: Failed to send   8 bytes: 'AI NACK'
+[2026-09-18 17:25:36.407] <info> app: !8 
+[2026-09-18 17:25:36.418] <info> app: I2C error: address NACK
+[2026-09-18 17:25:36.418] <info> app: AI processor not responding. Waking it.
+[2026-09-18 17:25:36.420] BLE out: Failed to send   8 bytes: 'AI NACK'
+[2026-09-18 17:25:36.765] <info> app: MAC rxTimeOut
+[2026-09-18 17:25:37.748] <info> app: MAC rxTimeOut
+[2026-09-18 17:25:37.813] Join failed. Status code -1
+[2026-09-18 17:25:37.814] <info> app: Bumping state machine with 'Joined' (Current state: JOINING)
+[2026-09-18 17:25:37.814] 
+[2026-09-18 17:25:37.814] <info> app: Retry (attempt 3/6) in 21 seconds (0 minutes)
+[2026-09-18 17:25:37.814] 
+[2026-09-18 17:25:37.814] <debug> app: FDS update success! FileId: 0x3E8 RecKey:0x1
+[2026-09-18 17:25:37.814] <debug> app: FDS update success! FileId: 0x3E8 RecKey:0x2
+[2026-09-18 17:25:37.814] <info> app: Data stored on NVM: 76 bytes
+[2026-09-18 17:25:37.814] BLE out: Failed to send  16 bytes: 'Failed to join.'
+[2026-09-18 17:25:40.423] <info> app: !9 
+[2026-09-18 17:25:40.423] <info> app: I2C error: address NACK
+[2026-09-18 17:25:40.434] <info> app: AI processor not responding. Waking it.
+[2026-09-18 17:25:40.434] BLE out: Failed to send   8 bytes: 'AI NACK'
+[2026-09-18 17:25:44.457] <info> app: !10 
+[2026-09-18 17:25:44.457] <info> app: I2C error: address NACK
+[2026-09-18 17:25:44.457] <info> app: AI processor not responding. Waking it.
+[2026-09-18 17:25:44.457] BLE out: Failed to send   8 bytes: 'AI NACK'
+[2026-09-18 17:25:48.443] <info> app: !11 
+[2026-09-18 17:25:48.477] <info> app: I2C error: address NACK
+[2026-09-18 17:25:48.478] <info> app: AI processor not responding. Waking it.
+[2026-09-18 17:25:48.478] BLE out: Failed to send   8 bytes: 'AI NACK'
+[2026-09-18 17:25:52.455] <info> app: !12 
+[2026-09-18 17:25:52.470] <info> app: I2C error: address NACK
+[2026-09-18 17:25:52.470] <info> app: AI processor not responding. Waking it.
+[2026-09-18 17:25:52.470] BLE out: Failed to send   8 bytes: 'AI NACK'

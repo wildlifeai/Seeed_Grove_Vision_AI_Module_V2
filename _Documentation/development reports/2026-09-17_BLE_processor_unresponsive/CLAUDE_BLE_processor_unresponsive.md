@@ -2,7 +2,7 @@
 
 #### File: CLAUDE_BLE_processor_unresponsive.md
 #### Author: Charles Palmer
-#### Date: 17 September 2026
+#### Date: 17-19 September 2026
 
 ## Background
 
@@ -17,6 +17,11 @@ I still keep on seeing the himax processor caught in a never-ending cycle.
 ```
 
 Victor provided the log file from the AI processor: [teraterm160926.txt](teraterm160926.txt).
+Then later logs from both [teraterm_ble.txt](teraterm_ble.txt) and [teraterm_ai.txt](teraterm_ai.txt) taken simultatnespusly - these will have timestamps to see
+what the BLE processor is doing while the AI processor times out.
+
+I then ran a cold boot sequence on my desktop unit to produce [ble_log_1.txt](ble_log_1.txt) and [ai_log_1.txt](ai_log_1.txt)
+as the reference for normal behaviour.
 
 ## Evidence of Failure
 
@@ -36,8 +41,58 @@ that need to be deferred) is corrupted by more than 1 message needing deferral.
 BLE processor is ready?
 
 I am waiting to see if Victor can provide the console log for the BLE processor so we can see that as well.
+__LATER__ these arrived and are analysed below:
+
+## Analysis of simultaneous logs
+
+#### Correct behaviour
+
+In  [ble_log_1.txt](ble_log_1.txt) and [ai_log_1.txt](ai_log_1.txt):
+1. AI processor asserts its first interrupt to BLE processor at `10:44:00.250` (the pin chnages before the message is printed).
+2. BLE processor receives this at `10:44:00.197` - therefore OK.
+
+#### Incorrect behaviour
+
+In [teraterm_ble.txt](teraterm_ble.txt) and [teraterm_ai.txt](teraterm_ai.txt)
+1. AI processor asserts its first interrupt to BLE processor at `17:25:04.290` (the pin chnages before the message is printed).
+2. BLE processor does not see this: no console output between `17:25:03.316` and `17:25:14.388`
+3. AI processor sends several more messages to the BLE processor which are not acted upon, until the 5th 
+at `17:25:20.343`.
+3. The BLE processor does see this interrupt at `17:25:20.387`. It then presumably tries to read 
+AI data but instead gets to `i2cError()` and reports 'AI NACK'
+4. It turns out that at `17:25:20.343` `did send a message (Sleep) to the BLE processor 
+with an interrupt pulse. 
+5.	The AI processor sends several more 'Sleep' messages with interrupts and these did seem to arrive at the 
+BLE processor at  17:25:24.389, 17:25:28.382, 17:25:32.425, 17:25:36.407
+
+Interestingly, the BLE counts interrupts and prints the count:  `<info> app: !4` 0 since the count starts at 0
+this is the 5th count, which is the same number that the AI processor has sent. The code is there:
+```
+void aiProcessorAiIntEvent(void) {
+	static uint8_t count = 0;
+
+	if (!g_fileTxActive) {   // silent per-packet during a transfer session
+		// Just show we have received something
+		NRF_LOG_INFO("!%d ", count++);
+	}
+
+	if (m_aiProcessorEnabled) {
+		// Probably in the ISR context so use the scheduler.
+		app_sched_event_put(NULL, 0, executeI2cRead);
+	}
+}
+```
+So one explanation is that `m_aiProcessorEnabled` was false for the first 4 interrupts. 
+This is set true at `17:25:03.011` when the BLE processor prints "Enabled I2C (instance 1)".
+But the AI processor did not send its first message until after this, so that should not be the problem.
+
+The other possibility is that  executeI2cRead() is not scheduled, or fails to perform the I2C read.  
+
+
 
 ## Branch check (Claude, 17 September 2026): `dev` is missing the GPIOTE-accuracy fix
+
+_This section is from Claude: wild goose chase I think and TL;DR_
 
 Before speculating further, checked whether Victor's "latest dev branch firmware" actually
 contains the interrupt-detection fix from the parallel `2026-09-14_firmware_update_fails`
@@ -68,6 +123,8 @@ additional or alternate contributor, but it's the more likely and more direct
 candidate, and is already understood and already fixed elsewhere.
 
 ## Problem of MISSINGMASTERTIME timer
+
+_This section is from Claude: not relevant to the main problem but wirth returning to. Also TL;DR_
 
 Charles asked (17 Sep) whether reverting `MISSINGMASTERTIME` from 4000ms back to 300ms
 would help, based on this log's own arithmetic: the first message (a `Wake` message,
@@ -152,6 +209,8 @@ However, it is worth chekcing if `m_aiProcessorEnabled` is enabled in time.
 
 ## The `savedMessage` single-slot problem (Claude, 17 September 2026)
 
+_This section is from Claude: not relevant to the main problem but wirth returning to. Also TL;DR_
+
 Flagged briefly above; documenting properly here since this needs addressing whenever
 we return to this report, independently of whatever the underlying detection issue
 turns out to be.
@@ -196,6 +255,8 @@ or at minimum detect an incoming overwrite and log it distinctly so a collision 
 longer invisible. Not yet designed or implemented - park for when we return to this.
 
 ## File as github issue
+
+_This section is from Claude: probably not to be filed as it diagnoses the wrong problem. Also TL;DR_
 
 Draft text below, ready to file - not yet filed.
 

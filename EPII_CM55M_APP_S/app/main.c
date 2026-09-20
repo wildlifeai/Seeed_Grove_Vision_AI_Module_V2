@@ -434,6 +434,18 @@ int main(void)
 }
 #endif
 
+#ifdef WW500_MINIMAL
+#include "ww500_minimal.h"
+
+/** main entry */
+int main(void)
+{
+	board_init();
+	app_main();
+	return 0;
+}
+#endif
+
 #ifdef WW130_TEST
 #include "ww130_test.h"
 

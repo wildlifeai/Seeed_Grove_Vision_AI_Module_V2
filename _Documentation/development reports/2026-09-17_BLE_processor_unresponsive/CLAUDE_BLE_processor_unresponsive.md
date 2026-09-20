@@ -51,7 +51,7 @@ In  [ble_log_1.txt](ble_log_1.txt) and [ai_log_1.txt](ai_log_1.txt):
 1. AI processor asserts its first interrupt to BLE processor at `10:44:00.250` (the pin chnages before the message is printed).
 2. BLE processor receives this at `10:44:00.197` - therefore OK.
 
-#### Incorrect behaviour
+#### Incorrect behaviour (teraterm_ble.txt and teraterm_ai.txt)
 
 In [teraterm_ble.txt](teraterm_ble.txt) and [teraterm_ai.txt](teraterm_ai.txt)
 1. AI processor asserts its first interrupt to BLE processor at `17:25:04.290` (the pin chnages before the message is printed).
@@ -88,7 +88,19 @@ But the AI processor did not send its first message until after this, so that sh
 
 The other possibility is that  executeI2cRead() is not scheduled, or fails to perform the I2C read.  
 
+I added lots of diagnostic messages in the BLE code and sent the BLE inage to Victor and asked fro a second set 
+of log files. For some reason this did not work and he returned a second set of logs with the same code:
 
+#### Incorrect behaviour (teraterm_ble_2.txt and teraterm_ai_2.txt)
+
+In [teraterm_ble_2.txt](teraterm_ble_2.txt) and [teraterm_himax_2.txt](teraterm_himax_2.txt) the logs show
+similar behaviour with one important difference:
+
+At `15:36:23.429` the BLE processor sees the _first_ interrupt from the AI processor. (unlike the first batch
+where the first 4 are lost in some way).
+
+My best guess now is there is a hardware fault with the I2C interface: missing p.u. resistors or open-circuit SDA/SCL pins.
+I ruled out the first by lifting the p.u.s on my board. I am going to pause investigations pending the arrival of the board from Victor. 
 
 ## Branch check (Claude, 17 September 2026): `dev` is missing the GPIOTE-accuracy fix
 

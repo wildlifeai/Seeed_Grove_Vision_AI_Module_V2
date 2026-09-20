@@ -31,7 +31,8 @@ APPL_DEFINES += -DBOARD_NAME_STRING=${BOARD_NAME_STRING}
 #APP_TYPE = ww500_md_test_1
 #APP_TYPE = ww500_md_test_2
 #APP_TYPE = ww130_cli
-APP_TYPE = ww500_md
+#APP_TYPE = ww500_md
+APP_TYPE = ww500_minimal
 
 SCENARIO_APP_MKS =
 SCENARIO_APP_MKS += $(foreach APP_TYPE_MK, $(APP_TYPE), $(wildcard $(SCENARIO_APP_ROOT)/$(APP_TYPE_MK)/*.mk))

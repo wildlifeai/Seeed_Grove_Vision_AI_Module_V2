@@ -65,6 +65,11 @@ generates the flashable image, named `M<YMDDHMM>.IMG` (same scheme as the other 
 leading letter is `M` rather than a camera variant). Flash and recover as in
 `_Documentation/firmware_update_and_recovery.md`.
 
+After changing a `#define` in a header (such as those in `ww500_minimal.h`), run `make clean`
+before building. On 20 September 2026 an incremental build kept an old value in an object file:
+only `ww500_minimal.c` is force-rebuilt, so a file that merely uses the changed define was not
+recompiled.
+
 Remember to set `APP_TYPE` back to `ww500_md` before building the production firmware. CI
 builds `ww500_md` only and does not build this app.
 

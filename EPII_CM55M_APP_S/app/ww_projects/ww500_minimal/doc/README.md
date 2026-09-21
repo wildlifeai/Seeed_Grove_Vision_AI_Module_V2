@@ -108,6 +108,17 @@ Type `help` at the console for the list. Commands with their parameters:
 | `timeprint <seconds>` | Time print period while blinking; 0 turns it off. Default `WW500_MINIMAL_TIME_PRINT_PERIOD_MS` |
 | `led <9\|10> <0\|1>` | Set an LED directly (use `blink off` first) |
 | `inactivity <seconds>` | Idle time before DPD after a character is typed. Default `WW500_MINIMAL_INACTIVITY_CLI_MS`; the idle time with no typing is `WW500_MINIMAL_INACTIVITY_MS` |
+| `idle` | Power diagnostic: measures the idle loop for 2 s to show whether tickless idle is sleeping the CPU. Use after `blink off` |
+| `clocks` | Power diagnostic: prints the clock frequencies and which clock enables are set |
+| `clkoff <image\|hsc\|flash\|lsc\|sb\|all>` | EXPERIMENT: switches off a group of unused clock enables to see what they cost (see `power_diag.c` for what is in each group). `all` = image + hsc + lsc + sb |
+| `clkon` | Restores the clocks switched off by `clkoff` (a reset or DPD wake also restores them) |
+| `clkslow <rc\|xtal>` | EXPERIMENT: runs the CPU and buses from the 24 MHz RC oscillator or crystal instead of the 400 MHz PLL. The FreeRTOS tick is retuned so time stays correct |
+| `clkpll <0\|1>` | EXPERIMENT: switches the PLL off (refused unless `clkslow` is in force) or on |
+| `clkuart <rc\|xtal>` | EXPERIMENT: moves the console UART's reference clock (normally the 24 MHz crystal) to the RC oscillator, so the crystal can be switched off without losing the console |
+| `clkdiv <1-16>` | EXPERIMENT: divides the slow clock further (only after `clkslow`). 24 MHz divided by 16 is 1.5 MHz |
+| `clkfast` | Returns the clocks to normal after `clkslow` and `clkpll` |
+| `xtal <24\|32> <0\|1>` | EXPERIMENT: switches the 24 MHz or 32.768 kHz crystal oscillator off (0) or on (1). The 24 MHz one is refused while the PLL or CPU clock uses it |
+| `sleep <seconds> <0\|1>` | EXPERIMENT: enters Power-down mode with retention off (0) or on (1). Wakes on the timer or the WAKE pin as a warm boot; with retention it should not reload from flash |
 | `dpd` | Stop blinking and enter DPD as soon as possible |
 | `reset` | Reset by watchdog (the next boot is a cold boot) |
 
@@ -126,6 +137,7 @@ To hold the processor awake and idle for an operating-current measurement:
 | `CLI-commands.c/.h` | CLI task, UART receive callback and commands |
 | `FreeRTOS_CLI.c/.h` | FreeRTOS+CLI parser (third-party, copied from `ww500_md`) |
 | `inactivity.c/.h` | Inactivity detection using the idle hook (from `ww500_md`) |
+| `power_diag.c/.h` | Power diagnostics for the `idle`, `clocks`, `clkoff`, `clkon`, `clkslow`, `clkpll` and `clkfast` commands |
 | `barrier.c/.h` | Calls a function when every task is ready (from `ww500_md`) |
 | `sleep_mode.c/.h` | DPD entry and wake-reason decoding (from `ww500_md`) |
 | `rtc_util.c/.h` | RTC read/set, clocks around DPD, ISO strings, adding seconds |

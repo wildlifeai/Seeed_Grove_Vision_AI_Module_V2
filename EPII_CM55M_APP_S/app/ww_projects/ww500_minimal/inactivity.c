@@ -41,6 +41,9 @@ static uint32_t tasksInactivePeriod = 0;
 // This is the number of ticks that must happen before 'inactivity' is declared.
 static TickType_t tasksInactiveTicks = 0;
 
+// How many times the idle hook has run. Read by power_diag.c
+static volatile uint32_t idleHookCount = 0;
+
 /**************************************** Local Function Declarations ****************************************/
 
 /**************************************** Local Function Definitions *****************************************/
@@ -80,6 +83,8 @@ void inactivity_IdleHook(void) {
     TickType_t now;
     TickType_t timeSinceActivity;
 
+    idleHookCount++;
+
     if (!inactivity_enabled || (tasksInactiveTicks == 0)) {
     	return;
     }
@@ -101,6 +106,18 @@ void inactivity_IdleHook(void) {
             inactivity_callback();
         }
     }
+}
+
+/**
+ * @brief Returns how many times the idle hook has run.
+ *
+ * With tickless idle the idle task sleeps between events, so this rises slowly. If the idle
+ * task is spinning it rises tens of thousands of times a second.
+ *
+ * @return The number of calls to inactivity_IdleHook().
+ */
+uint32_t inactivity_getIdleHookCount(void) {
+	return idleHookCount;
 }
 
 /**

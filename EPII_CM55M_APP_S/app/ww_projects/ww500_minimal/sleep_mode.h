@@ -6,8 +6,8 @@
  *
  *  Deep power down (DPD) entry, and decoding of the reason for a wakeup.
  *
- *  Copied into ww500_minimal from ww500_md and reformatted. sleep_mode_enter_sleep()
- *  (PD mode with a CM55M timer wakeup) was left behind: it is not used.
+ *  Copied into ww500_minimal from ww500_md and reformatted. sleep_mode_enter_sleep() (Power-down
+ *  mode with a CM55M timer wakeup) was left out at first and added back for the 'sleep' CLI command.
  */
 
 #ifndef SLEEP_MODE_H_
@@ -40,6 +40,11 @@ extern "C" {
  * @brief Prints the reason for a wakeup, or "Cold boot" if there was none.
  */
 void sleep_mode_print_event(uint32_t event, uint32_t event1);
+
+/**
+ * @brief Puts the processor in Power-down mode, optionally keeping the memories. Does not return.
+ */
+void sleep_mode_enter_sleep(uint32_t timer_ms, uint32_t aon_gpio, uint32_t retention);
 
 /**
  * @brief Puts the processor in deep power down (DPD). Does not return.

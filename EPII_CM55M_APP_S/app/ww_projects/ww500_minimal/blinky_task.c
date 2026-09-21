@@ -24,6 +24,7 @@
 #include "app_msg.h"
 #include "barrier.h"
 #include "blinky_task.h"
+#include "power_diag.h"
 #include "rtc_util.h"
 #include "sleep_mode.h"
 #include "ww500_minimal.h"
@@ -103,11 +104,18 @@ static void printTime(void) {
  *
  * Wakes on the WAKE signal (PA0, level high) or after the alarm period (see ww500_minimal_getAlarmPeriod()).
  * The LEDs are driven low first: the state of PB9 and PB10 in DPD is not known.
+ *
+ * Any clocks switched off by the 'clkoff' experiment are switched back on first. The bootloader
+ * has to read the application back from flash on every wake, and a wake with the flash interface
+ * clocks still off did not resume (see doc/power_investigation.md). This does nothing if no clocks
+ * have been switched off.
  */
 static void enterDpd(void) {
 	blinkyState = BLINKY_TASK_STATE_SLEEPING;
 
 	setLeds(false, false);
+
+	power_diag_restoreClocks();
 
 	sleep_mode_enter_dpd(SLEEPMODE_WAKE_SOURCE_WAKE_PIN | SLEEPMODE_WAKE_SOURCE_RTC,
 			ww500_minimal_getAlarmPeriod(), false);

@@ -42,6 +42,8 @@
 #include "blinky_task.h"
 #include "CLI-commands.h"
 #include "inactivity.h"
+#include "power_diag.h"
+#include "sleep_mode.h"
 #include "rtc_util.h"
 #include "ww500_minimal.h"
 
@@ -62,6 +64,18 @@
 
 // The shortest inactivity period, used to force DPD. inactivity_setPeriod() raises it as necessary.
 #define FORCE_DPD_INACTIVITY_MS		1
+
+// The longest name of a clock group for 'clkoff'
+#define CLK_GROUP_NAME_LEN			8
+
+// The longest wake time for 'sleep', in seconds
+#define MAX_SLEEP_PERIOD_S			3600
+
+// Time for the blinky task to stop and switch the LEDs off before 'sleep' enters Power-down
+#define SLEEP_SETTLE_MS				50
+
+// How long the 'idle' command measures the idle loop
+#define IDLE_MEASURE_MS				2000
 
 // The period for the watchdog that resets the processor
 #define WATCHDOG_RESET_MS			100
@@ -112,6 +126,17 @@ static BaseType_t prvBlink(char *pcWriteBuffer, size_t xWriteBufferLen, const ch
 static BaseType_t prvTimePrint(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 static BaseType_t prvLed(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 static BaseType_t prvInactivity(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
+static BaseType_t prvIdle(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
+static BaseType_t prvClocks(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
+static BaseType_t prvClkOff(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
+static BaseType_t prvClkOn(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
+static BaseType_t prvClkSlow(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
+static BaseType_t prvClkPll(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
+static BaseType_t prvClkDiv(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
+static BaseType_t prvClkUart(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
+static BaseType_t prvClkFast(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
+static BaseType_t prvSleep(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
+static BaseType_t prvXtal(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 static BaseType_t prvDpd(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 static BaseType_t prvReset(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 
@@ -514,6 +539,353 @@ static BaseType_t prvInactivity(char *pcWriteBuffer, size_t xWriteBufferLen, con
 }
 
 /**
+ * @brief Checks whether tickless idle is sleeping the CPU. Command: idle
+ *
+ * Blocks this task for IDLE_MEASURE_MS while every task is idle, counting how often the idle
+ * hook runs. See power_diag_measureIdle().
+ *
+ * @param pcWriteBuffer   Buffer for the response.
+ * @param xWriteBufferLen Length of the buffer.
+ * @param pcCommandString The command line.
+ * @return pdFALSE as there is no more output.
+ */
+static BaseType_t prvIdle(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) {
+	(void)pcCommandString;
+	configASSERT(pcWriteBuffer);
+
+	power_diag_measureIdle(IDLE_MEASURE_MS);
+
+	cli_append(&pcWriteBuffer, &xWriteBufferLen, "Done");
+
+	return pdFALSE;
+}
+
+/**
+ * @brief Prints the clock frequencies and clock enables. Command: clocks
+ *
+ * @param pcWriteBuffer   Buffer for the response.
+ * @param xWriteBufferLen Length of the buffer.
+ * @param pcCommandString The command line.
+ * @return pdFALSE as there is no more output.
+ */
+static BaseType_t prvClocks(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) {
+	(void)pcCommandString;
+	configASSERT(pcWriteBuffer);
+
+	power_diag_printClocks();
+
+	cli_append(&pcWriteBuffer, &xWriteBufferLen, "Done");
+
+	return pdFALSE;
+}
+
+/**
+ * @brief Switches off a group of unused clocks, to see what they cost. Command: clkoff <group>
+ *
+ * EXPERIMENT. Groups: image, hsc, u55, i3c, puf, dma, sdio, flash, lsc, sb, all. See power_diag_gateClocks().
+ * 'clkon' restores them; so does a reset or a DPD wake.
+ *
+ * @param pcWriteBuffer   Buffer for the response.
+ * @param xWriteBufferLen Length of the buffer.
+ * @param pcCommandString The command line.
+ * @return pdFALSE as there is no more output.
+ */
+static BaseType_t prvClkOff(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) {
+	const char *pcParameter;
+	BaseType_t lParameterStringLength;
+	char group[CLK_GROUP_NAME_LEN];
+
+	configASSERT(pcWriteBuffer);
+
+	pcParameter = FreeRTOS_CLIGetParameter(pcCommandString, 1, &lParameterStringLength);
+
+	if ((pcParameter != NULL) && (lParameterStringLength > 0) && (lParameterStringLength < (BaseType_t) sizeof(group))) {
+		memcpy(group, pcParameter, lParameterStringLength);
+		group[lParameterStringLength] = '\0';
+
+		if (power_diag_gateClocks(group)) {
+			cli_append(&pcWriteBuffer, &xWriteBufferLen, "Clock group '%s' is off. 'clocks' shows what is left, 'clkon' restores", group);
+			return pdFALSE;
+		}
+	}
+
+	cli_append(&pcWriteBuffer, &xWriteBufferLen, "Expected image, hsc, u55, i3c, puf, dma, sdio, flash, lsc, sb or all");
+
+	return pdFALSE;
+}
+
+/**
+ * @brief Restores the clocks switched off by 'clkoff'. Command: clkon
+ *
+ * @param pcWriteBuffer   Buffer for the response.
+ * @param xWriteBufferLen Length of the buffer.
+ * @param pcCommandString The command line.
+ * @return pdFALSE as there is no more output.
+ */
+static BaseType_t prvClkOn(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) {
+	(void)pcCommandString;
+	configASSERT(pcWriteBuffer);
+
+	power_diag_restoreClocks();
+
+	cli_append(&pcWriteBuffer, &xWriteBufferLen, "Clocks restored");
+
+	return pdFALSE;
+}
+
+/**
+ * @brief Switches the CPU and bus clocks to a 24 MHz oscillator. Command: clkslow <rc|xtal>
+ *
+ * EXPERIMENT. See power_diag_slowClock(). The tick is retuned so FreeRTOS time stays correct.
+ * Use "rc". "xtal" needs a 24 MHz crystal to be fitted, otherwise the CPU clock stops.
+ * 'clkfast' restores the clocks, as does entering DPD or Power-down.
+ *
+ * @param pcWriteBuffer   Buffer for the response.
+ * @param xWriteBufferLen Length of the buffer.
+ * @param pcCommandString The command line.
+ * @return pdFALSE as there is no more output.
+ */
+static BaseType_t prvClkSlow(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) {
+	const char *pcParameter;
+	BaseType_t lParameterStringLength;
+	char source[CLK_GROUP_NAME_LEN];
+
+	configASSERT(pcWriteBuffer);
+
+	pcParameter = FreeRTOS_CLIGetParameter(pcCommandString, 1, &lParameterStringLength);
+
+	if ((pcParameter != NULL) && (lParameterStringLength > 0) && (lParameterStringLength < (BaseType_t) sizeof(source))) {
+		memcpy(source, pcParameter, lParameterStringLength);
+		source[lParameterStringLength] = '\0';
+
+		if (power_diag_slowClock(source)) {
+			cli_append(&pcWriteBuffer, &xWriteBufferLen, "CPU and bus clocks are now the 24 MHz %s. 'clocks' shows the result, 'clkpll 0' switches the PLL off, 'clkfast' restores", source);
+			return pdFALSE;
+		}
+	}
+
+	cli_append(&pcWriteBuffer, &xWriteBufferLen, "Expected rc or xtal");
+
+	return pdFALSE;
+}
+
+/**
+ * @brief Moves the console UART's reference clock to the RC oscillator or the crystal. Command: clkuart <rc|xtal>
+ *
+ * EXPERIMENT. The UART clock comes from the 24 MHz crystal, so switching the crystal off (xtal 24 0) stops the
+ * console unless this is used first. The RC oscillator is less accurate, so the console may be garbled: power-cycle
+ * if it is. 'clkfast' puts the original source back.
+ *
+ * @param pcWriteBuffer   Buffer for the response.
+ * @param xWriteBufferLen Length of the buffer.
+ * @param pcCommandString The command line.
+ * @return pdFALSE as there is no more output.
+ */
+static BaseType_t prvClkUart(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) {
+	const char *pcParameter;
+	BaseType_t lParameterStringLength;
+	char source[CLK_GROUP_NAME_LEN];
+
+	configASSERT(pcWriteBuffer);
+
+	pcParameter = FreeRTOS_CLIGetParameter(pcCommandString, 1, &lParameterStringLength);
+
+	if ((pcParameter != NULL) && (lParameterStringLength > 0) && (lParameterStringLength < (BaseType_t) sizeof(source))) {
+		memcpy(source, pcParameter, lParameterStringLength);
+		source[lParameterStringLength] = '\0';
+
+		if (power_diag_uartClock(source)) {
+			cli_append(&pcWriteBuffer, &xWriteBufferLen, "The UART reference clock is now the %s. If this text is garbled, power-cycle", source);
+			return pdFALSE;
+		}
+	}
+
+	cli_append(&pcWriteBuffer, &xWriteBufferLen, "Expected rc or xtal");
+
+	return pdFALSE;
+}
+
+/**
+ * @brief Divides the slow CPU and bus clock further. Command: clkdiv <1-16>
+ *
+ * EXPERIMENT. Only after 'clkslow'. With the 24 MHz oscillator a divider of 16 gives 1.5 MHz.
+ * 'clkfast' restores the normal clocks.
+ *
+ * @param pcWriteBuffer   Buffer for the response.
+ * @param xWriteBufferLen Length of the buffer.
+ * @param pcCommandString The command line.
+ * @return pdFALSE as there is no more output.
+ */
+static BaseType_t prvClkDiv(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) {
+	const char *pcParameter;
+	BaseType_t lParameterStringLength;
+	uint32_t divider;
+
+	configASSERT(pcWriteBuffer);
+
+	pcParameter = FreeRTOS_CLIGetParameter(pcCommandString, 1, &lParameterStringLength);
+
+	if (!parseUint(pcParameter, lParameterStringLength, &divider) || (divider < 1) || (divider > 16)) {
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "Expected a divider from 1 to 16");
+	}
+	else if (power_diag_divideClock(divider)) {
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "Clock divider is %d. 'clocks' shows the frequencies, 'clkfast' restores", (int) divider);
+	}
+	else {
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "Refused: use 'clkslow rc' first, so the clocks are not taken from the PLL");
+	}
+
+	return pdFALSE;
+}
+
+/**
+ * @brief Switches the PLL off or on. Command: clkpll <0|1>
+ *
+ * EXPERIMENT. The PLL is only switched off when the CPU and bus clocks are not using it, so use
+ * 'clkslow' first.
+ *
+ * @param pcWriteBuffer   Buffer for the response.
+ * @param xWriteBufferLen Length of the buffer.
+ * @param pcCommandString The command line.
+ * @return pdFALSE as there is no more output.
+ */
+static BaseType_t prvClkPll(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) {
+	const char *pcParameter;
+	BaseType_t lParameterStringLength;
+	uint32_t enable;
+
+	configASSERT(pcWriteBuffer);
+
+	pcParameter = FreeRTOS_CLIGetParameter(pcCommandString, 1, &lParameterStringLength);
+
+	if (!parseUint(pcParameter, lParameterStringLength, &enable) || (enable > 1)) {
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "Expected 0 (off) or 1 (on)");
+	}
+	else if (power_diag_pll(enable == 1)) {
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "PLL is %s", (enable == 1) ? "on" : "off");
+	}
+	else {
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "Refused: the CPU or bus clock is still using the PLL. Use 'clkslow' first");
+	}
+
+	return pdFALSE;
+}
+
+/**
+ * @brief Returns the CPU and bus clocks to normal, switching the PLL back on if needed. Command: clkfast
+ *
+ * @param pcWriteBuffer   Buffer for the response.
+ * @param xWriteBufferLen Length of the buffer.
+ * @param pcCommandString The command line.
+ * @return pdFALSE as there is no more output.
+ */
+static BaseType_t prvClkFast(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) {
+	(void)pcCommandString;
+	configASSERT(pcWriteBuffer);
+
+	power_diag_fastClock();
+
+	cli_append(&pcWriteBuffer, &xWriteBufferLen, "Clock speed, PLL, crystal and UART clock restored. Clock enables switched off by clkoff stay off: use clkon");
+
+	return pdFALSE;
+}
+
+/**
+ * @brief Switches a crystal oscillator off or on. Command: xtal <24|32> <0|1>
+ *
+ * EXPERIMENT. Both oscillators are enabled by default. The WW500 has no 32.768 kHz crystal, so
+ * 'xtal 32 0' should only remove the current the idle oscillator draws. The 24 MHz oscillator is refused
+ * while the PLL, the CPU clock or the console UART uses it (use clkslow rc, clkpll 0 and clkuart rc first).
+ * See power_diag_crystal().
+ *
+ * @param pcWriteBuffer   Buffer for the response.
+ * @param xWriteBufferLen Length of the buffer.
+ * @param pcCommandString The command line.
+ * @return pdFALSE as there is no more output.
+ */
+static BaseType_t prvXtal(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) {
+	const char *pcParameter;
+	BaseType_t lParameterStringLength;
+	uint32_t which;
+	uint32_t enable;
+
+	configASSERT(pcWriteBuffer);
+
+	pcParameter = FreeRTOS_CLIGetParameter(pcCommandString, 1, &lParameterStringLength);
+	if (!parseUint(pcParameter, lParameterStringLength, &which) || ((which != 24) && (which != 32))) {
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "Expected 24 or 32, then 0 (off) or 1 (on)");
+		return pdFALSE;
+	}
+
+	pcParameter = FreeRTOS_CLIGetParameter(pcCommandString, 2, &lParameterStringLength);
+	if (!parseUint(pcParameter, lParameterStringLength, &enable) || (enable > 1)) {
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "Expected 24 or 32, then 0 (off) or 1 (on)");
+		return pdFALSE;
+	}
+
+	if (power_diag_crystal(which, enable == 1)) {
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "The %d %s crystal oscillator is %s. 'clocks' shows the state", (int) which,
+				(which == 24) ? "MHz" : "kHz", (enable == 1) ? "enabled" : "disabled");
+	}
+	else {
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "Refused: the 24 MHz crystal is in use by the PLL, the CPU clock or the console UART. Use 'clkslow rc', 'clkpll 0' and 'clkuart rc' first");
+	}
+
+	return pdFALSE;
+}
+
+/**
+ * @brief Enters Power-down mode, optionally keeping the memories. Command: sleep <seconds> <retention 0|1>
+ *
+ * EXPERIMENT. This is the datasheet's Power-down mode: the wake is a warm boot (a restart at the
+ * application entry). With retention the memories are kept and the bootloader does not reload the
+ * application from flash, so the wake should be much faster than from DPD. The wake sources are
+ * the timer and the WAKE pin (PA0, level high). Does not return.
+ *
+ * Any clocks changed by the clock experiments are restored first, and the LEDs are switched off.
+ *
+ * @param pcWriteBuffer   Buffer for the response.
+ * @param xWriteBufferLen Length of the buffer.
+ * @param pcCommandString The command line.
+ * @return pdFALSE as there is no more output.
+ */
+static BaseType_t prvSleep(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) {
+	const char *pcParameter;
+	BaseType_t lParameterStringLength;
+	uint32_t seconds;
+	uint32_t retention;
+
+	configASSERT(pcWriteBuffer);
+
+	pcParameter = FreeRTOS_CLIGetParameter(pcCommandString, 1, &lParameterStringLength);
+	if (!parseUint(pcParameter, lParameterStringLength, &seconds) || (seconds < 1) || (seconds > MAX_SLEEP_PERIOD_S)) {
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "Expected 1 to %d seconds, then retention 0 or 1", MAX_SLEEP_PERIOD_S);
+		return pdFALSE;
+	}
+
+	pcParameter = FreeRTOS_CLIGetParameter(pcCommandString, 2, &lParameterStringLength);
+	if (!parseUint(pcParameter, lParameterStringLength, &retention) || (retention > 1)) {
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "Expected 1 to %d seconds, then retention 0 or 1", MAX_SLEEP_PERIOD_S);
+		return pdFALSE;
+	}
+
+	XP_LT_RED;
+	xprintf(">>> Entering Power-down for %d s, retention %d\n\n", (int) seconds, (int) retention);
+	XP_LT_GREY;
+
+	// Let the blinky task stop and switch the LEDs off, then put everything back to normal
+	blinky_task_setPeriod(0);
+	vTaskDelay(pdMS_TO_TICKS(SLEEP_SETTLE_MS));
+	ww500_minimal_ledPb9(false);
+	ww500_minimal_ledPb10(false);
+	power_diag_restoreClocks();
+
+	sleep_mode_enter_sleep(seconds * 1000, 0, retention);	// does not return
+
+	return pdFALSE;
+}
+
+/**
  * @brief Enters deep power down (DPD) as soon as possible. Command: dpd
  *
  * Stops the blinking so all tasks are idle, and shortens the inactivity period.
@@ -573,6 +945,17 @@ static void registerCommands(void) {
 		{ "timeprint", "timeprint <seconds>:\r\n Prints the time this often while blinking. 0 = off\r\n", prvTimePrint, 1 },
 		{ "led", "led <9|10> <0|1>:\r\n Sets the LED on PB9 or PB10 (use 'blink off' first)\r\n", prvLed, 2 },
 		{ "inactivity", "inactivity <seconds>:\r\n Sets how long to stay awake once the tasks are idle\r\n", prvInactivity, 1 },
+		{ "idle", "idle:\r\n Measures the idle loop for 2 s to show whether tickless idle is sleeping the CPU (use after blink off)\r\n", prvIdle, 0 },
+		{ "clocks", "clocks:\r\n Prints the clock frequencies and which clock enables are set\r\n", prvClocks, 0 },
+		{ "clkoff", "clkoff <image|hsc|u55|i3c|puf|dma|sdio|flash|lsc|sb|all>:\r\n EXPERIMENT: switches off a group of unused clocks to see what they cost (u55...sdio are the parts of hsc)\r\n", prvClkOff, 1 },
+		{ "clkon", "clkon:\r\n Restores the clocks switched off by clkoff\r\n", prvClkOn, 0 },
+		{ "clkslow", "clkslow <rc|xtal>:\r\n EXPERIMENT: runs the CPU and buses from a 24 MHz oscillator instead of the 400 MHz PLL. Use rc: xtal stops the CPU clock if no 24 MHz crystal is fitted\r\n", prvClkSlow, 1 },
+		{ "clkpll", "clkpll <0|1>:\r\n EXPERIMENT: switches the PLL off (after clkslow) or on\r\n", prvClkPll, 1 },
+		{ "clkuart", "clkuart <rc|xtal>:\r\n EXPERIMENT: moves the console UART's reference clock to the RC oscillator or the crystal\r\n", prvClkUart, 1 },
+		{ "clkdiv", "clkdiv <1-16>:\r\n EXPERIMENT: divides the slow CPU and bus clock further (use after clkslow rc)\r\n", prvClkDiv, 1 },
+		{ "clkfast", "clkfast:\r\n Restores the clock speed, PLL, crystals and UART clock after clkslow. Does not restore clkoff (use clkon)\r\n", prvClkFast, 0 },
+		{ "xtal", "xtal <24|32> <0|1>:\r\n EXPERIMENT: switches the 24 MHz or 32.768 kHz crystal oscillator off (0) or on (1)\r\n", prvXtal, 2 },
+		{ "sleep", "sleep <seconds> <retention 0|1>:\r\n EXPERIMENT: Power-down mode with timer and WAKE pin wake. Retention keeps RAM so the wake avoids the flash reload\r\n", prvSleep, 2 },
 		{ "dpd", "dpd:\r\n Enters deep power down as soon as possible\r\n", prvDpd, 0 },
 		{ "reset", "reset:\r\n Resets the processor using the watchdog\r\n", prvReset, 0 },
 	};

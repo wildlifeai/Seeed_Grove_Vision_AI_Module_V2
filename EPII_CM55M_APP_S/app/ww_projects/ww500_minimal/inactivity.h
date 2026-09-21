@@ -48,6 +48,11 @@ void inactivity_init(uint32_t timeout_ms, void (*callback)(void));
 void inactivity_IdleHook(void);
 
 /**
+ * @brief Returns how many times the idle hook has run. Used to check that tickless idle sleeps.
+ */
+uint32_t inactivity_getIdleHookCount(void);
+
+/**
  * @brief Resets the idle tracking when a non-idle task runs. Called from vApplicationTaskSwitchedIn().
  */
 void inactivity_on_task_switched_in(void);

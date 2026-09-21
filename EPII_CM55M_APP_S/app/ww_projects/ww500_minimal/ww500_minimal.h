@@ -48,7 +48,7 @@
 #define WW500_MINIMAL_TIME_PRINT_PERIOD_MS		1000
 
 // The period of inactivity, in ms, before DPD is entered
-#define WW500_MINIMAL_INACTIVITY_MS				1000
+#define WW500_MINIMAL_INACTIVITY_MS				5000
 
 // Use an extended period if the user starts to use the console, for debugging
 #define WW500_MINIMAL_INACTIVITY_CLI_MS			60000

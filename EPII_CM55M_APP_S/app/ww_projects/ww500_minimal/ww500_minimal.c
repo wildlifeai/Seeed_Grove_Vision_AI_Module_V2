@@ -47,6 +47,14 @@
 // Number of times the LEDs flash at cold boot
 #define COLD_BOOT_FLASHES				3
 
+// Wake event bits reported after a wake from Power-down mode (see wakeup_event_str[] in sleep_mode.c).
+// A wake from DPD is reported differently (PMU_WAKEUPEVENT1_DPD_PAD_AON_GPIO_0 and PMU_WAKEUP_DPD_RTC_INT).
+#define WAKE_EVENT_PD_EXT_GPIO			0x10	// the WAKE pin (PA0)
+#define WAKE_EVENT_PD_TIMER				0x460	// RTC timer, SB timer 2 and SB timer 0
+
+// A value in retained RAM that shows the RAM survived a sleep (see checkRetention())
+#define RETENTION_MAGIC					0x52455431
+
 // To print git information
 #ifndef GIT_BRANCH
 #define GIT_BRANCH "unknown"
@@ -76,6 +84,11 @@ Barrier_t startupBarrier;
 
 static char versionString[64]; // Make sure the buffer is large enough
 
+// These are in the .noinit section, which the start-up code does not clear, so they show whether the RAM
+// was kept while asleep. After Power-down with retention they survive; after DPD or a power-cycle they do not.
+static uint32_t retentionMagic __attribute__((section(".noinit")));
+static uint32_t retentionWakes __attribute__((section(".noinit")));
+
 static WW500_MINIMAL_WAKE_REASON_E wakeReason = WW500_MINIMAL_WAKE_REASON_UNKNOWN;
 
 // The RTC alarm period used to wake from DPD. Reverts to the default after DPD.
@@ -88,6 +101,7 @@ static void initLeds(void);
 static void initVersionString(void);
 static void showResetOnLeds(uint8_t numFlashes);
 static void allTasksReady(void);
+static void checkRetention(void);
 
 /**************************************** Local Function Definitions *****************************************/
 
@@ -170,6 +184,27 @@ static void showResetOnLeds(uint8_t numFlashes) {
  */
 static void allTasksReady(void) {
 	inactivity_init(WW500_MINIMAL_INACTIVITY_MS, ww500_minimal_onInactivity);
+}
+
+/**
+ * @brief Reports whether the RAM was kept while asleep.
+ *
+ * Uses two variables in the .noinit section. If the magic value is still there the RAM was retained (Power-down
+ * with retention) and the wake counter is incremented; otherwise (first boot, DPD, power-cycle) it starts again.
+ */
+static void checkRetention(void) {
+	if (retentionMagic == RETENTION_MAGIC) {
+		retentionWakes++;
+		XP_LT_GREEN;
+		xprintf("Retention check: the RAM was kept (%u retained wake%s in a row)\n", (unsigned) retentionWakes,
+				(retentionWakes == 1) ? "" : "s");
+		XP_WHITE;
+	}
+	else {
+		retentionMagic = RETENTION_MAGIC;
+		retentionWakes = 0;
+		xprintf("Retention check: the RAM was not kept (first boot, DPD or a power-cycle)\n");
+	}
 }
 
 /**************************************** Global Function Definitions ****************************************/
@@ -324,6 +359,8 @@ int app_main(void) {
 	sleep_mode_print_event(wakeup_event, wakeup_event1);	// print descriptive string
 	XP_WHITE;
 
+	checkRetention();
+
 	if ((wakeup_event == PMU_WAKEUP_NONE) && (wakeup_event1 == PMU_WAKEUPEVENT1_NONE)) {
 		showResetOnLeds(COLD_BOOT_FLASHES);	// pattern on LEDs to show cold boot
 
@@ -367,11 +404,11 @@ int app_main(void) {
 #endif // WW500_MINIMAL_SYNC_RTC_AFTER_DPD
 
 		XP_YELLOW;
-		if (wakeup_event1 == PMU_WAKEUPEVENT1_DPD_PAD_AON_GPIO_0) {
+		if ((wakeup_event1 == PMU_WAKEUPEVENT1_DPD_PAD_AON_GPIO_0) || ((wakeup_event & WAKE_EVENT_PD_EXT_GPIO) != 0)) {
 			xprintf("WAKE pin wake\n");
 			wakeReason = WW500_MINIMAL_WAKE_REASON_WAKE_PIN;
 		}
-		else if (wakeup_event == PMU_WAKEUP_DPD_RTC_INT) {
+		else if ((wakeup_event == PMU_WAKEUP_DPD_RTC_INT) || ((wakeup_event & WAKE_EVENT_PD_TIMER) != 0)) {
 			xprintf("Timer wake\n");
 			wakeReason = WW500_MINIMAL_WAKE_REASON_TIMER;
 		}

@@ -1,0 +1,4 @@
+nRF version reply: none seen
+DOWNLOAD  AI txfile: 26371 bytes, 110 packets, 24.6 s from first packet to Finished = 1.05 KB/s
+  packet gap median 308 ms; nRF's own BLE wait median 16 ms, max 149 ms
+  nRF console in that window: 164019 chars, 1739 hex-dump rows = 14.2 s of UART time at 115200, 1491 chars (129 ms) per packet

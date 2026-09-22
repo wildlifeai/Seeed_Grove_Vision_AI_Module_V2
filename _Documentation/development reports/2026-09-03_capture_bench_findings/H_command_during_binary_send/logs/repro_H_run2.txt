@@ -1,0 +1,25 @@
+[+0.000] [05:25.198] nrf   | BLE in: Received  22 bytes 'AI txfile 59200BE0.JPG'
+[+9.798] packet 40 out, sending the probe
+
+[+ 10.715] nrf   | BLE in: Received   8 bytes 'AI slots'
+[+ 10.715] nrf   | Sending 'slots' to AI processor (4 ctrl bytes, 5 payload, 2 CRC)<info> app: AI state changed from ID
+[+ 11.120] app   | ImageReassembler: Sequence gap — expected 44, got 1 (213 total gaps)
+[+ 25.997] nrf   | BLE out: Failed to send  28 bytes: 'AI processor not responding'
+[+ 25.997] nrf   | BLE out: Failed to send  28 bytes: 'AI processor not responding'
+[+ 25.997] nrf   | BLE out: Failed to send  28 bytes: 'AI processor not responding'
+[+ 25.997] nrf   | BLE out: Failed to send  28 bytes: 'AI processor not responding'
+[+ 25.997] nrf   | BLE out: Sent  28 bytes: 'AI processor not responding'
+[+ 26.174] app   | ImageReassembler: Transfer complete! Received 26371/26371 (213 gaps)
+[+ 26.184] app   | ImageReassembler: Image has 213 sequence gaps — may be corrupt
+[+ 26.288] app   | ImageReassembler: Image saved to file:///data/user/0/com.wildlife.wildlifewatcher.expo/cache/capture
+[+ 26.298] nrf   | BLE out: Sent  43 bytes: 'Finished sending 26371 bytes (110 packets)'
+[+ 26.298] nrf   | BLE out: Sent 116 bytes: 'Active slot 1 running 'RP3 (day/colour)'. Slot A: 'HM0360 (night/IR)', Slo
+
+packets before the probe: 1..40 (40 sent)
+packets after the probe:  70 sent, numbered 41..43 then 1..67
+total packets sent: 110, last one numbered 67
+Finished sending says 110 packets, 26371 bytes
+probe reply arrived 15.6 s after the probe went in, 0.0 s after Finished sending
+'AI processor not responding': yes, 5x
+
+HIT: the packet counter restarted at 1 after packet 43

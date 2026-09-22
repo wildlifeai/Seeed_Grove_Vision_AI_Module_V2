@@ -1,0 +1,20 @@
+op9 is 89
+
+d=600 ms, setop 9 90: B HIT: setop acknowledged after Save State, save failed with error 12 and A hit (device stuck awake)
+    [02:14.324] himax | Inactive for 1000ms
+    [02:14.324] himax | MKL62BA command received: 'setop 9 90'
+    [02:14.324] himax | Saved state to SD card. Image sequence number = 27
+    [02:14.324] himax | Error 12 saving config
+    [02:14.636] nrf   | BLE out: Sent  19 bytes: 'Set OpParam 9 = 90'
+    [02:14.636] himax | IF Task unhandled event 'Inactivity' in 'I2C TX State'
+
+The device is stuck awake (finding A). Power-cycle it, then run:  python repro_B.py verify 90 89
+after the wake op9 = None; the acknowledged value was 90, the value before was 89
+restored: no reply
+after the wake op9 = None; the acknowledged value was 90, the value before was 89
+restored: no reply
+after the wake op9 = None; the acknowledged value was 90, the value before was 89
+restored: no reply
+after the wake op9 = 89; the acknowledged value was 90, the value before was 89
+PROOF: the acknowledged setop was not saved
+restored: nrf   | BLE out: Sent  19 bytes: 'Set OpParam 9 = 89'

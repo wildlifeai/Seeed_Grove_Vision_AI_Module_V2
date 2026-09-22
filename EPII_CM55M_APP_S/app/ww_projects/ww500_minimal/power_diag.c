@@ -222,14 +222,14 @@ static void gateFlash(SCU_PDHSC_CLKEN_CFG_T *hsc) {
 /**
  * @brief Clears the enables of the LSC peripherals this app does not use.
  *
- * Keeps the buses, SRAM2, UART0 (the console), GPIO, the SW (debug) clock and RO_PD.
+ * Keeps the buses, SRAM2, UART0 (the console), GPIO, the SW (debug) clock and RO_PD. Since the SD card was added
+ * it also keeps the SPI master (sspim) and DMA2 and DMA3, which the SD card driver may use; the power
+ * measurements in doc/power_investigation.md were made before that, with these three switched off too.
  *
  * @param lsc The LSC clock enables to modify.
  */
 static void gateLsc(SCU_PDLSC_CLKEN_CFG_T *lsc) {
 	lsc->cm55s_clk_en = 0;
-	lsc->dma2_clk_en = 0;
-	lsc->dma3_clk_en = 0;
 	lsc->i2s_host_sclk_en = 0;
 	lsc->pdm_clk_en = 0;
 	lsc->uart1_clk_en = 0;
@@ -244,7 +244,6 @@ static void gateLsc(SCU_PDLSC_CLKEN_CFG_T *lsc) {
 	lsc->i2c_mst_sen_ic_clk_en = 0;
 	lsc->vad_d_clk_en = 0;
 	lsc->adcck_en = 0;
-	lsc->sspim_en = 0;
 	lsc->sspis_en = 0;
 	lsc->ckmon_en = 0;
 	lsc->imageclk_en.sc_clk_lsc_en = 0;

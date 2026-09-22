@@ -190,19 +190,23 @@ APPL_DEFINES += -DDBG_MORE
 # Add new library here
 # The source code should be loacted in ~\library\{lib_name}\
 #
-# Minimal build: no TFLM/U55 (neural network), sensordp (camera data path),
-# spi_ptl, spi_eeprom or i2c_comm. If the link fails, add back only what is needed.
+# Minimal build: no TFLM/U55 (neural network), spi_ptl, spi_eeprom or i2c_comm.
+# sensordp (the camera data path) was added in step 8 for the HM0360.
+# If the link fails, add back only what is needed.
 ##
-LIB_SEL = pwrmgmt
+LIB_SEL = pwrmgmt sensordp
 
 ##
 # middleware support feature
 # Add new middleware here
 # The source code should be loacted in ~\middleware\{mid_name}\
 #
-# Minimal build: no FatFS (so no FATFS_PORT_LIST / CMSIS_DRIVERS_LIST either)
+# FatFS for the SD card, over SPI (added in step 7). The CMSIS SPI driver is what the
+# mmc_spi port talks to.
 ##
-MID_SEL =
+MID_SEL = fatfs
+FATFS_PORT_LIST = mmc_spi
+CMSIS_DRIVERS_LIST = SPI
 
 #override OS_SEL := freertos
 override OS_SEL := freertos_10_5_1
@@ -214,9 +218,11 @@ override TRUSTZONE_FW_TYPE := 1
 override CIS_SEL := HM_COMMON
 override EPII_USECASE_SEL := drv_onecore_cm55m_s
 
-# Minimal build: no camera, so CIS_SUPPORT_INAPP is deliberately left unset.
-# (ww.mk skips the cis_sensor source directory when it is empty.)
-CIS_SUPPORT_INAPP =
+# The HM0360 camera (step 8). The sensor and data path code is in cis_sensor/cis_hm0360 in this folder,
+# a copy of the one in ww500_md, as all the apps have their own copy.
+CIS_SUPPORT_INAPP = cis_sensor
+CIS_SUPPORT_INAPP_MODEL = cis_hm0360
+APPL_DEFINES += -DUSE_HM0360
 
 $(info In ww500_minimal.mk TOOLCHAIN='${TOOLCHAIN}', SCENARIO_APP_ROOT='${SCENARIO_APP_ROOT}',  APP_TYPE='${APP_TYPE}')
 

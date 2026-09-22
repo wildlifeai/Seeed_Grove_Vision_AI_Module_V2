@@ -41,7 +41,26 @@ typedef enum {
 	// Messages directed to the CLI task
 	APP_MSG_CLITASK_FIRST						= 0x0200,
 	APP_MSG_CLITASK_RXCHAR						= 0x0200,	// A character has arrived from the console UART
-	APP_MSG_CLITASK_LAST						= 0x0201,
+	APP_MSG_CLITASK_FILE_DONE					= 0x0201,	// The FatFS task has finished a file operation. msg_data = the fileOperation_t
+	APP_MSG_CLITASK_LAST						= 0x0202,
+
+	// Messages directed to the FatFS task
+	APP_MSG_FATFSTASK_FIRST						= 0x0300,
+	APP_MSG_FATFSTASK_WRITE_FILE				= 0x0300,	// Write a file. msg_data = a fileOperation_t
+	APP_MSG_FATFSTASK_READ_FILE					= 0x0301,	// Read a file. msg_data = a fileOperation_t
+	APP_MSG_FATFSTASK_INACTIVITY				= 0x0302,	// All tasks are inactive: get ready for DPD
+	APP_MSG_FATFSTASK_LAST						= 0x0303,
+
+	// Messages directed to the image task
+	APP_MSG_IMAGETASK_FIRST						= 0x0400,
+	APP_MSG_IMAGETASK_CAPTURE					= 0x0400,	// Take a picture and save it as a JPEG
+	APP_MSG_IMAGETASK_FRAME_READY				= 0x0401,	// From the data path callback: the JPEG frame is in memory
+	APP_MSG_IMAGETASK_FRAME_ERROR				= 0x0402,	// From the data path callback: an error. msg_data = the event
+	APP_MSG_IMAGETASK_FILE_DONE					= 0x0403,	// The FatFS task has finished writing the JPEG. msg_data = the fileOperation_t
+	APP_MSG_IMAGETASK_SET_MODE					= 0x0404,	// Set the resting mode of the HM0360. msg_data = the mode
+	APP_MSG_IMAGETASK_REINIT					= 0x0405,	// Write the HM0360 register table again
+	APP_MSG_IMAGETASK_INACTIVITY				= 0x0406,	// All tasks are inactive: get ready for DPD
+	APP_MSG_IMAGETASK_LAST						= 0x0407,
 } APP_MSG_EVENT_E;
 
 /**

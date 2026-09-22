@@ -37,7 +37,8 @@
 
 /******************************************** External Variables *********************************************/
 
-extern Barrier_t startupBarrier;  // Object that calls a function when all tasks are ready
+extern Barrier_t startupBarrier;   // Object that calls a function when all tasks are ready
+extern Barrier_t shutdownBarrier;  // Object that calls a function when all tasks are ready to shut down
 
 /********************************************** Local Variables **********************************************/
 
@@ -70,7 +71,6 @@ static const char * blinkyStateString[BLINKY_TASK_NUMSTATES] = {
 
 static void vBlinkyTask(void *pvParameters);
 static void setLeds(bool pb9, bool pb10);
-static void enterDpd(void);
 static void printTime(void);
 
 /**************************************** Local Function Definitions *****************************************/
@@ -97,28 +97,6 @@ static void printTime(void) {
 		xprintf(" >>> %s\n", timeString);
 		XP_WHITE;
 	}
-}
-
-/**
- * @brief Switches the LEDs off and enters DPD. Does not return.
- *
- * Wakes on the WAKE signal (PA0, level high) or after the alarm period (see ww500_minimal_getAlarmPeriod()).
- * The LEDs are driven low first: the state of PB9 and PB10 in DPD is not known.
- *
- * Any clocks switched off by the 'clkoff' experiment are switched back on first. The bootloader
- * has to read the application back from flash on every wake, and a wake with the flash interface
- * clocks still off did not resume (see doc/power_investigation.md). This does nothing if no clocks
- * have been switched off.
- */
-static void enterDpd(void) {
-	blinkyState = BLINKY_TASK_STATE_SLEEPING;
-
-	setLeds(false, false);
-
-	power_diag_restoreClocks();
-
-	sleep_mode_enter_dpd(SLEEPMODE_WAKE_SOURCE_WAKE_PIN | SLEEPMODE_WAKE_SOURCE_RTC,
-			ww500_minimal_getAlarmPeriod(), false);
 }
 
 /**
@@ -170,7 +148,11 @@ static void vBlinkyTask(void *pvParameters) {
 				break;
 
 			case APP_MSG_BLINKYTASK_INACTIVITY:
-				enterDpd();		// does not return
+				// Every task has been idle for the inactivity period. Stop blinking and report to the barrier.
+				// When the other tasks have also reported the barrier calls blinky_task_sleepNow().
+				blinkyState = BLINKY_TASK_STATE_STOPPED;
+				setLeds(false, false);
+				barrier_ready(&shutdownBarrier);
 				break;
 
 			default:
@@ -263,6 +245,31 @@ void blinky_task_notifyInactivity(void) {
 	sendMsg.msg_parameter = 0;
 
 	xQueueSend(xBlinkyTaskQueue, (void *)&sendMsg, 0);
+}
+
+/**
+ * @brief Switches the LEDs off and enters DPD. Does not return.
+ *
+ * Called by the shutdown barrier, in the context of the last task to report to it (the blinky task or the FatFS
+ * task), once every task is ready.
+ *
+ * Wakes on the WAKE signal (PA0, level high) or after the alarm period (see ww500_minimal_getAlarmPeriod()).
+ * The LEDs are driven low first: the state of PB9 and PB10 in DPD is not known.
+ *
+ * Any clocks switched off by the 'clkoff' experiment are switched back on first. The bootloader
+ * has to read the application back from flash on every wake, and a wake with the flash interface
+ * clocks still off did not resume (see doc/power_investigation.md). This does nothing if no clocks
+ * have been switched off.
+ */
+void blinky_task_sleepNow(void) {
+	blinkyState = BLINKY_TASK_STATE_SLEEPING;
+
+	setLeds(false, false);
+
+	power_diag_restoreClocks();
+
+	sleep_mode_enter_dpd(SLEEPMODE_WAKE_SOURCE_WAKE_PIN | SLEEPMODE_WAKE_SOURCE_RTC,
+			ww500_minimal_getAlarmPeriod(), false);
 }
 
 /**

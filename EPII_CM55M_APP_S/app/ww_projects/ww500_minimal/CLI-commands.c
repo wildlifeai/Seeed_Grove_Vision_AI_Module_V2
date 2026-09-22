@@ -41,6 +41,8 @@
 #include "barrier.h"
 #include "blinky_task.h"
 #include "CLI-commands.h"
+#include "fatfs_task.h"
+#include "image_task.h"
 #include "inactivity.h"
 #include "power_diag.h"
 #include "sleep_mode.h"
@@ -77,6 +79,12 @@
 // How long the 'idle' command measures the idle loop
 #define IDLE_MEASURE_MS				2000
 
+// The longest wait for the FatFS task to finish an SD card operation before doing something that stops it
+#define FATFS_WAIT_MS				2000
+
+// The size of the buffer for 'sdwrite' and 'sdread' (the text of a command line is shorter than this)
+#define CLI_FILE_BUFFER_SIZE		128
+
 // The period for the watchdog that resets the processor
 #define WATCHDOG_RESET_MS			100
 
@@ -104,6 +112,13 @@ static char rxChar;
 static char cliInBuffer[CLI_CMD_LINE_BUF_SIZE];		/* Buffer for input */
 static char cliOutBuffer[CLI_OUTPUT_BUF_SIZE];		/* Buffer for output */
 
+// The file operation for the 'sdwrite' and 'sdread' commands. The FatFS task replies with APP_MSG_CLITASK_FILE_DONE.
+static fileOperation_t cliFileOp;
+static char cliFileName[FATFS_TASK_FILENAME_LENGTH];
+static char cliFileBuffer[CLI_FILE_BUFFER_SIZE];
+static volatile bool cliFileOpBusy = false;
+static bool cliFileOpIsRead = false;
+
 // How long to stay awake after a character is typed. Changed by the 'inactivity' command.
 static uint32_t cliInactivityMs = WW500_MINIMAL_INACTIVITY_CLI_MS;
 
@@ -114,6 +129,8 @@ static void vCmdLineTask_cb(void);
 static void registerCommands(void);
 static void processSingleCharacter(char c);
 static bool parseUint(const char *param, BaseType_t length, uint32_t *value);
+static void waitForFatFs(void);
+static void reportFileOp(void);
 
 static BaseType_t prvVer(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 static BaseType_t prvTaskStats(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
@@ -137,10 +154,51 @@ static BaseType_t prvClkUart(char *pcWriteBuffer, size_t xWriteBufferLen, const 
 static BaseType_t prvClkFast(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 static BaseType_t prvSleep(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 static BaseType_t prvXtal(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
+static BaseType_t prvSd(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
+static BaseType_t prvBootCount(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
+static BaseType_t prvSdWrite(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
+static BaseType_t prvSdRead(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
+static BaseType_t prvCapture(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
+static BaseType_t prvCam(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 static BaseType_t prvDpd(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 static BaseType_t prvReset(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 
 /**************************************** Local Function Definitions *****************************************/
+
+/**
+ * @brief Waits for the FatFS task to finish what it is doing, for at most FATFS_WAIT_MS.
+ *
+ * Used before doing something that suppresses interrupts for a while (setting the RTC) or that stops the
+ * processor (Power-down), so that an SD card write is not interrupted.
+ */
+static void waitForFatFs(void) {
+	TickType_t startTime = xTaskGetTickCount();
+
+	while (fatfs_task_isBusy() && (ww500_minimal_getElapsedMs(startTime) < FATFS_WAIT_MS)) {
+		vTaskDelay(pdMS_TO_TICKS(10));
+	}
+}
+
+/**
+ * @brief Prints the result of the 'sdwrite' or 'sdread' operation that has just finished.
+ */
+static void reportFileOp(void) {
+	cliFileOpBusy = false;
+
+	if (cliFileOp.res != FR_OK) {
+		XP_RED;
+		xprintf("SD card operation on '%s' failed: FatFS error %d%s\n", cliFileName, (int) cliFileOp.res,
+				(cliFileOp.res == FR_NOT_READY) ? " (no card)" : "");
+		XP_WHITE;
+	}
+	else if (cliFileOpIsRead) {
+		cliFileBuffer[cliFileOp.length] = '\0';	// The buffer was one byte bigger than the length asked for
+		xprintf("Read %u bytes from '%s':\n%s\n", (unsigned) cliFileOp.length, cliFileName, cliFileBuffer);
+	}
+	else {
+		xprintf("Wrote %u bytes to '%s'\n", (unsigned) cliFileOp.length, cliFileName);
+	}
+}
 
 /**
  * @brief Converts a command parameter to an unsigned number.
@@ -319,6 +377,9 @@ static BaseType_t prvSetUtc(char *pcWriteBuffer, size_t xWriteBufferLen, const c
 		cli_append(&pcWriteBuffer, &xWriteBufferLen, "Error %d. Expected YYYY-MM-DDTHH:MM:SSZ", ret);
 		return pdFALSE;
 	}
+
+	// Setting the RTC suppresses interrupts for about 1.4 s, which must not happen in the middle of an SD card write
+	waitForFatFs();
 
 	startTime = xTaskGetTickCount();
 	ret = rtc_util_setTime(&tm);
@@ -876,11 +937,236 @@ static BaseType_t prvSleep(char *pcWriteBuffer, size_t xWriteBufferLen, const ch
 	// Let the blinky task stop and switch the LEDs off, then put everything back to normal
 	blinky_task_setPeriod(0);
 	vTaskDelay(pdMS_TO_TICKS(SLEEP_SETTLE_MS));
+	waitForFatFs();		// Do not stop the processor in the middle of an SD card write
 	ww500_minimal_ledPb9(false);
 	ww500_minimal_ledPb10(false);
 	power_diag_restoreClocks();
 
 	sleep_mode_enter_sleep(seconds * 1000, 0, retention);	// does not return
+
+	return pdFALSE;
+}
+
+/**
+ * @brief Prints the state of the SD card and the boot count. Command: sd
+ *
+ * @param pcWriteBuffer   Buffer for the response.
+ * @param xWriteBufferLen Length of the buffer.
+ * @param pcCommandString The command line.
+ * @return pdFALSE as there is no more output.
+ */
+static BaseType_t prvSd(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) {
+	(void)pcCommandString;
+	configASSERT(pcWriteBuffer);
+
+	fatfs_task_printStatus();
+
+	cli_append(&pcWriteBuffer, &xWriteBufferLen, "Done");
+
+	return pdFALSE;
+}
+
+/**
+ * @brief Reports the boot count. Command: bootcount
+ *
+ * The count is in BOOTS.TXT on the SD card and is incremented once at every boot. To change it, write the file:
+ * for example 'sdwrite BOOTS.TXT 0'.
+ *
+ * @param pcWriteBuffer   Buffer for the response.
+ * @param xWriteBufferLen Length of the buffer.
+ * @param pcCommandString The command line.
+ * @return pdFALSE as there is no more output.
+ */
+static BaseType_t prvBootCount(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) {
+	(void)pcCommandString;
+	configASSERT(pcWriteBuffer);
+
+	if (fatfs_task_bootCountValid()) {
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "Boot count: %u", (unsigned) fatfs_task_getBootCount());
+	}
+	else {
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "Boot count is not available (no SD card, or BOOTS.TXT could not be updated)");
+	}
+
+	return pdFALSE;
+}
+
+/**
+ * @brief Writes text to a file on the SD card. Command: sdwrite <name> <text>
+ *
+ * The name is an 8.3 name in the root directory. The text is the rest of the command line, spaces included.
+ * The file is replaced if it exists. The result is printed when the FatFS task replies.
+ *
+ * @param pcWriteBuffer   Buffer for the response.
+ * @param xWriteBufferLen Length of the buffer.
+ * @param pcCommandString The command line.
+ * @return pdFALSE as there is no more output.
+ */
+static BaseType_t prvSdWrite(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) {
+	const char *pcName;
+	const char *pcText;
+	BaseType_t nameLength;
+	BaseType_t textLength;
+	size_t length;
+
+	configASSERT(pcWriteBuffer);
+
+	pcName = FreeRTOS_CLIGetParameter(pcCommandString, 1, &nameLength);
+	pcText = FreeRTOS_CLIGetParameter(pcCommandString, 2, &textLength);
+
+	if ((pcName == NULL) || (pcText == NULL) || (nameLength >= FATFS_TASK_FILENAME_LENGTH)) {
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "Expected an 8.3 file name, then the text to write");
+	}
+	else if (cliFileOpBusy) {
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "The previous SD card operation has not finished");
+	}
+	else {
+		memcpy(cliFileName, pcName, nameLength);
+		cliFileName[nameLength] = '\0';
+
+		// The text is the rest of the command line
+		length = strlen(pcText);
+		if (length > sizeof(cliFileBuffer)) {
+			length = sizeof(cliFileBuffer);
+		}
+		memcpy(cliFileBuffer, pcText, length);
+
+		cliFileOp.fileName = cliFileName;
+		cliFileOp.buffer = (uint8_t *) cliFileBuffer;
+		cliFileOp.length = length;
+		cliFileOp.doneEvent = APP_MSG_CLITASK_FILE_DONE;
+		cliFileOp.senderQueue = xCliTaskQueue;
+		cliFileOpIsRead = false;
+		cliFileOpBusy = true;
+
+		if (fatfs_task_sendFileOp(APP_MSG_FATFSTASK_WRITE_FILE, &cliFileOp)) {
+			cli_append(&pcWriteBuffer, &xWriteBufferLen, "Writing '%s'...", cliFileName);
+		}
+		else {
+			cliFileOpBusy = false;
+			cli_append(&pcWriteBuffer, &xWriteBufferLen, "The FatFS task did not accept the request");
+		}
+	}
+
+	return pdFALSE;
+}
+
+/**
+ * @brief Reads a file on the SD card and prints it as text. Command: sdread <name>
+ *
+ * The name is an 8.3 name in the root directory. At most CLI_FILE_BUFFER_SIZE bytes are read. The result is
+ * printed when the FatFS task replies.
+ *
+ * @param pcWriteBuffer   Buffer for the response.
+ * @param xWriteBufferLen Length of the buffer.
+ * @param pcCommandString The command line.
+ * @return pdFALSE as there is no more output.
+ */
+static BaseType_t prvSdRead(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) {
+	const char *pcName;
+	BaseType_t nameLength;
+
+	configASSERT(pcWriteBuffer);
+
+	pcName = FreeRTOS_CLIGetParameter(pcCommandString, 1, &nameLength);
+
+	if ((pcName == NULL) || (nameLength >= FATFS_TASK_FILENAME_LENGTH)) {
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "Expected an 8.3 file name");
+	}
+	else if (cliFileOpBusy) {
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "The previous SD card operation has not finished");
+	}
+	else {
+		memcpy(cliFileName, pcName, nameLength);
+		cliFileName[nameLength] = '\0';
+
+		cliFileOp.fileName = cliFileName;
+		cliFileOp.buffer = (uint8_t *) cliFileBuffer;
+		cliFileOp.length = sizeof(cliFileBuffer) - 1;	// leave room for the '\0' when it is printed
+		cliFileOp.doneEvent = APP_MSG_CLITASK_FILE_DONE;
+		cliFileOp.senderQueue = xCliTaskQueue;
+		cliFileOpIsRead = true;
+		cliFileOpBusy = true;
+
+		if (fatfs_task_sendFileOp(APP_MSG_FATFSTASK_READ_FILE, &cliFileOp)) {
+			cli_append(&pcWriteBuffer, &xWriteBufferLen, "Reading '%s'...", cliFileName);
+		}
+		else {
+			cliFileOpBusy = false;
+			cli_append(&pcWriteBuffer, &xWriteBufferLen, "The FatFS task did not accept the request");
+		}
+	}
+
+	return pdFALSE;
+}
+
+/**
+ * @brief Takes a picture and saves it as a JPEG. Command: capture
+ *
+ * The image task does the work, and prints the result when the file has been written.
+ *
+ * @param pcWriteBuffer   Buffer for the response.
+ * @param xWriteBufferLen Length of the buffer.
+ * @param pcCommandString The command line.
+ * @return pdFALSE as there is no more output.
+ */
+static BaseType_t prvCapture(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) {
+	(void)pcCommandString;
+	configASSERT(pcWriteBuffer);
+
+	if (image_task_requestCapture()) {
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "Asked the image task for a picture");
+	}
+	else {
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "The image task did not accept the request");
+	}
+
+	return pdFALSE;
+}
+
+/**
+ * @brief Shows or changes the HM0360 mode. Command: cam [mode|init]
+ *
+ * With no parameter the image task prints the mode the sensor is in. With a number it sets the resting mode
+ * (the mode the sensor is in when not taking a picture, and left in for DPD): 0 sleep, 1 continuous, 2 N frames
+ * then sleep, 3 N frames then standby, 4 hardware trigger, 6 or 7 hardware trigger N frames. With 'init' the
+ * image task writes the long register table again.
+ *
+ * @param pcWriteBuffer   Buffer for the response.
+ * @param xWriteBufferLen Length of the buffer.
+ * @param pcCommandString The command line.
+ * @return pdFALSE as there is no more output.
+ */
+static BaseType_t prvCam(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) {
+	const char *pcParam;
+	BaseType_t paramLength;
+	uint32_t mode;
+	bool queued;
+
+	configASSERT(pcWriteBuffer);
+
+	pcParam = FreeRTOS_CLIGetParameter(pcCommandString, 1, &paramLength);
+
+	if (pcParam == NULL) {
+		queued = image_task_requestMode(IMAGE_TASK_MODE_REPORT);
+	}
+	else if ((paramLength == 4) && (strncmp(pcParam, "init", 4) == 0)) {
+		queued = image_task_requestReinit();
+	}
+	else if (parseUint(pcParam, paramLength, &mode) && (mode <= 7)) {
+		queued = image_task_requestMode((uint8_t) mode);
+	}
+	else {
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "Expected nothing, a mode from 0 to 7, or 'init'");
+		return pdFALSE;
+	}
+
+	if (queued) {
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "Asked the image task");
+	}
+	else {
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "The image task did not accept the request");
+	}
 
 	return pdFALSE;
 }
@@ -956,6 +1242,12 @@ static void registerCommands(void) {
 		{ "clkfast", "clkfast:\r\n Restores the clock speed, PLL, crystals and UART clock after clkslow. Does not restore clkoff (use clkon)\r\n", prvClkFast, 0 },
 		{ "xtal", "xtal <24|32> <0|1>:\r\n EXPERIMENT: switches the 24 MHz or 32.768 kHz crystal oscillator off (0) or on (1)\r\n", prvXtal, 2 },
 		{ "sleep", "sleep <seconds> <retention 0|1>:\r\n EXPERIMENT: Power-down mode with timer and WAKE pin wake. Retention keeps RAM so the wake avoids the flash reload\r\n", prvSleep, 2 },
+		{ "sd", "sd:\r\n Prints the state of the SD card and the boot count\r\n", prvSd, 0 },
+		{ "bootcount", "bootcount:\r\n Prints the boot count, kept in BOOTS.TXT on the SD card\r\n", prvBootCount, 0 },
+		{ "sdwrite", "sdwrite <name> <text>:\r\n Writes the text to an 8.3 file in the root of the SD card, replacing it\r\n", prvSdWrite, -1 },
+		{ "sdread", "sdread <name>:\r\n Reads an 8.3 file from the root of the SD card and prints it as text\r\n", prvSdRead, 1 },
+		{ "capture", "capture:\r\n Takes a picture with the HM0360 (mode 2, one frame) and saves it as Bnnnnnnn.JPG on the SD card\r\n", prvCapture, 0 },
+		{ "cam", "cam [mode|init]:\r\n Prints the HM0360 mode, or sets its resting mode (0-4, 6, 7; the default is 2), or 'init' writes its registers again\r\n", prvCam, -1 },
 		{ "dpd", "dpd:\r\n Enters deep power down as soon as possible\r\n", prvDpd, 0 },
 		{ "reset", "reset:\r\n Resets the processor using the watchdog\r\n", prvReset, 0 },
 	};
@@ -1117,6 +1409,11 @@ static void vCmdLineTask(void *pvParameters) {
 
 				dev_uart_ptr->uart_control(UART_CMD_SET_RXINT_BUF, (UART_CTRL_PARAM)&rx_buffer);
 				dev_uart_ptr->uart_control(UART_CMD_SET_RXINT, (UART_CTRL_PARAM)1);
+				break;
+
+			case APP_MSG_CLITASK_FILE_DONE:
+				// The FatFS task has finished the 'sdwrite' or 'sdread' operation
+				reportFileOp();
 				break;
 
 			default:

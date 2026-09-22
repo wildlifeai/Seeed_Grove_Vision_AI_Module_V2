@@ -10,6 +10,10 @@
  *  every task is idle, so the inactivity mechanism (inactivity.c) reports inactivity. The
  *  resulting message tells this task to switch the LEDs off and enter DPD.
  *
+ *  It is one of the tasks in the shutdown barrier (with the FatFS task): when it is told that all tasks are
+ *  inactive it switches the LEDs off and reports to the barrier. When every task has reported, the barrier
+ *  calls blinky_task_sleepNow(), which enters DPD.
+ *
  *  Blinking can be stopped and started by messages (e.g. from the CLI) so that operating
  *  current can be measured with the LEDs dark, or so that DPD can be forced.
  *
@@ -71,9 +75,14 @@ uint16_t blinky_task_getState(void);
 const char * blinky_task_getStateString(void);
 
 /**
- * @brief Tells the task that all tasks are inactive, so it should enter DPD.
+ * @brief Tells the task that all tasks are inactive, so it should get ready for DPD.
  */
 void blinky_task_notifyInactivity(void);
+
+/**
+ * @brief Enters DPD. Does not return. Called by the shutdown barrier when every task is ready.
+ */
+void blinky_task_sleepNow(void);
 
 /**
  * @brief Starts the blinking with a period, or stops it if the period is 0.

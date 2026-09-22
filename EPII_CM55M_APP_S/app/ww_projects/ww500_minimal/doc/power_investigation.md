@@ -379,7 +379,7 @@ and `clkon` restores them. Groups (see `power_diag.c`):
 |---|---|
 | `image` | The camera data path: XDMA, INP, DP, 2x2, 5x5, CDM, JPEG, TPG, EDM, RGB2YUV, CSC, MIPI RX/TX, SC |
 | `hsc` | U55 (neural network), I3C host, PUF, DMA0, DMA1, SDIO |
-| `lsc` | CM55S core, DMA2/3, I2S, PDM, UART1/2, I3C slaves, PWM, I2C slaves and masters, VAD, ADC clock, SSPI master/slave, clock monitor, SC |
+| `lsc` | CM55S core, DMA2/3, I2S, PDM, UART1/2, I3C slaves, PWM, I2C slaves and masters, VAD, ADC clock, SSPI master/slave, clock monitor, SC. **Since the SD card was added (step 7) the SPI master (`sspim`) and DMA2/3 are no longer switched off**, because the SD card needs them; the measurements below were made with them off |
 | `sb` | Temperature sensor, ADC, WDT1, TIMER3 to TIMER8, Himax I2C master |
 | `flash` | QSPI, OSPI, SPI2AHB, I2C2AHB flash write. Not included in `all` |
 | `u55`, `i3c`, `puf`, `dma`, `sdio` | The individual blocks of `hsc` (`dma` = DMA0 and DMA1). Added to find which block stops the DPD resume |

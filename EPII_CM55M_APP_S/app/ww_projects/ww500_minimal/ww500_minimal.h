@@ -65,7 +65,7 @@
 /*********************************************** Global Types ************************************************/
 
 // Number of tasks (the size of the internalStates[] array)
-#define WW500_MINIMAL_NUMBER_OF_TASKS			2
+#define WW500_MINIMAL_NUMBER_OF_TASKS			4
 
 // Function pointer types, to get the internal state of a task
 typedef uint16_t (*int_func_ptr)(void);

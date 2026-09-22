@@ -34,6 +34,8 @@
 #include "barrier.h"
 #include "blinky_task.h"
 #include "CLI-commands.h"
+#include "fatfs_task.h"
+#include "image_task.h"
 #include "inactivity.h"
 #include "rtc_util.h"
 #include "sleep_mode.h"
@@ -82,6 +84,10 @@ uint8_t numTasksRegistered = 0;
 // Object that calls a function when all tasks are ready. Available to all of the tasks.
 Barrier_t startupBarrier;
 
+// Object that calls a function when every task that takes part has finished what it was doing and is ready for DPD.
+// The tasks are the blinky task and the FatFS task; the function is blinky_task_sleepNow().
+Barrier_t shutdownBarrier;
+
 static char versionString[64]; // Make sure the buffer is large enough
 
 // These are in the .noinit section, which the start-up code does not clear, so they show whether the RAM
@@ -108,8 +114,9 @@ static void checkRetention(void);
 /**
  * @brief Initialises the pins used by this app.
  *
- * Only the console UART (PB0, PB1) and the LEDs (PB9, PB10) are configured. Everything else is
- * left alone so that it draws no current.
+ * The console UART (PB0, PB1), the SPI master for the SD card (PB2 data out, PB3 data in, PB4 clock,
+ * PB5 chip select) and the LEDs (PB9, PB10) are configured. Everything else is left alone so that it
+ * draws no current.
  *
  * NOTE: there is a weak version of pinmux_init() in board/epii_evb/pinmux_init.c that just
  * initialises PB0 and PB1 for UART.
@@ -122,6 +129,12 @@ static void initPins(void) {
 	/* Init UART0 pin mux to PB0 and PB1 */
 	pinmux_cfg.pin_pb0 = SCU_PB0_PINMUX_UART0_RX_1;
 	pinmux_cfg.pin_pb1 = SCU_PB1_PINMUX_UART0_TX_1;
+
+	/* Init the SPI master pin mux for the SD card. The SD card driver takes PB5 over as a GPIO while it needs it */
+	pinmux_cfg.pin_pb2 = SCU_PB2_PINMUX_SPI_M_DO_1;
+	pinmux_cfg.pin_pb3 = SCU_PB3_PINMUX_SPI_M_DI_1;
+	pinmux_cfg.pin_pb4 = SCU_PB4_PINMUX_SPI_M_SCLK_1;
+	pinmux_cfg.pin_pb5 = SCU_PB5_PINMUX_SPI_M_CS_1;
 
 	hx_drv_scu_set_all_pinmux_cfg(&pinmux_cfg, 1);
 
@@ -313,13 +326,18 @@ WW500_MINIMAL_WAKE_REASON_E ww500_minimal_getWakeReason(void) {
  * @brief Callback when all tasks have been inactive for a period.
  *
  * Called from the FreeRTOS idle hook (see inactivity.c). It prints a message, as ww500_md does,
- * and tells the blinky task, which enters DPD. The message send does not block.
+ * and tells the FatFS task and the blinky task. The message sends do not block. DPD is entered
+ * when both have finished (see shutdownBarrier).
  */
 void ww500_minimal_onInactivity(void) {
 	XP_LT_GREEN;
 	xprintf("Inactive for %dms\n", inactivity_getPeriod());
 	XP_WHITE;
 
+	// Tell each task that takes part in the shutdown barrier. Each finishes what it is doing and then reports
+	// to the barrier. The last one to report enters DPD.
+	fatfs_task_notifyInactivity();
+	image_task_notifyInactivity();
 	blinky_task_notifyInactivity();
 }
 
@@ -432,6 +450,24 @@ int app_main(void) {
 	internalStates[taskIndex++] = internalState;
 	xprintf("Created task '%s' Priority %d\n", pcTaskGetName(task_id), priority);
 
+	// The FatFS task mounts the SD card and updates the boot count
+	task_id = fatfs_task_createTask(--priority, wakeReason);
+	internalState.task_id = task_id;
+	internalState.getState = fatfs_task_getState;
+	internalState.stateString = fatfs_task_getStateString;
+	internalState.priority = priority;
+	internalStates[taskIndex++] = internalState;
+	xprintf("Created task '%s' Priority %d\n", pcTaskGetName(task_id), priority);
+
+	// The image task initialises the HM0360 and takes pictures when asked
+	task_id = image_task_createTask(--priority, wakeReason);
+	internalState.task_id = task_id;
+	internalState.getState = image_task_getState;
+	internalState.stateString = image_task_getStateString;
+	internalState.priority = priority;
+	internalStates[taskIndex++] = internalState;
+	xprintf("Created task '%s' Priority %d\n", pcTaskGetName(task_id), priority);
+
 	task_id = blinky_task_createTask(--priority, wakeReason);
 	internalState.task_id = task_id;
 	internalState.getState = blinky_task_getState;
@@ -444,6 +480,9 @@ int app_main(void) {
 
 	// A barrier so that a function is called when all tasks are ready in their for(;;) loop
 	barrier_init(&startupBarrier, taskIndex, allTasksReady);
+
+	// Also a barrier to entering DPD: the blinky, FatFS and image tasks must all be ready
+	barrier_init(&shutdownBarrier, 3, blinky_task_sleepNow);
 
 	xprintf("FreeRTOS scheduler started.\n");
 	vTaskStartScheduler();

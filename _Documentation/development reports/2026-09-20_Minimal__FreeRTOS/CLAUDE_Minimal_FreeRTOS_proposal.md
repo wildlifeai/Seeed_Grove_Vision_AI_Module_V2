@@ -3,7 +3,7 @@
 #### File: CLAUDE_Minimal_FreeRTOS_proposal.md
 #### Companion to: CLAUDE_Minimal_FreeRTOS.md (the task brief)
 #### Date: 20 September 2026
-#### Status: DRAFT for review — no code has been written
+#### Status: SUPERSEDED as a description of the app. The proposal was reviewed and implemented (20-21 September 2026). This body is kept as the record of what was proposed; section 14 lists where the app differs. Current information: [README.md](README.md) in this folder, and `ww500_minimal/doc/README.md` and `power_investigation.md` in the app folder.
 
 ## 1. Goal and decisions so far
 
@@ -232,3 +232,29 @@ Not yet built or run: nothing here has been compiled.
 - **Time printing (Q3):** the blinky task prints the RTC time every `WW500_MINIMAL_TIME_PRINT_PERIOD_MS` (5 s) while blinking. It stops when blinking stops, because a task that printed while otherwise idle would prevent inactivity and DPD.
 - **Holding the board awake for a current measurement:** `blink off` then `inactivity <seconds>` (DPD follows that long after the last idle moment; typing extends it). To hold it awake with the LEDs blinking, use `awake <seconds>`.
 - **Settings revert after DPD** (Q6 option a), as agreed.
+
+## 14. What was built, and where it differs from this proposal (21 September 2026)
+
+The steps in section 11 were all done, in that order, with a build and a bench check after each (Charles ran `make` and flashed). The app is
+`EPII_CM55M_APP_S/app/ww_projects/ww500_minimal`. Differences from the text above:
+
+| Section | Proposed | Built |
+|---|---|---|
+| 2 | Run window 10 s after a cold boot, 3 s after a wake | **3 s cold, 10 s warm** (Charles changed them). Time printed every 1 s while blinking. |
+| 3, 5 | A new `power_task` | **Not created.** `inactivity.c` and `barrier.c` were kept (Q4); the blinky task stops after its run time, which makes every task idle, and it owns entry to DPD. |
+| 3 | `pinmux_cfg.c/.h` (trimmed) | **Dropped.** The UART and LED pins are set in `ww500_minimal.c`. |
+| 3 | `rtc_util.c/.h` (Q3) | Built as proposed. The RTC is set to 2024-01-01 at a cold boot and can be set and read from the CLI. |
+| 3 | No `power_diag` | **Added** `power_diag.c/.h`: read-only and experimental diagnostics for the power work. |
+| 3 | `sleep_mode.c` keeps DPD only | Also has **`sleep_mode_enter_sleep()`** (Power-down, optionally with retention), brought back for the `sleep` command. |
+| 7 | About 14 CLI commands | **25** (including the built-in `help`). The proposed ones except `int`, `assert` and `quiet`, which were not ported (`quiet` became `timeprint 0`), plus the experiment commands `idle`, `clocks`, `clkoff`, `clkon`, `clkslow`, `clkpll`, `clkdiv`, `clkuart`, `clkfast`, `xtal` and `sleep`. |
+| 4 | `ww.mk` entry | `APP_TYPE = ww500_minimal` is active and `ww500_md` is commented out (Q8). It must be set back before any production build. |
+| 4 | Shared SDK changes | One additive block in `EPII_CM55M_APP_S/app/main.c` (`#ifdef WW500_MINIMAL`). `ww500_md`, `board_init()` and `platform_driver_init()` were not changed. |
+| 8 | Risks not yet verified | The tickless-idle settings were found (`os/freertos_10_5_1/NTZ/config/FreeRTOSConfig.h`). The DPD, boot and slot behaviour worked as for `ww500_md`. |
+| 9 | Questions Q1 to Q9 | Answered in section 10. Q9: Charles ran the compiler and flashed. |
+
+Other points:
+
+- `FreeRTOS_CLI.c/.h` are third-party and were copied unchanged except for one include, so they do not follow `c_file_format.md`. All other files do.
+- A compile error and a hang were found and fixed during the work: see `power_investigation.md` for the second (the Power-down wake).
+- What the work measured, the short summary, and what is and is not known are in `power_investigation.md`. The thread README has the outcome and the open items.
+- Nothing has been committed or pushed.

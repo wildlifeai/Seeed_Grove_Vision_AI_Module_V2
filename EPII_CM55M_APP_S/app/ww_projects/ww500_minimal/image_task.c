@@ -381,14 +381,10 @@ static void startCapture(void) {
 		xprintf("Image: busy (%s)\n", imageStateString[imageState]);
 		return;
 	}
-	if (!fatfs_task_mounted()) {
-		xprintf("Image: no SD card, so no picture\n");
-		return;
-	}
-	if (!fatfs_task_bootCountValid()) {
-		xprintf("Image: the boot count was not updated, so no picture\n");
-		return;
-	}
+	// Whether the JPEG can be saved (an SD card, mounted, with a valid boot count) is checked once the frame
+	// is in hand (see handleFrameReady()), not here: this lets the sensor be tested (and its current measured)
+	// with no SD card or no FatFS code (WW500_MINIMAL_NO_FATFS) fitted, at the cost of the frame being taken
+	// and then discarded when it cannot be saved.
 	if (picturesSaved >= MAX_PICTURES_PER_BOOT) {
 		xprintf("Image: %d pictures have been saved in this boot: the limit\n", MAX_PICTURES_PER_BOOT);
 		return;
@@ -470,6 +466,26 @@ static void handleFrameReady(void) {
 
 	if ((jpegLength == 0) || (jpegAddress == 0)) {
 		abortCapture("the JPEG is empty");
+		return;
+	}
+
+	// The sensor has been tested regardless of the SD card - only the save needs one. Checked here, not
+	// before the capture, so a frame can still be taken (and its size and timing seen) with no card or no
+	// FatFS code (WW500_MINIMAL_NO_FATFS) fitted.
+	if (!fatfs_task_mounted()) {
+		XP_YELLOW;
+		xprintf("Image: frame after %d ms, JPEG is %u bytes, but there is no SD card, so it was not saved\n",
+				(int) frameTimeMs, (unsigned) jpegLength);
+		XP_WHITE;
+		finishOperation();
+		return;
+	}
+	if (!fatfs_task_bootCountValid()) {
+		XP_YELLOW;
+		xprintf("Image: frame after %d ms, JPEG is %u bytes, but the boot count was not updated, so it was not saved\n",
+				(int) frameTimeMs, (unsigned) jpegLength);
+		XP_WHITE;
+		finishOperation();
 		return;
 	}
 

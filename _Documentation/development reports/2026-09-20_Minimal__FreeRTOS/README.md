@@ -19,18 +19,12 @@ committed the work at the end of 22 September 2026 (check `git log` for the comm
   and the WAKE pin (PA0). How it works is in
   [`ww500_minimal/doc/README.md`](../../EPII_CM55M_APP_S/app/ww_projects/ww500_minimal/doc/README.md).
 
-**What the power measurements showed** (short version; the full record, the known/unknown lists and the evidence are in
-[`power_investigation.md`](../../EPII_CM55M_APP_S/app/ww_projects/ww500_minimal/doc/power_investigation.md)):
-
-- **DPD: 10 uA**, and it resumes on the timer and the WAKE pin. After a wake, the first bootloader line to a running CLI task takes 24 to 30 ms.
-- **Awake and idle it drew 17.3 to 17.9 mA**, although FreeRTOS tickless idle works. WFI stops only the CPU clock; the PLL, buses, SRAMs and peripheral clocks stay on.
-- **Run-time changes cut that to 4.8 mA (72 %)**: 24 MHz RC oscillator, PLL off, unused clock enables off, UART moved to the RC oscillator and the crystal off. It is reversible, the
-  console still works and DPD still works from that state. Below 24 MHz gains little more. About 4 to 5 mA is a static floor.
-- **Under 1 mA is not available while running code.** The datasheet offers sub-mA only in Power-down with retention and DPD.
-- **Power-down with retention works** (after making it wake on the RC oscillator, as the application note asks): 1.5 mA asleep, RAM kept, and the application starts about
-  10 ms sooner than after a DPD wake. The full wake latency was not measured.
-- **The RTC and sleep timers are about 4.1 % fast** (32 kHz RC oscillator, no crystal): a 30 s alarm is about 28.8 s.
-- **DPD is the right low-power state** on what we know. Power-down with retention is a latency option at 150 times DPD's sleep current.
+**Where power results are recorded:** all of them, in one place -
+[`power_investigation.md`](../../EPII_CM55M_APP_S/app/ww_projects/ww500_minimal/doc/power_investigation.md) (its
+"Short summary" section for the headline numbers, the rest for the detail, the known/unknown lists and the
+evidence). This README and `ww500_minimal/doc/README.md` point to it rather than repeating figures, so there is
+only one place to update as new results (camera current, DPD with the camera and card fitted, ...) come in.
+Headline so far: **DPD 10 uA**, awake-idle 4.8-17.9 mA depending on clock state, Power-down with retention 1.5 mA.
 
 Decisions and why (details in the proposal):
 
@@ -121,6 +115,7 @@ A proposal was written first ([CLAUDE_Step8_camera_proposal.md](CLAUDE_Step8_cam
 - Open the saved JPEG on a PC and judge the picture (only the file size and the write result were seen). A second `capture` in the same boot should give `B0010301.JPG`.
 - **Current in each HM0360 mode** (`cam 0`, `cam 2`, ...) with the 0R link lifted, to check the comment in `hm0360_md.c` (about 700 uA in mode 0, 270 uA in mode 2) and which mode is really lowest.
 - **DPD current with the camera and the SD card fitted**, after a plain boot and after a `capture` (target: still about 10 uA). If it rises, look at the camera's control pins and I2C pads and the sensor's mode before DPD.
+- Record the results of both in `power_investigation.md` (add a "Camera (HM0360)" entry to its summary table and detailed record), not here - see "Where power results are recorded" above.
 - **Sensor state over DPD:** after a wake, `Image: HM0360 was in mode N when the boot began` should show the mode it was left in, and the ready line should say `warm init` (no register table).
   Not tested yet. Note the sensor is left in the resting mode, in which it keeps producing a frame about every 2 s with nobody listening (as in `ww500_md` in DPD).
 - **Check the capture timing:** the 5 s wait for the frame is far longer than the 33 ms seen. Take more pictures, then decide whether to shorten it. (The doc says the first frame does not wait for the sleep interval in mode 2.)

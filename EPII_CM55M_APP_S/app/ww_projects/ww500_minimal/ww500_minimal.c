@@ -35,7 +35,9 @@
 #include "blinky_task.h"
 #include "CLI-commands.h"
 #include "fatfs_task.h"
+#ifndef WW500_MINIMAL_NO_CAMERA
 #include "image_task.h"
+#endif // WW500_MINIMAL_NO_CAMERA
 #include "inactivity.h"
 #include "rtc_util.h"
 #include "sleep_mode.h"
@@ -336,8 +338,12 @@ void ww500_minimal_onInactivity(void) {
 
 	// Tell each task that takes part in the shutdown barrier. Each finishes what it is doing and then reports
 	// to the barrier. The last one to report enters DPD.
+#ifndef WW500_MINIMAL_NO_FATFS
 	fatfs_task_notifyInactivity();
+#endif // WW500_MINIMAL_NO_FATFS
+#ifndef WW500_MINIMAL_NO_CAMERA
 	image_task_notifyInactivity();
+#endif // WW500_MINIMAL_NO_CAMERA
 	blinky_task_notifyInactivity();
 }
 
@@ -369,6 +375,20 @@ int app_main(void) {
 
 	xprintf("Git branch: '%s' %s%s\n",  GIT_BRANCH, GIT_COMMIT, GIT_DIRTY);
 	xprintf("Compiler Version: ARM GNU, %s\n\n", __VERSION__);
+
+	// Says which of the two optional subsystems this build has, since WW500_NO_CAMERA / WW500_NO_FATFS
+	// (ww500_minimal.mk) can leave either or both out to test their effect on DPD current
+#ifdef WW500_MINIMAL_NO_CAMERA
+	xprintf("Camera code: absent (WW500_MINIMAL_NO_CAMERA)\n");
+#else
+	xprintf("Camera code: present\n");
+#endif // WW500_MINIMAL_NO_CAMERA
+#ifdef WW500_MINIMAL_NO_FATFS
+	xprintf("SD card code: absent (WW500_MINIMAL_NO_FATFS)\n");
+#else
+	xprintf("SD card code: present\n");
+#endif // WW500_MINIMAL_NO_FATFS
+	xprintf("\n");
 
 	hx_drv_pmu_get_ctrl(PMU_pmu_wakeup_EVT, &wakeup_event);
 	hx_drv_pmu_get_ctrl(PMU_pmu_wakeup_EVT1, &wakeup_event1);
@@ -450,6 +470,7 @@ int app_main(void) {
 	internalStates[taskIndex++] = internalState;
 	xprintf("Created task '%s' Priority %d\n", pcTaskGetName(task_id), priority);
 
+#ifndef WW500_MINIMAL_NO_FATFS
 	// The FatFS task mounts the SD card and updates the boot count
 	task_id = fatfs_task_createTask(--priority, wakeReason);
 	internalState.task_id = task_id;
@@ -458,7 +479,9 @@ int app_main(void) {
 	internalState.priority = priority;
 	internalStates[taskIndex++] = internalState;
 	xprintf("Created task '%s' Priority %d\n", pcTaskGetName(task_id), priority);
+#endif // WW500_MINIMAL_NO_FATFS
 
+#ifndef WW500_MINIMAL_NO_CAMERA
 	// The image task initialises the HM0360 and takes pictures when asked
 	task_id = image_task_createTask(--priority, wakeReason);
 	internalState.task_id = task_id;
@@ -467,6 +490,7 @@ int app_main(void) {
 	internalState.priority = priority;
 	internalStates[taskIndex++] = internalState;
 	xprintf("Created task '%s' Priority %d\n", pcTaskGetName(task_id), priority);
+#endif // WW500_MINIMAL_NO_CAMERA
 
 	task_id = blinky_task_createTask(--priority, wakeReason);
 	internalState.task_id = task_id;
@@ -481,8 +505,15 @@ int app_main(void) {
 	// A barrier so that a function is called when all tasks are ready in their for(;;) loop
 	barrier_init(&startupBarrier, taskIndex, allTasksReady);
 
-	// Also a barrier to entering DPD: the blinky, FatFS and image tasks must all be ready
+	// Also a barrier to entering DPD: the blinky task always takes part, plus the FatFS and image tasks
+	// whichever of them were created above
+#if defined(WW500_MINIMAL_NO_CAMERA) && defined(WW500_MINIMAL_NO_FATFS)
+	barrier_init(&shutdownBarrier, 1, blinky_task_sleepNow);
+#elif defined(WW500_MINIMAL_NO_CAMERA) || defined(WW500_MINIMAL_NO_FATFS)
+	barrier_init(&shutdownBarrier, 2, blinky_task_sleepNow);
+#else
 	barrier_init(&shutdownBarrier, 3, blinky_task_sleepNow);
+#endif
 
 	xprintf("FreeRTOS scheduler started.\n");
 	vTaskStartScheduler();

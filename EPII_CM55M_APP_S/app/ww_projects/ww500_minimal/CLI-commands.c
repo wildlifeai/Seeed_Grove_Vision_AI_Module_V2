@@ -32,6 +32,7 @@
 #include "FreeRTOS_CLI.h"
 
 // Himax board UART driver
+#include "hx_drv_scu.h"
 #include "hx_drv_uart.h"
 
 #include "printf_x.h"
@@ -42,7 +43,9 @@
 #include "blinky_task.h"
 #include "CLI-commands.h"
 #include "fatfs_task.h"
+#ifndef WW500_MINIMAL_NO_CAMERA
 #include "image_task.h"
+#endif // WW500_MINIMAL_NO_CAMERA
 #include "inactivity.h"
 #include "power_diag.h"
 #include "sleep_mode.h"
@@ -112,12 +115,14 @@ static char rxChar;
 static char cliInBuffer[CLI_CMD_LINE_BUF_SIZE];		/* Buffer for input */
 static char cliOutBuffer[CLI_OUTPUT_BUF_SIZE];		/* Buffer for output */
 
+#ifndef WW500_MINIMAL_NO_FATFS
 // The file operation for the 'sdwrite' and 'sdread' commands. The FatFS task replies with APP_MSG_CLITASK_FILE_DONE.
 static fileOperation_t cliFileOp;
 static char cliFileName[FATFS_TASK_FILENAME_LENGTH];
 static char cliFileBuffer[CLI_FILE_BUFFER_SIZE];
 static volatile bool cliFileOpBusy = false;
 static bool cliFileOpIsRead = false;
+#endif // WW500_MINIMAL_NO_FATFS
 
 // How long to stay awake after a character is typed. Changed by the 'inactivity' command.
 static uint32_t cliInactivityMs = WW500_MINIMAL_INACTIVITY_CLI_MS;
@@ -130,7 +135,9 @@ static void registerCommands(void);
 static void processSingleCharacter(char c);
 static bool parseUint(const char *param, BaseType_t length, uint32_t *value);
 static void waitForFatFs(void);
+#ifndef WW500_MINIMAL_NO_FATFS
 static void reportFileOp(void);
+#endif // WW500_MINIMAL_NO_FATFS
 
 static BaseType_t prvVer(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 static BaseType_t prvTaskStats(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
@@ -154,12 +161,17 @@ static BaseType_t prvClkUart(char *pcWriteBuffer, size_t xWriteBufferLen, const 
 static BaseType_t prvClkFast(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 static BaseType_t prvSleep(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 static BaseType_t prvXtal(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
+#ifndef WW500_MINIMAL_NO_FATFS
 static BaseType_t prvSd(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 static BaseType_t prvBootCount(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 static BaseType_t prvSdWrite(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 static BaseType_t prvSdRead(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
+#endif // WW500_MINIMAL_NO_FATFS
+#ifndef WW500_MINIMAL_NO_CAMERA
 static BaseType_t prvCapture(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 static BaseType_t prvCam(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
+#endif // WW500_MINIMAL_NO_CAMERA
+static BaseType_t prvRc32kTrim(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 static BaseType_t prvDpd(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 static BaseType_t prvReset(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 
@@ -179,6 +191,7 @@ static void waitForFatFs(void) {
 	}
 }
 
+#ifndef WW500_MINIMAL_NO_FATFS
 /**
  * @brief Prints the result of the 'sdwrite' or 'sdread' operation that has just finished.
  */
@@ -199,6 +212,8 @@ static void reportFileOp(void) {
 		xprintf("Wrote %u bytes to '%s'\n", (unsigned) cliFileOp.length, cliFileName);
 	}
 }
+
+#endif // WW500_MINIMAL_NO_FATFS
 
 /**
  * @brief Converts a command parameter to an unsigned number.
@@ -947,6 +962,7 @@ static BaseType_t prvSleep(char *pcWriteBuffer, size_t xWriteBufferLen, const ch
 	return pdFALSE;
 }
 
+#ifndef WW500_MINIMAL_NO_FATFS
 /**
  * @brief Prints the state of the SD card and the boot count. Command: sd
  *
@@ -1100,6 +1116,9 @@ static BaseType_t prvSdRead(char *pcWriteBuffer, size_t xWriteBufferLen, const c
 	return pdFALSE;
 }
 
+#endif // WW500_MINIMAL_NO_FATFS
+
+#ifndef WW500_MINIMAL_NO_CAMERA
 /**
  * @brief Takes a picture and saves it as a JPEG. Command: capture
  *
@@ -1166,6 +1185,53 @@ static BaseType_t prvCam(char *pcWriteBuffer, size_t xWriteBufferLen, const char
 	}
 	else {
 		cli_append(&pcWriteBuffer, &xWriteBufferLen, "The image task did not accept the request");
+	}
+
+	return pdFALSE;
+}
+
+#endif // WW500_MINIMAL_NO_CAMERA
+
+/**
+ * @brief Reads or sets the RC32K1K trim register. Command: rc32ktrim [value]
+ *
+ * EXPERIMENT: the RTC and the sleep/wake timers are clocked from this oscillator (no 32.768 kHz crystal is
+ * fitted - see doc/README.md, "RTC accuracy and the 32.768 kHz crystal"), and it measured about 4 % fast. The
+ * trim register might correct that, but its direction and step size are not documented, so this is trial and
+ * error: measure the RTC rate (see the doc for the procedure), change the trim, then measure again.
+ *
+ * @param pcWriteBuffer   Buffer for the response.
+ * @param xWriteBufferLen Length of the buffer.
+ * @param pcCommandString The command line.
+ * @return pdFALSE as there is no more output.
+ */
+static BaseType_t prvRc32kTrim(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) {
+	const char *pcParam;
+	BaseType_t paramLength;
+	uint32_t value;
+	uint8_t trim;
+
+	configASSERT(pcWriteBuffer);
+
+	pcParam = FreeRTOS_CLIGetParameter(pcCommandString, 1, &paramLength);
+
+	if (pcParam == NULL) {
+		if (hx_drv_scu_get_RC32K1K_trim(&trim) == SCU_NO_ERROR) {
+			cli_append(&pcWriteBuffer, &xWriteBufferLen, "RC32K1K trim is %u (0-255)", (unsigned) trim);
+		}
+		else {
+			cli_append(&pcWriteBuffer, &xWriteBufferLen, "Could not read the trim register");
+		}
+	}
+	else if (!parseUint(pcParam, paramLength, &value) || (value > 255)) {
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "Expected nothing, or a value from 0 to 255");
+	}
+	else if (hx_drv_scu_set_RC32K1K_trim((uint8_t) value) == SCU_NO_ERROR) {
+		cli_append(&pcWriteBuffer, &xWriteBufferLen,
+				"RC32K1K trim set to %u. Re-measure the RTC rate to see whether this helped", (unsigned) value);
+	}
+	else {
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "Could not set the trim register");
 	}
 
 	return pdFALSE;
@@ -1242,12 +1308,17 @@ static void registerCommands(void) {
 		{ "clkfast", "clkfast:\r\n Restores the clock speed, PLL, crystals and UART clock after clkslow. Does not restore clkoff (use clkon)\r\n", prvClkFast, 0 },
 		{ "xtal", "xtal <24|32> <0|1>:\r\n EXPERIMENT: switches the 24 MHz or 32.768 kHz crystal oscillator off (0) or on (1)\r\n", prvXtal, 2 },
 		{ "sleep", "sleep <seconds> <retention 0|1>:\r\n EXPERIMENT: Power-down mode with timer and WAKE pin wake. Retention keeps RAM so the wake avoids the flash reload\r\n", prvSleep, 2 },
+#ifndef WW500_MINIMAL_NO_FATFS
 		{ "sd", "sd:\r\n Prints the state of the SD card and the boot count\r\n", prvSd, 0 },
 		{ "bootcount", "bootcount:\r\n Prints the boot count, kept in BOOTS.TXT on the SD card\r\n", prvBootCount, 0 },
 		{ "sdwrite", "sdwrite <name> <text>:\r\n Writes the text to an 8.3 file in the root of the SD card, replacing it\r\n", prvSdWrite, -1 },
 		{ "sdread", "sdread <name>:\r\n Reads an 8.3 file from the root of the SD card and prints it as text\r\n", prvSdRead, 1 },
+#endif // WW500_MINIMAL_NO_FATFS
+#ifndef WW500_MINIMAL_NO_CAMERA
 		{ "capture", "capture:\r\n Takes a picture with the HM0360 (mode 2, one frame) and saves it as Bnnnnnnn.JPG on the SD card\r\n", prvCapture, 0 },
 		{ "cam", "cam [mode|init]:\r\n Prints the HM0360 mode, or sets its resting mode (0-4, 6, 7; the default is 2), or 'init' writes its registers again\r\n", prvCam, -1 },
+#endif // WW500_MINIMAL_NO_CAMERA
+		{ "rc32ktrim", "rc32ktrim [0-255]:\r\n EXPERIMENT: reads or sets the RC32K1K trim register that clocks the RTC and sleep timers (no 32.768 kHz crystal is fitted). Re-measure RTC accuracy after changing it\r\n", prvRc32kTrim, -1 },
 		{ "dpd", "dpd:\r\n Enters deep power down as soon as possible\r\n", prvDpd, 0 },
 		{ "reset", "reset:\r\n Resets the processor using the watchdog\r\n", prvReset, 0 },
 	};
@@ -1411,10 +1482,12 @@ static void vCmdLineTask(void *pvParameters) {
 				dev_uart_ptr->uart_control(UART_CMD_SET_RXINT, (UART_CTRL_PARAM)1);
 				break;
 
+#ifndef WW500_MINIMAL_NO_FATFS
 			case APP_MSG_CLITASK_FILE_DONE:
 				// The FatFS task has finished the 'sdwrite' or 'sdread' operation
 				reportFileOp();
 				break;
+#endif // WW500_MINIMAL_NO_FATFS
 
 			default:
 				xprintf("CLI Task: unexpected event 0x%04x\n", rxMessage.msg_event);

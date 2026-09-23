@@ -23,7 +23,8 @@ carrying only the HX6538, LEDs off, nothing on the I/O).
 
 | State | Current | Notes |
 |---|---|---|
-| **DPD** (deep power down, `dpd`) | **10 uA** | The chip reboots on a timer or WAKE-pin wake. |
+| **DPD** (deep power down, `dpd`), bare board | **10 uA** | The chip reboots on a timer or WAKE-pin wake. |
+| DPD, PCA9574 fitted (23 September 2026) | **13.8 uA** | See "PCA9574 and the extra DPD current" below - cause not found. |
 | **Power-down with retention** (`sleep 30 1`) | **1.5 mA** | RAM is kept. The app's banner appears 4 to 5 ms after the first bootloader line, against 13 to 16 ms after a DPD wake. |
 | Power-down, no retention (`sleep 30 0`) | 1.5 mA | RAM lost. Behaves like DPD (banner 16 ms after the first bootloader line). Same current as with retention. |
 | Awake and idle, best state found (24 MHz RC oscillator, PLL off, unused clock enables off, UART moved to RC, crystal off) | 4.8 mA | Console and DPD still work. Fully reversible. |
@@ -132,6 +133,7 @@ application note. "Inferred" is a conclusion not directly tested.
   in Power-down, the I/O retention setting, the external-supply pin left off), states of the pins, other blocks kept powered in the stand-by
   domain, or the board.
 - Why DPD is 10 uA when the datasheet's typical is about ten times lower (the board, most likely).
+- Why DPD rose to 13.8 uA once the PCA9574 was fitted (HM0360 and SD card removed) - see "PCA9574 and the extra DPD current" below. The camera and FatFS application code were both ruled out.
 - The full combined floor: the 4.8 mA state plus `clkdiv 16`. The `u55`, `i3c`, `puf`, `dma` and `sdio` parts of `clkoff` were never used, so which
   block of the `hsc` group stops a DPD resume when left off is not known.
 - Whether dynamic voltage and frequency scaling (the datasheet mentions a 0.8/0.9 V scheme) or powering down unused SRAM banks can lower the static
@@ -144,6 +146,53 @@ application note. "Inferred" is a conclusion not directly tested.
 - What the retention flags in the PMU configuration do exactly. The power-management library is a binary.
 - Whether the RTC error could be trimmed out with the RC32K trim register, or would need the time from the BLE processor. Not tried.
 - Whether any of this holds in `ww500_md`, with its camera, SD card, BLE link and neural network. The experiments ran only in `ww500_minimal`.
+
+---
+
+## Where is the HM0360 power going?
+
+Sleep measurements (DPD):
+
+I meaured the volatges across R28 (XSHDN) and R31 (XSLEEP). In both cases the voltage at the HM0360 is 1.65V vs 1.81V at the 1V8 rail.
+Since the reistors a 1M this means 160nA flows into these pins.
+
+Voltages at some pins (VSYNC, HSYNC, SEN_PCLK, STROBE) at in the range 10-150mV and seem to be floating (Hi-Z). SEN_INT (the MD interrupt)
+is essential 0V. 
+
+There are 2 power supply rails with 0R resistors. I remove these and measure the currents in turn:
+
+* __2V8__ (R45) 73uA (pulses higher to c. 400uA periodically - perhaps when the counter expires?)
+* __1V8__ (R47) 138uA (pulses higher to c. 600uA periodically)
+* __Sum__ 200uA
+* __Whole board__ 260uA (pulses higher to c. 600uA periodically)
+
+__Different modes__
+
+the MODE_SELECT register is 0x0100 and documented in the data sheet section 6.1. 
+
+Table 6.1 (p31) and section 10.2 (p48) document modes 0, 1, 2, 3, 4, 6, 7.
+
+I can type `cam 0` (to put the camera in mode 0) and the same with other modes. 
+Results follow (other than made 2 which is reported above):
+
+* __2V8__ Mode 1 (continuous) = 1.4mA. All other modes constant at 73uA
+* __1V8__ Mode 1 (continuous) = 4.8mA. All other modes constant at 138uA.
+* __Whole Board__ modes other than 1: All other modes constant at 138uA.
+
+__Interesting:__ I think the ww500_md project uses mode 2 rather than mode 0 when MD is diabled
+because mode 0 seemed to have much higher power. This is not what we see here (tentative - check). 
+
+__HM0360 data sheet__
+
+Section 2 Sensor Overview says:
+
+```
+...target current consumption of 256uA in AoS monitor mode and 8.6mA in VGS 60 fps read out mode.
+```
+
+DC characteristcs are in section 11.3, p 78.
+
+---
 
 ## Detailed record
 
@@ -807,6 +856,33 @@ and read the current while it sleeps. Watch when the boot messages appear after 
 WAKE switch on another run. Repeat with `sleep 30 0` (no retention). The boot log after a retention
 wake should show no `1st BL` bootloader messages if the flash reload really is skipped. Record the
 time from the wake event to the first console output, and the current during the sleep.
+
+### PCA9574 and the extra DPD current (Charles, 23 September 2026)
+
+Step 8 added the HM0360 camera and the PCA9574 I2C expander (used to test the sensor I2C bus - see
+`ww500_minimal/doc/README.md`, "HM0360 camera"). Measuring DPD again, to check it still holds at 10 uA with
+that hardware fitted, gave a surprise:
+
+- With the HM0360 and the SD card both removed, and the PCA9574 fitted, DPD is **13.8 uA**, not 10 uA. The
+  PCA9574 itself was expected to add under 1 uA.
+- **Same with or without the SD card fitted.** Ruling in favour of neither being about the card itself.
+- **The camera and FatFS application code were both ruled out.** `WW500_NO_CAMERA` and `WW500_NO_FATFS`
+  (`ww500_minimal.mk` - build options that stop the image task and the FatFS task from ever being created;
+  see `ww500_minimal/doc/README.md`, "Building without the camera or FatFS code") were tried alone and
+  together. None of the four combinations changed the figure: still 13.8 uA every time, camera code present or
+  absent, FatFS code present or absent.
+
+So the extra current (13.8 - 10 = 3.8 uA) is not from either piece of new application code running. What is
+left, in order of suspicion:
+
+- **The PCA9574 itself**, drawing more than the under-1 uA expected. Not checked against its datasheet.
+- **A floating pin.** The HM0360 module and the SD card may have carried pull-ups or pull-downs (for SDA/SCL,
+  or the SPI MISO/DI line) that are now missing, leaving an input pin at a mid-rail voltage. 3.3 V / 3.8 uA is
+  about 868 kOhm, which is the right order of magnitude for a floating CMOS input's leakage, not a real
+  resistor - this is Charles's own observation. Not measured with a meter yet.
+
+Not resolved. Next step: measure the DC voltage on SDA, SCL and the SPI MISO/DI pins with a high-impedance
+meter, to see whether any sits away from a clean 0 V or 3.3 V.
 
 ## State of the code
 

@@ -224,6 +224,42 @@ CIS_SUPPORT_INAPP = cis_sensor
 CIS_SUPPORT_INAPP_MODEL = cis_hm0360
 APPL_DEFINES += -DUSE_HM0360
 
+##
+# EXPERIMENT (23 September 2026): build without ever creating or using the image task, to test whether some
+# of the extra DPD current seen with the HM0360 and SD card removed is caused by the camera code (the sensor
+# I2C master init, the PCA9574/HM0360 presence checks, ...) rather than by the hardware. The sensordp library
+# and cis_sensor sources above are still built and linked either way - excluding them too needs more surgery
+# than is safe without a compiler here - but with this set the image task is never created and the
+# 'capture'/'cam' CLI commands are not registered (see the WW500_MINIMAL_NO_CAMERA guards in ww500_minimal.c
+# and CLI-commands.c), so none of that code ever runs.
+#
+# Uncomment the line below to build without the camera task (comment it out again for the normal build). Do a
+# clean build after changing it: in Eclipse, Project > Clean... for this project, then Build. This is a compile
+# define, so an incremental build can otherwise keep the old behaviour in an object file that was not touched.
+##
+# WW500_NO_CAMERA = y
+
+ifeq ($(strip $(WW500_NO_CAMERA)),y)
+APPL_DEFINES += -DWW500_MINIMAL_NO_CAMERA
+endif
+
+##
+# EXPERIMENT (23 September 2026): the same, for the FatFS task, to test whether the SD card code (mounting,
+# the SPI pins, ...) rather than the camera code is behind the extra DPD current. LIB_SEL/MID_SEL above still
+# build and link FatFS either way; with this set the FatFS task is never created and the 'sd', 'bootcount',
+# 'sdwrite' and 'sdread' CLI commands are not registered (see the WW500_MINIMAL_NO_FATFS guards in
+# ww500_minimal.c and CLI-commands.c), so none of that code ever runs. Can be combined with WW500_NO_CAMERA
+# above to remove both.
+#
+# Uncomment the line below to build without the FatFS task (comment it out again for the normal build). Clean
+# build after changing it, as above.
+##
+#WW500_NO_FATFS = y
+
+ifeq ($(strip $(WW500_NO_FATFS)),y)
+APPL_DEFINES += -DWW500_MINIMAL_NO_FATFS
+endif
+
 $(info In ww500_minimal.mk TOOLCHAIN='${TOOLCHAIN}', SCENARIO_APP_ROOT='${SCENARIO_APP_ROOT}',  APP_TYPE='${APP_TYPE}')
 
 ifeq ($(strip $(TOOLCHAIN)), arm)

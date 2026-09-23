@@ -400,6 +400,10 @@ void power_diag_printClocks(void) {
 	SCU_XTAL24MSEL_E xtal24Sel = SCU_XTAL24MSEL_1M_4M;
 	SCU_HSC32KCLKSRC_E hsc32k = SCU_HSC32KCLKSRC_RC32K1K;
 	SCU_LSC32KCLKSRC_E lsc32k = SCU_LSC32KCLKSRC_RC32K1K;
+	SCU_PDAON_CLK_CFG_T aonClk;
+	uint8_t rc32k1kTrim = 0;
+	SCU_RC32K1KSEL_E rc32k1kSel = SCU_RC32K1KSEL_RC1K;
+	uint8_t rc32k1kEn = 0;
 
 	XP_LT_CYAN;
 	xprintf("Clock frequencies\n");
@@ -447,6 +451,25 @@ void power_diag_printClocks(void) {
 	}
 	if ((hx_drv_scu_get_pdlsc_32k_cfg(&lsc32k) == SCU_NO_ERROR) && (lsc32k < 2)) {
 		xprintf("  LSC 32 kHz clock from %s\n", (lsc32k == SCU_LSC32KCLKSRC_XTAL32K) ? "XTAL32K" : "RC32K1K");
+	}
+	if (hx_drv_scu_get_pdaon_clk_cfg(&aonClk) == SCU_NO_ERROR) {
+		// The RTC is in the always-on (AON) domain: this is its clock source, separate from the HSC/LSC 32 kHz
+		// selectors above. SCU_AONCLKSRC_RC32K1K/XTAL32K feed the RTC directly; the APB1_* values are for a
+		// different, SB-side, peripheral bus and are not expected here.
+		xprintf("  AON clock (feeds the RTC) from %s\n",
+				(aonClk.aonclk == SCU_AONCLKSRC_XTAL32K) ? "XTAL32K" :
+				(aonClk.aonclk == SCU_AONCLKSRC_RC32K1K) ? "RC32K1K" : "APB1 variant (unexpected here)");
+	}
+	if (hx_drv_scu_get_RC32K1K_trim(&rc32k1kTrim) == SCU_NO_ERROR) {
+		xprintf("  RC32K1K trim = %u (0-255; see 'rc32ktrim' to change it)\n", (unsigned) rc32k1kTrim);
+	}
+	if (hx_drv_scu_get_RC32K1K_selen(&rc32k1kSel, &rc32k1kEn) == SCU_NO_ERROR) {
+		// This oscillator can itself run at 32.768 kHz or 1 kHz - a separate choice from which 32 kHz source
+		// feeds the RTC/HSC/LSC above. The SDK header's own comments on SCU_RC32K1KSEL_RC1K/RC32K are swapped
+		// (each names the other value), so this reads the enum member name, not the comment. Nothing in this
+		// app or ww500_md sets this - it is whatever the hardware defaults to.
+		xprintf("  RC32K1K oscillator %s, selected for %s\n", rc32k1kEn ? "enabled" : "disabled",
+				(rc32k1kSel == SCU_RC32K1KSEL_RC32K) ? "32.768 kHz" : "1 kHz");
 	}
 
 	XP_LT_CYAN;

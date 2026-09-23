@@ -65,7 +65,15 @@
 /*********************************************** Global Types ************************************************/
 
 // Number of tasks (the size of the internalStates[] array)
+// CLI and Blinky always run; FatFS and the image task are each optional (see WW500_MINIMAL_NO_FATFS,
+// WW500_MINIMAL_NO_CAMERA in ww500_minimal.mk - build-time experiments to isolate their effect on DPD current)
+#if defined(WW500_MINIMAL_NO_CAMERA) && defined(WW500_MINIMAL_NO_FATFS)
+#define WW500_MINIMAL_NUMBER_OF_TASKS			2
+#elif defined(WW500_MINIMAL_NO_CAMERA) || defined(WW500_MINIMAL_NO_FATFS)
+#define WW500_MINIMAL_NUMBER_OF_TASKS			3
+#else
 #define WW500_MINIMAL_NUMBER_OF_TASKS			4
+#endif
 
 // Function pointer types, to get the internal state of a task
 typedef uint16_t (*int_func_ptr)(void);

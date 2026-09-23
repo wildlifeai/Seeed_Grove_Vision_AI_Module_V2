@@ -6,7 +6,8 @@
 
 ## Status
 
-Open - fix implemented, not yet build-verified or device-tested by Charles.
+Open - fix implemented and build-verified (both `cis_imx708` and `cis_hm0360`
+variants, 5 September 2026); not yet device-tested by Charles.
 
 ## Background
 
@@ -101,8 +102,8 @@ it, and not addressed here.
 
 The other AI's diagnosis and suggested fix for `I2C_TX` were both correct,
 but scoped to the one instance it happened to reproduce. The actual pattern
-was systemic (5 of 8 states affected). Fixed all 5. Not yet build-verified or
-device-tested.
+was systemic (5 of 8 states affected). Fixed all 5. Build-verified 5 September
+2026; not yet device-tested.
 
 ## Open items
 

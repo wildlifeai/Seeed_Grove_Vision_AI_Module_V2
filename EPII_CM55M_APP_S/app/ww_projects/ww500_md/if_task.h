@@ -32,23 +32,26 @@
 #define WW130_MAX_WBUF_SIZE   (I2CCOMM_HEADER_SIZE + WW130_MAX_PAYLOAD_SIZE + I2CCOMM_CHECKSUM_SIZE + PADDING_ALIGN_SCB_DCACHE)
 #define WW130_MAX_RBUF_SIZE   (I2CCOMM_HEADER_SIZE + WW130_MAX_PAYLOAD_SIZE + I2CCOMM_CHECKSUM_SIZE + PADDING_ALIGN_SCB_DCACHE)
 
-
-/* Task priorities. */
-//#define if_task_PRIORITY	(configMAX_PRIORITIES - 2)
-
-// The states for the if_task
-// Must match the ifTaskStateString[] array in if_task.c
-// APP_IF_STATE_NUMSTATES is only used to establish the number of states
+/**
+ * The states for the if_task
+ * Must match the ifTaskStateString[] array in if_task.c
+ *
+ * Earlier we had states APP_IF_STATE_I2C_SLAVE_TX and APP_IF_STATE_I2C_SLAVE_RX
+ * but they were not used, and so removed together with other dead code
+ * relating to these states.
+ *
+ * APP_IF_STATE_PA0 seems only used for testing. We might want to delete it later.
+ *
+ * APP_IF_STATE_NUMSTATES is only used to establish the number of states
+ */
 typedef enum {
 	APP_IF_STATE_UNINIT						=0x0000,	// Uninitialised - before task starts
 	APP_IF_STATE_IDLE						=0x0001,	// While nothing else is happening
 	APP_IF_STATE_I2C_RX						=0x0002,	// I2C data arrives from master (exchange initiated by master)
 	APP_IF_STATE_I2C_TX						=0x0003,	// I2C is transmitting to master (exchange initiated by master)
-	APP_IF_STATE_I2C_SLAVE_TX				=0x0004,	// I2C is transmitting to master (exchange initiated by slave)
-	APP_IF_STATE_I2C_SLAVE_RX				=0x0005,	// Waiting for I2C data to arrive from master (exchange initiated by slave)
-	APP_IF_STATE_PA0						=0x0006,	// Used in testing inter-processor communications interrupt
-	APP_IF_STATE_DISK_OP					=0x0007,
-	APP_IF_STATE_NUMSTATES					=0x0008
+	APP_IF_STATE_PA0						=0x0004,	// Used in testing inter-processor communications interrupt
+	APP_IF_STATE_DISK_OP					=0x0005,
+	APP_IF_STATE_NUMSTATES					=0x0006
 } APP_IF_STATE_E;
 
 /**

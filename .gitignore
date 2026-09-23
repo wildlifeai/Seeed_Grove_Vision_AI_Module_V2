@@ -59,14 +59,14 @@ we2_image_gen_local_dpd/Images*.txt
 # DPD generated files
 # ---------------------------
 
-# Ignore everything inside output_case1_sec_wlcsp
+# Ignore everything inside output_case1_sec_wlcsp, output.img included: every
+# build rewrites it, so it is not tracked (#198)
 we2_image_gen_local_dpd/output_case1_sec_wlcsp/**
 
-# But keep the folder itself
+# But keep the folder itself, so a fresh clone has somewhere for the image
+# generator to write (git does not track empty folders)
 !we2_image_gen_local_dpd/output_case1_sec_wlcsp/
-
-# Keep the golden reference image
-!we2_image_gen_local_dpd/output_case1_sec_wlcsp/output.img
+!we2_image_gen_local_dpd/output_case1_sec_wlcsp/.gitkeep
 
 # Ignore files in secureboot_tool
 we2_image_gen_local_dpd/secureboot_tool/**/*.crt

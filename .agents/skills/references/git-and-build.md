@@ -18,7 +18,12 @@ wrong here goes wrong before any code is compiled.
   fix with `git fetch --unshallow`, about a minute. Two-dot `git diff A B` compares trees
   directly and stays correct either way.
 * **Never commit build churn**: `prebuilt_libs/**/*.a` deltas, `we2_image_gen_local*/`
-  outputs, stray `NUL` files, `obj_*` trees. Check `git status` before staging.
+  outputs, stray `NUL` files, `obj_*` trees. Check `git status` before staging. The three
+  archives a normal build recompiles (`libcommon.a`, `libfatfs.a`, `libtrustzone_cfg.a`)
+  and `output.img` are untracked (#198), so a modified `.a` in `git status` now means
+  something rebuilt a real input, e.g. `make WW500_FAST_LIBS=n`. Restore it, never commit
+  it, unless the PR is a deliberate SDK or toolchain update labelled
+  `intended-artifact-change`.
 
 # 3. Build and flash invariants
 

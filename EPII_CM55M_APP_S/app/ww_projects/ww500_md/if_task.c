@@ -52,8 +52,19 @@
 
 /*************************************** Definitions *******************************************/
 
+// Uncomment and define to add delay to inter-processor interrupt pulse width 9MS)
+//#define INTERRUPT_PULSE_WIDTH 5
+
 // Uncomment to allow testing of the interprocessor interrupt ppin
 #define TEST_INT_PULSE
+
+// /IP_INT (PB11/GPIO2) was designed to be bidirectional - either side can drive it low
+// to interrupt the other - see interprocessor_interrupt_init()'s comment. Confirmed
+// 16 Sep 2026 that the BLE processor (nRF52832) never actually drives this pin on this
+// board (WW500.C02): it configures it PIN_INPUT-only (main.c:523 in the ww-hardware
+// repo). Uncomment to reinstate this side's interrupt-input handling if a future board
+// revision or firmware change needs it again.
+//#define BIDIRECTIONAL_INTERRUPT
 
 #define EVT_I2CS_0_SLV_ADDR     0x62
 
@@ -72,6 +83,13 @@
 // 4000ms window rides through the renegotiation while staying under the 5s file
 // session inactivity and the app's 15s silence timeout.
 #define MISSINGMASTERTIME	4000
+
+// Added 16 Sep 2026 while investigating BLE file-transfer round-trip time
+// variability (see the "firmware update fails" development report): a single
+// disk operation this slow is unusual enough to flag even during a transfer's
+// otherwise-quiet g_fileRxActive session - e.g. a periodic f_sync() landing on
+// a card that happens to be busy with internal wear-levelling/GC.
+#define SLOW_DISK_OP_WARNING_MS	100
 
 #define DBG_EVT_IICS_CMD_LOG 1
 #if DBG_EVT_IICS_CMD_LOG
@@ -99,8 +117,6 @@ static void vIfTask(void *pvParameters);
 static APP_MSG_DEST_T  handleEventForIdle(APP_MSG_T rxMessage);
 static APP_MSG_DEST_T  handleEventForStateI2CRx(APP_MSG_T rxMessage);
 static APP_MSG_DEST_T  handleEventForStateI2CTx(APP_MSG_T rxMessage);
-static APP_MSG_DEST_T  handleEventForStateI2CSlaveTx(APP_MSG_T rxMessage);
-static APP_MSG_DEST_T  handleEventForStateI2CSlaveRx(APP_MSG_T rxMessage);
 static APP_MSG_DEST_T  handleEventForStatePA0(APP_MSG_T rxMessage);
 static APP_MSG_DEST_T  handleEventForStateDiskOp(APP_MSG_T rxMessage);
 
@@ -192,8 +208,6 @@ const char * ifTaskStateString[APP_IF_STATE_NUMSTATES] = {
 		"Idle",
 		"I2C RX State",
 		"I2C TX State",
-		"I2C TX State (slave)",
-		"I2C RX State (slave)",
 		"PA0 State",
 		"Disk Op State",
 };
@@ -312,10 +326,16 @@ static void i2csTxDoneEvent(void *param) {
 	//HX_DRV_DEV_IIC *iic_obj = param;
 	//HX_DRV_DEV_IIC_INFO *iic_info_ptr = &(iic_obj->iic_info);
 	APP_MSG_T send_msg;
-	BaseType_t xHigherPriorityTaskWoken;
+	// This callback runs in ISR context (see the function comment above), so this
+	// must be initialised: xTimerStopFromISR()/xQueueSendFromISR() below only ever
+	// set it to pdTRUE when a yield is needed, never reset it to pdFALSE.
+	BaseType_t xHigherPriorityTaskWoken = pdFALSE;
 
-	// Stop the timer in case the master does not read our data
-	if (xTimerStop(timerHndlMissingMaster, 0) != pdPASS) {
+	// Stop the timer in case the master does not read our data.
+	// Must be the FromISR variant - this callback runs in ISR context, and the
+	// plain xTimerStop() is a task-context-only API (it was previously used here
+	// in error; see if_task.c dead-code/ISR-audit notes).
+	if (xTimerStopFromISR(timerHndlMissingMaster, &xHigherPriorityTaskWoken) != pdPASS) {
 		configASSERT(0);	// TODO add debug messages?
 	}
 
@@ -543,10 +563,13 @@ static void i2cRxDataReady(void) {
 			}
 		}
 
-		// Suppress the high-volume per-packet console logging for the duration of
-		// the transfer (restored in restoreInactivityPeriod()). At 921600 baud the
-		// hex dumps + state/event traces measurably throttle the packet loop.
-		g_fileRxActive = true;
+		// g_fileRxActive (suppresses the high-volume per-packet console logging,
+		// restored in restoreInactivityPeriod()) is deliberately NOT set here.
+		// It's set once OPEN_FILE actually succeeds (handleEventForStateDiskOp(),
+		// DISK_PHASE_FILE_OPEN) so a failure right at the start - e.g. no SD card
+		// mounted - is never silenced by "quiet" mode before we even know the
+		// transfer can proceed (found 14 Sep 2026: an SD-card-absent failure was
+		// hard to see on the console because logging was already suppressed).
 
 		fileRxOp.fileName      = (char *)fileRx_getFileName();
 		fileRxOp.buffer        = NULL;
@@ -865,10 +888,10 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 
 
 	case APP_MSG_IFTASK_MSG_TO_MASTER:
-		// Here when this processor initiates communications with MKL62BA
+		// Here when this processor initiates communications with MKL62BA.
+		// This shares APP_IF_STATE_I2C_TX with MKL62BA-initiated exchanges rather
+		// than using a dedicated "slave-initiated" state - see if_task.h for why.
 		sendI2CMessage((uint8_t *) data, AI_PROCESSOR_MSG_RX_STRING, (uint16_t) length);
-		// TODO - think carefully whether we need this state...
-		//if_task_state = APP_IF_STATE_I2C_SLAVE_TX;
 		if_task_state = APP_IF_STATE_I2C_TX;
 		break;
 
@@ -957,6 +980,7 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 		}
 
 		// TODO think about this state...
+		// It is only used for testing via a CLI command and might be deleted.
 		if_task_state = APP_IF_STATE_PA0;
 		break;
 
@@ -1156,127 +1180,6 @@ static APP_MSG_DEST_T  handleEventForStateI2CTx(APP_MSG_T rxMessage) {
 }
 
 /**
- * Implements state machine when in APP_IF_STATE_I2C_SLAVE_TX
- *
- * This is the state when the I2C interface is transmitting to the MKL62BA
- * (an exchange initiated by an HX6538 request)
- *
- * It is initiated when some other task needs to send a messages to the MKL62BA.
- *
- */
-static APP_MSG_DEST_T  handleEventForStateI2CSlaveTx(APP_MSG_T rxMessage) {
-	APP_MSG_EVENT_E event;
-	APP_MSG_DEST_T sendMsg;
-	sendMsg.destination = NULL;
-
-	event = rxMessage.msg_event;
-
-	switch (event) {
-	case APP_MSG_IFTASK_I2CCOMM_TX_DONE:
-		// I2C transmission has finished. Expecting a response from the MKL62BA soon.
-		if_task_state = APP_IF_STATE_I2C_SLAVE_RX;
-		i2cTransmissionComplete();
-		// Starts Missing Master timer
-		//evt_i2ccomm_tx_cb();
-		break;
-
-	case APP_MSG_IFTASK_I2CCOMM_MM_TIMER:
-		// Missing Master timer expired. Master failed to respond to our attempt to send I2C data
-		XP_LT_RED;
-		xprintf("I2C master did not read our I2C message\n");
-		XP_WHITE;
-
-		i2cTransmissionComplete();
-		if_task_state = APP_IF_STATE_IDLE;
-		break;
-
-	case APP_MSG_IFTASK_I2CCOMM_ERR:
-		if_task_state = APP_IF_STATE_IDLE;
-		i2cError();
-		break;
-
-	case APP_MSG_IFTASK_INACTIVITY:
-		// GitHub issue #205 - see handleEventForStateI2CTx() for why this must
-		// be deferred, not dropped.
-		XP_BROWN;
-		xprintf("Deferring event 0x%04x\n", event);
-		XP_WHITE;
-		savedMessage = rxMessage;
-		break;
-
-// TODO think abot what is expected!
-//	case APP_MSG_IFTASK_I2CCOMM_PA0_INT_IN:
-//		// Not used at the moment
-//		break;
-//
-//	case APP_MSG_IFTASK_I2CCOMM_CLI_STRING_RESPONSE ... APP_MSG_IFTASK_I2CCOMM_CLI_BINARY_CONTINUES:
-//		// This could happen if the ifTask is still sending a previous message
-//		// and APP_MSG_IFTASK_I2CCOMM_TX has not yet arrived. So save the response and process it when we return to IDLE
-//		XP_BROWN;
-//		xprintf("Deferring event 0x%04x\n", event);
-//		XP_WHITE;
-//		savedMessage = rxMessage;
-//		break;
-
-	default:
-		// Here for events that are not expected in this state.
-		flagUnexpectedEvent(rxMessage);
-		break;
-	}
-
-	// If non-null then our task sends another message to another task
-	return sendMsg;
-}
-
-/**
- * Implements state machine when in APP_IF_STATE_I2C_SLAVE_RX
- *
- * This state is entered when an I2C message arrives from the MKL62BA
- * (initiated by HX6538)
- */
-static APP_MSG_DEST_T  handleEventForStateI2CSlaveRx(APP_MSG_T rxMessage) {
-	APP_MSG_EVENT_E event;
-	APP_MSG_DEST_T sendMsg;
-	sendMsg.destination = NULL;
-
-	event = rxMessage.msg_event;
-//	data = rxMessage.msg_data;
-//	length = rxMessage.msg_parameter;
-//	if (length > WW130_MAX_PAYLOAD_SIZE) {
-//		length = WW130_MAX_PAYLOAD_SIZE;
-//	}
-
-	switch (event) {
-
-		// TODO - which event?
-	case APP_MSG_IFTASK_I2CCOMM_CLI_STRING_RESPONSE:
-	case APP_MSG_IFTASK_I2CCOMM_RX_READY:
-		// Here when I2C message arrived
-		if_task_state = APP_IF_STATE_I2C_RX;
-		// Read and parse the incoming data. Messages of type  AI_PROCESSOR_MSG_TX_STRING are passed to the CLI task for parsing and executing
-		i2cRxDataReady();
-		break;
-
-	case APP_MSG_IFTASK_INACTIVITY:
-		// GitHub issue #205 - see handleEventForStateI2CTx() for why this must
-		// be deferred, not dropped.
-		XP_BROWN;
-		xprintf("Deferring event 0x%04x\n", event);
-		XP_WHITE;
-		savedMessage = rxMessage;
-		break;
-
-	default:
-		// Here for events that are not expected in this state.
-		flagUnexpectedEvent(rxMessage);
-		break;
-	}
-
-	// If non-null then our task sends another message to another task
-	return sendMsg;
-}
-
-/**
  * Implements state machine when in APP_IF_STATE_PA0
  *
  * This state is used to test the inter-processor interrupt
@@ -1357,6 +1260,16 @@ static APP_MSG_DEST_T  handleEventForStateDiskOp(APP_MSG_T rxMessage) {
 	        xprintf("   FileTX: disk operation took %dms\n", elapsedTime);
 	        XP_WHITE;
 	    }
+	    else if (elapsedTime > SLOW_DISK_OP_WARNING_MS) {
+	        // Quiet mode normally suppresses this per-packet timing (see above),
+	        // but an unusually slow individual disk operation is worth flagging
+	        // even mid-transfer - this print is rare by construction, so it
+	        // shouldn't itself perturb the timing it's reporting on.
+	    	// Not an error - due to slow SD card operations sometimes
+	        XP_LT_RED;
+	        xprintf("   FileTX: disk operation took %dms (slow!)\n", elapsedTime);
+	        XP_WHITE;
+	    }
 
 		switch (diskPhase) {
 
@@ -1369,6 +1282,12 @@ static APP_MSG_DEST_T  handleEventForStateDiskOp(APP_MSG_T rxMessage) {
 			}
 			else {
 				sendI2CMessage((uint8_t *)"ftx ack 0", AI_PROCESSOR_MSG_RX_STRING, 9);
+
+				// Transfer is actually proceeding now - safe to suppress the
+				// high-volume per-packet logging from here on (restored in
+				// restoreInactivityPeriod()). See the comment in
+				// AI_PROCESSOR_MSG_FILE_START for why this isn't set any earlier.
+				g_fileRxActive = true;
 			}
 			if_task_state = APP_IF_STATE_I2C_TX;
 			break;
@@ -1505,6 +1424,11 @@ static void vIfTask(void *pvParameters) {
 	dbg_printf(DBG_LESS_INFO, "I2C slave instance %d configured at address 0x%02x\n", iic_id, EVT_I2CS_0_SLV_ADDR);
 	dbg_printf(DBG_LESS_INFO, "I2C buffers have %d bytes, payload is %d\n",
 			WW130_MAX_WBUF_SIZE, WW130_MAX_PAYLOAD_SIZE);
+#ifdef INTERRUPT_PULSE_WIDTH
+	dbg_printf(DBG_LESS_INFO, "Inter-processor interrupt pulse >= %dms\n", INTERRUPT_PULSE_WIDTH);
+#else
+	dbg_printf(DBG_LESS_INFO, "Inter-processor interrupt pulse short\n");
+#endif // INTERRUPT_PULSE_WIDTH
 
 	// TODO can we do something to detect whether there is a WW130 present, and
 	// maybe stay in the UNINIT or ERROR state if not?
@@ -1579,16 +1503,6 @@ static void vIfTask(void *pvParameters) {
 				txMessage = handleEventForStateI2CTx(rxMessage);
 				break;
 
-			case APP_IF_STATE_I2C_SLAVE_TX:
-				// When I2C interface is transmitting (exchanges initiated by HX6538)
-				txMessage = handleEventForStateI2CSlaveTx(rxMessage);
-				break;
-
-			case APP_IF_STATE_I2C_SLAVE_RX:
-				// When a message arrives from the MKL62BA (exchanges initiated by HX6538)
-				txMessage = handleEventForStateI2CSlaveRx(rxMessage);
-				break;
-
 			case APP_IF_STATE_PA0:
 				txMessage = handleEventForStatePA0(rxMessage);
 				break;
@@ -1656,6 +1570,8 @@ static void vIfTask(void *pvParameters) {
 /*********************************** Interprocessor Interrupt Functions ************************************************/
 
 #ifdef WW500
+
+#ifdef BIDIRECTIONAL_INTERRUPT
 /**
  * Interrupt callback for interprocessor interrupt pin (interrupt from MKL63BA).
  *
@@ -1665,6 +1581,11 @@ static void vIfTask(void *pvParameters) {
  * PB11 is connected to the SW2 (FTDI) switch on the WWIF100 breakout board. (P18 on the MKL62BA).
  * (on the WW500.A01 this is a wire link).
  * You can press the SW2 button for a short time. If you press it for a long time, the MKL62BA will enter DFU mode.
+ *
+ * Not used at present: only registered under BIDIRECTIONAL_INTERRUPT (undefined by
+ * default) - see interprocessor_interrupt_init(). Confirmed 16 Sep 2026 that the BLE
+ * processor (nRF52832) never drives /IP_INT as an output on this board, so it never
+ * asserts this line to interrupt us.
  */
 static void interprocessor_interrupt_cb(uint8_t group, uint8_t aIndex) {
     uint8_t value;
@@ -1688,6 +1609,7 @@ static void interprocessor_interrupt_cb(uint8_t group, uint8_t aIndex) {
 
 	hx_drv_gpio_clr_int_status(AON_GPIO0);
 }
+#endif // BIDIRECTIONAL_INTERRUPT
 
 /**
  * Configure PB11 as GPIO2 to be used as the inter-processor interrupt signal
@@ -1697,6 +1619,12 @@ static void interprocessor_interrupt_cb(uint8_t group, uint8_t aIndex) {
  *
  * When PB11 is an input then it can be enabled as an interrupt. This allows the MKL62BA to interrupt this chip
  * by driving PB11 low. That is - the same PB11 signal can be used by either side to interrupt the other.
+ *
+ * Not used at present: confirmed 16 Sep 2026 that the BLE processor (nRF52832) never
+ * drives /IP_INT as an output on this board (WW500.C02) - it configures the pin
+ * PIN_INPUT-only (main.c:523 in the ww-hardware repo). So the interrupt-input side of
+ * this pin (below) is currently dead - guarded by BIDIRECTIONAL_INTERRUPT, undefined by
+ * default. Define it to reinstate this if a future board revision needs it again.
  *
  * This registers a callback to interprocessor_interrupt_cb() which in turn sends an event to the comm_task loop,
  * which in turn sends a message to main_task
@@ -1718,13 +1646,14 @@ static void interprocessor_interrupt_init(void) {
 	pad_pull_cfg.pb11.pull_sel = SCU_PAD_PULL_UP;
     hx_drv_scu_set_all_pull_cfg(&pad_pull_cfg);
 
-
-	// The next commands prepare PB11 to be an interrupt input
+#ifdef BIDIRECTIONAL_INTERRUPT
+	// Not used at present - see function comment above and BIDIRECTIONAL_INTERRUPT.
 	hx_drv_gpio_clr_int_status(GPIO2);
 	hx_drv_gpio_cb_register(GPIO2, interprocessor_interrupt_cb);	// define ISR
 	hx_drv_gpio_set_int_type(GPIO2, GPIO_IRQ_TRIG_TYPE_EDGE_FALLING);	// only when PB11 goes low
 	//hx_drv_gpio_set_int_type(GPIO2, GPIO_IRQ_TRIG_TYPE_EDGE_BOTH);	// When PB11 goes low, then when it goes high
 	hx_drv_gpio_set_int_enable(GPIO2, 1);	// 1 means enable interrupt
+#endif // BIDIRECTIONAL_INTERRUPT
 
 	//hx_drv_gpio_get_in_value(GPIO2, &gpio_value);
 	//xprintf("Initialised PB11 (GPIO2) as input. Read %d\n", gpio_value);
@@ -1740,8 +1669,10 @@ static void interprocessor_interrupt_init(void) {
  */
 static void interprocessor_interrupt_assert(void) {
 
+#ifdef BIDIRECTIONAL_INTERRUPT
 	// disable the interrupt, so we don't interrupt ourself
 	hx_drv_gpio_set_int_enable(GPIO2, 0);	// 0 means disable interrupt
+#endif // BIDIRECTIONAL_INTERRUPT
 
 	// Sets PA0 as an output and drive low, then delay, then high, then set as an input
     hx_drv_gpio_set_output(GPIO2, GPIO_OUT_LOW);
@@ -1770,8 +1701,19 @@ static void interprocessor_interrupt_assert(void) {
  */
 static void interprocessor_interrupt_negate(void) {
 
+#ifdef INTERRUPT_PULSE_WIDTH
+	// Add a deliberate delay to ensure the GPIO has a minimum low and high time
+	// This was an attempt to fix apparent missing interrupts at the BLE processor.
+	// Actual fix was to change BLE interrupt detection code.
+	vTaskDelay(pdMS_TO_TICKS(INTERRUPT_PULSE_WIDTH));
 	hx_drv_gpio_set_out_value(GPIO2, GPIO_OUT_HIGH);
-#if 0
+	vTaskDelay(pdMS_TO_TICKS(INTERRUPT_PULSE_WIDTH));
+#else
+	// Minimal pulse width
+	hx_drv_gpio_set_out_value(GPIO2, GPIO_OUT_HIGH);
+#endif //INTERRUPT_PULSE_WIDTH
+
+	#if 0
 	// This for testing:
 	uint8_t pinValue;
 	hx_drv_gpio_get_in_value(GPIO2, &pinValue);
@@ -1787,12 +1729,15 @@ static void interprocessor_interrupt_negate(void) {
 	}
 #endif
 
-	// Now set PB11 as an input and prepare it to respond to interrupts from the MKL62BA.
+	// Set PB11 back to an input - the idle state between messages.
 	hx_drv_gpio_set_input(GPIO2);
 
+#ifdef BIDIRECTIONAL_INTERRUPT
+	// Not used at present - see interprocessor_interrupt_init() and BIDIRECTIONAL_INTERRUPT.
 	// The next commands prepare PB11 to be an interrupt input
 	hx_drv_gpio_clr_int_status(GPIO2);
 	hx_drv_gpio_set_int_enable(GPIO2, 1);	// 1 means enable interrupt
+#endif // BIDIRECTIONAL_INTERRUPT
 }
 
 #else

@@ -163,8 +163,9 @@ and are coloured cyan. That will make it easier for humans to review these lines
   the buffer; (2) hardened `load_configuration()` with a new `isNumericToken()`
   check so an index/value pair is only accepted when both tokens are purely
   digits, rejecting any future truncated-line garbage outright instead of
-  trusting bare `atoi()`'s silent-zero-on-failure behaviour. Not yet
-  build-verified. (complete 4 September 2026, build verification pending)
+  trusting bare `atoi()`'s silent-zero-on-failure behaviour. Build-verified
+  (both `cis_imx708` and `cis_hm0360` variants, 5 September 2026); not yet
+  device-tested. (complete 4 September 2026, build-verified 5 September 2026)
 
 * Implemented `flash_led_modes_proposal.md`'s final design in full:
   `FlashLedMode_t` (`ledFlash.h`) gains `FLASH_MODE_ALWAYS_ON`/`FLASH_MODE_TIME_OF_DAY`
@@ -193,7 +194,8 @@ and are coloured cyan. That will make it easier for humans to review these lines
   Also added the one-line note flagged in the proposal's §7 to `light_sensor.md` §6.4 -
   the `light` CLI command's DARK/BRIGHT verdict may not correspond to what's actually
   controlling the flash under `ALWAYS_ON`/`TIME_OF_DAY`.
-  Not yet build-verified. (complete 4 September 2026, build verification pending)
+  Build-verified (both `cis_imx708` and `cis_hm0360` variants, 5 September 2026);
+  not yet device-tested. (complete 4 September 2026, build-verified 5 September 2026)
 
 * Skip NN initialisation entirely for a throwaway light-check-only wake
   (`aeCheckOnlyWake`, `image_task.c`) - Charles noticed, after installing a real NN
@@ -222,7 +224,8 @@ and are coloured cyan. That will make it easier for humans to review these lines
   processed until the task's main loop starts, after all of this init work
   completes, so simply reordering two adjacent calls would not achieve real
   overlap) - treated as a separate, bigger investigation if wanted later.
-  Not yet build-verified. (complete 4 September 2026, build verification pending)
+  Build-verified (both `cis_imx708` and `cis_hm0360` variants, 5 September 2026);
+  not yet device-tested. (complete 4 September 2026, build-verified 5 September 2026)
 
 * Fixed a STROBE-flicker bug in `decideDarkBrightGainBased()` (`lightSensor.c`),
   found by Charles bench-testing `ae_stream.py --capture` with the flash enabled
@@ -279,7 +282,8 @@ and are coloured cyan. That will make it easier for humans to review these lines
   the MakerNote EXIF field, which `image_task.c` populates from its own,
   always-unconditional single AE-register read, independent of which
   `lightSensor.c` algorithm is active.
-  Not yet build-verified. (complete 1 September 2026, build verification pending)
+  Build-verified (both `cis_imx708` and `cis_hm0360` variants, 5 September 2026);
+  not yet device-tested. (complete 1 September 2026, build-verified 5 September 2026)
 
 * Fixed an EXIF/MakerNote flash-state off-by-one bug, found while building a new
   bench tool (`_Tools/jpegAE_annotate.py`, burns the MakerNote AE fields plus the
@@ -309,7 +313,8 @@ and are coloured cyan. That will make it easier for humans to review these lines
   only, `image_task.c` ~lines 1038/1055) reads `ledFlashIsActive()` at the same late
   point in the same frame's handling, so it likely has the identical staleness
   problem for the flash argument it passes in.
-  Not yet build-verified. (complete 1 September 2026, build verification pending)
+  Build-verified (both `cis_imx708` and `cis_hm0360` variants, 5 September 2026);
+  not yet device-tested. (complete 1 September 2026, build-verified 5 September 2026)
 
 * Found and fixed a date-rollover bug in `exif_utc.c` while investigating why the
   periodic AE-check-interval timer wake stopped working (Charles saw

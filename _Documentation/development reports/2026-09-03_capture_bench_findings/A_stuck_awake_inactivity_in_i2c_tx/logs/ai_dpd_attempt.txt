@@ -1,0 +1,132 @@
+# 19:35:32, after the power cycle: 'AI dpd' sent from the app's Engineer Console to test whether its own reply reproduces finding A. It did not: the reply's I2C transmission finished inside the 1 ms period and the IF task took its Inactivity event in Idle. Same three-way logger; times are MM:SS.mmm from 18:27:23.
+#
+[68:07.763] app   | [BLE Heartbeat] 58s idle — sending heartbeat (get heartbeat)...
+[68:07.800] app   | Written get heartbeat to the device WILD-CNKW (19:35:32-139)
+[68:07.955] app   | [BLE Heartbeat] Heartbeat sent. Timer will reset on response.
+[68:08.052] app   | Written AI dpd to the device WILD-CNKW (19:35:32-400)
+[68:08.114] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: heartbeat is 12h
+[68:08.197] nrf   | BLE in: Received  13 bytes 'get heartbeat'
+[68:08.197] nrf   | BLE out: Sent  17 bytes: 'heartbeat is 12h'
+[68:08.197] nrf   | BLE in: Received   6 bytes 'AI dpd'
+[68:08.197] nrf   | <info> app: AI state machine bumped with 'Msg to AI' (Current state: SLEEP)
+[68:08.197] nrf   | <info> app: AI processor is in DPD. Waking it. (dpd)
+[68:08.198] himax | slot flash_offset 0x00100000
+[68:08.198] himax | **** WW500 MD. (WW500_C02) Built: 13:32:59 Sep  3 2026 ****
+[68:08.198] himax | Git branch: 'nogit' nogit-dirty
+[68:08.198] himax | Wakeup_event = 0x0000, WakeupEvt1 = 0x0001 WAKE signal
+[68:08.198] himax | Enabling RP SENSOR_ENABLE
+[68:08.513] himax | PCA9574 present at 0x20
+[68:08.513] himax | DEBUG: ledFlashSelectLED(0)
+[68:08.513] himax | Initialised LED Flash
+[68:08.513] himax | HM0360 present at 0x24
+[68:08.513] himax | Main camera present at 0x1a
+[68:08.513] himax | Disabling RP SENSOR_ENABLE
+[68:08.513] himax | ### Warm Boot ###
+[68:08.513] himax | Woke at 2024:01:01 00:01:46 
+[68:08.513] himax | BLE wake
+[68:08.513] himax | Initialising FreeRTOS tasks
+[68:08.513] himax | FreeRTOS scheduler started.
+[68:08.513] himax | Starting CLI Task
+[68:08.513] himax | Enter 'help' to view a list of available commands.
+[68:08.513] himax | cmd> Starting IFTask
+[68:08.513] himax | I2C slave instance 0 configured at address 0x62
+[68:08.513] himax | I2C buffers have 256 bytes, payload is 244
+[68:08.513] himax | Starting FatFS Task
+[68:08.813] himax | Mounting FatFS on SD card OK
+[68:08.813] himax | Directory '/MANIFEST' exists
+[68:08.813] himax | SD card initialised. CWD is '0:/'
+[68:08.813] himax | Loading configuration: CWD is '0:/MANIFEST'
+[68:08.813] himax | 'CONFIG.TXT' found. (Next image #27), camera enabled. Flash brightness 89
+[68:08.813] himax | Retaining existing images directory (20 <= 100) '/MEDIA/00000000/IMAGES.000'
+[68:08.813] himax | Directory '/MEDIA/00000000/IMAGES.000' exists
+[68:08.813] himax | FatFs setup took 249ms
+[68:08.813] himax | Inactivity period set at 1000ms
+[68:08.813] himax | IF Task received event 'Awake' (0x070f). Rx data = 0x00000000
+[68:08.813] himax | Starting Image Task
+[68:08.813] himax | Image 2304 x 1296. Raw buffer 460800. JPEG buffer 115860. JPEG compression x4
+[68:08.813] himax | Enabling RP SENSOR_ENABLE
+[68:08.813] himax | Memory allocated: 460800 for raw buffer, 115860 for JPEG, 100 for JPEG header
+[68:08.813] himax | mclk DIV3, xshutdown_pin=82
+[68:08.813] himax | Quad Bayer re-mosaic adjustments ON
+[68:08.813] himax | CWD is '0:/MANIFEST'
+[68:08.813] himax | Error opening '0:/RPV3_EX.BIN': 4
+[68:08.813] himax | sensor_type: 15
+[68:08.813] himax | DEBUG: ledFlashBrightness(89%) [brbits = 0xd]
+[68:08.813] himax | DEBUG: ledFlashSelectLED(0)
+[68:08.813] himax | [LS] In ledFlashSetFlashModeFromOpParam with 0 Mode 0
+[68:08.813] himax | DEBUG: ledFlashDisable()
+[68:08.813] himax | Not initialising NN (project ID is 0)
+[68:08.813] himax | No model found.
+[68:08.813] himax | NN Initialisation took 9ms TODO - consider doing this after taking the picture!
+[68:08.813] himax | Image sensor and data path initialised for camera RP v3
+[68:08.813] himax |   Camera system enabled.
+[68:08.813] himax |   Neural network disabled.
+[68:08.813] himax |   Flash LED(s) in use: 0
+[68:08.813] himax |   Flash brightness: 89%
+[68:08.813] himax |   Light is currently LIGHT.
+[68:08.813] himax |   Flash duration 100ms
+[68:08.813] himax |   MD disabled.
+[68:08.813] himax |   Timelapse disabled.
+[68:08.813] himax | IF Task received event 'FreeRTOS Initialised' (0x0710). Rx data = 0x00000000
+[68:08.898] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: Wake
+[68:09.048] himax | IF Task received event 'I2C Rx' (0x0700). Rx data = 0x00000000
+[68:09.048] himax | Received I2C message.
+[68:09.048] himax | MKL62BA command received: 'selftest'
+[68:09.048] himax | selfTest 0000
+[68:09.048] himax | IF Task received event 'String Response' (0x0703). Rx data = 0x3000ea30
+[68:09.048] himax | IF Task received event 'I2C Rx' (0x0700). Rx data = 0x00000000
+[68:09.048] himax | Received I2C message.
+[68:09.048] himax | MKL62BA command received: 'dpd'
+[68:09.048] himax | Forcing DPD by clearing inactivity period
+[68:09.048] himax | IF Task received event 'String Response' (0x0703). Rx data = 0x3000ea30
+[68:09.048] himax | Inactive for 1ms
+[68:09.048] himax | IMAGE Task received event 'Image Event Inactivity' (0x0a00). Rx data = 0x00000000
+[68:09.048] himax | IMAGE Task state changed from 'Init' (1) to 'Save State' (5)
+[68:09.048] himax | FatFS Task received event 'Save State' (0x0904). Rx data = 0x00000000
+[68:09.048] himax | Saved state to SD card. Image sequence number = 27
+[68:09.048] himax | FatFS task sending event 0x0a06. Tx data = 0x00000000
+[68:09.048] himax | IMAGE task sending event 0x0904. Rx data = 0x00000000
+[68:09.048] himax | IMAGE Task received event 'Image Event Disk Write Complete' (0x0a06). Rx data = 0x00000000
+[68:09.048] himax | Image task ready to sleep.
+[68:09.048] himax | IMAGE Task state changed from 'Save State' (5) to 'Uninitialised' (0)
+[68:09.048] himax | IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+[68:09.048] himax | Inactive for 1ms
+[68:09.048] himax | IMAGE Task received event 'Image Event Inactivity' (0x0a00). Rx data = 0x00000000
+[68:09.048] himax | IMAGE task unhandled event 'Image Event Inactivity' in 'Uninitialised'
+[68:09.048] himax | IF Task received event 'Message to Master' (0x070d). Rx data = 0x300113b8
+[68:09.048] himax | Deferring event 0x070d
+[68:09.048] himax | IF task ready to sleep.
+[68:09.084] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: Error bits = 0x0000
+[68:09.158] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: Forcing DPD by clearing inactivity period
+[68:09.281] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: Sleep
+[68:09.363] himax | DEBUG: ledFlashDisable()
+[68:09.363] himax | Preparing HM0360 for MD:   HM0360 Motion Detection off.
+[68:09.363] himax |    Inhibiting MD
+[68:09.363] himax |    Changing mode from 2 to 2 with nFrames=1, sleepTime=0 sleepCount = 0xffff
+[68:09.363] himax |  No LED flashes.
+[68:09.363] himax | >>> Entering DPD at 2024:01:01 00:01:47
+[68:09.414] nrf   | <info> app: AI state machine bumped with 'Wake' (Current state: SLEEP)
+[68:09.414] nrf   | <info> app: BLE and AI time differ by 711s - too much!
+[68:09.414] nrf   | <info> app: AI state changed from SLEEP to WOKEN
+[68:09.414] nrf   | BLE out: Sent   5 bytes: 'Wake'
+[68:09.414] nrf   | <info> app: AI State machine scheduler called with event 8 'Send SelfTest'
+[68:09.414] nrf   | <info> app: AI state machine bumped with 'Send SelfTest' (Current state: WOKEN)
+[68:09.414] nrf   | Sending 'selftest' to AI processor (4 ctrl bytes, 8 payload, 2 CRC)<info> app: OK
+[68:09.414] nrf   | <info> app: AI state changed from WOKEN to SELFTEST
+[68:09.414] nrf   | <info> app: I2C TX complete: 14 bytes.
+[68:09.414] nrf   | <info> app: AI state machine bumped with 'Selftest Rx' (Current state: SELFTEST)
+[68:09.414] nrf   | <info> app: AI self test bits = 0x0000 (all bits now 0x0000)
+[68:09.414] nrf   | <info> app: Can't send UTC
+[68:09.414] nrf   | <info> app: AI state changed from SELFTEST to IDLE
+[68:09.414] nrf   | BLE out: Sent  20 bytes: 'Error bits = 0x0000'
+[68:09.414] nrf   | <info> app: AI State machine scheduler called with event 12 'Msg to AI'
+[68:09.414] nrf   | <info> app: AI state machine bumped with 'Msg to AI' (Current state: IDLE)
+[68:09.414] nrf   | Sending 'dpd' to AI processor (4 ctrl bytes, 3 payload, 2 CRC)<info> app: AI state changed from IDLE to PROCESSING
+[68:09.414] nrf   | <info> app: I2C TX complete: 9 bytes.
+[68:09.414] nrf   | <info> app: AI processor replies: 'Forcing DPD by clearing inactivity period'
+[68:09.414] nrf   | <info> app: AI state changed from PROCESSING to IDLE
+[68:09.414] nrf   | BLE out: Sent  42 bytes: 'Forcing DPD by clearing inactivity period'
+[68:09.414] nrf   | <info> app: AI state machine bumped with 'Sleep' (Current state: IDLE)
+[68:09.414] nrf   | <info> app: AI processor sends stats: '27 0 0 9 88 1 500 0 1000 89 1 0 100 0 0 0 18 1 0 20 0 2 50 65 15 0 0 286 326 1 110 1 '
+[68:09.414] nrf   | <info> app: AI state changed from IDLE to SLEEP
+[68:09.414] nrf   | BLE out: Sent   6 bytes: 'Sleep'

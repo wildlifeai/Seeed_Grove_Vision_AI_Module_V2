@@ -1,0 +1,1114 @@
+[2026-09-16 20:50:56.287] 1st BL Modem Build DATE=Jan 17 2025, Version: 2.12
+[2026-09-16 20:50:56.287] Please input any key to enter X-Modem mode in 30 ms 
+[2026-09-16 20:50:56.287] waiting input key...
+[2026-09-16 20:50:56.303] slot flash_offset 0x00100000
+[2026-09-16 20:50:56.303] New MemDesp himax_sec_SB_image_process PASS
+[2026-09-16 20:50:56.303] set_memory_s_ns
+[2026-09-16 20:50:56.303] HX_DSP_FLAG 1
+[2026-09-16 20:50:56.351] jump_addr=0x10000000
+[2026-09-16 20:50:56.351] Compiler Version: ARM GNU, 14.3.1 20250623
+[2026-09-16 20:50:56.351] 
+[2026-09-16 20:50:56.351] **** WW500 MD. (WW500_C02) Built: 05:31:27 Sep 15 2026 ****
+[2026-09-16 20:50:56.351] 
+[2026-09-16 20:50:56.351] Git branch: 'dev' bcb45deb
+[2026-09-16 20:50:56.351] Compiler Version: ARM GNU, 14.3.1 20250623
+[2026-09-16 20:50:56.351] 
+[2026-09-16 20:50:56.351] Wakeup_event = 0x0000, WakeupEvt1 = 0x0000 Cold boot
+[2026-09-16 20:50:56.351] Camera: HM0360
+[2026-09-16 20:50:56.351] PCA9574 present at 0x20
+[2026-09-16 20:50:56.351] DEBUG: ledFlashSelectLED(0)
+[2026-09-16 20:50:56.351] Initialised LED Flash
+[2026-09-16 20:50:56.351] HM0360 present at 0x24
+[2026-09-16 20:50:56.351] Main camera present at 0x24
+[2026-09-16 20:50:57.053] 1st BL Modem Build DATE=Jan 17 2025, Version: 2.12
+[2026-09-16 20:50:57.053] Please input any key to enter X-Modem mode in 30 ms 
+[2026-09-16 20:50:57.053] waiting input key...
+[2026-09-16 20:50:57.069] slot flash_offset 0x00100000
+[2026-09-16 20:50:57.069] New MemDesp himax_sec_SB_image_process PASS
+[2026-09-16 20:50:57.069] set_memory_s_ns
+[2026-09-16 20:50:57.069] HX_DSP_FLAG 1
+[2026-09-16 20:50:57.085] jump_addr=0x10000000
+[2026-09-16 20:50:57.085] Compiler Version: ARM GNU, 14.3.1 20250623
+[2026-09-16 20:50:57.101] 
+[2026-09-16 20:50:57.101] **** WW500 MD. (WW500_C02) Built: 05:31:27 Sep 15 2026 ****
+[2026-09-16 20:50:57.101] 
+[2026-09-16 20:50:57.101] Git branch: 'dev' bcb45deb
+[2026-09-16 20:50:57.101] Compiler Version: ARM GNU, 14.3.1 20250623
+[2026-09-16 20:50:57.101] 
+[2026-09-16 20:50:57.101] Wakeup_event = 0x0000, WakeupEvt1 = 0x0000 Cold boot
+[2026-09-16 20:50:57.101] Camera: HM0360
+[2026-09-16 20:50:57.101] PCA9574 present at 0x20
+[2026-09-16 20:50:57.101] DEBUG: ledFlashSelectLED(0)
+[2026-09-16 20:50:57.101] Initialised LED Flash
+[2026-09-16 20:50:57.101] HM0360 present at 0x24
+[2026-09-16 20:50:57.101] Main camera present at 0x24
+[2026-09-16 20:50:57.705] 
+[2026-09-16 20:50:57.705] ### Cold Boot ###
+[2026-09-16 20:50:57.705] FreeRTOS tickless idle is enabled. configMAX_PRIORITIES = 5
+[2026-09-16 20:50:59.139] Initialising FreeRTOS tasks
+[2026-09-16 20:50:59.140] Created task 'CLI' Priority 4
+[2026-09-16 20:50:59.140] Created task 'IFTask' Priority 3
+[2026-09-16 20:50:59.140] Created task 'FAT' Priority 2
+[2026-09-16 20:50:59.140] Created task 'IMAGE' Priority 1
+[2026-09-16 20:50:59.140] FreeRTOS scheduler started.
+[2026-09-16 20:50:59.140] Starting CLI Task
+[2026-09-16 20:50:59.140] 
+[2026-09-16 20:50:59.140] Enter 'help' to view a list of available commands.
+[2026-09-16 20:50:59.140] cmd> Starting IFTask
+[2026-09-16 20:50:59.140] I2C slave instance 0 configured at address 0x62
+[2026-09-16 20:50:59.140] I2C buffers have 256 bytes, payload is 244
+[2026-09-16 20:50:59.140] Starting FatFS Task
+[2026-09-16 20:50:59.145] Mounting FatFS on SD card OK
+[2026-09-16 20:50:59.361] Creating directory '/MANIFEST'
+[2026-09-16 20:50:59.441] SD card initialised. CWD is '0:/'
+[2026-09-16 20:50:59.442] Loading configuration: CWD is '0:/MANIFEST'
+[2026-09-16 20:50:59.442] Failed to open config file: 4
+[2026-09-16 20:50:59.442] 'CONFIG.TXT' NOT found.
+[2026-09-16 20:50:59.442] Retaining existing images directory (0 <= 100) '/MEDIA/00000000/IMAGES.000'
+[2026-09-16 20:50:59.442] Creating directory '/MEDIA/00000000/IMAGES.000'
+[2026-09-16 20:50:59.680] FatFs setup took 540ms
+[2026-09-16 20:50:59.680] Inactivity period set at 1000ms
+[2026-09-16 20:51:00.682] 
+[2026-09-16 20:51:00.682] IF Task received event 'Awake' (0x070f). Rx data = 0x00000000
+[2026-09-16 20:51:00.682] Starting Image Task
+[2026-09-16 20:51:00.682] Flash ID 0xEF initialised
+[2026-09-16 20:51:00.682] Image 640 x 480. Raw buffer 460800. JPEG buffer 115860. JPEG compression x4
+[2026-09-16 20:51:00.682] Initialising HM0360 at 0x24 (p.u. delay 1ms)
+[2026-09-16 20:51:00.682] Memory allocated: 460800 for raw buffer, 115860 for JPEG, 100 for JPEG header
+[2026-09-16 20:51:00.682]    Inhibiting MD
+[2026-09-16 20:51:00.682]    Changing mode from 0 to 0 with nFrames=0, sleepTime=0 sleepCount = 0xffff
+[2026-09-16 20:51:00.905] HM0360 Init 
+[2026-09-16 20:51:00.905] HM0360 Init Mirror Off
+[2026-09-16 20:51:00.905] HM0360 Init finished
+[2026-09-16 20:51:00.905] HM0360 MD sensitivity 1
+[2026-09-16 20:51:00.905] CWD is '0:/MANIFEST'
+[2026-09-16 20:51:00.905] Error opening '0:/HM0360EX.BIN': 4
+[2026-09-16 20:51:00.905] sensor_type: 8
+[2026-09-16 20:51:00.921] DEBUG: ledFlashBrightness(5%) [brbits = 0x0]
+[2026-09-16 20:51:00.921] DEBUG: ledFlashSelectLED(0)
+[2026-09-16 20:51:00.921] [LS] In ledFlashSetFlashModeFromOpParam with 0 Mode 0
+[2026-09-16 20:51:00.921] DEBUG: ledFlashDisable()
+[2026-09-16 20:51:00.921] 
+[2026-09-16 20:51:00.921] Not initialising NN (project ID is 0)
+[2026-09-16 20:51:00.921] No model found.
+[2026-09-16 20:51:00.921] NN Initialisation took 9ms TODO - consider doing this after taking the picture!
+[2026-09-16 20:51:00.921] 
+[2026-09-16 20:51:00.921] Image sensor and data path initialised for camera HM0360
+[2026-09-16 20:51:00.921]   Camera system enabled.
+[2026-09-16 20:51:00.921]   Neural network disabled.
+[2026-09-16 20:51:00.921]   Flash LED(s) in use: 0
+[2026-09-16 20:51:00.921]   Flash brightness: 5%
+[2026-09-16 20:51:00.921]   Flash is currently not armed.
+[2026-09-16 20:51:00.921]   MD disabled.
+[2026-09-16 20:51:00.921]   Timelapse disabled.
+[2026-09-16 20:51:00.921] 
+[2026-09-16 20:51:00.921] IF Task received event 'FreeRTOS Initialised' (0x0710). Rx data = 0x00000000
+[2026-09-16 20:51:00.921] Assert inter-processor interrupt.
+[2026-09-16 20:51:00.921] Sending 31 bytes: Header 4, payload 25, checksum 2 'Wake 2024-01-01T00:00:02Z'
+[2026-09-16 20:51:00.921] 000: 80 04 19 00 57 61 6b 65  20 32 30 32 34 2d 30 31 ....Wake 2024-01
+[2026-09-16 20:51:00.921] 010: 2d 30 31 54 30 30 3a 30  30 3a 30 32 5a bf 51    -01T00:00:02Z.Q 
+[2026-09-16 20:51:00.937] Negate inter-processor interrupt.
+[2026-09-16 20:51:00.937] IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+[2026-09-16 20:51:01.718] Inactive for 1000ms
+[2026-09-16 20:51:01.718] IMAGE Task received event 'Image Event Inactivity' (0x0a00). Rx data = 0x00000000
+[2026-09-16 20:51:01.718] IMAGE Task state changed from 'Init' (1) to 'Save State' (5)
+[2026-09-16 20:51:01.718] 
+[2026-09-16 20:51:01.718] FatFS Task received event 'Save State' (0x0904). Rx data = 0x00000000
+[2026-09-16 20:51:01.724] Saved state to SD card. Image sequence number = 0
+[2026-09-16 20:51:01.724] FatFS task sending event 0x0a06. Tx data = 0x00000000
+[2026-09-16 20:51:01.724] IMAGE task sending event 0x0904. Rx data = 0x00000000
+[2026-09-16 20:51:01.724] 
+[2026-09-16 20:51:01.724] IMAGE Task received event 'Image Event Disk Write Complete' (0x0a06). Rx data = 0x00000000
+[2026-09-16 20:51:01.724] Image task ready to sleep.
+[2026-09-16 20:51:01.724] IMAGE Task state changed from 'Save State' (5) to 'Uninitialised' (0)
+[2026-09-16 20:51:01.724] 
+[2026-09-16 20:51:01.724] 
+[2026-09-16 20:51:01.724] IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+[2026-09-16 20:51:01.724] Deferring event 0x070e
+[2026-09-16 20:51:02.799] Inactive for 1000ms
+[2026-09-16 20:51:02.799] IMAGE Task received event 'Image Event Inactivity' (0x0a00). Rx data = 0x00000000
+[2026-09-16 20:51:02.799] IMAGE task unhandled event 'Image Event Inactivity' in 'Uninitialised'
+[2026-09-16 20:51:02.799] 
+[2026-09-16 20:51:02.799] IF Task received event 'Message to Master' (0x070d). Rx data = 0x30011108
+[2026-09-16 20:51:02.799] Deferring event 0x070d
+[2026-09-16 20:51:02.804] 
+[2026-09-16 20:51:02.804] 
+[2026-09-16 20:51:02.804] IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+[2026-09-16 20:51:02.804] Deferring event 0x070e
+[2026-09-16 20:51:03.882] Inactive for 1000ms
+[2026-09-16 20:51:03.882] IMAGE Task received event 'Image Event Inactivity' (0x0a00). Rx data = 0x00000000
+[2026-09-16 20:51:03.882] IMAGE task unhandled event 'Image Event Inactivity' in 'Uninitialised'
+[2026-09-16 20:51:03.882] 
+[2026-09-16 20:51:03.882] IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+[2026-09-16 20:51:03.882] Deferring event 0x070e
+[2026-09-16 20:51:04.934] 
+[2026-09-16 20:51:04.934] IF Task received event 'MM Timer' (0x070a). Rx data = 0x00000000
+[2026-09-16 20:51:04.935] I2C master did not read our I2C message
+[2026-09-16 20:51:04.935] I2C transmission complete.
+[2026-09-16 20:51:04.935] IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+[2026-09-16 20:51:04.935] Issuing deferred event 0x070e 'Inactivity'
+[2026-09-16 20:51:04.935] IFTask sending event 0x070e. Tx data = 0x00000000
+[2026-09-16 20:51:04.935] 
+[2026-09-16 20:51:04.935] IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+[2026-09-16 20:51:04.935] Assert inter-processor interrupt.
+[2026-09-16 20:51:04.935] Sending 103 bytes: Header 4, payload 97, checksum 2 'Sleep 0 0 0 1 0 1 500 0 1000 5 1 0 100 0 0 0 18 1 0 0 0 2 50 65 15 0 0 286 326 1 110 1 0 0 0 0 0 '
+[2026-09-16 20:51:04.935] 000: 80 04 61 00 53 6c 65 65  70 20 30 20 30 20 30 20 ..a.Sleep 0 0 0 
+[2026-09-16 20:51:04.942] 010: 31 20 30 20 31 20 35 30  30 20 30 20 31 30 30 30 1 0 1 500 0 1000
+[2026-09-16 20:51:04.942] 020: 20 35 20 31 20 30 20 31  30 30 20 30 20 30 20 30  5 1 0 100 0 0 0
+[2026-09-16 20:51:04.942] 030: 20 31 38 20 31 20 30 20  30 20 30 20 32 20 35 30  18 1 0 0 0 2 50
+[2026-09-16 20:51:04.942] 040: 20 36 35 20 31 35 20 30  20 30 20 32 38 36 20 33  65 15 0 0 286 3
+[2026-09-16 20:51:04.942] 050: 32 36 20 31 20 31 31 30  20 31 20 30 20 30 20 30 26 1 110 1 0 0 0
+[2026-09-16 20:51:04.942] 060: 20 30 20 30 20 b4 89                              0 0 ..         
+[2026-09-16 20:51:04.942] Negate inter-processor interrupt.
+[2026-09-16 20:51:04.942] IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+[2026-09-16 20:51:04.942] Sent to iftask 0x70a
+[2026-09-16 20:51:04.942] 
+[2026-09-16 20:51:04.942] IF Task received event 'Message to Master' (0x070d). Rx data = 0x30011108
+[2026-09-16 20:51:04.942] Deferring event 0x070d
+[2026-09-16 20:51:04.942] 
+[2026-09-16 20:51:05.983] Inactive for 1000ms
+[2026-09-16 20:51:05.983] IMAGE Task received event 'Image Event Inactivity' (0x0a00). Rx data = 0x00000000
+[2026-09-16 20:51:05.983] IMAGE task unhandled event 'Image Event Inactivity' in 'Uninitialised'
+[2026-09-16 20:51:05.983] 
+[2026-09-16 20:51:05.983] IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+[2026-09-16 20:51:05.983] Deferring event 0x070e
+[2026-09-16 20:51:07.048] Inactive for 1000ms
+[2026-09-16 20:51:07.048] 
+[2026-09-16 20:51:07.048] IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+[2026-09-16 20:51:07.048] Deferring event 0x070e
+[2026-09-16 20:51:08.117] Inactive for 1000ms
+[2026-09-16 20:51:08.117] 
+[2026-09-16 20:51:08.117] IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+[2026-09-16 20:51:08.117] Deferring event 0x070e
+[2026-09-16 20:51:08.945] 
+[2026-09-16 20:51:08.945] IF Task received event 'MM Timer' (0x070a). Rx data = 0x00000000
+[2026-09-16 20:51:08.945] I2C master did not read our I2C message
+[2026-09-16 20:51:08.945] I2C transmission complete.
+[2026-09-16 20:51:08.945] IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+[2026-09-16 20:51:08.945] Issuing deferred event 0x070e 'Inactivity'
+[2026-09-16 20:51:08.945] IFTask sending event 0x070e. Tx data = 0x00000000
+[2026-09-16 20:51:08.945] 
+[2026-09-16 20:51:08.945] IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+[2026-09-16 20:51:08.945] Assert inter-processor interrupt.
+[2026-09-16 20:51:08.945] Sending 103 bytes: Header 4, payload 97, checksum 2 'Sleep 0 0 0 1 0 1 500 0 1000 5 1 0 100 0 0 0 18 1 0 0 0 2 50 65 15 0 0 286 326 1 110 1 0 0 0 0 0 '
+[2026-09-16 20:51:08.945] 000: 80 04 61 00 53 6c 65 65  70 20 30 20 30 20 30 20 ..a.Sleep 0 0 0 
+[2026-09-16 20:51:08.945] 010: 31 20 30 20 31 20 35 30  30 20 30 20 31 30 30 30 1 0 1 500 0 1000
+[2026-09-16 20:51:08.945] 020: 20 35 20 31 20 30 20 31  30 30 20 30 20 30 20 30  5 1 0 100 0 0 0
+[2026-09-16 20:51:08.945] 030: 20 31 38 20 31 20 30 20  30 20 30 20 32 20 35 30  18 1 0 0 0 2 50
+[2026-09-16 20:51:08.945] 040: 20 36 35 20 31 35 20 30  20 30 20 32 38 36 20 33  65 15 0 0 286 3
+[2026-09-16 20:51:08.945] 050: 32 36 20 31 20 31 31 30  20 31 20 30 20 30 20 30 26 1 110 1 0 0 0
+[2026-09-16 20:51:08.945] 060: 20 30 20 30 20 b4 89                              0 0 ..         
+[2026-09-16 20:51:08.945] Negate inter-processor interrupt.
+[2026-09-16 20:51:08.945] IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+[2026-09-16 20:51:08.945] Sent to iftask 0x70a
+[2026-09-16 20:51:08.945] 
+[2026-09-16 20:51:08.945] IF Task received event 'Message to Master' (0x070d). Rx data = 0x30011108
+[2026-09-16 20:51:08.961] Deferring event 0x070d
+[2026-09-16 20:51:08.961] 
+[2026-09-16 20:51:08.961] IMAGE Task received event 'Image Event Inactivity' (0x0a00). Rx data = 0x00000000
+[2026-09-16 20:51:08.961] IMAGE task unhandled event 'Image Event Inactivity' in 'Uninitialised'
+[2026-09-16 20:51:09.996] Inactive for 1000ms
+[2026-09-16 20:51:09.996] 
+[2026-09-16 20:51:09.996] IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+[2026-09-16 20:51:09.996] Deferring event 0x070e
+[2026-09-16 20:51:11.064] Inactive for 1000ms
+[2026-09-16 20:51:11.064] 
+[2026-09-16 20:51:11.064] IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+[2026-09-16 20:51:11.064] Deferring event 0x070e
+[2026-09-16 20:51:11.954] I2C busy - not sending message to master
+[2026-09-16 20:51:11.954] 
+[2026-09-16 20:51:11.954] IMAGE Task received event 'Image Event Inactivity' (0x0a00). Rx data = 0x00000000
+[2026-09-16 20:51:11.954] IMAGE task unhandled event 'Image Event Inactivity' in 'Uninitialised'
+[2026-09-16 20:51:12.970] 
+[2026-09-16 20:51:12.970] IF Task received event 'MM Timer' (0x070a). Rx data = 0x00000000
+[2026-09-16 20:51:12.970] I2C master did not read our I2C message
+[2026-09-16 20:51:12.970] I2C transmission complete.
+[2026-09-16 20:51:12.970] IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+[2026-09-16 20:51:12.970] Issuing deferred event 0x070e 'Inactivity'
+[2026-09-16 20:51:12.970] IFTask sending event 0x070e. Tx data = 0x00000000
+[2026-09-16 20:51:12.970] 
+[2026-09-16 20:51:12.970] IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+[2026-09-16 20:51:12.970] Assert inter-processor interrupt.
+[2026-09-16 20:51:12.970] Sending 103 bytes: Header 4, payload 97, checksum 2 'Sleep 0 0 0 1 0 1 500 0 1000 5 1 0 100 0 0 0 18 1 0 0 0 2 50 65 15 0 0 286 326 1 110 1 0 0 0 0 0 '
+[2026-09-16 20:51:12.970] 000: 80 04 61 00 53 6c 65 65  70 20 30 20 30 20 30 20 ..a.Sleep 0 0 0 
+[2026-09-16 20:51:12.970] 010: 31 20 30 20 31 20 35 30  30 20 30 20 31 30 30 30 1 0 1 500 0 1000
+[2026-09-16 20:51:12.970] 020: 20 35 20 31 20 30 20 31  30 30 20 30 20 30 20 30  5 1 0 100 0 0 0
+[2026-09-16 20:51:12.970] 030: 20 31 38 20 31 20 30 20  30 20 30 20 32 20 35 30  18 1 0 0 0 2 50
+[2026-09-16 20:51:12.970] 040: 20 36 35 20 31 35 20 30  20 30 20 32 38 36 20 33  65 15 0 0 286 3
+[2026-09-16 20:51:12.970] 050: 32 36 20 31 20 31 31 30  20 31 20 30 20 30 20 30 26 1 110 1 0 0 0
+[2026-09-16 20:51:12.970] 060: 20 30 20 30 20 b4 89                              0 0 ..         
+[2026-09-16 20:51:12.970] Negate inter-processor interrupt.
+[2026-09-16 20:51:12.970] IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+[2026-09-16 20:51:12.975] Sent to iftask 0x70a
+[2026-09-16 20:51:12.975] 
+[2026-09-16 20:51:12.975] IF Task received event 'Message to Master' (0x070d). Rx data = 0x30011108
+[2026-09-16 20:51:12.975] Deferring event 0x070d
+[2026-09-16 20:51:12.975] 
+[2026-09-16 20:51:12.975] IMAGE Task received event 'Image Event Inactivity' (0x0a00). Rx data = 0x00000000
+[2026-09-16 20:51:12.975] IMAGE task unhandled event 'Image Event Inactivity' in 'Uninitialised'
+[2026-09-16 20:51:14.005] Inactive for 1000ms
+[2026-09-16 20:51:14.005] 
+[2026-09-16 20:51:14.005] IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+[2026-09-16 20:51:14.005] Deferring event 0x070e
+[2026-09-16 20:51:15.072] Inactive for 1000ms
+[2026-09-16 20:51:15.072] 
+[2026-09-16 20:51:15.073] IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+[2026-09-16 20:51:15.073] Deferring event 0x070e
+[2026-09-16 20:51:15.980] I2C busy - not sending message to master
+[2026-09-16 20:51:15.980] 
+[2026-09-16 20:51:15.980] IMAGE Task received event 'Image Event Inactivity' (0x0a00). Rx data = 0x00000000
+[2026-09-16 20:51:15.980] IMAGE task unhandled event 'Image Event Inactivity' in 'Uninitialised'
+[2026-09-16 20:51:16.984] 
+[2026-09-16 20:51:16.984] IF Task received event 'MM Timer' (0x070a). Rx data = 0x00000000
+[2026-09-16 20:51:16.984] I2C master did not read our I2C message
+[2026-09-16 20:51:16.984] I2C transmission complete.
+[2026-09-16 20:51:16.984] IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+[2026-09-16 20:51:16.984] Issuing deferred event 0x070e 'Inactivity'
+[2026-09-16 20:51:16.986] IFTask sending event 0x070e. Tx data = 0x00000000
+[2026-09-16 20:51:16.986] 
+[2026-09-16 20:51:16.986] IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+[2026-09-16 20:51:16.986] Assert inter-processor interrupt.
+[2026-09-16 20:51:16.986] Sending 103 bytes: Header 4, payload 97, checksum 2 'Sleep 0 0 0 1 0 1 500 0 1000 5 1 0 100 0 0 0 18 1 0 0 0 2 50 65 15 0 0 286 326 1 110 1 0 0 0 0 0 '
+[2026-09-16 20:51:16.986] 000: 80 04 61 00 53 6c 65 65  70 20 30 20 30 20 30 20 ..a.Sleep 0 0 0 
+[2026-09-16 20:51:16.988] 010: 31 20 30 20 31 20 35 30  30 20 30 20 31 30 30 30 1 0 1 500 0 1000
+[2026-09-16 20:51:16.988] 020: 20 35 20 31 20 30 20 31  30 30 20 30 20 30 20 30  5 1 0 100 0 0 0
+[2026-09-16 20:51:16.988] 030: 20 31 38 20 31 20 30 20  30 20 30 20 32 20 35 30  18 1 0 0 0 2 50
+[2026-09-16 20:51:16.988] 040: 20 36 35 20 31 35 20 30  20 30 20 32 38 36 20 33  65 15 0 0 286 3
+[2026-09-16 20:51:16.988] 050: 32 36 20 31 20 31 31 30  20 31 20 30 20 30 20 30 26 1 110 1 0 0 0
+[2026-09-16 20:51:16.988] 060: 20 30 20 30 20 b4 89                              0 0 ..         
+[2026-09-16 20:51:16.988] Negate inter-processor interrupt.
+[2026-09-16 20:51:16.988] IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+[2026-09-16 20:51:16.988] Sent to iftask 0x70a
+[2026-09-16 20:51:16.988] 
+[2026-09-16 20:51:16.988] IF Task received event 'Message to Master' (0x070d). Rx data = 0x30011108
+[2026-09-16 20:51:17.000] Deferring event 0x070d
+[2026-09-16 20:51:17.000] 
+[2026-09-16 20:51:17.001] IMAGE Task received event 'Image Event Inactivity' (0x0a00). Rx data = 0x00000000
+[2026-09-16 20:51:17.001] IMAGE task unhandled event 'Image Event Inactivity' in 'Uninitialised'
+[2026-09-16 20:51:18.002] Inactive for 1000ms
+[2026-09-16 20:51:18.002] 
+[2026-09-16 20:51:18.002] IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+[2026-09-16 20:51:18.002] Deferring event 0x070e
+[2026-09-16 20:51:19.085] Inactive for 1000ms
+[2026-09-16 20:51:19.086] 
+[2026-09-16 20:51:19.086] IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+[2026-09-16 20:51:19.087] Deferring event 0x070e
+[2026-09-16 20:51:19.993] I2C busy - not sending message to master
+[2026-09-16 20:51:19.993] 
+[2026-09-16 20:51:19.993] IMAGE Task received event 'Image Event Inactivity' (0x0a00). Rx data = 0x00000000
+[2026-09-16 20:51:19.993] IMAGE task unhandled event 'Image Event Inactivity' in 'Uninitialised'
+[2026-09-16 20:51:20.997] 
+[2026-09-16 20:51:20.997] IF Task received event 'MM Timer' (0x070a). Rx data = 0x00000000
+[2026-09-16 20:51:20.997] I2C master did not read our I2C message
+[2026-09-16 20:51:20.997] I2C transmission complete.
+[2026-09-16 20:51:20.997] IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+[2026-09-16 20:51:20.997] Issuing deferred event 0x070e 'Inactivity'
+[2026-09-16 20:51:20.997] IFTask sending event 0x070e. Tx data = 0x00000000
+[2026-09-16 20:51:20.997] 
+[2026-09-16 20:51:20.997] IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+[2026-09-16 20:51:20.997] Assert inter-processor interrupt.
+[2026-09-16 20:51:20.997] Sending 103 bytes: Header 4, payload 97, checksum 2 'Sleep 0 0 0 1 0 1 500 0 1000 5 1 0 100 0 0 0 18 1 0 0 0 2 50 65 15 0 0 286 326 1 110 1 0 0 0 0 0 '
+[2026-09-16 20:51:20.997] 000: 80 04 61 00 53 6c 65 65  70 20 30 20 30 20 30 20 ..a.Sleep 0 0 0 
+[2026-09-16 20:51:21.002] 010: 31 20 30 20 31 20 35 30  30 20 30 20 31 30 30 30 1 0 1 500 0 1000
+[2026-09-16 20:51:21.002] 020: 20 35 20 31 20 30 20 31  30 30 20 30 20 30 20 30  5 1 0 100 0 0 0
+[2026-09-16 20:51:21.002] 030: 20 31 38 20 31 20 30 20  30 20 30 20 32 20 35 30  18 1 0 0 0 2 50
+[2026-09-16 20:51:21.002] 040: 20 36 35 20 31 35 20 30  20 30 20 32 38 36 20 33  65 15 0 0 286 3
+[2026-09-16 20:51:21.002] 050: 32 36 20 31 20 31 31 30  20 31 20 30 20 30 20 30 26 1 110 1 0 0 0
+[2026-09-16 20:51:21.002] 060: 20 30 20 30 20 b4 89                              0 0 ..         
+[2026-09-16 20:51:21.002] Negate inter-processor interrupt.
+[2026-09-16 20:51:21.002] IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+[2026-09-16 20:51:21.002] Sent to iftask 0x70a
+[2026-09-16 20:51:21.002] 
+[2026-09-16 20:51:21.002] IF Task received event 'Message to Master' (0x070d). Rx data = 0x30011108
+[2026-09-16 20:51:21.002] Deferring event 0x070d
+[2026-09-16 20:51:21.002] 
+[2026-09-16 20:51:21.002] IMAGE Task received event 'Image Event Inactivity' (0x0a00). Rx data = 0x00000000
+[2026-09-16 20:51:21.002] IMAGE task unhandled event 'Image Event Inactivity' in 'Uninitialised'
+[2026-09-16 20:51:22.033] Inactive for 1000ms
+[2026-09-16 20:51:22.033] 
+[2026-09-16 20:51:22.033] IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+[2026-09-16 20:51:22.033] Deferring event 0x070e
+[2026-09-16 20:51:23.099] Inactive for 1000ms
+[2026-09-16 20:51:23.099] 
+[2026-09-16 20:51:23.099] IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+[2026-09-16 20:51:23.099] Deferring event 0x070e
+[2026-09-16 20:51:24.005] I2C busy - not sending message to master
+[2026-09-16 20:51:24.005] 
+[2026-09-16 20:51:24.005] IMAGE Task received event 'Image Event Inactivity' (0x0a00). Rx data = 0x00000000
+[2026-09-16 20:51:24.005] IMAGE task unhandled event 'Image Event Inactivity' in 'Uninitialised'
+[2026-09-16 20:51:25.010] 
+[2026-09-16 20:51:25.010] IF Task received event 'MM Timer' (0x070a). Rx data = 0x00000000
+[2026-09-16 20:51:25.010] I2C master did not read our I2C message
+[2026-09-16 20:51:25.010] I2C transmission complete.
+[2026-09-16 20:51:25.010] IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+[2026-09-16 20:51:25.010] Issuing deferred event 0x070e 'Inactivity'
+[2026-09-16 20:51:25.010] IFTask sending event 0x070e. Tx data = 0x00000000
+[2026-09-16 20:51:25.010] 
+[2026-09-16 20:51:25.010] IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+[2026-09-16 20:51:25.010] Assert inter-processor interrupt.
+[2026-09-16 20:51:25.010] Sending 103 bytes: Header 4, payload 97, checksum 2 'Sleep 0 0 0 1 0 1 500 0 1000 5 1 0 100 0 0 0 18 1 0 0 0 2 50 65 15 0 0 286 326 1 110 1 0 0 0 0 0 '
+[2026-09-16 20:51:25.010] 000: 80 04 61 00 53 6c 65 65  70 20 30 20 30 20 30 20 ..a.Sleep 0 0 0 
+[2026-09-16 20:51:25.010] 010: 31 20 30 20 31 20 35 30  30 20 30 20 31 30 30 30 1 0 1 500 0 1000
+[2026-09-16 20:51:25.010] 020: 20 35 20 31 20 30 20 31  30 30 20 30 20 30 20 30  5 1 0 100 0 0 0
+[2026-09-16 20:51:25.010] 030: 20 31 38 20 31 20 30 20  30 20 30 20 32 20 35 30  18 1 0 0 0 2 50
+[2026-09-16 20:51:25.010] 040: 20 36 35 20 31 35 20 30  20 30 20 32 38 36 20 33  65 15 0 0 286 3
+[2026-09-16 20:51:25.010] 050: 32 36 20 31 20 31 31 30  20 31 20 30 20 30 20 30 26 1 110 1 0 0 0
+[2026-09-16 20:51:25.010] 060: 20 30 20 30 20 b4 89                              0 0 ..         
+[2026-09-16 20:51:25.010] Negate inter-processor interrupt.
+[2026-09-16 20:51:25.010] IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+[2026-09-16 20:51:25.010] Sent to iftask 0x70a
+[2026-09-16 20:51:25.010] 
+[2026-09-16 20:51:25.010] IF Task received event 'Message to Master' (0x070d). Rx data = 0x30011108
+[2026-09-16 20:51:25.025] Deferring event 0x070d
+[2026-09-16 20:51:25.025] 
+[2026-09-16 20:51:25.025] IMAGE Task received event 'Image Event Inactivity' (0x0a00). Rx data = 0x00000000
+[2026-09-16 20:51:25.025] IMAGE task unhandled event 'Image Event Inactivity' in 'Uninitialised'
+[2026-09-16 20:51:26.044] Inactive for 1000ms
+[2026-09-16 20:51:26.044] 
+[2026-09-16 20:51:26.044] IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+[2026-09-16 20:51:26.044] Deferring event 0x070e
+[2026-09-16 20:51:27.110] Inactive for 1000ms
+[2026-09-16 20:51:27.110] 
+[2026-09-16 20:51:27.110] IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+[2026-09-16 20:51:27.110] Deferring event 0x070e
+[2026-09-16 20:51:28.017] I2C busy - not sending message to master
+[2026-09-16 20:51:28.017] 
+[2026-09-16 20:51:28.017] IMAGE Task received event 'Image Event Inactivity' (0x0a00). Rx data = 0x00000000
+[2026-09-16 20:51:28.017] IMAGE task unhandled event 'Image Event Inactivity' in 'Uninitialised'
+[2026-09-16 20:51:29.016] 
+[2026-09-16 20:51:29.016] IF Task received event 'MM Timer' (0x070a). Rx data = 0x00000000
+[2026-09-16 20:51:29.016] I2C master did not read our I2C message
+[2026-09-16 20:51:29.016] I2C transmission complete.
+[2026-09-16 20:51:29.016] IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+[2026-09-16 20:51:29.016] Issuing deferred event 0x070e 'Inactivity'
+[2026-09-16 20:51:29.016] IFTask sending event 0x070e. Tx data = 0x00000000
+[2026-09-16 20:51:29.016] 
+[2026-09-16 20:51:29.016] IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+[2026-09-16 20:51:29.016] Assert inter-processor interrupt.
+[2026-09-16 20:51:29.016] Sending 103 bytes: Header 4, payload 97, checksum 2 'Sleep 0 0 0 1 0 1 500 0 1000 5 1 0 100 0 0 0 18 1 0 0 0 2 50 65 15 0 0 286 326 1 110 1 0 0 0 0 0 '
+[2026-09-16 20:51:29.016] 000: 80 04 61 00 53 6c 65 65  70 20 30 20 30 20 30 20 ..a.Sleep 0 0 0 
+[2026-09-16 20:51:29.016] 010: 31 20 30 20 31 20 35 30  30 20 30 20 31 30 30 30 1 0 1 500 0 1000
+[2026-09-16 20:51:29.016] 020: 20 35 20 31 20 30 20 31  30 30 20 30 20 30 20 30  5 1 0 100 0 0 0
+[2026-09-16 20:51:29.016] 030: 20 31 38 20 31 20 30 20  30 20 30 20 32 20 35 30  18 1 0 0 0 2 50
+[2026-09-16 20:51:29.016] 040: 20 36 35 20 31 35 20 30  20 30 20 32 38 36 20 33  65 15 0 0 286 3
+[2026-09-16 20:51:29.016] 050: 32 36 20 31 20 31 31 30  20 31 20 30 20 30 20 30 26 1 110 1 0 0 0
+[2026-09-16 20:51:29.016] 060: 20 30 20 30 20 b4 89                              0 0 ..         
+[2026-09-16 20:51:29.016] Negate inter-processor interrupt.
+[2026-09-16 20:51:29.016] IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+[2026-09-16 20:51:29.016] Sent to iftask 0x70a
+[2026-09-16 20:51:29.016] 
+[2026-09-16 20:51:29.016] IF Task received event 'Message to Master' (0x070d). Rx data = 0x30011108
+[2026-09-16 20:51:29.016] Deferring event 0x070d
+[2026-09-16 20:51:29.016] 
+[2026-09-16 20:51:29.016] IMAGE Task received event 'Image Event Inactivity' (0x0a00). Rx data = 0x00000000
+[2026-09-16 20:51:29.032] IMAGE task unhandled event 'Image Event Inactivity' in 'Uninitialised'
+[2026-09-16 20:51:30.052] Inactive for 1000ms
+[2026-09-16 20:51:30.052] 
+[2026-09-16 20:51:30.052] IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+[2026-09-16 20:51:30.052] Deferring event 0x070e
+[2026-09-16 20:51:31.119] Inactive for 1000ms
+[2026-09-16 20:51:31.119] 
+[2026-09-16 20:51:31.119] IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+[2026-09-16 20:51:31.119] Deferring event 0x070e
+[2026-09-16 20:51:32.043] I2C busy - not sending message to master
+[2026-09-16 20:51:32.043] 
+[2026-09-16 20:51:32.043] IMAGE Task received event 'Image Event Inactivity' (0x0a00). Rx data = 0x00000000
+[2026-09-16 20:51:32.043] IMAGE task unhandled event 'Image Event Inactivity' in 'Uninitialised'
+[2026-09-16 20:51:33.029] 
+[2026-09-16 20:51:33.029] IF Task received event 'MM Timer' (0x070a). Rx data = 0x00000000
+[2026-09-16 20:51:33.029] I2C master did not read our I2C message
+[2026-09-16 20:51:33.029] I2C transmission complete.
+[2026-09-16 20:51:33.029] IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+[2026-09-16 20:51:33.029] Issuing deferred event 0x070e 'Inactivity'
+[2026-09-16 20:51:33.029] IFTask sending event 0x070e. Tx data = 0x00000000
+[2026-09-16 20:51:33.029] 
+[2026-09-16 20:51:33.029] IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+[2026-09-16 20:51:33.029] Assert inter-processor interrupt.
+[2026-09-16 20:51:33.029] Sending 103 bytes: Header 4, payload 97, checksum 2 'Sleep 0 0 0 1 0 1 500 0 1000 5 1 0 100 0 0 0 18 1 0 0 0 2 50 65 15 0 0 286 326 1 110 1 0 0 0 0 0 '
+[2026-09-16 20:51:33.029] 000: 80 04 61 00 53 6c 65 65  70 20 30 20 30 20 30 20 ..a.Sleep 0 0 0 
+[2026-09-16 20:51:33.029] 010: 31 20 30 20 31 20 35 30  30 20 30 20 31 30 30 30 1 0 1 500 0 1000
+[2026-09-16 20:51:33.036] 020: 20 35 20 31 20 30 20 31  30 30 20 30 20 30 20 30  5 1 0 100 0 0 0
+[2026-09-16 20:51:33.036] 030: 20 31 38 20 31 20 30 20  30 20 30 20 32 20 35 30  18 1 0 0 0 2 50
+[2026-09-16 20:51:33.036] 040: 20 36 35 20 31 35 20 30  20 30 20 32 38 36 20 33  65 15 0 0 286 3
+[2026-09-16 20:51:33.036] 050: 32 36 20 31 20 31 31 30  20 31 20 30 20 30 20 30 26 1 110 1 0 0 0
+[2026-09-16 20:51:33.036] 060: 20 30 20 30 20 b4 89                              0 0 ..         
+[2026-09-16 20:51:33.036] Negate inter-processor interrupt.
+[2026-09-16 20:51:33.036] IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+[2026-09-16 20:51:33.036] Sent to iftask 0x70a
+[2026-09-16 20:51:33.036] 
+[2026-09-16 20:51:33.036] IF Task received event 'Message to Master' (0x070d). Rx data = 0x30011108
+[2026-09-16 20:51:33.036] Deferring event 0x070d
+[2026-09-16 20:51:33.036] 
+[2026-09-16 20:51:33.045] IMAGE Task received event 'Image Event Inactivity' (0x0a00). Rx data = 0x00000000
+[2026-09-16 20:51:33.045] IMAGE task unhandled event 'Image Event Inactivity' in 'Uninitialised'
+[2026-09-16 20:51:34.063] Inactive for 1000ms
+[2026-09-16 20:51:34.063] 
+[2026-09-16 20:51:34.063] IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+[2026-09-16 20:51:34.063] Deferring event 0x070e
+[2026-09-16 20:51:35.134] Inactive for 1000ms
+[2026-09-16 20:51:35.134] 
+[2026-09-16 20:51:35.134] IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+[2026-09-16 20:51:35.134] Deferring event 0x070e
+[2026-09-16 20:51:36.042] I2C busy - not sending message to master
+[2026-09-16 20:51:36.042] 
+[2026-09-16 20:51:36.042] IMAGE Task received event 'Image Event Inactivity' (0x0a00). Rx data = 0x00000000
+[2026-09-16 20:51:36.042] IMAGE task unhandled event 'Image Event Inactivity' in 'Uninitialised'
+[2026-09-16 20:51:37.043] 
+[2026-09-16 20:51:37.043] IF Task received event 'MM Timer' (0x070a). Rx data = 0x00000000
+[2026-09-16 20:51:37.043] I2C master did not read our I2C message
+[2026-09-16 20:51:37.043] I2C transmission complete.
+[2026-09-16 20:51:37.043] IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+[2026-09-16 20:51:37.043] Issuing deferred event 0x070e 'Inactivity'
+[2026-09-16 20:51:37.043] IFTask sending event 0x070e. Tx data = 0x00000000
+[2026-09-16 20:51:37.043] 
+[2026-09-16 20:51:37.043] IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+[2026-09-16 20:51:37.043] Assert inter-processor interrupt.
+[2026-09-16 20:51:37.043] Sending 103 bytes: Header 4, payload 97, checksum 2 'Sleep 0 0 0 1 0 1 500 0 1000 5 1 0 100 0 0 0 18 1 0 0 0 2 50 65 15 0 0 286 326 1 110 1 0 0 0 0 0 '
+[2026-09-16 20:51:37.043] 000: 80 04 61 00 53 6c 65 65  70 20 30 20 30 20 30 20 ..a.Sleep 0 0 0 
+[2026-09-16 20:51:37.043] 010: 31 20 30 20 31 20 35 30  30 20 30 20 31 30 30 30 1 0 1 500 0 1000
+[2026-09-16 20:51:37.043] 020: 20 35 20 31 20 30 20 31  30 30 20 30 20 30 20 30  5 1 0 100 0 0 0
+[2026-09-16 20:51:37.043] 030: 20 31 38 20 31 20 30 20  30 20 30 20 32 20 35 30  18 1 0 0 0 2 50
+[2026-09-16 20:51:37.043] 040: 20 36 35 20 31 35 20 30  20 30 20 32 38 36 20 33  65 15 0 0 286 3
+[2026-09-16 20:51:37.043] 050: 32 36 20 31 20 31 31 30  20 31 20 30 20 30 20 30 26 1 110 1 0 0 0
+[2026-09-16 20:51:37.043] 060: 20 30 20 30 20 b4 89                              0 0 ..         
+[2026-09-16 20:51:37.043] Negate inter-processor interrupt.
+[2026-09-16 20:51:37.043] IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+[2026-09-16 20:51:37.043] Sent to iftask 0x70a
+[2026-09-16 20:51:37.043] 
+[2026-09-16 20:51:37.043] IF Task received event 'Message to Master' (0x070d). Rx data = 0x30011108
+[2026-09-16 20:51:37.043] Deferring event 0x070d
+[2026-09-16 20:51:37.043] 
+[2026-09-16 20:51:37.043] IMAGE Task received event 'Image Event Inactivity' (0x0a00). Rx data = 0x00000000
+[2026-09-16 20:51:37.043] IMAGE task unhandled event 'Image Event Inactivity' in 'Uninitialised'
+[2026-09-16 20:51:38.090] Inactive for 1000ms
+[2026-09-16 20:51:38.090] 
+[2026-09-16 20:51:38.090] IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+[2026-09-16 20:51:38.090] Deferring event 0x070e
+[2026-09-16 20:51:39.157] Inactive for 1000ms
+[2026-09-16 20:51:39.157] 
+[2026-09-16 20:51:39.157] IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+[2026-09-16 20:51:39.157] Deferring event 0x070e
+[2026-09-16 20:51:40.062] I2C busy - not sending message to master
+[2026-09-16 20:51:40.062] 
+[2026-09-16 20:51:40.062] IMAGE Task received event 'Image Event Inactivity' (0x0a00). Rx data = 0x00000000
+[2026-09-16 20:51:40.062] IMAGE task unhandled event 'Image Event Inactivity' in 'Uninitialised'
+[2026-09-16 20:51:41.047] 
+[2026-09-16 20:51:41.047] IF Task received event 'MM Timer' (0x070a). Rx data = 0x00000000
+[2026-09-16 20:51:41.047] I2C master did not read our I2C message
+[2026-09-16 20:51:41.047] I2C transmission complete.
+[2026-09-16 20:51:41.047] IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+[2026-09-16 20:51:41.047] Issuing deferred event 0x070e 'Inactivity'
+[2026-09-16 20:51:41.047] IFTask sending event 0x070e. Tx data = 0x00000000
+[2026-09-16 20:51:41.052] 
+[2026-09-16 20:51:41.052] IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+[2026-09-16 20:51:41.052] Assert inter-processor interrupt.
+[2026-09-16 20:51:41.052] Sending 103 bytes: Header 4, payload 97, checksum 2 'Sleep 0 0 0 1 0 1 500 0 1000 5 1 0 100 0 0 0 18 1 0 0 0 2 50 65 15 0 0 286 326 1 110 1 0 0 0 0 0 '
+[2026-09-16 20:51:41.052] 000: 80 04 61 00 53 6c 65 65  70 20 30 20 30 20 30 20 ..a.Sleep 0 0 0 
+[2026-09-16 20:51:41.052] 010: 31 20 30 20 31 20 35 30  30 20 30 20 31 30 30 30 1 0 1 500 0 1000
+[2026-09-16 20:51:41.052] 020: 20 35 20 31 20 30 20 31  30 30 20 30 20 30 20 30  5 1 0 100 0 0 0
+[2026-09-16 20:51:41.052] 030: 20 31 38 20 31 20 30 20  30 20 30 20 32 20 35 30  18 1 0 0 0 2 50
+[2026-09-16 20:51:41.052] 040: 20 36 35 20 31 35 20 30  20 30 20 32 38 36 20 33  65 15 0 0 286 3
+[2026-09-16 20:51:41.052] 050: 32 36 20 31 20 31 31 30  20 31 20 30 20 30 20 30 26 1 110 1 0 0 0
+[2026-09-16 20:51:41.063] 060: 20 30 20 30 20 b4 89                              0 0 ..         
+[2026-09-16 20:51:41.063] Negate inter-processor interrupt.
+[2026-09-16 20:51:41.063] IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+[2026-09-16 20:51:41.063] Sent to iftask 0x70a
+[2026-09-16 20:51:41.063] 
+[2026-09-16 20:51:41.063] IF Task received event 'Message to Master' (0x070d). Rx data = 0x30011108
+[2026-09-16 20:51:41.063] Deferring event 0x070d
+[2026-09-16 20:51:41.063] 
+[2026-09-16 20:51:41.063] IMAGE Task received event 'Image Event Inactivity' (0x0a00). Rx data = 0x00000000
+[2026-09-16 20:51:41.063] IMAGE task unhandled event 'Image Event Inactivity' in 'Uninitialised'
+[2026-09-16 20:51:42.097] Inactive for 1000ms
+[2026-09-16 20:51:42.097] 
+[2026-09-16 20:51:42.098] IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+[2026-09-16 20:51:42.098] Deferring event 0x070e
+[2026-09-16 20:51:43.162] Inactive for 1000ms
+[2026-09-16 20:51:43.162] 
+[2026-09-16 20:51:43.162] IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+[2026-09-16 20:51:43.162] Deferring event 0x070e
+[2026-09-16 20:51:44.070] I2C busy - not sending message to master
+[2026-09-16 20:51:44.070] 
+[2026-09-16 20:51:44.070] IMAGE Task received event 'Image Event Inactivity' (0x0a00). Rx data = 0x00000000
+[2026-09-16 20:51:44.070] IMAGE task unhandled event 'Image Event Inactivity' in 'Uninitialised'
+[2026-09-16 20:51:45.071] 
+[2026-09-16 20:51:45.071] IF Task received event 'MM Timer' (0x070a). Rx data = 0x00000000
+[2026-09-16 20:51:45.071] I2C master did not read our I2C message
+[2026-09-16 20:51:45.071] I2C transmission complete.
+[2026-09-16 20:51:45.071] IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+[2026-09-16 20:51:45.071] Issuing deferred event 0x070e 'Inactivity'
+[2026-09-16 20:51:45.071] IFTask sending event 0x070e. Tx data = 0x00000000
+[2026-09-16 20:51:45.071] 
+[2026-09-16 20:51:45.071] IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+[2026-09-16 20:51:45.071] Assert inter-processor interrupt.
+[2026-09-16 20:51:45.071] Sending 103 bytes: Header 4, payload 97, checksum 2 'Sleep 0 0 0 1 0 1 500 0 1000 5 1 0 100 0 0 0 18 1 0 0 0 2 50 65 15 0 0 286 326 1 110 1 0 0 0 0 0 '
+[2026-09-16 20:51:45.071] 000: 80 04 61 00 53 6c 65 65  70 20 30 20 30 20 30 20 ..a.Sleep 0 0 0 
+[2026-09-16 20:51:45.071] 010: 31 20 30 20 31 20 35 30  30 20 30 20 31 30 30 30 1 0 1 500 0 1000
+[2026-09-16 20:51:45.071] 020: 20 35 20 31 20 30 20 31  30 30 20 30 20 30 20 30  5 1 0 100 0 0 0
+[2026-09-16 20:51:45.071] 030: 20 31 38 20 31 20 30 20  30 20 30 20 32 20 35 30  18 1 0 0 0 2 50
+[2026-09-16 20:51:45.071] 040: 20 36 35 20 31 35 20 30  20 30 20 32 38 36 20 33  65 15 0 0 286 3
+[2026-09-16 20:51:45.071] 050: 32 36 20 31 20 31 31 30  20 31 20 30 20 30 20 30 26 1 110 1 0 0 0
+[2026-09-16 20:51:45.080] 060: 20 30 20 30 20 b4 89                              0 0 ..         
+[2026-09-16 20:51:45.080] Negate inter-processor interrupt.
+[2026-09-16 20:51:45.080] IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+[2026-09-16 20:51:45.080] Sent to iftask 0x70a
+[2026-09-16 20:51:45.080] 
+[2026-09-16 20:51:45.080] IF Task received event 'Message to Master' (0x070d). Rx data = 0x30011108
+[2026-09-16 20:51:45.080] Deferring event 0x070d
+[2026-09-16 20:51:45.080] 
+[2026-09-16 20:51:45.080] IMAGE Task received event 'Image Event Inactivity' (0x0a00). Rx data = 0x00000000
+[2026-09-16 20:51:45.080] IMAGE task unhandled event 'Image Event Inactivity' in 'Uninitialised'
+[2026-09-16 20:51:46.104] Inactive for 1000ms
+[2026-09-16 20:51:46.104] 
+[2026-09-16 20:51:46.104] IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+[2026-09-16 20:51:46.104] Deferring event 0x070e
+[2026-09-16 20:51:47.170] Inactive for 1000ms
+[2026-09-16 20:51:47.170] 
+[2026-09-16 20:51:47.170] IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+[2026-09-16 20:51:47.170] Deferring event 0x070e
+[2026-09-16 20:51:48.093] I2C busy - not sending message to master
+[2026-09-16 20:51:48.095] 
+[2026-09-16 20:51:48.095] IMAGE Task received event 'Image Event Inactivity' (0x0a00). Rx data = 0x00000000
+[2026-09-16 20:51:48.095] IMAGE task unhandled event 'Image Event Inactivity' in 'Uninitialised'
+[2026-09-16 20:51:49.080] 
+[2026-09-16 20:51:49.080] IF Task received event 'MM Timer' (0x070a). Rx data = 0x00000000
+[2026-09-16 20:51:49.080] I2C master did not read our I2C message
+[2026-09-16 20:51:49.080] I2C transmission complete.
+[2026-09-16 20:51:49.080] IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+[2026-09-16 20:51:49.080] Issuing deferred event 0x070e 'Inactivity'
+[2026-09-16 20:51:49.080] IFTask sending event 0x070e. Tx data = 0x00000000
+[2026-09-16 20:51:49.080] 
+[2026-09-16 20:51:49.080] IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+[2026-09-16 20:51:49.080] Assert inter-processor interrupt.
+[2026-09-16 20:51:49.080] Sending 103 bytes: Header 4, payload 97, checksum 2 'Sleep 0 0 0 1 0 1 500 0 1000 5 1 0 100 0 0 0 18 1 0 0 0 2 50 65 15 0 0 286 326 1 110 1 0 0 0 0 0 '
+[2026-09-16 20:51:49.080] 000: 80 04 61 00 53 6c 65 65  70 20 30 20 30 20 30 20 ..a.Sleep 0 0 0 
+[2026-09-16 20:51:49.080] 010: 31 20 30 20 31 20 35 30  30 20 30 20 31 30 30 30 1 0 1 500 0 1000
+[2026-09-16 20:51:49.084] 020: 20 35 20 31 20 30 20 31  30 30 20 30 20 30 20 30  5 1 0 100 0 0 0
+[2026-09-16 20:51:49.084] 030: 20 31 38 20 31 20 30 20  30 20 30 20 32 20 35 30  18 1 0 0 0 2 50
+[2026-09-16 20:51:49.084] 040: 20 36 35 20 31 35 20 30  20 30 20 32 38 36 20 33  65 15 0 0 286 3
+[2026-09-16 20:51:49.084] 050: 32 36 20 31 20 31 31 30  20 31 20 30 20 30 20 30 26 1 110 1 0 0 0
+[2026-09-16 20:51:49.084] 060: 20 30 20 30 20 b4 89                              0 0 ..         
+[2026-09-16 20:51:49.084] Negate inter-processor interrupt.
+[2026-09-16 20:51:49.084] IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+[2026-09-16 20:51:49.084] Sent to iftask 0x70a
+[2026-09-16 20:51:49.084] 
+[2026-09-16 20:51:49.084] IF Task received event 'Message to Master' (0x070d). Rx data = 0x30011108
+[2026-09-16 20:51:49.084] Deferring event 0x070d
+[2026-09-16 20:51:49.084] 
+[2026-09-16 20:51:49.084] IMAGE Task received event 'Image Event Inactivity' (0x0a00). Rx data = 0x00000000
+[2026-09-16 20:51:49.099] IMAGE task unhandled event 'Image Event Inactivity' in 'Uninitialised'
+[2026-09-16 20:51:50.116] Inactive for 1000ms
+[2026-09-16 20:51:50.116] 
+[2026-09-16 20:51:50.116] IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+[2026-09-16 20:51:50.120] Deferring event 0x070e
+[2026-09-16 20:51:51.183] Inactive for 1000ms
+[2026-09-16 20:51:51.183] 
+[2026-09-16 20:51:51.183] IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+[2026-09-16 20:51:51.183] Deferring event 0x070e
+[2026-09-16 20:51:52.105] I2C busy - not sending message to master
+[2026-09-16 20:51:52.105] 
+[2026-09-16 20:51:52.107] IMAGE Task received event 'Image Event Inactivity' (0x0a00). Rx data = 0x00000000
+[2026-09-16 20:51:52.107] IMAGE task unhandled event 'Image Event Inactivity' in 'Uninitialised'
+[2026-09-16 20:51:53.092] 
+[2026-09-16 20:51:53.093] IF Task received event 'MM Timer' (0x070a). Rx data = 0x00000000
+[2026-09-16 20:51:53.093] I2C master did not read our I2C message
+[2026-09-16 20:51:53.093] I2C transmission complete.
+[2026-09-16 20:51:53.093] IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+[2026-09-16 20:51:53.093] Issuing deferred event 0x070e 'Inactivity'
+[2026-09-16 20:51:53.093] IFTask sending event 0x070e. Tx data = 0x00000000
+[2026-09-16 20:51:53.093] 
+[2026-09-16 20:51:53.093] IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+[2026-09-16 20:51:53.093] Assert inter-processor interrupt.
+[2026-09-16 20:51:53.093] Sending 103 bytes: Header 4, payload 97, checksum 2 'Sleep 0 0 0 1 0 1 500 0 1000 5 1 0 100 0 0 0 18 1 0 0 0 2 50 65 15 0 0 286 326 1 110 1 0 0 0 0 0 '
+[2026-09-16 20:51:53.093] 000: 80 04 61 00 53 6c 65 65  70 20 30 20 30 20 30 20 ..a.Sleep 0 0 0 
+[2026-09-16 20:51:53.093] 010: 31 20 30 20 31 20 35 30  30 20 30 20 31 30 30 30 1 0 1 500 0 1000
+[2026-09-16 20:51:53.093] 020: 20 35 20 31 20 30 20 31  30 30 20 30 20 30 20 30  5 1 0 100 0 0 0
+[2026-09-16 20:51:53.093] 030: 20 31 38 20 31 20 30 20  30 20 30 20 32 20 35 30  18 1 0 0 0 2 50
+[2026-09-16 20:51:53.093] 040: 20 36 35 20 31 35 20 30  20 30 20 32 38 36 20 33  65 15 0 0 286 3
+[2026-09-16 20:51:53.093] 050: 32 36 20 31 20 31 31 30  20 31 20 30 20 30 20 30 26 1 110 1 0 0 0
+[2026-09-16 20:51:53.093] 060: 20 30 20 30 20 b4 89                              0 0 ..         
+[2026-09-16 20:51:53.102] Negate inter-processor interrupt.
+[2026-09-16 20:51:53.102] IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+[2026-09-16 20:51:53.102] Sent to iftask 0x70a
+[2026-09-16 20:51:53.102] 
+[2026-09-16 20:51:53.102] IF Task received event 'Message to Master' (0x070d). Rx data = 0x30011108
+[2026-09-16 20:51:53.102] Deferring event 0x070d
+[2026-09-16 20:51:53.102] 
+[2026-09-16 20:51:53.102] IMAGE Task received event 'Image Event Inactivity' (0x0a00). Rx data = 0x00000000
+[2026-09-16 20:51:53.102] IMAGE task unhandled event 'Image Event Inactivity' in 'Uninitialised'
+[2026-09-16 20:51:54.142] Inactive for 1000ms
+[2026-09-16 20:51:54.142] 
+[2026-09-16 20:51:54.142] IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+[2026-09-16 20:51:54.142] Deferring event 0x070e
+[2026-09-16 20:51:55.209] Inactive for 1000ms
+[2026-09-16 20:51:55.211] 
+[2026-09-16 20:51:55.211] IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+[2026-09-16 20:51:55.211] Deferring event 0x070e
+[2026-09-16 20:51:56.115] I2C busy - not sending message to master
+[2026-09-16 20:51:56.115] 
+[2026-09-16 20:51:56.115] IMAGE Task received event 'Image Event Inactivity' (0x0a00). Rx data = 0x00000000
+[2026-09-16 20:51:56.115] IMAGE task unhandled event 'Image Event Inactivity' in 'Uninitialised'
+[2026-09-16 20:51:57.102] 
+[2026-09-16 20:51:57.102] IF Task received event 'MM Timer' (0x070a). Rx data = 0x00000000
+[2026-09-16 20:51:57.102] I2C master did not read our I2C message
+[2026-09-16 20:51:57.102] I2C transmission complete.
+[2026-09-16 20:51:57.102] IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+[2026-09-16 20:51:57.102] Issuing deferred event 0x070e 'Inactivity'
+[2026-09-16 20:51:57.102] IFTask sending event 0x070e. Tx data = 0x00000000
+[2026-09-16 20:51:57.102] 
+[2026-09-16 20:51:57.102] IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+[2026-09-16 20:51:57.102] Assert inter-processor interrupt.
+[2026-09-16 20:51:57.102] Sending 103 bytes: Header 4, payload 97, checksum 2 'Sleep 0 0 0 1 0 1 500 0 1000 5 1 0 100 0 0 0 18 1 0 0 0 2 50 65 15 0 0 286 326 1 110 1 0 0 0 0 0 '
+[2026-09-16 20:51:57.102] 000: 80 04 61 00 53 6c 65 65  70 20 30 20 30 20 30 20 ..a.Sleep 0 0 0 
+[2026-09-16 20:51:57.102] 010: 31 20 30 20 31 20 35 30  30 20 30 20 31 30 30 30 1 0 1 500 0 1000
+[2026-09-16 20:51:57.102] 020: 20 35 20 31 20 30 20 31  30 30 20 30 20 30 20 30  5 1 0 100 0 0 0
+[2026-09-16 20:51:57.102] 030: 20 31 38 20 31 20 30 20  30 20 30 20 32 20 35 30  18 1 0 0 0 2 50
+[2026-09-16 20:51:57.102] 040: 20 36 35 20 31 35 20 30  20 30 20 32 38 36 20 33  65 15 0 0 286 3
+[2026-09-16 20:51:57.102] 050: 32 36 20 31 20 31 31 30  20 31 20 30 20 30 20 30 26 1 110 1 0 0 0
+[2026-09-16 20:51:57.102] 060: 20 30 20 30 20 b4 89                              0 0 ..         
+[2026-09-16 20:51:57.113] Negate inter-processor interrupt.
+[2026-09-16 20:51:57.113] IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+[2026-09-16 20:51:57.113] Sent to iftask 0x70a
+[2026-09-16 20:51:57.118] 
+[2026-09-16 20:51:57.118] IF Task received event 'Message to Master' (0x070d). Rx data = 0x30011108
+[2026-09-16 20:51:57.118] Deferring event 0x070d
+[2026-09-16 20:51:57.118] 
+[2026-09-16 20:51:57.118] IMAGE Task received event 'Image Event Inactivity' (0x0a00). Rx data = 0x00000000
+[2026-09-16 20:51:57.118] IMAGE task unhandled event 'Image Event Inactivity' in 'Uninitialised'
+[2026-09-16 20:51:58.155] Inactive for 1000ms
+[2026-09-16 20:51:58.157] 
+[2026-09-16 20:51:58.157] IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+[2026-09-16 20:51:58.157] Deferring event 0x070e
+[2026-09-16 20:51:59.222] Inactive for 1000ms
+[2026-09-16 20:51:59.222] 
+[2026-09-16 20:51:59.224] IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+[2026-09-16 20:51:59.224] Deferring event 0x070e
+[2026-09-16 20:52:00.128] I2C busy - not sending message to master
+[2026-09-16 20:52:00.128] 
+[2026-09-16 20:52:00.128] IMAGE Task received event 'Image Event Inactivity' (0x0a00). Rx data = 0x00000000
+[2026-09-16 20:52:00.128] IMAGE task unhandled event 'Image Event Inactivity' in 'Uninitialised'
+[2026-09-16 20:52:01.114] 
+[2026-09-16 20:52:01.116] IF Task received event 'MM Timer' (0x070a). Rx data = 0x00000000
+[2026-09-16 20:52:01.116] I2C master did not read our I2C message
+[2026-09-16 20:52:01.116] I2C transmission complete.
+[2026-09-16 20:52:01.116] IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+[2026-09-16 20:52:01.116] Issuing deferred event 0x070e 'Inactivity'
+[2026-09-16 20:52:01.116] IFTask sending event 0x070e. Tx data = 0x00000000
+[2026-09-16 20:52:01.116] 
+[2026-09-16 20:52:01.116] IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+[2026-09-16 20:52:01.119] Assert inter-processor interrupt.
+[2026-09-16 20:52:01.119] Sending 103 bytes: Header 4, payload 97, checksum 2 'Sleep 0 0 0 1 0 1 500 0 1000 5 1 0 100 0 0 0 18 1 0 0 0 2 50 65 15 0 0 286 326 1 110 1 0 0 0 0 0 '
+[2026-09-16 20:52:01.119] 000: 80 04 61 00 53 6c 65 65  70 20 30 20 30 20 30 20 ..a.Sleep 0 0 0 
+[2026-09-16 20:52:01.119] 010: 31 20 30 20 31 20 35 30  30 20 30 20 31 30 30 30 1 0 1 500 0 1000
+[2026-09-16 20:52:01.119] 020: 20 35 20 31 20 30 20 31  30 30 20 30 20 30 20 30  5 1 0 100 0 0 0
+[2026-09-16 20:52:01.119] 030: 20 31 38 20 31 20 30 20  30 20 30 20 32 20 35 30  18 1 0 0 0 2 50
+[2026-09-16 20:52:01.119] 040: 20 36 35 20 31 35 20 30  20 30 20 32 38 36 20 33  65 15 0 0 286 3
+[2026-09-16 20:52:01.119] 050: 32 36 20 31 20 31 31 30  20 31 20 30 20 30 20 30 26 1 110 1 0 0 0
+[2026-09-16 20:52:01.119] 060: 20 30 20 30 20 b4 89                              0 0 ..         
+[2026-09-16 20:52:01.119] Negate inter-processor interrupt.
+[2026-09-16 20:52:01.119] IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+[2026-09-16 20:52:01.119] Sent to iftask 0x70a
+[2026-09-16 20:52:01.119] 
+[2026-09-16 20:52:01.119] IF Task received event 'Message to Master' (0x070d). Rx data = 0x30011108
+[2026-09-16 20:52:01.131] Deferring event 0x070d
+[2026-09-16 20:52:01.131] 
+[2026-09-16 20:52:01.131] IMAGE Task received event 'Image Event Inactivity' (0x0a00). Rx data = 0x00000000
+[2026-09-16 20:52:01.131] IMAGE task unhandled event 'Image Event Inactivity' in 'Uninitialised'
+[2026-09-16 20:52:02.166] Inactive for 1000ms
+[2026-09-16 20:52:02.166] 
+[2026-09-16 20:52:02.166] IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+[2026-09-16 20:52:02.166] Deferring event 0x070e
+[2026-09-16 20:52:03.235] Inactive for 1000ms
+[2026-09-16 20:52:03.235] 
+[2026-09-16 20:52:03.235] IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+[2026-09-16 20:52:03.235] Deferring event 0x070e
+[2026-09-16 20:52:04.142] I2C busy - not sending message to master
+[2026-09-16 20:52:04.142] 
+[2026-09-16 20:52:04.142] IMAGE Task received event 'Image Event Inactivity' (0x0a00). Rx data = 0x00000000
+[2026-09-16 20:52:04.142] IMAGE task unhandled event 'Image Event Inactivity' in 'Uninitialised'
+[2026-09-16 20:52:05.129] 
+[2026-09-16 20:52:05.129] IF Task received event 'MM Timer' (0x070a). Rx data = 0x00000000
+[2026-09-16 20:52:05.129] I2C master did not read our I2C message
+[2026-09-16 20:52:05.129] I2C transmission complete.
+[2026-09-16 20:52:05.129] IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+[2026-09-16 20:52:05.129] Issuing deferred event 0x070e 'Inactivity'
+[2026-09-16 20:52:05.129] IFTask sending event 0x070e. Tx data = 0x00000000
+[2026-09-16 20:52:05.129] 
+[2026-09-16 20:52:05.129] IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+[2026-09-16 20:52:05.129] Assert inter-processor interrupt.
+[2026-09-16 20:52:05.132] Sending 103 bytes: Header 4, payload 97, checksum 2 'Sleep 0 0 0 1 0 1 500 0 1000 5 1 0 100 0 0 0 18 1 0 0 0 2 50 65 15 0 0 286 326 1 110 1 0 0 0 0 0 '
+[2026-09-16 20:52:05.132] 000: 80 04 61 00 53 6c 65 65  70 20 30 20 30 20 30 20 ..a.Sleep 0 0 0 
+[2026-09-16 20:52:05.132] 010: 31 20 30 20 31 20 35 30  30 20 30 20 31 30 30 30 1 0 1 500 0 1000
+[2026-09-16 20:52:05.132] 020: 20 35 20 31 20 30 20 31  30 30 20 30 20 30 20 30  5 1 0 100 0 0 0
+[2026-09-16 20:52:05.132] 030: 20 31 38 20 31 20 30 20  30 20 30 20 32 20 35 30  18 1 0 0 0 2 50
+[2026-09-16 20:52:05.132] 040: 20 36 35 20 31 35 20 30  20 30 20 32 38 36 20 33  65 15 0 0 286 3
+[2026-09-16 20:52:05.135] 050: 32 36 20 31 20 31 31 30  20 31 20 30 20 30 20 30 26 1 110 1 0 0 0
+[2026-09-16 20:52:05.135] 060: 20 30 20 30 20 b4 89                              0 0 ..         
+[2026-09-16 20:52:05.135] Negate inter-processor interrupt.
+[2026-09-16 20:52:05.135] IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+[2026-09-16 20:52:05.135] Sent to iftask 0x70a
+[2026-09-16 20:52:05.135] 
+[2026-09-16 20:52:05.135] IF Task received event 'Message to Master' (0x070d). Rx data = 0x30011108
+[2026-09-16 20:52:05.135] Deferring event 0x070d
+[2026-09-16 20:52:05.135] 
+[2026-09-16 20:52:05.135] IMAGE Task received event 'Image Event Inactivity' (0x0a00). Rx data = 0x00000000
+[2026-09-16 20:52:05.135] IMAGE task unhandled event 'Image Event Inactivity' in 'Uninitialised'
+[2026-09-16 20:52:06.177] Inactive for 1000ms
+[2026-09-16 20:52:06.177] 
+[2026-09-16 20:52:06.177] IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+[2026-09-16 20:52:06.177] Deferring event 0x070e
+[2026-09-16 20:52:07.243] Inactive for 1000ms
+[2026-09-16 20:52:07.243] 
+[2026-09-16 20:52:07.243] IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+[2026-09-16 20:52:07.243] Deferring event 0x070e
+[2026-09-16 20:52:08.151] I2C busy - not sending message to master
+[2026-09-16 20:52:08.151] 
+[2026-09-16 20:52:08.151] IMAGE Task received event 'Image Event Inactivity' (0x0a00). Rx data = 0x00000000
+[2026-09-16 20:52:08.151] IMAGE task unhandled event 'Image Event Inactivity' in 'Uninitialised'
+[2026-09-16 20:52:09.137] 
+[2026-09-16 20:52:09.137] IF Task received event 'MM Timer' (0x070a). Rx data = 0x00000000
+[2026-09-16 20:52:09.137] I2C master did not read our I2C message
+[2026-09-16 20:52:09.137] I2C transmission complete.
+[2026-09-16 20:52:09.137] IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+[2026-09-16 20:52:09.137] Issuing deferred event 0x070e 'Inactivity'
+[2026-09-16 20:52:09.137] IFTask sending event 0x070e. Tx data = 0x00000000
+[2026-09-16 20:52:09.137] 
+[2026-09-16 20:52:09.137] IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+[2026-09-16 20:52:09.137] Assert inter-processor interrupt.
+[2026-09-16 20:52:09.137] Sending 103 bytes: Header 4, payload 97, checksum 2 'Sleep 0 0 0 1 0 1 500 0 1000 5 1 0 100 0 0 0 18 1 0 0 0 2 50 65 15 0 0 286 326 1 110 1 0 0 0 0 0 '
+[2026-09-16 20:52:09.137] 000: 80 04 61 00 53 6c 65 65  70 20 30 20 30 20 30 20 ..a.Sleep 0 0 0 
+[2026-09-16 20:52:09.137] 010: 31 20 30 20 31 20 35 30  30 20 30 20 31 30 30 30 1 0 1 500 0 1000
+[2026-09-16 20:52:09.137] 020: 20 35 20 31 20 30 20 31  30 30 20 30 20 30 20 30  5 1 0 100 0 0 0
+[2026-09-16 20:52:09.137] 030: 20 31 38 20 31 20 30 20  30 20 30 20 32 20 35 30  18 1 0 0 0 2 50
+[2026-09-16 20:52:09.137] 040: 20 36 35 20 31 35 20 30  20 30 20 32 38 36 20 33  65 15 0 0 286 3
+[2026-09-16 20:52:09.137] 050: 32 36 20 31 20 31 31 30  20 31 20 30 20 30 20 30 26 1 110 1 0 0 0
+[2026-09-16 20:52:09.137] 060: 20 30 20 30 20 b4 89                              0 0 ..         
+[2026-09-16 20:52:09.137] Negate inter-processor interrupt.
+[2026-09-16 20:52:09.157] IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+[2026-09-16 20:52:09.157] Sent to iftask 0x70a
+[2026-09-16 20:52:09.157] 
+[2026-09-16 20:52:09.157] IF Task received event 'Message to Master' (0x070d). Rx data = 0x30011108
+[2026-09-16 20:52:09.157] Deferring event 0x070d
+[2026-09-16 20:52:09.157] 
+[2026-09-16 20:52:09.157] IMAGE Task received event 'Image Event Inactivity' (0x0a00). Rx data = 0x00000000
+[2026-09-16 20:52:09.157] IMAGE task unhandled event 'Image Event Inactivity' in 'Uninitialised'
+[2026-09-16 20:52:10.189] Inactive for 1000ms
+[2026-09-16 20:52:10.189] 
+[2026-09-16 20:52:10.189] IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+[2026-09-16 20:52:10.189] Deferring event 0x070e
+[2026-09-16 20:52:11.257] Inactive for 1000ms
+[2026-09-16 20:52:11.257] 
+[2026-09-16 20:52:11.257] IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+[2026-09-16 20:52:11.257] Deferring event 0x070e
+[2026-09-16 20:52:12.165] I2C busy - not sending message to master
+[2026-09-16 20:52:12.167] 
+[2026-09-16 20:52:12.167] IMAGE Task received event 'Image Event Inactivity' (0x0a00). Rx data = 0x00000000
+[2026-09-16 20:52:12.167] IMAGE task unhandled event 'Image Event Inactivity' in 'Uninitialised'
+[2026-09-16 20:52:13.153] 
+[2026-09-16 20:52:13.153] IF Task received event 'MM Timer' (0x070a). Rx data = 0x00000000
+[2026-09-16 20:52:13.153] I2C master did not read our I2C message
+[2026-09-16 20:52:13.153] I2C transmission complete.
+[2026-09-16 20:52:13.153] IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+[2026-09-16 20:52:13.153] Issuing deferred event 0x070e 'Inactivity'
+[2026-09-16 20:52:13.153] IFTask sending event 0x070e. Tx data = 0x00000000
+[2026-09-16 20:52:13.156] 
+[2026-09-16 20:52:13.156] IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+[2026-09-16 20:52:13.156] Assert inter-processor interrupt.
+[2026-09-16 20:52:13.156] Sending 103 bytes: Header 4, payload 97, checksum 2 'Sleep 0 0 0 1 0 1 500 0 1000 5 1 0 100 0 0 0 18 1 0 0 0 2 50 65 15 0 0 286 326 1 110 1 0 0 0 0 0 '
+[2026-09-16 20:52:13.156] 000: 80 04 61 00 53 6c 65 65  70 20 30 20 30 20 30 20 ..a.Sleep 0 0 0 
+[2026-09-16 20:52:13.156] 010: 31 20 30 20 31 20 35 30  30 20 30 20 31 30 30 30 1 0 1 500 0 1000
+[2026-09-16 20:52:13.156] 020: 20 35 20 31 20 30 20 31  30 30 20 30 20 30 20 30  5 1 0 100 0 0 0
+[2026-09-16 20:52:13.156] 030: 20 31 38 20 31 20 30 20  30 20 30 20 32 20 35 30  18 1 0 0 0 2 50
+[2026-09-16 20:52:13.156] 040: 20 36 35 20 31 35 20 30  20 30 20 32 38 36 20 33  65 15 0 0 286 3
+[2026-09-16 20:52:13.156] 050: 32 36 20 31 20 31 31 30  20 31 20 30 20 30 20 30 26 1 110 1 0 0 0
+[2026-09-16 20:52:13.156] 060: 20 30 20 30 20 b4 89                              0 0 ..         
+[2026-09-16 20:52:13.156] Negate inter-processor interrupt.
+[2026-09-16 20:52:13.156] IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+[2026-09-16 20:52:13.156] Sent to iftask 0x70a
+[2026-09-16 20:52:13.156] 
+[2026-09-16 20:52:13.156] IF Task received event 'Message to Master' (0x070d). Rx data = 0x30011108
+[2026-09-16 20:52:13.156] Deferring event 0x070d
+[2026-09-16 20:52:13.169] 
+[2026-09-16 20:52:13.169] IMAGE Task received event 'Image Event Inactivity' (0x0a00). Rx data = 0x00000000
+[2026-09-16 20:52:13.169] IMAGE task unhandled event 'Image Event Inactivity' in 'Uninitialised'
+[2026-09-16 20:52:14.202] Inactive for 1000ms
+[2026-09-16 20:52:14.202] 
+[2026-09-16 20:52:14.202] IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+[2026-09-16 20:52:14.202] Deferring event 0x070e
+[2026-09-16 20:52:15.270] Inactive for 1000ms
+[2026-09-16 20:52:15.270] 
+[2026-09-16 20:52:15.270] IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+[2026-09-16 20:52:15.270] Deferring event 0x070e
+[2026-09-16 20:52:16.174] I2C busy - not sending message to master
+[2026-09-16 20:52:16.174] 
+[2026-09-16 20:52:16.174] IMAGE Task received event 'Image Event Inactivity' (0x0a00). Rx data = 0x00000000
+[2026-09-16 20:52:16.174] IMAGE task unhandled event 'Image Event Inactivity' in 'Uninitialised'
+[2026-09-16 20:52:17.174] 
+[2026-09-16 20:52:17.174] IF Task received event 'MM Timer' (0x070a). Rx data = 0x00000000
+[2026-09-16 20:52:17.174] I2C master did not read our I2C message
+[2026-09-16 20:52:17.174] I2C transmission complete.
+[2026-09-16 20:52:17.174] IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+[2026-09-16 20:52:17.174] Issuing deferred event 0x070e 'Inactivity'
+[2026-09-16 20:52:17.174] IFTask sending event 0x070e. Tx data = 0x00000000
+[2026-09-16 20:52:17.174] 
+[2026-09-16 20:52:17.174] IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+[2026-09-16 20:52:17.174] Assert inter-processor interrupt.
+[2026-09-16 20:52:17.174] Sending 103 bytes: Header 4, payload 97, checksum 2 'Sleep 0 0 0 1 0 1 500 0 1000 5 1 0 100 0 0 0 18 1 0 0 0 2 50 65 15 0 0 286 326 1 110 1 0 0 0 0 0 '
+[2026-09-16 20:52:17.174] 000: 80 04 61 00 53 6c 65 65  70 20 30 20 30 20 30 20 ..a.Sleep 0 0 0 
+[2026-09-16 20:52:17.174] 010: 31 20 30 20 31 20 35 30  30 20 30 20 31 30 30 30 1 0 1 500 0 1000
+[2026-09-16 20:52:17.174] 020: 20 35 20 31 20 30 20 31  30 30 20 30 20 30 20 30  5 1 0 100 0 0 0
+[2026-09-16 20:52:17.174] 030: 20 31 38 20 31 20 30 20  30 20 30 20 32 20 35 30  18 1 0 0 0 2 50
+[2026-09-16 20:52:17.174] 040: 20 36 35 20 31 35 20 30  20 30 20 32 38 36 20 33  65 15 0 0 286 3
+[2026-09-16 20:52:17.174] 050: 32 36 20 31 20 31 31 30  20 31 20 30 20 30 20 30 26 1 110 1 0 0 0
+[2026-09-16 20:52:17.179] 060: 20 30 20 30 20 b4 89                              0 0 ..         
+[2026-09-16 20:52:17.179] Negate inter-processor interrupt.
+[2026-09-16 20:52:17.179] IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+[2026-09-16 20:52:17.179] Sent to iftask 0x70a
+[2026-09-16 20:52:17.179] 
+[2026-09-16 20:52:17.179] IF Task received event 'Message to Master' (0x070d). Rx data = 0x30011108
+[2026-09-16 20:52:17.179] Deferring event 0x070d
+[2026-09-16 20:52:17.179] 
+[2026-09-16 20:52:17.179] IMAGE Task received event 'Image Event Inactivity' (0x0a00). Rx data = 0x00000000
+[2026-09-16 20:52:17.179] IMAGE task unhandled event 'Image Event Inactivity' in 'Uninitialised'
+[2026-09-16 20:52:18.210] Inactive for 1000ms
+[2026-09-16 20:52:18.210] 
+[2026-09-16 20:52:18.210] IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+[2026-09-16 20:52:18.210] Deferring event 0x070e
+[2026-09-16 20:52:19.276] Inactive for 1000ms
+[2026-09-16 20:52:19.276] 
+[2026-09-16 20:52:19.276] IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+[2026-09-16 20:52:19.276] Deferring event 0x070e
+[2026-09-16 20:52:20.180] I2C busy - not sending message to master
+[2026-09-16 20:52:20.180] 
+[2026-09-16 20:52:20.180] IMAGE Task received event 'Image Event Inactivity' (0x0a00). Rx data = 0x00000000
+[2026-09-16 20:52:20.180] IMAGE task unhandled event 'Image Event Inactivity' in 'Uninitialised'
+[2026-09-16 20:52:21.179] 
+[2026-09-16 20:52:21.179] IF Task received event 'MM Timer' (0x070a). Rx data = 0x00000000
+[2026-09-16 20:52:21.179] I2C master did not read our I2C message
+[2026-09-16 20:52:21.179] I2C transmission complete.
+[2026-09-16 20:52:21.179] IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+[2026-09-16 20:52:21.179] Issuing deferred event 0x070e 'Inactivity'
+[2026-09-16 20:52:21.179] IFTask sending event 0x070e. Tx data = 0x00000000
+[2026-09-16 20:52:21.179] 
+[2026-09-16 20:52:21.179] IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+[2026-09-16 20:52:21.179] Assert inter-processor interrupt.
+[2026-09-16 20:52:21.179] Sending 103 bytes: Header 4, payload 97, checksum 2 'Sleep 0 0 0 1 0 1 500 0 1000 5 1 0 100 0 0 0 18 1 0 0 0 2 50 65 15 0 0 286 326 1 110 1 0 0 0 0 0 '
+[2026-09-16 20:52:21.183] 000: 80 04 61 00 53 6c 65 65  70 20 30 20 30 20 30 20 ..a.Sleep 0 0 0 
+[2026-09-16 20:52:21.183] 010: 31 20 30 20 31 20 35 30  30 20 30 20 31 30 30 30 1 0 1 500 0 1000
+[2026-09-16 20:52:21.183] 020: 20 35 20 31 20 30 20 31  30 30 20 30 20 30 20 30  5 1 0 100 0 0 0
+[2026-09-16 20:52:21.183] 030: 20 31 38 20 31 20 30 20  30 20 30 20 32 20 35 30  18 1 0 0 0 2 50
+[2026-09-16 20:52:21.183] 040: 20 36 35 20 31 35 20 30  20 30 20 32 38 36 20 33  65 15 0 0 286 3
+[2026-09-16 20:52:21.183] 050: 32 36 20 31 20 31 31 30  20 31 20 30 20 30 20 30 26 1 110 1 0 0 0
+[2026-09-16 20:52:21.183] 060: 20 30 20 30 20 b4 89                              0 0 ..         
+[2026-09-16 20:52:21.183] Negate inter-processor interrupt.
+[2026-09-16 20:52:21.183] IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+[2026-09-16 20:52:21.183] Sent to iftask 0x70a
+[2026-09-16 20:52:21.183] 
+[2026-09-16 20:52:21.183] IF Task received event 'Message to Master' (0x070d). Rx data = 0x30011108
+[2026-09-16 20:52:21.183] Deferring event 0x070d
+[2026-09-16 20:52:21.183] 
+[2026-09-16 20:52:21.183] IMAGE Task received event 'Image Event Inactivity' (0x0a00). Rx data = 0x00000000
+[2026-09-16 20:52:21.195] IMAGE task unhandled event 'Image Event Inactivity' in 'Uninitialised'
+[2026-09-16 20:52:22.226] Inactive for 1000ms
+[2026-09-16 20:52:22.226] 
+[2026-09-16 20:52:22.226] IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+[2026-09-16 20:52:22.226] Deferring event 0x070e
+[2026-09-16 20:52:23.289] Inactive for 1000ms
+[2026-09-16 20:52:23.289] 
+[2026-09-16 20:52:23.289] IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+[2026-09-16 20:52:23.289] Deferring event 0x070e
+[2026-09-16 20:52:24.196] I2C busy - not sending message to master
+[2026-09-16 20:52:24.196] 
+[2026-09-16 20:52:24.196] IMAGE Task received event 'Image Event Inactivity' (0x0a00). Rx data = 0x00000000
+[2026-09-16 20:52:24.196] IMAGE task unhandled event 'Image Event Inactivity' in 'Uninitialised'
+[2026-09-16 20:52:25.199] 
+[2026-09-16 20:52:25.199] IF Task received event 'MM Timer' (0x070a). Rx data = 0x00000000
+[2026-09-16 20:52:25.199] I2C master did not read our I2C message
+[2026-09-16 20:52:25.199] I2C transmission complete.
+[2026-09-16 20:52:25.200] IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+[2026-09-16 20:52:25.200] Issuing deferred event 0x070e 'Inactivity'
+[2026-09-16 20:52:25.200] IFTask sending event 0x070e. Tx data = 0x00000000
+[2026-09-16 20:52:25.200] 
+[2026-09-16 20:52:25.200] IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+[2026-09-16 20:52:25.200] Assert inter-processor interrupt.
+[2026-09-16 20:52:25.200] Sending 103 bytes: Header 4, payload 97, checksum 2 'Sleep 0 0 0 1 0 1 500 0 1000 5 1 0 100 0 0 0 18 1 0 0 0 2 50 65 15 0 0 286 326 1 110 1 0 0 0 0 0 '
+[2026-09-16 20:52:25.200] 000: 80 04 61 00 53 6c 65 65  70 20 30 20 30 20 30 20 ..a.Sleep 0 0 0 
+[2026-09-16 20:52:25.200] 010: 31 20 30 20 31 20 35 30  30 20 30 20 31 30 30 30 1 0 1 500 0 1000
+[2026-09-16 20:52:25.200] 020: 20 35 20 31 20 30 20 31  30 30 20 30 20 30 20 30  5 1 0 100 0 0 0
+[2026-09-16 20:52:25.200] 030: 20 31 38 20 31 20 30 20  30 20 30 20 32 20 35 30  18 1 0 0 0 2 50
+[2026-09-16 20:52:25.200] 040: 20 36 35 20 31 35 20 30  20 30 20 32 38 36 20 33  65 15 0 0 286 3
+[2026-09-16 20:52:25.203] 050: 32 36 20 31 20 31 31 30  20 31 20 30 20 30 20 30 26 1 110 1 0 0 0
+[2026-09-16 20:52:25.203] 060: 20 30 20 30 20 b4 89                              0 0 ..         
+[2026-09-16 20:52:25.203] Negate inter-processor interrupt.
+[2026-09-16 20:52:25.203] IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+[2026-09-16 20:52:25.203] Sent to iftask 0x70a
+[2026-09-16 20:52:25.203] 
+[2026-09-16 20:52:25.203] IF Task received event 'Message to Master' (0x070d). Rx data = 0x30011108
+[2026-09-16 20:52:25.203] Deferring event 0x070d
+[2026-09-16 20:52:25.203] 
+[2026-09-16 20:52:25.203] IMAGE Task received event 'Image Event Inactivity' (0x0a00). Rx data = 0x00000000
+[2026-09-16 20:52:25.203] IMAGE task unhandled event 'Image Event Inactivity' in 'Uninitialised'
+[2026-09-16 20:52:26.232] Inactive for 1000ms
+[2026-09-16 20:52:26.232] 
+[2026-09-16 20:52:26.232] IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+[2026-09-16 20:52:26.232] Deferring event 0x070e
+[2026-09-16 20:52:27.312] Inactive for 1000ms
+[2026-09-16 20:52:27.312] 
+[2026-09-16 20:52:27.312] IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+[2026-09-16 20:52:27.312] Deferring event 0x070e
+[2026-09-16 20:52:28.218] I2C busy - not sending message to master
+[2026-09-16 20:52:28.218] 
+[2026-09-16 20:52:28.218] IMAGE Task received event 'Image Event Inactivity' (0x0a00). Rx data = 0x00000000
+[2026-09-16 20:52:28.218] IMAGE task unhandled event 'Image Event Inactivity' in 'Uninitialised'
+[2026-09-16 20:52:29.204] 
+[2026-09-16 20:52:29.204] IF Task received event 'MM Timer' (0x070a). Rx data = 0x00000000
+[2026-09-16 20:52:29.204] I2C master did not read our I2C message
+[2026-09-16 20:52:29.204] I2C transmission complete.
+[2026-09-16 20:52:29.204] IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+[2026-09-16 20:52:29.204] Issuing deferred event 0x070e 'Inactivity'
+[2026-09-16 20:52:29.204] IFTask sending event 0x070e. Tx data = 0x00000000
+[2026-09-16 20:52:29.204] 
+[2026-09-16 20:52:29.204] IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+[2026-09-16 20:52:29.204] Assert inter-processor interrupt.
+[2026-09-16 20:52:29.204] Sending 103 bytes: Header 4, payload 97, checksum 2 'Sleep 0 0 0 1 0 1 500 0 1000 5 1 0 100 0 0 0 18 1 0 0 0 2 50 65 15 0 0 286 326 1 110 1 0 0 0 0 0 '
+[2026-09-16 20:52:29.204] 000: 80 04 61 00 53 6c 65 65  70 20 30 20 30 20 30 20 ..a.Sleep 0 0 0 
+[2026-09-16 20:52:29.204] 010: 31 20 30 20 31 20 35 30  30 20 30 20 31 30 30 30 1 0 1 500 0 1000
+[2026-09-16 20:52:29.204] 020: 20 35 20 31 20 30 20 31  30 30 20 30 20 30 20 30  5 1 0 100 0 0 0
+[2026-09-16 20:52:29.219] 030: 20 31 38 20 31 20 30 20  30 20 30 20 32 20 35 30  18 1 0 0 0 2 50
+[2026-09-16 20:52:29.219] 040: 20 36 35 20 31 35 20 30  20 30 20 32 38 36 20 33  65 15 0 0 286 3
+[2026-09-16 20:52:29.219] 050: 32 36 20 31 20 31 31 30  20 31 20 30 20 30 20 30 26 1 110 1 0 0 0
+[2026-09-16 20:52:29.219] 060: 20 30 20 30 20 b4 89                              0 0 ..         
+[2026-09-16 20:52:29.219] Negate inter-processor interrupt.
+[2026-09-16 20:52:29.220] IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+[2026-09-16 20:52:29.220] Sent to iftask 0x70a
+[2026-09-16 20:52:29.220] 
+[2026-09-16 20:52:29.220] IF Task received event 'Message to Master' (0x070d). Rx data = 0x30011108
+[2026-09-16 20:52:29.220] Deferring event 0x070d
+[2026-09-16 20:52:29.220] 
+[2026-09-16 20:52:29.220] IMAGE Task received event 'Image Event Inactivity' (0x0a00). Rx data = 0x00000000
+[2026-09-16 20:52:29.220] IMAGE task unhandled event 'Image Event Inactivity' in 'Uninitialised'
+[2026-09-16 20:52:30.253] Inactive for 1000ms
+[2026-09-16 20:52:30.253] 
+[2026-09-16 20:52:30.253] IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+[2026-09-16 20:52:30.253] Deferring event 0x070e
+[2026-09-16 20:52:31.320] Inactive for 1000ms
+[2026-09-16 20:52:31.320] 
+[2026-09-16 20:52:31.320] IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+[2026-09-16 20:52:31.320] Deferring event 0x070e
+[2026-09-16 20:52:32.229] I2C busy - not sending message to master
+[2026-09-16 20:52:32.229] 
+[2026-09-16 20:52:32.229] IMAGE Task received event 'Image Event Inactivity' (0x0a00). Rx data = 0x00000000
+[2026-09-16 20:52:32.229] IMAGE task unhandled event 'Image Event Inactivity' in 'Uninitialised'
+[2026-09-16 20:52:33.217] 
+[2026-09-16 20:52:33.217] IF Task received event 'MM Timer' (0x070a). Rx data = 0x00000000
+[2026-09-16 20:52:33.217] I2C master did not read our I2C message
+[2026-09-16 20:52:33.217] I2C transmission complete.
+[2026-09-16 20:52:33.217] IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+[2026-09-16 20:52:33.217] Issuing deferred event 0x070e 'Inactivity'
+[2026-09-16 20:52:33.217] IFTask sending event 0x070e. Tx data = 0x00000000
+[2026-09-16 20:52:33.217] 
+[2026-09-16 20:52:33.217] IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+[2026-09-16 20:52:33.217] Assert inter-processor interrupt.
+[2026-09-16 20:52:33.217] Sending 103 bytes: Header 4, payload 97, checksum 2 'Sleep 0 0 0 1 0 1 500 0 1000 5 1 0 100 0 0 0 18 1 0 0 0 2 50 65 15 0 0 286 326 1 110 1 0 0 0 0 0 '
+[2026-09-16 20:52:33.217] 000: 80 04 61 00 53 6c 65 65  70 20 30 20 30 20 30 20 ..a.Sleep 0 0 0 
+[2026-09-16 20:52:33.217] 010: 31 20 30 20 31 20 35 30  30 20 30 20 31 30 30 30 1 0 1 500 0 1000
+[2026-09-16 20:52:33.217] 020: 20 35 20 31 20 30 20 31  30 30 20 30 20 30 20 30  5 1 0 100 0 0 0
+[2026-09-16 20:52:33.217] 030: 20 31 38 20 31 20 30 20  30 20 30 20 32 20 35 30  18 1 0 0 0 2 50
+[2026-09-16 20:52:33.217] 040: 20 36 35 20 31 35 20 30  20 30 20 32 38 36 20 33  65 15 0 0 286 3
+[2026-09-16 20:52:33.217] 050: 32 36 20 31 20 31 31 30  20 31 20 30 20 30 20 30 26 1 110 1 0 0 0
+[2026-09-16 20:52:33.217] 060: 20 30 20 30 20 b4 89                              0 0 ..         
+[2026-09-16 20:52:33.217] Negate inter-processor interrupt.
+[2026-09-16 20:52:33.217] IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+[2026-09-16 20:52:33.217] Sent to iftask 0x70a
+[2026-09-16 20:52:33.217] 
+[2026-09-16 20:52:33.217] IF Task received event 'Message to Master' (0x070d). Rx data = 0x30011108
+[2026-09-16 20:52:33.217] Deferring event 0x070d
+[2026-09-16 20:52:33.217] 
+[2026-09-16 20:52:33.217] IMAGE Task received event 'Image Event Inactivity' (0x0a00). Rx data = 0x00000000
+[2026-09-16 20:52:33.233] IMAGE task unhandled event 'Image Event Inactivity' in 'Uninitialised'
+[2026-09-16 20:52:34.267] Inactive for 1000ms
+[2026-09-16 20:52:34.267] 
+[2026-09-16 20:52:34.267] IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+[2026-09-16 20:52:34.267] Deferring event 0x070e
+[2026-09-16 20:52:35.334] Inactive for 1000ms
+[2026-09-16 20:52:35.334] 
+[2026-09-16 20:52:35.334] IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+[2026-09-16 20:52:35.334] Deferring event 0x070e
+[2026-09-16 20:52:36.241] I2C busy - not sending message to master
+[2026-09-16 20:52:36.241] 
+[2026-09-16 20:52:36.241] IMAGE Task received event 'Image Event Inactivity' (0x0a00). Rx data = 0x00000000
+[2026-09-16 20:52:36.241] IMAGE task unhandled event 'Image Event Inactivity' in 'Uninitialised'
+[2026-09-16 20:52:37.228] 
+[2026-09-16 20:52:37.228] IF Task received event 'MM Timer' (0x070a). Rx data = 0x00000000
+[2026-09-16 20:52:37.228] I2C master did not read our I2C message
+[2026-09-16 20:52:37.228] I2C transmission complete.
+[2026-09-16 20:52:37.228] IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+[2026-09-16 20:52:37.228] Issuing deferred event 0x070e 'Inactivity'
+[2026-09-16 20:52:37.228] IFTask sending event 0x070e. Tx data = 0x00000000
+[2026-09-16 20:52:37.228] 
+[2026-09-16 20:52:37.228] IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+[2026-09-16 20:52:37.228] Assert inter-processor interrupt.
+[2026-09-16 20:52:37.228] Sending 103 bytes: Header 4, payload 97, checksum 2 'Sleep 0 0 0 1 0 1 500 0 1000 5 1 0 100 0 0 0 18 1 0 0 0 2 50 65 15 0 0 286 326 1 110 1 0 0 0 0 0 '
+[2026-09-16 20:52:37.236] 000: 80 04 61 00 53 6c 65 65  70 20 30 20 30 20 30 20 ..a.Sleep 0 0 0 
+[2026-09-16 20:52:37.236] 010: 31 20 30 20 31 20 35 30  30 20 30 20 31 30 30 30 1 0 1 500 0 1000
+[2026-09-16 20:52:37.236] 020: 20 35 20 31 20 30 20 31  30 30 20 30 20 30 20 30  5 1 0 100 0 0 0
+[2026-09-16 20:52:37.236] 030: 20 31 38 20 31 20 30 20  30 20 30 20 32 20 35 30  18 1 0 0 0 2 50
+[2026-09-16 20:52:37.236] 040: 20 36 35 20 31 35 20 30  20 30 20 32 38 36 20 33  65 15 0 0 286 3
+[2026-09-16 20:52:37.236] 050: 32 36 20 31 20 31 31 30  20 31 20 30 20 30 20 30 26 1 110 1 0 0 0
+[2026-09-16 20:52:37.236] 060: 20 30 20 30 20 b4 89                              0 0 ..         
+[2026-09-16 20:52:37.236] Negate inter-processor interrupt.
+[2026-09-16 20:52:37.236] IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+[2026-09-16 20:52:37.236] Sent to iftask 0x70a
+[2026-09-16 20:52:37.236] 
+[2026-09-16 20:52:37.236] IF Task received event 'Message to Master' (0x070d). Rx data = 0x30011108
+[2026-09-16 20:52:37.250] Deferring event 0x070d
+[2026-09-16 20:52:37.250] 
+[2026-09-16 20:52:37.250] IMAGE Task received event 'Image Event Inactivity' (0x0a00). Rx data = 0x00000000
+[2026-09-16 20:52:37.250] IMAGE task unhandled event 'Image Event Inactivity' in 'Uninitialised'
+[2026-09-16 20:52:38.277] Inactive for 1000ms
+[2026-09-16 20:52:38.277] 
+[2026-09-16 20:52:38.277] IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+[2026-09-16 20:52:38.277] Deferring event 0x070e
+[2026-09-16 20:52:39.342] Inactive for 1000ms
+[2026-09-16 20:52:39.343] 
+[2026-09-16 20:52:39.343] IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+[2026-09-16 20:52:39.343] Deferring event 0x070e
+[2026-09-16 20:52:40.248] I2C busy - not sending message to master
+[2026-09-16 20:52:40.248] 
+[2026-09-16 20:52:40.248] IMAGE Task received event 'Image Event Inactivity' (0x0a00). Rx data = 0x00000000
+[2026-09-16 20:52:40.248] IMAGE task unhandled event 'Image Event Inactivity' in 'Uninitialised'
+[2026-09-16 20:52:41.250] 
+[2026-09-16 20:52:41.252] IF Task received event 'MM Timer' (0x070a). Rx data = 0x00000000
+[2026-09-16 20:52:41.252] I2C master did not read our I2C message
+[2026-09-16 20:52:41.252] I2C transmission complete.
+[2026-09-16 20:52:41.252] IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+[2026-09-16 20:52:41.252] Issuing deferred event 0x070e 'Inactivity'
+[2026-09-16 20:52:41.252] IFTask sending event 0x070e. Tx data = 0x00000000
+[2026-09-16 20:52:41.252] 
+[2026-09-16 20:52:41.252] IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+[2026-09-16 20:52:41.252] Assert inter-processor interrupt.
+[2026-09-16 20:52:41.252] Sending 103 bytes: Header 4, payload 97, checksum 2 'Sleep 0 0 0 1 0 1 500 0 1000 5 1 0 100 0 0 0 18 1 0 0 0 2 50 65 15 0 0 286 326 1 110 1 0 0 0 0 0 '
+[2026-09-16 20:52:41.252] 000: 80 04 61 00 53 6c 65 65  70 20 30 20 30 20 30 20 ..a.Sleep 0 0 0 
+[2026-09-16 20:52:41.252] 010: 31 20 30 20 31 20 35 30  30 20 30 20 31 30 30 30 1 0 1 500 0 1000
+[2026-09-16 20:52:41.252] 020: 20 35 20 31 20 30 20 31  30 30 20 30 20 30 20 30  5 1 0 100 0 0 0
+[2026-09-16 20:52:41.252] 030: 20 31 38 20 31 20 30 20  30 20 30 20 32 20 35 30  18 1 0 0 0 2 50
+[2026-09-16 20:52:41.257] 040: 20 36 35 20 31 35 20 30  20 30 20 32 38 36 20 33  65 15 0 0 286 3
+[2026-09-16 20:52:41.257] 050: 32 36 20 31 20 31 31 30  20 31 20 30 20 30 20 30 26 1 110 1 0 0 0
+[2026-09-16 20:52:41.257] 060: 20 30 20 30 20 b4 89                              0 0 ..         
+[2026-09-16 20:52:41.257] Negate inter-processor interrupt.
+[2026-09-16 20:52:41.257] IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+[2026-09-16 20:52:41.257] Sent to iftask 0x70a
+[2026-09-16 20:52:41.257] 
+[2026-09-16 20:52:41.257] IF Task received event 'Message to Master' (0x070d). Rx data = 0x30011108
+[2026-09-16 20:52:41.257] Deferring event 0x070d
+[2026-09-16 20:52:41.257] 
+[2026-09-16 20:52:41.266] IMAGE Task received event 'Image Event Inactivity' (0x0a00). Rx data = 0x00000000
+[2026-09-16 20:52:41.266] IMAGE task unhandled event 'Image Event Inactivity' in 'Uninitialised'
+[2026-09-16 20:52:42.298] Inactive for 1000ms
+[2026-09-16 20:52:42.298] 
+[2026-09-16 20:52:42.298] IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+[2026-09-16 20:52:42.298] Deferring event 0x070e
+[2026-09-16 20:52:43.350] Inactive for 1000ms
+[2026-09-16 20:52:43.350] 
+[2026-09-16 20:52:43.350] IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+[2026-09-16 20:52:43.350] Deferring event 0x070e

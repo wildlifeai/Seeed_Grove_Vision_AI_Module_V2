@@ -1,22 +1,21 @@
 name: No build artifacts in PRs
 
-# A normal build rewrites files that are tracked in git, so `git add -A` commits
-# them without anyone noticing:
+# The SDK library .mk files copy each archive they build back into prebuilt_libs/
+# (e.g. library/common/common.mk, middleware/fatfs/fatfs.mk), and image generation
+# runs as part of `all:` (mk/image_gen.mk). The files a normal build rewrites,
+# libcommon.a, libfatfs.a, libtrustzone_cfg.a and output.img, are not tracked
+# (#198): the build recreates them every time and never reads a committed copy.
 #
-#   * prebuilt_libs/**/*.a          the SDK library .mk files copy each freshly
-#                                   built archive back over the tracked one
-#                                   (e.g. library/common/common.mk, middleware/
-#                                   fatfs/fatfs.mk), so every build dirties them
-#   * we2_image_gen_local_dpd/...   image generation runs as part of `all:` since
-#                                   the mk/image_gen.mk work, rewriting output.img
+# This check is the backstop for everything else in those paths:
 #
-# Those .a files are what the firmware links against. Committing a local rebuild
-# silently changes what ships, with no visible source diff, which is why this is
-# a hard failure rather than a warning.
+#   * prebuilt_libs/**/*.a          the other archives are real inputs. The build
+#                                   links them as committed, so a changed one
+#                                   silently changes what ships, with no visible
+#                                   source diff. A build that recompiles one
+#                                   (e.g. `make WW500_FAST_LIBS=n`) dirties it.
+#   * we2_image_gen_local_dpd/...   image generator outputs
 #
-# .gitignore cannot prevent this: the files are tracked deliberately, and git
-# ignores .gitignore for tracked files. The durable fix, and the options being
-# weighed, are in issue #198.
+# That is why this is a hard failure rather than a warning.
 #
 # To get past this check, restore the files rather than committing them:
 #   git checkout origin/dev -- EPII_CM55M_APP_S/prebuilt_libs we2_image_gen_local_dpd

@@ -2000,6 +2000,7 @@ static bool configure_image_sensor(CAMERA_CONFIG_E operation) {
         	processedOK = false;
         }
         else  {
+        	// TODO should be #if defined(USE_HM0360) || defined(USE_HM0360_MD)
 #ifdef USE_HM0360
         	cisdp_sensor_set_md_sensitivity(fatfs_getOperationalParameter(OP_PARAMETER_MD_SENSITIVITY));
 #endif // USE_HM0360
@@ -2034,10 +2035,10 @@ static bool configure_image_sensor(CAMERA_CONFIG_E operation) {
             processedOK = false;
         }
         else  {
-
+        	// TODO should be #if defined(USE_HM0360) || defined(USE_HM0360_MD)
+        	// TODO should other similar instances be chnaged?
 #ifdef USE_HM0360
         	cisdp_sensor_set_md_sensitivity(fatfs_getOperationalParameter(OP_PARAMETER_MD_SENSITIVITY));
-
 #endif // USE_HM0360
         	// if wdma variable is zero when not init yet, then this step is a must be to retrieve wdma address
             //  Datapath events give callbacks to os_app_dplib_cb() in dp_task

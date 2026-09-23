@@ -736,6 +736,9 @@ HX_CIS_ERROR_E hm0360_md_prepare(bool cameraSystemEnabled, uint16_t mdFrameInter
 		mdInterval = 0;
 	}
 
+	// TODO - should this also depend on the md sensitivity, as value 0 sets the sensitivity to off.
+	// Maybe we should remove the md 0 value as it is a second way to disable MD.
+
 	if (mdInterval > 0) {
 		dbg_printf(DBG_LESS_INFO, "   HM0360 Motion Detection on! %dms frame interval\r\n", mdFrameInterval);
 	}

@@ -33,7 +33,7 @@ website and backend consume this firmware's EXIF fields, op-parameters and BLE c
 |---|---|
 | A branch, a worktree, the upstream, a build or a flash | [references/git-and-build.md](references/git-and-build.md) |
 | Anything that behaves oddly on real hardware | [references/hardware-traps.md](references/hardware-traps.md) |
-| A reproduction, a bench script or the logger | [references/bench.md](references/bench.md) |
+| A reproduction, a bench script, the logger or flashing a batch of boards | [references/bench.md](references/bench.md) |
 | An op parameter, a command string, an EXIF field, a self-test bit | [references/cross-repo-contracts.md](references/cross-repo-contracts.md) |
 | Documentation, a development report, or your own commit hygiene | [references/documentation.md](references/documentation.md) |
 

@@ -296,6 +296,15 @@ void set_mipi_csirx_disable()
 }
 
 
+// Point the shared CIS I2C bus at the IMX708. The HM0360 MD companion shares
+// the bus, and anything that talks to it moves the slave ID. Callers that write
+// sensor registers from outside this driver (e.g. the AE loop) call this first.
+void cisdp_select_main_camera_i2c(void)
+{
+    hx_drv_cis_set_slaveID(CIS_I2C_ID);
+}
+
+
 int cisdp_sensor_init(bool sensor_init) {
     dbg_printf(DBG_LESS_INFO, "Initialising IMX708 at 0x%02x (p.u. delay %dms)\r\n", CIS_I2C_ID, CIS_POWERUP_DELAY);
     dbg_printf(DBG_LESS_INFO, "Memory allocated: %ld for raw buffer, %d for JPEG, %d for JPEG header\n",
@@ -598,6 +607,10 @@ int cisdp_dp_init(bool inp_init, SENSORDPLIB_PATH_E dp_type, sensordplib_CBEvent
 
 void cisdp_stream_on()
 {
+    // The HM0360 MD companion shares the CIS I2C bus; make sure the stream
+    // command reaches the IMX708 whatever the bus was last pointed at
+    cisdp_select_main_camera_i2c();
+
     /*
      * Stream On
      */
@@ -615,6 +628,8 @@ void cisdp_stream_on()
 
 void cisdp_stream_off()
 {
+    cisdp_select_main_camera_i2c();	// see cisdp_stream_on()
+
     /*
      * Stream Off
      */
@@ -631,6 +646,8 @@ void cisdp_stream_off()
 
 void cisdp_sensor_start()
 {
+    cisdp_select_main_camera_i2c();	// see cisdp_stream_on()
+
     /*
      * Stream On
      */
@@ -654,6 +671,8 @@ void cisdp_sensor_stop() {
     sensordplib_stop_capture();
     sensordplib_start_swreset();
     sensordplib_stop_swreset_WoSensorCtrl();
+
+    cisdp_select_main_camera_i2c();	// see cisdp_stream_on()
 
     /*
      * Stream Off

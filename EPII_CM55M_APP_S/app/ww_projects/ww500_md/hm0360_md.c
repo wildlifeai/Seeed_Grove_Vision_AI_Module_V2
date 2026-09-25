@@ -40,6 +40,14 @@ static bool hm0360MainCamera = false;
 
 static bool hm0360_present = false;
 
+// Depth of nested saveMainCameraConfig() scopes. The md functions call each
+// other (hm0360_md_init() and hm0360_md_prepare() call hm0360_md_setMode(),
+// which calls hm0360_md_enableInterrupt() or hm0360_md_disableInterrupt()),
+// so an inner save must not re-sample the slave ID: it would capture the
+// HM0360's own address, and the outer restore would then leave the bus pointing
+// at the HM0360, so the main camera silently misses its next register writes.
+static uint32_t idSaveDepth = 0;
+
 static HX_CIS_SensorSetting_t HM0360_md_init_setting[] = {
 #include "../cis_hm0360/HM0360_OSC_Bayer_640x480_setA_VGA_setB_QVGA_md_8b_ParallelOutput_R2.i"
 };
@@ -60,7 +68,10 @@ static void saveMainCameraConfig(void) {
 		return;
 	}
 
-	hx_drv_cis_get_slaveID(&mainCameraID);
+	// Only the outermost scope samples the current ID (see idSaveDepth)
+	if (idSaveDepth++ == 0) {
+		hx_drv_cis_get_slaveID(&mainCameraID);
+	}
     hx_drv_cis_set_slaveID(HM0360_SENSOR_I2CID);
 }
 
@@ -72,7 +83,10 @@ static void restoreMainCameraConfig(void) {
 		// Don't waste time saving and restoring this
 		return;
 	}
-	hx_drv_cis_set_slaveID(mainCameraID);
+	// Inner scopes keep the HM0360 selected; only the outermost restores
+	if (idSaveDepth > 0 && --idSaveDepth == 0) {
+		hx_drv_cis_set_slaveID(mainCameraID);
+	}
 }
 
 

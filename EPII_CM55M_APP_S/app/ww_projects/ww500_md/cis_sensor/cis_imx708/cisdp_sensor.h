@@ -50,6 +50,11 @@ uint32_t app_get_raw_width();
 uint32_t app_get_raw_height();
 uint32_t app_get_raw_channels();
 
+/* Point the shared CIS I2C bus at the main camera (the HM0360 MD companion
+ * shares the bus and moves the slave ID). Call before writing sensor
+ * registers from outside the driver (e.g. the AE loop). */
+void cisdp_select_main_camera_i2c(void);
+
 #ifdef __cplusplus
 }
 #endif

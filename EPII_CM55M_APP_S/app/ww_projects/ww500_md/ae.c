@@ -26,6 +26,7 @@
 #include "hx_drv_CIS_common.h"	// hx_drv_cis_set_reg
 #include "fatfs_task.h"		// operational parameters
 #include "preview.h"		// preview_isActive(): unbounded AE while previewing
+#include "cisdp_sensor.h"	// cisdp_select_main_camera_i2c()
 #include "ae.h"
 
 /*********************************************** Local Defines **********************************************/
@@ -121,6 +122,12 @@ static uint32_t brightLuma(uint32_t yAddr, uint16_t w, uint16_t h) {
  * @param value 16-bit value to write
  */
 static void writeReg16(uint16_t regH, uint16_t value) {
+#if defined(USE_RP3)
+	// The HM0360 MD companion shares the CIS I2C bus and moves the slave ID,
+	// so always address the main camera. Only the IMX708 driver provides
+	// this hook.
+	cisdp_select_main_camera_i2c();
+#endif
 	hx_drv_cis_set_reg(regH, (uint8_t)((value >> 8) & 0xFF), 0);
 	hx_drv_cis_set_reg((uint16_t)(regH + 1), (uint8_t)(value & 0xFF), 0);
 }

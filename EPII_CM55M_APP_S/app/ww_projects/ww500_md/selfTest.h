@@ -33,6 +33,7 @@ typedef enum {
     SELF_TEST_AI_NO_SD_CARD,	// 11 = SD card missing
     SELF_TEST_AI_PDM_ERROR,		// 12 = PDM microphone fails
     SELF_TEST_AI_NN_ERROR,		// 13 = Neural network error
+    SELF_TEST_AI_NO_BLE,		// 14 = BLE processor did not read the AI processor's first message (added 28 Sep 2026)
 
 } selfTest_type_t;
 

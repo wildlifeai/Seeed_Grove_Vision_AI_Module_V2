@@ -723,6 +723,7 @@ HX_CIS_ERROR_E hm0360_md_configureStrobe(bool flashRequired) {
 HX_CIS_ERROR_E hm0360_md_prepare(bool cameraSystemEnabled, uint16_t mdFrameInterval) {
 	HX_CIS_ERROR_E ret;
 	uint16_t mdInterval;
+	uint16_t sensitivity;
 
 	// Don't proceed if the HM0360 is missing or faulty
 	if (!hm0360_present) {
@@ -739,11 +740,32 @@ HX_CIS_ERROR_E hm0360_md_prepare(bool cameraSystemEnabled, uint16_t mdFrameInter
 	// TODO - should this also depend on the md sensitivity, as value 0 sets the sensitivity to off.
 	// Maybe we should remove the md 0 value as it is a second way to disable MD.
 
-	if (mdInterval > 0) {
-		dbg_printf(DBG_LESS_INFO, "   HM0360 Motion Detection on! %dms frame interval\r\n", mdFrameInterval);
+	// The message reports whether motion detection can really happen (28 Sep 2026). Sensitivity 0
+	// (OP_PARAMETER_MD_SENSITIVITY, op 17) sets MD_LIGHT_COEF to 0 in cisdp_sensor_set_md_sensitivity(), so the
+	// sensor never raises a motion interrupt even though the frame interval is set. The sensor set-up below is unchanged:
+	// it still takes its frames at the interval. Only the HM0360 build applies op 17 (image_task.c); in the RP builds the
+	// sensor keeps the register table's sensitivity whatever op 17 says, so there it is not reported.
+#ifdef USE_HM0360
+	sensitivity = fatfs_getOperationalParameter(OP_PARAMETER_MD_SENSITIVITY);
+#else
+	sensitivity = 1;	// op 17 is not applied in this build: the register table's (low) sensitivity is in use
+#endif // USE_HM0360
+
+	if (mdInterval == 0) {
+		dbg_printf(DBG_LESS_INFO, "   HM0360 Motion Detection off (%s).\r\n",
+				cameraSystemEnabled ? "the frame interval, op 11, is 0" : "the camera system is disabled");
+	}
+	else if (sensitivity == 0) {	// MD_SENSITIVITY_OFF (cis_hm0360/cisdp_sensor.h, not visible in the RP builds)
+		dbg_printf(DBG_LESS_INFO, "   HM0360 Motion Detection off (the sensitivity, op 17, is 0), frames every %dms.\r\n",
+				mdFrameInterval);
 	}
 	else {
-		dbg_printf(DBG_LESS_INFO, "   HM0360 Motion Detection off.\r\n");
+#ifdef USE_HM0360
+		dbg_printf(DBG_LESS_INFO, "   HM0360 Motion Detection on! %dms frame interval, sensitivity %d\r\n",
+				mdFrameInterval, (int) sensitivity);
+#else
+		dbg_printf(DBG_LESS_INFO, "   HM0360 Motion Detection on! %dms frame interval\r\n", mdFrameInterval);
+#endif // USE_HM0360
 	}
 
 	saveMainCameraConfig();

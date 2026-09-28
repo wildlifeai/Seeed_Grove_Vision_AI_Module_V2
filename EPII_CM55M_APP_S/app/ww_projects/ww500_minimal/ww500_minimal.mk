@@ -225,8 +225,8 @@ override EPII_USECASE_SEL := drv_onecore_cm55m_s
 #                                             while in use, for power measurements
 # Do a clean build when changing the camera (make clean, or in Eclipse Project > Clean...).
 CIS_SUPPORT_INAPP = cis_sensor
-#CIS_SUPPORT_INAPP_MODEL = cis_hm0360
-CIS_SUPPORT_INAPP_MODEL=cis_imx708
+CIS_SUPPORT_INAPP_MODEL = cis_hm0360
+#CIS_SUPPORT_INAPP_MODEL=cis_imx708
 
 ifeq ($(CIS_SUPPORT_INAPP_MODEL), cis_hm0360)
 $(info ww500_minimal camera: HM0360)

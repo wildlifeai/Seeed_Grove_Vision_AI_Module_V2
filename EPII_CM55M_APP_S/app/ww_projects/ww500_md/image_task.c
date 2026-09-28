@@ -2732,6 +2732,12 @@ void image_sleepNow(void) {
 #if defined(USE_HM0360) || defined(USE_HM0360_MD)
     // HM0360 as main camera
     if (hm0360_md_isHM0360Present()) {
+#ifdef USE_HM0360
+    	// Apply the MD sensitivity (op 17) now, not only at boot (configure_image_sensor()), so that a change made
+    	// while awake (setop 17, AI setop over BLE) takes effect for this DPD rather than after the next wake, and so
+    	// matches the message hm0360_md_prepare() prints (28 Sep 2026)
+    	cisdp_sensor_set_md_sensitivity(fatfs_getOperationalParameter(OP_PARAMETER_MD_SENSITIVITY));
+#endif // USE_HM0360
     	XP_LT_GREY;
        	xprintf("Preparing HM0360 for MD:");
     	hm0360_md_prepare(cameraSystemEnabled, mdInterval); // select CONTEXT_B registers (if enabled)

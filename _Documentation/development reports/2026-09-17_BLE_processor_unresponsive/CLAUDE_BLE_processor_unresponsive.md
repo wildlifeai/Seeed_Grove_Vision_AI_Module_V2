@@ -311,6 +311,10 @@ send was deferred 26 times and successfully replayed 0 times. See the
 `savedMessage` section of `CLAUDE_BLE_processor_unresponsive.md` for the full
 mechanism and fix proposal (convert to a small FIFO).
 
+---
 
+## 28 September 2026: Unresponsive BLE Processor Detection and Mitigation (Claude)
 
-
+The AI processor now detects an absent or unresponsive BLE processor at every boot and still enters DPD without it. This
+also fixes the "never sleeps" fault described above for the case where the "Sleep" message is not read. Written up in
+[CLAUDE_Unresponsive_BLE_Processor_Detection_and_Mitigation.md](CLAUDE_Unresponsive_BLE_Processor_Detection_and_Mitigation.md).

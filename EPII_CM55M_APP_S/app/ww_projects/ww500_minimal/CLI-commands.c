@@ -44,6 +44,7 @@
 #include "CLI-commands.h"
 #include "fatfs_task.h"
 #ifndef WW500_MINIMAL_NO_CAMERA
+#include "hm0360_regs.h"
 #include "image_task.h"
 #endif // WW500_MINIMAL_NO_CAMERA
 #include "inactivity.h"
@@ -170,6 +171,10 @@ static BaseType_t prvSdRead(char *pcWriteBuffer, size_t xWriteBufferLen, const c
 #ifndef WW500_MINIMAL_NO_CAMERA
 static BaseType_t prvCapture(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 static BaseType_t prvCam(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
+#ifdef USE_HM0360
+static BaseType_t prvContext(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
+static BaseType_t prvMdInt(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
+#endif // USE_HM0360
 #endif // WW500_MINIMAL_NO_CAMERA
 static BaseType_t prvRc32kTrim(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 static BaseType_t prvDpd(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
@@ -542,7 +547,7 @@ static BaseType_t prvTimePrint(char *pcWriteBuffer, size_t xWriteBufferLen, cons
 }
 
 /**
- * @brief Sets an LED directly. Command: led <9|10> <0|1>
+ * @brief Sets an LED directly. Command: led <red|blue> <0|1>
  *
  * The blinky task will overwrite the LEDs while it is blinking, so use 'blink off' first.
  *
@@ -554,31 +559,37 @@ static BaseType_t prvTimePrint(char *pcWriteBuffer, size_t xWriteBufferLen, cons
 static BaseType_t prvLed(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) {
 	const char *pcParameter;
 	BaseType_t lParameterStringLength;
-	uint32_t pin;
+	bool red;
 	uint32_t value;
 
 	configASSERT(pcWriteBuffer);
 
 	pcParameter = FreeRTOS_CLIGetParameter(pcCommandString, 1, &lParameterStringLength);
-	if (!parseUint(pcParameter, lParameterStringLength, &pin) || ((pin != 9) && (pin != 10))) {
-		cli_append(&pcWriteBuffer, &xWriteBufferLen, "Expected pin 9 or 10, then 0 or 1");
+	if ((lParameterStringLength == 3) && (strncmp(pcParameter, "red", 3) == 0)) {
+		red = true;
+	}
+	else if ((lParameterStringLength == 4) && (strncmp(pcParameter, "blue", 4) == 0)) {
+		red = false;
+	}
+	else {
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "Expected red or blue, then 0 or 1");
 		return pdFALSE;
 	}
 
 	pcParameter = FreeRTOS_CLIGetParameter(pcCommandString, 2, &lParameterStringLength);
 	if (!parseUint(pcParameter, lParameterStringLength, &value) || (value > 1)) {
-		cli_append(&pcWriteBuffer, &xWriteBufferLen, "Expected pin 9 or 10, then 0 or 1");
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "Expected red or blue, then 0 or 1");
 		return pdFALSE;
 	}
 
-	if (pin == 9) {
-		ww500_minimal_ledPb9(value == 1);
+	if (red) {
+		ww500_minimal_ledRed(value == 1);
 	}
 	else {
-		ww500_minimal_ledPb10(value == 1);
+		ww500_minimal_ledBlue(value == 1);
 	}
 
-	cli_append(&pcWriteBuffer, &xWriteBufferLen, "PB%d = %d", (int) pin, (int) value);
+	cli_append(&pcWriteBuffer, &xWriteBufferLen, "%s LED %s", red ? "Red" : "Blue", (value == 1) ? "on" : "off");
 
 	return pdFALSE;
 }
@@ -953,8 +964,8 @@ static BaseType_t prvSleep(char *pcWriteBuffer, size_t xWriteBufferLen, const ch
 	blinky_task_setPeriod(0);
 	vTaskDelay(pdMS_TO_TICKS(SLEEP_SETTLE_MS));
 	waitForFatFs();		// Do not stop the processor in the middle of an SD card write
-	ww500_minimal_ledPb9(false);
-	ww500_minimal_ledPb10(false);
+	ww500_minimal_ledRed(false);
+	ww500_minimal_ledBlue(false);
 	power_diag_restoreClocks();
 
 	sleep_mode_enter_sleep(seconds * 1000, 0, retention);	// does not return
@@ -1144,12 +1155,16 @@ static BaseType_t prvCapture(char *pcWriteBuffer, size_t xWriteBufferLen, const 
 }
 
 /**
- * @brief Shows or changes the HM0360 mode. Command: cam [mode|init]
+ * @brief Shows or changes the camera's resting state. Command: cam [mode|init] (HM0360) or cam [on|off|init] (RP3)
  *
- * With no parameter the image task prints the mode the sensor is in. With a number it sets the resting mode
- * (the mode the sensor is in when not taking a picture, and left in for DPD): 0 sleep, 1 continuous, 2 N frames
- * then sleep, 3 N frames then standby, 4 hardware trigger, 6 or 7 hardware trigger N frames. With 'init' the
- * image task writes the long register table again.
+ * HM0360: with no parameter the image task prints the mode the sensor is in. With a number it sets the resting
+ * mode (the mode the sensor is in when not taking a picture, and left in for DPD): 0 sleep, 1 continuous, 2 N
+ * frames then sleep, 3 N frames then standby, 4 hardware trigger, 6 or 7 hardware trigger N frames. With 'init'
+ * the image task writes the long register table again.
+ *
+ * RP3: with no parameter the image task prints whether the camera is powered. 'on' powers it and writes its
+ * registers, and keeps it powered between pictures; 'off' powers it down (the normal state between pictures).
+ * With 'init' the image task checks again that it answers. It is always powered down for DPD.
  *
  * @param pcWriteBuffer   Buffer for the response.
  * @param xWriteBufferLen Length of the buffer.
@@ -1172,6 +1187,7 @@ static BaseType_t prvCam(char *pcWriteBuffer, size_t xWriteBufferLen, const char
 	else if ((paramLength == 4) && (strncmp(pcParam, "init", 4) == 0)) {
 		queued = image_task_requestReinit();
 	}
+#ifdef USE_HM0360
 	else if (parseUint(pcParam, paramLength, &mode) && (mode <= 7)) {
 		queued = image_task_requestMode((uint8_t) mode);
 	}
@@ -1179,6 +1195,19 @@ static BaseType_t prvCam(char *pcWriteBuffer, size_t xWriteBufferLen, const char
 		cli_append(&pcWriteBuffer, &xWriteBufferLen, "Expected nothing, a mode from 0 to 7, or 'init'");
 		return pdFALSE;
 	}
+#else
+	else if ((paramLength == 2) && (strncmp(pcParam, "on", 2) == 0)) {
+		queued = image_task_requestMode(1);
+	}
+	else if ((paramLength == 3) && (strncmp(pcParam, "off", 3) == 0)) {
+		queued = image_task_requestMode(0);
+	}
+	else {
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "Expected nothing, 'on', 'off' or 'init'");
+		return pdFALSE;
+	}
+	(void) mode;
+#endif // USE_HM0360
 
 	if (queued) {
 		cli_append(&pcWriteBuffer, &xWriteBufferLen, "Asked the image task");
@@ -1189,6 +1218,83 @@ static BaseType_t prvCam(char *pcWriteBuffer, size_t xWriteBufferLen, const char
 
 	return pdFALSE;
 }
+
+#ifdef USE_HM0360
+/**
+ * @brief Sets the register context of the HM0360 resting mode. Command: context <A|B>
+ *
+ * ww500_md uses context B for motion detection in DPD. Pictures are always taken in context A.
+ *
+ * @param pcWriteBuffer   Buffer for the response.
+ * @param xWriteBufferLen Length of the buffer.
+ * @param pcCommandString The command line.
+ * @return pdFALSE as there is no more output.
+ */
+static BaseType_t prvContext(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) {
+	const char *pcParam;
+	BaseType_t paramLength;
+	uint8_t context;
+
+	configASSERT(pcWriteBuffer);
+
+	pcParam = FreeRTOS_CLIGetParameter(pcCommandString, 1, &paramLength);
+
+	if ((paramLength == 1) && ((pcParam[0] == 'A') || (pcParam[0] == 'a'))) {
+		context = CONTEXT_A;
+	}
+	else if ((paramLength == 1) && ((pcParam[0] == 'B') || (pcParam[0] == 'b'))) {
+		context = CONTEXT_B;
+	}
+	else {
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "Expected A or B");
+		return pdFALSE;
+	}
+
+	if (image_task_requestContext(context)) {
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "Asked the image task");
+	}
+	else {
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "The image task did not accept the request");
+	}
+
+	return pdFALSE;
+}
+
+/**
+ * @brief Sets the HM0360 motion detection interval. Command: mdint <ms>
+ *
+ * The interval is the sleep between frames in the resting mode (mode 2). A non-zero interval enables the motion
+ * detection interrupt, which wakes the processor from DPD through the WAKE pin; 0 disables it.
+ *
+ * @param pcWriteBuffer   Buffer for the response.
+ * @param xWriteBufferLen Length of the buffer.
+ * @param pcCommandString The command line.
+ * @return pdFALSE as there is no more output.
+ */
+static BaseType_t prvMdInt(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) {
+	const char *pcParam;
+	BaseType_t paramLength;
+	uint32_t intervalMs;
+
+	configASSERT(pcWriteBuffer);
+
+	pcParam = FreeRTOS_CLIGetParameter(pcCommandString, 1, &paramLength);
+
+	if (!parseUint(pcParam, paramLength, &intervalMs) || (intervalMs > 0xFFFF)) {
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "Expected an interval in ms (0 = off, longest about 2000)");
+		return pdFALSE;
+	}
+
+	if (image_task_requestMdInterval((uint16_t) intervalMs)) {
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "Asked the image task");
+	}
+	else {
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "The image task did not accept the request");
+	}
+
+	return pdFALSE;
+}
+#endif // USE_HM0360
 
 #endif // WW500_MINIMAL_NO_CAMERA
 
@@ -1295,7 +1401,7 @@ static void registerCommands(void) {
 		{ "awake", "awake <seconds>:\r\n Sets how long the blinking runs before it stops (reverts after DPD)\r\n", prvAwake, 1 },
 		{ "blink", "blink <ms|off>:\r\n Starts blinking with a period in ms, or stops it. Once stopped DPD follows\r\n", prvBlink, 1 },
 		{ "timeprint", "timeprint <seconds>:\r\n Prints the time this often while blinking. 0 = off\r\n", prvTimePrint, 1 },
-		{ "led", "led <9|10> <0|1>:\r\n Sets the LED on PB9 or PB10 (use 'blink off' first)\r\n", prvLed, 2 },
+		{ "led", "led <red|blue> <0|1>:\r\n Sets the red (PB9) or blue (PB11) LED (use 'blink off' first)\r\n", prvLed, 2 },
 		{ "inactivity", "inactivity <seconds>:\r\n Sets how long to stay awake once the tasks are idle\r\n", prvInactivity, 1 },
 		{ "idle", "idle:\r\n Measures the idle loop for 2 s to show whether tickless idle is sleeping the CPU (use after blink off)\r\n", prvIdle, 0 },
 		{ "clocks", "clocks:\r\n Prints the clock frequencies and which clock enables are set\r\n", prvClocks, 0 },
@@ -1315,8 +1421,15 @@ static void registerCommands(void) {
 		{ "sdread", "sdread <name>:\r\n Reads an 8.3 file from the root of the SD card and prints it as text\r\n", prvSdRead, 1 },
 #endif // WW500_MINIMAL_NO_FATFS
 #ifndef WW500_MINIMAL_NO_CAMERA
+#ifdef USE_HM0360
 		{ "capture", "capture:\r\n Takes a picture with the HM0360 (mode 2, one frame) and saves it as Bnnnnnnn.JPG on the SD card\r\n", prvCapture, 0 },
 		{ "cam", "cam [mode|init]:\r\n Prints the HM0360 mode, or sets its resting mode (0-4, 6, 7; the default is 2), or 'init' writes its registers again\r\n", prvCam, -1 },
+		{ "context", "context <A|B>:\r\n Sets the HM0360 register context of the resting mode (default A; md uses B for motion detection)\r\n", prvContext, 1 },
+		{ "mdint", "mdint <ms>:\r\n Sets the HM0360 motion detection interval (0 = off, the default; longest about 2000). Kept through DPD\r\n", prvMdInt, 1 },
+#else
+		{ "capture", "capture:\r\n Powers the RP3 up, takes one frame, saves it as Bnnnnnnn.JPG on the SD card, powers it down (unless 'cam on')\r\n", prvCapture, 0 },
+		{ "cam", "cam [on|off|init]:\r\n Prints whether the RP3 is powered, or keeps it powered between pictures (on) or not (off, the default), or checks it again (init)\r\n", prvCam, -1 },
+#endif // USE_HM0360
 #endif // WW500_MINIMAL_NO_CAMERA
 		{ "rc32ktrim", "rc32ktrim [0-255]:\r\n EXPERIMENT: reads or sets the RC32K1K trim register that clocks the RTC and sleep timers (no 32.768 kHz crystal is fitted). Re-measure RTC accuracy after changing it\r\n", prvRc32kTrim, -1 },
 		{ "dpd", "dpd:\r\n Enters deep power down as soon as possible\r\n", prvDpd, 0 },

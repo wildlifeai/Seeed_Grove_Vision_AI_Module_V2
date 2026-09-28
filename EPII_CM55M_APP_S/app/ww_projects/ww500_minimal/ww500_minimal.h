@@ -109,14 +109,14 @@ extern "C" {
 int app_main(void);
 
 /**
- * @brief Drives the LED on PB9 (active high).
+ * @brief Drives the red LED (LED1, PB9, active high).
  */
-void ww500_minimal_ledPb9(bool on);
+void ww500_minimal_ledRed(bool on);
 
 /**
- * @brief Drives the LED on PB10 (active high).
+ * @brief Drives the blue LED (LED2, PB11, active high).
  */
-void ww500_minimal_ledPb10(bool on);
+void ww500_minimal_ledBlue(bool on);
 
 /**
  * @brief Returns the build time and date as a string.

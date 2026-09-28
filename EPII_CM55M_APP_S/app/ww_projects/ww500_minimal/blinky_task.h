@@ -4,7 +4,7 @@
  *  Created on: 20 Sep 2026
  *      Author: Charles Palmer
  *
- *  FreeRTOS task that alternately blinks the LEDs on PB9 and PB10, and owns entry to DPD.
+ *  FreeRTOS task that alternately blinks the red and blue LEDs, and owns entry to DPD.
  *
  *  The task blinks for a run time (longer after a cold boot), then stops. Stopping means that
  *  every task is idle, so the inactivity mechanism (inactivity.c) reports inactivity. The

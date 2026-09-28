@@ -1,8 +1,8 @@
-# ww500_minimal: awake-idle current and tickless idle
+# WW500 Power Consumption Investigations with `w500_minimal` build
 
 #### File: power_investigation.md
-#### Author: Claude (Sonnet 5), from measurements by Charles Palmer
-#### 21 September 2026
+#### Author: Claude and Charles Palmer
+#### 21-24 September 2026
 
 `ww500_minimal` was built to measure the HX6538 (AI processor) on its own. This document
 records what was found about the current the processor draws while it is awake and idle, how
@@ -13,26 +13,244 @@ is Claude's and is marked as inference where it is not measured.
 How the work happened is in `_Documentation/development reports/2026-09-20_Minimal__FreeRTOS/`.
 How the app works is in [README.md](README.md).
 
-## Short summary: what we have learnt
+#### Hardware
 
-The aim was to find out where the HX6538's current goes on a board that carries little else, and whether a low-current
-state that does not need a reboot exists. All figures are Charles's multimeter readings on 21 September 2026 (a WW500_C02
-carrying only the HX6538, LEDs off, nothing on the I/O).
+I populated a spare WW500.C00 PCB with only the minimum components for this work. 
+I started with an HX6538 and PSU components. No MKL62BA or flash LED circuit.
+I installed 2-pin jumprs at R45 and R47 sites to measure the 2V8 and 1V8 power into the HM0360.
 
-**The states, from lowest current to highest:**
+Total input current was measured with a multimeter at the FTDI connector board.
+
+(I did add the PCA9574 to confirm the I2C bus was working as I was having trouble with the HM0360 connections. 
+This might have incresed sleep current by 3.8uA).
+
+This matched a companion WW500.C00 PCB with only the MKL62BA.
+
+#### Software
+
+Claude built `ww500_minimal` for me, from scratch. This is a FreeRTOS port intended to have simple tasks
+that could be added or removed by compiler switches. It follows the patterns started in the `ww500_md` but is much simpler 
+and hopefully cleaner. It does the cold boot/warm boot selection and has CLI commands to explore
+clocking ((mainly to investigate the tickless idle current).
+
+---
+
+## Power Consumption Measurements
+
+**Power measurements without HM0360**
 
 | State | Current | Notes |
 |---|---|---|
 | **DPD** (deep power down, `dpd`), bare board | **10 uA** | The chip reboots on a timer or WAKE-pin wake. |
 | DPD, PCA9574 fitted (23 September 2026) | **13.8 uA** | See "PCA9574 and the extra DPD current" below - cause not found. |
+| DPD, SD card inserted | **13.8 uA** | No difference. |
 | **Power-down with retention** (`sleep 30 1`) | **1.5 mA** | RAM is kept. The app's banner appears 4 to 5 ms after the first bootloader line, against 13 to 16 ms after a DPD wake. |
 | Power-down, no retention (`sleep 30 0`) | 1.5 mA | RAM lost. Behaves like DPD (banner 16 ms after the first bootloader line). Same current as with retention. |
 | Awake and idle, best state found (24 MHz RC oscillator, PLL off, unused clock enables off, UART moved to RC, crystal off) | 4.8 mA | Console and DPD still work. Fully reversible. |
 | Awake and idle, 24 MHz RC oscillator, PLL off | 8.5 mA | |
 | Awake and idle, 24 MHz RC oscillator, PLL on | 10.1 mA | |
-| **Awake and idle as it was (400 MHz, tickless idle sleeping)** | **17.3 to 17.9 mA** | |
+| Awake and idle (400 MHz, tickless idle sleeping) | **17.3 to 17.9 mA** | Headline power, without adjustments. |
 
-**What we learnt, in short:**
+_Note that the compiler switches that enable/disable the fatfs and image tasks (and their HX6538 modules)
+make no difference to the DPD current._
+
+---
+
+**Power measurements with HM0360**
+
+| State | Current | Notes |
+|---|---|---|
+| **DPD** (deep power down, `dpd`), bare board | **259 uA** Jumps to >1mA every 2s or so. | Mode 2 |
+| Awake and idle as it was (400 MHz, tickless idle sleeping) | **17.9 mA** |  |
+
+
+## Where is the HM0360 power going?
+
+Sleep measurements (DPD):
+
+I measured the voltages across R28 (XSHDN) and R31 (XSLEEP). In both cases the voltage at the HM0360 is 1.65V vs 1.81V at the 1V8 rail.
+Since the resistors a 1M this means 160nA flows into these pins.
+
+Voltages at some pins (VSYNC, HSYNC, SEN_PCLK, STROBE) at in the range 10-150mV and seem to be floating (Hi-Z). SEN_INT (the MD interrupt)
+is essential 0V. 
+
+There are 2 power supply rails with 0R resistors. I removed these and replaced them with 2-pin jumpers
+so I could measure the currents in turn:
+
+* __2V8__ (R45) 73uA (pulses higher to c. 400uA * periodically(c. 1.9s)
+* __1V8__ (R47) 138uA (pulses higher to c. 600uA * periodically)
+* __Sum__ 200uA
+* __Whole board__ 260uA (pulses higher to c. 600uA * periodically)
+
+ * the brief current is an estimate from the multimeter. The PPK2 kit shows the actual system current 
+ is c. 9.5mA for 35ms.
+ 
+__Different modes__
+
+the MODE_SELECT register is 0x0100 and documented in the data sheet section 6.1. 
+
+Table 6.1 (p31) and section 10.2 (p48) document modes 0, 1, 2, 3, 4, 6, 7.
+
+I can type `cam 0` (to put the camera in mode 0) and the same with other modes. 
+Results follow (other than mode 2 which is reported above):
+
+* __2V8__ Mode 1 (continuous) = 1.4mA. All other modes constant at 73uA
+* __1V8__ Mode 1 (continuous) = 4.8mA. All other modes constant at 138uA.
+* __Whole Board__ modes other than 1: All other modes constant at 138uA.
+
+__Interesting:__ The `ww500_md` project uses mode 2 rather than mode 0 when MD is diabled
+because mode 0 seemed to have much higher power. See `hm0360_md_setMode()` in `hm0360_md.c`.
+This is not what we see here. Perhaps some other bug in `ww500_md` build?. 
+
+__HM0360 data sheet__
+
+Section 2 Sensor Overview says:
+
+```
+...target current consumption of 256uA in AoS monitor mode and 8.6mA in VGS 60 fps read out mode.
+```
+
+DC characteristcs are in section 11.3, p 78.
+
+---
+
+## Nordic Power Profiler Kit II
+
+For docs see [Get Started](https://www.nordicsemi.com/Products/Development-hardware/Power-Profiler-Kit-2/GetStarted)
+and ths [video](https://www.youtube.com/watch?v=B42lPvkUSoc)
+
+To use the PPK2 as an ammeter while powering the board via the FTDI cables do this:
+
+1.	Install [nRF Connect for Desktop](https://www.nordicsemi.com/Products/Development-tools/nRF-Connect-for-Desktop/Download#infotabs)
+ and add the power profiler app into it.
+2.	Plug the PPK2 into the laptop via the `USB DATA/POWER` 
+3.	Switch the power on and expect the green LED to light. 
+4.	Insert the 4-way cable assembly to the PPK2. I put the red wire on the VOUT pin.
+5.	Connect the red and brown wires to the 2-way pin on the FTDI connector:
+	- red at the back closest J5
+	- brown closest the board edge.
+6.	Power the WW500 through the FTDI cable.	
+7.	In the PPK2 left-hand pane click Select Device >PPK2
+8.	Make sure the 'Enable Power Output' switch is enabled (this can remove power from the board).
+9.	At the right times click the Start/Stop button 
+
+It might be useful to use the logic port to monitor some signals:
+
+| Pin       | Function | Connect to | Notes              |
+|-----------|----------|------------|--------------------|
+| 1 blue    | D0       | STROBE     | T7                 |
+| 2 yellow  | D1       | VSYNC      | T1                 |
+| 3 green   | D2       | HSYNC      | T2                 |
+| 6 purple  | D3       | SENSOR_ENABLE | j3 PIN 5        |
+| 7 grey    | D4       | SEN_INT    | (MD interrupt) R33 |
+| 8 orange  | D5       |            |                    |
+| 4 brown   | D6       | LED RED    | R22                |
+| 5 white   | D7       | LED BLUE   | R20                |
+| 9 black   | GND      | GND at U1  |                    |
+| 10 red    | VCC      | WW500 3V3  | U1 pin 13          |
+
+The PPK2 shows the following in mode 2:
+* Power pulses to 9.5mA for 35ms every 1.9s
+* Outside the pulse  the current is 259uA
+* Average power during this interval is 350uA
+* Checked by removing the HM0360 - current 14uA.
+* The VSYNC and STROBE pins pulse (maybe others as well)
+* Later I added a `context` CLI command to select CONTEXT B in DPD - this tri-staes the HM0360 signals 
+and so I no longer se VSYNC. The peak current drops to c. 8mA during the STROBE period.
+* TODO - in context B reduce resolution from 640 x 480
+
+Changes made to context B timing:
+
+Claude and I also made changes to the Context B timing registers. I hope that we might be able to reduce the time during whihc power consumption
+was higher, so as to reduce the average power. Hwever this was not successful: there were little or no changes
+visible. The following three screenshots from PPK2 are examples.
+
+* [screen shot 1](early.png)
+* [screen shot 2](default_after_cold_boot.png)
+* [screen shot 3](Context_b_after_warm.png)
+
+The top-most of the logic analyser traces is STROBE and teh secod is VSYNC. Clearly we are getting different numbers of
+STROBE pulses. Perhaps this is related to pre-metering, and perhaps this can be disabled?
+
+So this question is deferred till another time. However lower powers might be possible, as suggested in 
+[this TinML talk](https://www.youtube.com/watch?v=7tuq-vz4aVk) - see  the HM0360 demo at 28:40)
+which talks  about = "150uW average".
+
+---
+
+## RP3 camera
+
+After measurements with and without the HM0360 I added the RP3 interface - which is ony the 15-way connector 
+and MOSFETs Q1 and Q2. I also modified the code so that SENSOR_ENABLE is low even for HM0360 camera.
+
+Results: no change to active or sleep current.
+
+I used the PPK2 to observe the time taken to capture and image - shown in [RP3_timing](RP3_timing.png)
+
+### Time from `capture` to the frame (Claude and Charles, 28 September 2026)
+
+**How it was measured.** The PPK2 records the current and three logic inputs: SENSOR_ENABLE (PB7, input 3), the blue
+LED (input 7) and the red LED (input 6). Two LEDs were used as markers in the code:
+
+- **Blue LED:** lit by Charles in `cisdp_sensor_init()` (`cis_sensor/cis_imx708/cisdp_sensor.c`) around the IMX708 register
+  writes.
+- **Red LED:** lit just before `cisdp_sensor_start()` (stream on) in `startCapture()`, and switched off in the data path
+  interrupt callback when the frame is reported (`CAPTURE_TIME_ON_RED_LED` in `image_task.c`).
+
+The console also prints `Image: RP3 powered and initialised in N ms` (SENSOR_ENABLE high to the end of the register
+writes) and `frame after N ms` (from stream on, in whole ticks).
+
+**What `capture` does now, in order** (RP3_timing.png; the 52.3 ms, 84 mA and 4.4 mC are the PPK2's own selection figures, the other currents and the last time are read by eye from the plot, to a few mA and a few ms):
+
+| Stage | Time | Marker | Notes |
+|---|---|---|---|
+| Power settling | about 10 ms | SENSOR_ENABLE high, before the blue LED | `IMX708_POWERUP_DELAY`. Current about 32 mA, against about 18 mA before (the processor awake) |
+| Register writes | about 38 ms | blue LED | About 255 separate I2C transactions (145 table writes, 108 PDAF pixel-correction gains, a read and one or two others) |
+| Stream on to frame | about 52-54 ms | red LED | Average about 84 mA, peak about 145 mA, 4.4 mC. About 58 mA at first, then about 140 mA for the last part |
+| SENSOR_ENABLE low, then (presumably) the SD card write | about 100 ms | none | A noisy 50-70 mA, then back to the idle current |
+
+The console total for the first two stages ("powered and initialised") is now 51 ms.
+
+**What has been done so far to shorten it:**
+
+| Change | "Powered and initialised" |
+|---|---|
+| I2C at 100 kHz (as `ww500_md`), all the console messages, `IMX708_POWERUP_DELAY` already 10 ms | 130 ms (register writes alone 111 ms) |
+| I2C at 400 kHz for the RP3 build (`SENSOR_I2C_SPEED` in `image_task.c`) | 57 ms (register writes 40 ms) |
+| Progress messages in `cisdp_sensor.c` compiled out (`CISDP_DBG_TYPE`; failures still print) | 51 ms |
+
+Before these, Charles cut `IMX708_POWERUP_DELAY` from 100 ms (the `ww500_md` value) to 10 ms and tested it, which saved
+90 ms before the markers were added. Between pictures the camera is powered down (SENSOR_ENABLE low), and it is
+low for DPD and for the HM0360 build too.
+
+**What more might be done** (none tried yet):
+
+- **Register writes (38 ms):**
+  - Write the two blocks of 54 PDAF gains as two burst (auto-increment) writes instead of 108 single ones: about 15 ms less.
+    Needs a multi-byte I2C write, which `hx_drv_cis_setRegTable()` does not do. Other runs of consecutive registers in the
+    `.i` tables could be grouped the same way.
+  - Or leave the PDAF gains out: about the same saving, but they hide the phase-detection pixels, so compare pictures first.
+  - Try 1 MHz I2C (Fast-mode Plus, `DW_IIC_SPEED_FASTPLUS`), if the IMX708 and the board's pull-ups allow it.
+- **Stream on to frame (52-54 ms), also the highest current:**
+  - The sensor mode is 2304x1296 (`IMX708_mipi_2lane_2304x1296.i`), of which the data path keeps only 640x480. A smaller or
+    more heavily binned readout would move less data and could shorten the frame. It would need new register tables and
+    matching data path settings.
+  - The frame length and exposure registers set how long a frame takes. A shorter frame length (or exposure) shortens
+    the wait, within what the lighting allows. There is no auto-exposure in this build.
+  - Find out what the ~140 mA at the end of the frame is: probably the sensor readout with the HX6538's MIPI receiver,
+    data path and JPEG encoder all running, but not measured separately.
+- **Power settling (10 ms):** could be shorter only if the IMX708 datasheet's power-up timing allows it. Not recommended
+  without that.
+- **Between pictures:** when pictures come close together, keeping the camera powered and initialised (`cam on`) removes
+  the 10 + 38 ms each time, at the cost of its standing current. Measure that current (`cam on`, idle) to find the
+  break-even interval.
+- **SD card write (about 100 ms):** outside the camera. The console's `saved '...' (frame N ms, write N ms)` line gives
+  the write time, which would confirm that this stretch is the write. Earlier work on `ww500_md` found writes of about 20-40 ms on good
+  cards, so the card and file size are worth checking here too.
+
+---
+
+## Claude Summary: What we learnt, in short:
 
 1. **DPD is the low-power state.** 10 uA, and both wake sources work. Reboot cost after a wake: from the first bootloader line to a running
    CLI task takes 24 to 30 ms. The time before that line is not visible to the host.
@@ -120,8 +338,8 @@ application note. "Inferred" is a conclusion not directly tested.
 
 **Wake latency and the reboot cost**
 - The time from the WAKE edge or the timer alarm to the application running, for DPD, Power-down with retention and Power-down without. Only the
-  part after the first bootloader line is visible in the console log. It needs an oscilloscope or logic analyser on the WAKE pin and on PB10 (the blue
-  LED pin, which the app sets high early in `app_main()`). Not done.
+  part after the first bootloader line is visible in the console log. It needs an oscilloscope or logic analyser on the WAKE pin and on 
+  PB11 (the blue LED pin, which the app sets high early in `app_main()`). Not done.
 - How long the boot ROM and the first bootloader take before their first message.
 - Whether the Power-down wake by the WAKE switch works: it was tested only on the build that hung, before the fix.
 - How long the crystal and the PLL really take to start. `clkfast` waits 20 ms and 5 ms, both guesses. So the time to get from the slow idle state
@@ -146,51 +364,6 @@ application note. "Inferred" is a conclusion not directly tested.
 - What the retention flags in the PMU configuration do exactly. The power-management library is a binary.
 - Whether the RTC error could be trimmed out with the RC32K trim register, or would need the time from the BLE processor. Not tried.
 - Whether any of this holds in `ww500_md`, with its camera, SD card, BLE link and neural network. The experiments ran only in `ww500_minimal`.
-
----
-
-## Where is the HM0360 power going?
-
-Sleep measurements (DPD):
-
-I meaured the volatges across R28 (XSHDN) and R31 (XSLEEP). In both cases the voltage at the HM0360 is 1.65V vs 1.81V at the 1V8 rail.
-Since the reistors a 1M this means 160nA flows into these pins.
-
-Voltages at some pins (VSYNC, HSYNC, SEN_PCLK, STROBE) at in the range 10-150mV and seem to be floating (Hi-Z). SEN_INT (the MD interrupt)
-is essential 0V. 
-
-There are 2 power supply rails with 0R resistors. I remove these and measure the currents in turn:
-
-* __2V8__ (R45) 73uA (pulses higher to c. 400uA periodically - perhaps when the counter expires?)
-* __1V8__ (R47) 138uA (pulses higher to c. 600uA periodically)
-* __Sum__ 200uA
-* __Whole board__ 260uA (pulses higher to c. 600uA periodically)
-
-__Different modes__
-
-the MODE_SELECT register is 0x0100 and documented in the data sheet section 6.1. 
-
-Table 6.1 (p31) and section 10.2 (p48) document modes 0, 1, 2, 3, 4, 6, 7.
-
-I can type `cam 0` (to put the camera in mode 0) and the same with other modes. 
-Results follow (other than made 2 which is reported above):
-
-* __2V8__ Mode 1 (continuous) = 1.4mA. All other modes constant at 73uA
-* __1V8__ Mode 1 (continuous) = 4.8mA. All other modes constant at 138uA.
-* __Whole Board__ modes other than 1: All other modes constant at 138uA.
-
-__Interesting:__ I think the ww500_md project uses mode 2 rather than mode 0 when MD is diabled
-because mode 0 seemed to have much higher power. This is not what we see here (tentative - check). 
-
-__HM0360 data sheet__
-
-Section 2 Sensor Overview says:
-
-```
-...target current consumption of 256uA in AoS monitor mode and 8.6mA in VGS 60 fps read out mode.
-```
-
-DC characteristcs are in section 11.3, p 78.
 
 ---
 
@@ -821,8 +994,8 @@ in the boot text; that is only the A/B slot rotation).
 - **The programmed 30 s timer took 28.88 s of host time** (the sleep message at 19:10:46.091, the bootloader at 19:11:14.971). The Power-down
   wake timer (a stand-by timer) is clocked from the same 32 kHz RC oscillator as the RTC, so it is also about 4 % fast (30 / 28.9 = 1.04).
   All 32 kHz-derived timing, alarms and timers alike, is about 4 % fast.
-- **The wake latency that matters** (from the WAKE edge to the application running) needs a hardware measurement: the blue LED pin (PB10) goes
-  high early in `app_main()`, so an oscilloscope or logic analyser on the WAKE pin and PB10 would show it for DPD, `sleep 30 1` and `sleep 30 0`.
+- **The wake latency that matters** (from the WAKE edge to the application running) needs a hardware measurement: the blue LED pin (PB11) goes
+  high early in `app_main()`, so an oscilloscope or logic analyser on the WAKE pin and PB11 would show it for DPD, `sleep 30 1` and `sleep 30 0`.
 
 ### Part E, third result: retention check and timing (Charles, 21 September 2026)
 
@@ -893,5 +1066,13 @@ Everything below was built and run on the bench.
   oscillator; the restore of the clocks before DPD in `blinky_task.c`; the `Retention check` and the Power-down wake decoding in `ww500_minimal.c`.
 - **The experiment commands change nothing unless used.** They can stay as diagnostics or be removed.
 - **Not run:** the `u55`, `i3c`, `puf`, `dma` and `sdio` parts of `clkoff`, the full combination with `clkdiv 16`, and the Power-down wake by the WAKE switch on the fixed build.
-- **Not committed.** Nothing has been staged, committed or pushed. `ww.mk` still selects `ww500_minimal` and must be set back to `ww500_md` before any production
-  build. `EPII_CM55M_APP_S/app/main.c` has an added `WW500_MINIMAL` block. `ww500_md` itself was not changed.
+- **Later additions (23-28 September 2026), all built and run on the bench:** the `WW500_NO_CAMERA` / `WW500_NO_FATFS` build
+  flags (PCA9574 DPD test); HM0360 motion detection (`context`, `mdint`, the motion wake report); the HM0360 context B timing
+  switches (`CIS_CONTEXT_B_TIMING`, `CIS_CONTEXT_B_OUTPUT`, parked and off) and the register dump before DPD (off); the pin
+  changes (`pinmux_cfg.c`: blue LED on PB11, SENSOR_ENABLE on PB7 always an output); the RP3 build (`cis_imx708`), its 400 kHz
+  sensor I2C and filtered console messages; the red and blue LED timing markers. How each works is in `doc/README.md`.
+- **Committing:** Charles committed the work up to 22 September 2026 and is committing the rest for a PR at the end of the
+  project (28 September 2026). `ww.mk` selects `ww500_minimal` and must be set back to `ww500_md` before a production build
+  (and before the PR, if CI builds from `ww.mk`). `EPII_CM55M_APP_S/app/main.c` has an added `WW500_MINIMAL` block.
+  `ww500_md` itself was not changed: what should be carried over is listed in `doc/README.md`, "Changes to transfer to
+  ww500_md".

@@ -5,6 +5,10 @@
  *      Author: 901912
  */
 
+// FreeRTOS kernel includes.
+#include "FreeRTOS.h"
+#include "timers.h"
+
 #include "cisdp_sensor.h"
 
 #include "cisdp_cfg.h"
@@ -22,10 +26,6 @@
 #include "math.h"
 #include "hm0360_regs.h"
 #include "hm0360_md.h"
-
-// FreeRTOS kernel includes.
-#include "FreeRTOS.h"
-#include "timers.h"
 
 #ifdef TRUSTZONE_SEC
 #ifdef IP_INST_NS_csirx
@@ -73,6 +73,48 @@ static HX_CIS_SensorSetting_t HM0360_md_init_setting[] = {
 static HX_CIS_SensorSetting_t HM0360_mirror_setting[] = {
 	{HX_CIS_I2C_Action_W, 0x0101, CIS_MIRROR_SETTING},
 };
+
+// Context B is the motion detection context: QVGA by sub-sampling (0x3561, 0x3562) with no output (0x356A),
+// but the .i table gives it the same frame and line lengths as the VGA context A. HM0360_contextB_timing[]
+// shortens them, to cut the time the sensor is active for each motion detection frame. It is written once, at
+// cold boot, after the .i table. CIS_CONTEXT_B_TIMING (cisdp_cfg.h) selects the combination to measure:
+//   0x00: the .i table values, nothing written (line length 0x0429, frame length 0x0214)
+//   0x01: line length 0x0300, frame length unchanged
+//   0x02: line length 0x0300, frame length 0x011C
+// 0x0300 and 0x011C are the context B values in Himax's 24 MHz table with QVGA context B. When the values are
+// settled they can go into the .i table instead. See doc/power_investigation.md for the measurements.
+// The .i table ends by writing COMMAND_UPDATE (0x0104 = 0x01), so this table does the same after its writes.
+#define CONTEXT_B_LINE_LENGTH_DEFAULT	0x0429	// .i table
+#define CONTEXT_B_FRAME_LENGTH_DEFAULT	0x0214	// .i table
+
+#if (CIS_CONTEXT_B_TIMING == 0x01)
+#define CONTEXT_B_LINE_LENGTH			0x0300
+#define CONTEXT_B_FRAME_LENGTH			CONTEXT_B_FRAME_LENGTH_DEFAULT
+#elif (CIS_CONTEXT_B_TIMING == 0x02)
+#define CONTEXT_B_LINE_LENGTH			0x0300
+#define CONTEXT_B_FRAME_LENGTH			0x011C
+#endif	// CIS_CONTEXT_B_TIMING
+
+// TEMPORARY, for measurement: the .i table turns context B's outputs off (0x356A = 0x00), so VSYNC and the other
+// sensor outputs cannot be seen in motion detection. CIS_CONTEXT_B_OUTPUT (cisdp_cfg.h) turns them on, with the
+// value context A has (0x3510 = 0x01), so the frame can be timed. Turn it off again for current measurements
+// that should match normal use: the outputs drive the HX6538 pins while it is in DPD.
+#if (CIS_CONTEXT_B_OUTPUT != 0x00)
+static HX_CIS_SensorSetting_t HM0360_contextB_output[] = {
+	{HX_CIS_I2C_Action_W, 0x356A, 0x01},	// Context B Output Enable, as context A (0x3510)
+	{HX_CIS_I2C_Action_W, 0x0104, 0x01},	// COMMAND_UPDATE
+};
+#endif	// CIS_CONTEXT_B_OUTPUT
+
+#if (CIS_CONTEXT_B_TIMING != 0x00)
+static HX_CIS_SensorSetting_t HM0360_contextB_timing[] = {
+	{HX_CIS_I2C_Action_W, 0x355F, (CONTEXT_B_LINE_LENGTH >> 8) & 0xFF},		// Context B Line Length H
+	{HX_CIS_I2C_Action_W, 0x3560, CONTEXT_B_LINE_LENGTH & 0xFF},			// Context B Line Length L
+	{HX_CIS_I2C_Action_W, 0x355D, (CONTEXT_B_FRAME_LENGTH >> 8) & 0xFF},	// Context B Frame Length H
+	{HX_CIS_I2C_Action_W, 0x355E, CONTEXT_B_FRAME_LENGTH & 0xFF},			// Context B Frame Length L
+	{HX_CIS_I2C_Action_W, 0x0104, 0x01},									// COMMAND_UPDATE: latch the new values, as the .i table does last
+};
+#endif	// CIS_CONTEXT_B_TIMING
 
 
 // Writes to the tone mapping registers - see data sheet Table 4.5
@@ -343,6 +385,26 @@ int cisdp_sensor_init(bool sensor_init) {
 		hm0360_x_test_sensitivity();
 		hm0360_x_test_latency();
 #endif	// 	TESTCISFILE
+
+#if (CIS_CONTEXT_B_TIMING != 0x00)
+		if (hx_drv_cis_setRegTable(HM0360_contextB_timing, HX_CIS_SIZE_N(HM0360_contextB_timing, HX_CIS_SensorSetting_t)) != HX_CIS_NO_ERROR) {
+			dbg_printf(DBG_LESS_INFO, "HM0360 Init context B timing fail\r\n");
+			return -1;
+		}
+		dbg_printf(DBG_LESS_INFO, "HM0360 Init context B timing %d: line length 0x%04x, frame length 0x%04x\n",
+				CIS_CONTEXT_B_TIMING, CONTEXT_B_LINE_LENGTH, CONTEXT_B_FRAME_LENGTH);
+#else
+		dbg_printf(DBG_LESS_INFO, "HM0360 Init context B timing 0: .i table (line length 0x%04x, frame length 0x%04x)\n",
+				CONTEXT_B_LINE_LENGTH_DEFAULT, CONTEXT_B_FRAME_LENGTH_DEFAULT);
+#endif	// CIS_CONTEXT_B_TIMING
+
+#if (CIS_CONTEXT_B_OUTPUT != 0x00)
+		if (hx_drv_cis_setRegTable(HM0360_contextB_output, HX_CIS_SIZE_N(HM0360_contextB_output, HX_CIS_SensorSetting_t)) != HX_CIS_NO_ERROR) {
+			dbg_printf(DBG_LESS_INFO, "HM0360 Init context B output fail\r\n");
+			return -1;
+		}
+		dbg_printf(DBG_LESS_INFO, "HM0360 Init context B outputs ON (temporary, for measurement)\n");
+#endif	// CIS_CONTEXT_B_OUTPUT
 
 		dbg_printf(DBG_LESS_INFO, "HM0360 Init finished\n");
 	}

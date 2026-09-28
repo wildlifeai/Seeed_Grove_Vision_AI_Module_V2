@@ -3,10 +3,18 @@
 #### File: CLAUDE_Minimal_FreeRTOS.md
 #### Author: Charles Palmer
 #### Date: 20 September 2026
-#### Updated: 21 September 2026 (the Status section and typo fixes by Claude)
+#### Updated: 21 September 2026 (the Status section and typo fixes by Claude); 28 September 2026 (Status, by Claude)
 
 
-## Status (22 September 2026)
+## Status (28 September 2026)
+
+Work on this app stopped on 28 September 2026, to be committed and put up as a PR. Since the 22 September status below: the
+PCA9574 DPD test and the `WW500_NO_CAMERA`/`WW500_NO_FATFS` build flags, HM0360 motion detection (`context`, `mdint`), the
+parked context B timing experiment, the pin changes (blue LED on PB11, SENSOR_ENABLE on PB7 always an output) and an RP3
+camera build. See [README.md](README.md), "After step 8", and its Open items; changes to carry over to `ww500_md` are listed
+at the end of `ww500_minimal/doc/README.md`.
+
+### Status on 22 September 2026
 
 The tasks below have been done. The app is built and runs on the bench. Where to look:
 
@@ -64,8 +72,8 @@ BLE processor module, which normally drives the LEDs and listens for the switch 
 
 1. **Red LED** Make use of the Red LED components LED1 & R22. Wire link from U1 pin 21 to HX6538 PB9
 at U2 pin 4 (PB9 = PDM_CLK).
-2. **Blue LED** Make use of the Blue LED components LED2 & R20. Wire link from U1 pin 23 to HX6538 PB10
-at U2 pin 1 (PB10 = PDM_DATA).
+2. **Blue LED** Make use of the Blue LED components LED2 & R20. Wire link from U1 pin 23 to HX6538 PB11
+at U2 pin 22
 3. **Green LED** (possible future addition) Make use of the Green LED components LED3 & R40. Wire link from U1 pin 10 to HX6538 (t.b.d.)
 4. **WAKE Switch** Fit SW1 and use it instead of /BLE_WAKE to HX6538 pin PA0. Wire link from U1 pin 12 to pin 24.
 

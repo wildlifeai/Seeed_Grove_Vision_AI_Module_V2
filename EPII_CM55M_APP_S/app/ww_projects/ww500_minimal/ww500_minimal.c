@@ -39,6 +39,7 @@
 #include "image_task.h"
 #endif // WW500_MINIMAL_NO_CAMERA
 #include "inactivity.h"
+#include "pinmux_cfg.h"
 #include "rtc_util.h"
 #include "sleep_mode.h"
 #include "ww500_minimal.h"
@@ -104,60 +105,12 @@ static uint16_t alarmPeriodS = WW500_MINIMAL_ALARM_PERIOD_S;
 
 /**************************************** Local Function Declarations ****************************************/
 
-static void initPins(void);
-static void initLeds(void);
 static void initVersionString(void);
 static void showResetOnLeds(uint8_t numFlashes);
 static void allTasksReady(void);
 static void checkRetention(void);
 
 /**************************************** Local Function Definitions *****************************************/
-
-/**
- * @brief Initialises the pins used by this app.
- *
- * The console UART (PB0, PB1), the SPI master for the SD card (PB2 data out, PB3 data in, PB4 clock,
- * PB5 chip select) and the LEDs (PB9, PB10) are configured. Everything else is left alone so that it
- * draws no current.
- *
- * NOTE: there is a weak version of pinmux_init() in board/epii_evb/pinmux_init.c that just
- * initialises PB0 and PB1 for UART.
- */
-static void initPins(void) {
-	SCU_PINMUX_CFG_T pinmux_cfg;
-
-	hx_drv_scu_get_all_pinmux_cfg(&pinmux_cfg);
-
-	/* Init UART0 pin mux to PB0 and PB1 */
-	pinmux_cfg.pin_pb0 = SCU_PB0_PINMUX_UART0_RX_1;
-	pinmux_cfg.pin_pb1 = SCU_PB1_PINMUX_UART0_TX_1;
-
-	/* Init the SPI master pin mux for the SD card. The SD card driver takes PB5 over as a GPIO while it needs it */
-	pinmux_cfg.pin_pb2 = SCU_PB2_PINMUX_SPI_M_DO_1;
-	pinmux_cfg.pin_pb3 = SCU_PB3_PINMUX_SPI_M_DI_1;
-	pinmux_cfg.pin_pb4 = SCU_PB4_PINMUX_SPI_M_SCLK_1;
-	pinmux_cfg.pin_pb5 = SCU_PB5_PINMUX_SPI_M_CS_1;
-
-	hx_drv_scu_set_all_pinmux_cfg(&pinmux_cfg, 1);
-
-	initLeds();
-}
-
-/**
- * @brief Initialises the GPIO pins that drive the LEDs, both off.
- *
- * PB9  = LED on GPIO0, active high
- * PB10 = LED on GPIO1, active high
- */
-static void initLeds(void) {
-    hx_drv_gpio_set_output(GPIO0, GPIO_OUT_LOW);
-    hx_drv_scu_set_PB9_pinmux(SCU_PB9_PINMUX_GPIO0, 1);
-	hx_drv_gpio_set_out_value(GPIO0, GPIO_OUT_LOW);
-
-    hx_drv_gpio_set_output(GPIO1, GPIO_OUT_LOW);
-    hx_drv_scu_set_PB10_pinmux(SCU_PB10_PINMUX_GPIO1, 1);
-	hx_drv_gpio_set_out_value(GPIO1, GPIO_OUT_LOW);
-}
 
 /**
  * @brief Initialises a string with the time and date of build.
@@ -179,14 +132,14 @@ static void showResetOnLeds(uint8_t numFlashes) {
 
     for (uint8_t i = 0; i < numFlashes; i++) {
 
-    	ww500_minimal_ledPb9(true);
+    	ww500_minimal_ledRed(true);
     	hx_drv_timer_cm55s_delay_ms(LED_DELAY, TIMER_STATE_DC);
-    	ww500_minimal_ledPb10(true);
+    	ww500_minimal_ledBlue(true);
     	hx_drv_timer_cm55s_delay_ms(LED_DELAY, TIMER_STATE_DC);
 
-    	ww500_minimal_ledPb9(false);
+    	ww500_minimal_ledRed(false);
     	hx_drv_timer_cm55s_delay_ms(LED_DELAY, TIMER_STATE_DC);
-    	ww500_minimal_ledPb10(false);
+    	ww500_minimal_ledBlue(false);
     	hx_drv_timer_cm55s_delay_ms(LED_DELAY, TIMER_STATE_DC);
     }
 }
@@ -225,21 +178,21 @@ static void checkRetention(void) {
 /**************************************** Global Function Definitions ****************************************/
 
 /**
- * @brief Drives the LED on PB9 (active high).
+ * @brief Drives the red LED (LED1, PB9, GPIO0, active high).
  *
  * @param on True to switch the LED on.
  */
-void ww500_minimal_ledPb9(bool on) {
+void ww500_minimal_ledRed(bool on) {
 	hx_drv_gpio_set_out_value(GPIO0, on ? GPIO_OUT_HIGH : GPIO_OUT_LOW);
 }
 
 /**
- * @brief Drives the LED on PB10 (active high).
+ * @brief Drives the blue LED (LED2, PB11, GPIO2, active high).
  *
  * @param on True to switch the LED on.
  */
-void ww500_minimal_ledPb10(bool on) {
-	hx_drv_gpio_set_out_value(GPIO1, on ? GPIO_OUT_HIGH : GPIO_OUT_LOW);
+void ww500_minimal_ledBlue(bool on) {
+	hx_drv_gpio_set_out_value(GPIO2, on ? GPIO_OUT_HIGH : GPIO_OUT_LOW);
 }
 
 /**
@@ -365,9 +318,9 @@ int app_main(void) {
 	uint8_t taskIndex = 0;
 
 	initVersionString();
-	initPins();
+	pinmux_cfg_init();
 
-	ww500_minimal_ledPb10(true);	// On to show processor is active (not in DPD)
+	ww500_minimal_ledBlue(true);	// On to show processor is active (not in DPD)
 
 	XP_YELLOW;
 	xprintf("\n**** WW500 MINIMAL. (%s) Built: %s %s ****\r\n\n", ww500_minimal_getBoardNameString(), __TIME__, __DATE__);
@@ -376,12 +329,20 @@ int app_main(void) {
 	xprintf("Git branch: '%s' %s%s\n",  GIT_BRANCH, GIT_COMMIT, GIT_DIRTY);
 	xprintf("Compiler Version: ARM GNU, %s\n\n", __VERSION__);
 
+	XP_BLUE;
+	xprintf("This code is designed to run on a WW500 _without_ an MKL62BA, to facilitate power measurments.\n");
+	XP_WHITE;
+
 	// Says which of the two optional subsystems this build has, since WW500_NO_CAMERA / WW500_NO_FATFS
 	// (ww500_minimal.mk) can leave either or both out to test their effect on DPD current
 #ifdef WW500_MINIMAL_NO_CAMERA
 	xprintf("Camera code: absent (WW500_MINIMAL_NO_CAMERA)\n");
 #else
-	xprintf("Camera code: present\n");
+#ifdef USE_RP3
+	xprintf("Camera code: present, for RP3 (IMX708)\n");
+#else
+	xprintf("Camera code: present, for HM0360\n");
+#endif // USE_RP3
 #endif // WW500_MINIMAL_NO_CAMERA
 #ifdef WW500_MINIMAL_NO_FATFS
 	xprintf("SD card code: absent (WW500_MINIMAL_NO_FATFS)\n");
@@ -443,7 +404,8 @@ int app_main(void) {
 
 		XP_YELLOW;
 		if ((wakeup_event1 == PMU_WAKEUPEVENT1_DPD_PAD_AON_GPIO_0) || ((wakeup_event & WAKE_EVENT_PD_EXT_GPIO) != 0)) {
-			xprintf("WAKE pin wake\n");
+			// The image task reads the HM0360 later and says whether its motion detection was the cause
+			xprintf("WAKE pin wake (the image task will report the cause)\n");
 			wakeReason = WW500_MINIMAL_WAKE_REASON_WAKE_PIN;
 		}
 		else if ((wakeup_event == PMU_WAKEUP_DPD_RTC_INT) || ((wakeup_event & WAKE_EVENT_PD_TIMER) != 0)) {

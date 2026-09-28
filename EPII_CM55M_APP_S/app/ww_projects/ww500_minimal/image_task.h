@@ -4,7 +4,8 @@
  *  Created on: 22 Sep 2026
  *      Author: Charles Palmer
  *
- *  FreeRTOS task that owns the HM0360 camera. A light-weight version of the image task in ww500_md, which does a
+ *  FreeRTOS task that owns the camera: the HM0360 or (27 Sep 2026) the RP3, one per build (CIS_SUPPORT_INAPP_MODEL in
+ *  ww500_minimal.mk). A light-weight version of the image task in ww500_md, which does a
  *  great deal more (EXIF, neural network, exposure control, flash LED, timers).
  *
  *  What it does:
@@ -16,7 +17,16 @@
  *     the FatFS task to be written as Bnnnnnnn.JPG, where nnnnnnn is the boot count (5 digits) and the number of the
  *     picture in this boot (2 digits). There is no EXIF.
  *   - Changes the resting mode when asked (the CLI 'cam' command), so the current in each mode can be measured.
+ *   - Changes the resting context and motion detection interval when asked (the CLI 'context' and 'mdint'
+ *     commands). A non-zero interval enables the motion detection interrupt, which wakes the processor from DPD
+ *     through the WAKE pin. After a warm boot the interrupt is reported and cleared, and the mode, context and
+ *     interval are read back from the sensor, so they survive DPD. A pending interrupt is also cleared before DPD.
  *   - Takes part in the shutdown barrier, so that DPD is never entered while a picture is being taken or written.
+ *
+ *  The points above are for the HM0360. With the RP3 (IMX708) the camera is powered by SENSOR_ENABLE (PB7) only
+ *  while it is in use: 'capture' powers it up, writes its registers, takes one frame (the same JPEG and file as
+ *  above), then powers it down. 'cam on' and 'cam off' keep it powered between pictures, or not, so that its
+ *  current can be measured. It is always powered down for DPD. 'context' and 'mdint' are HM0360 only.
  *
  *  All the camera I2C and data path calls are made by this task.
  */
@@ -88,6 +98,18 @@ bool image_task_requestCapture(void);
  * @brief Asks the task to set the resting mode of the HM0360, or (IMAGE_TASK_MODE_REPORT) to print the mode.
  */
 bool image_task_requestMode(uint8_t mode);
+
+#ifdef USE_HM0360
+/**
+ * @brief Asks the task to set the register context (CONTEXT_A or CONTEXT_B) of the resting mode.
+ */
+bool image_task_requestContext(uint8_t context);
+
+/**
+ * @brief Asks the task to set the motion detection interval of the resting mode, in ms (0 = off).
+ */
+bool image_task_requestMdInterval(uint16_t intervalMs);
+#endif // USE_HM0360
 
 /**
  * @brief Asks the task to write the HM0360 register table again, as after a cold boot.

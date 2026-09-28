@@ -4,7 +4,7 @@
  *  Created on: 20 Sep 2026
  *      Author: Charles Palmer
  *
- *  FreeRTOS task that alternately blinks the LEDs on PB9 and PB10, and owns entry to DPD.
+ *  FreeRTOS task that alternately blinks the red and blue LEDs, and owns entry to DPD.
  *  See blinky_task.h for a description.
  */
 
@@ -70,7 +70,7 @@ static const char * blinkyStateString[BLINKY_TASK_NUMSTATES] = {
 /**************************************** Local Function Declarations ****************************************/
 
 static void vBlinkyTask(void *pvParameters);
-static void setLeds(bool pb9, bool pb10);
+static void setLeds(bool red, bool blue);
 static void printTime(void);
 
 /**************************************** Local Function Definitions *****************************************/
@@ -78,12 +78,12 @@ static void printTime(void);
 /**
  * @brief Sets both LEDs.
  *
- * @param pb9  True to switch on the LED on PB9.
- * @param pb10 True to switch on the LED on PB10.
+ * @param red  True to switch on the red LED.
+ * @param blue True to switch on the blue LED.
  */
-static void setLeds(bool pb9, bool pb10) {
-	ww500_minimal_ledPb9(pb9);
-	ww500_minimal_ledPb10(pb10);
+static void setLeds(bool red, bool blue) {
+	ww500_minimal_ledRed(red);
+	ww500_minimal_ledBlue(blue);
 }
 
 /**
@@ -112,7 +112,7 @@ static void vBlinkyTask(void *pvParameters) {
 	TickType_t startTick;
 	TickType_t lastPrintTick;
 	TickType_t waitTicks;
-	bool pb9State = false;
+	bool redState = false;
 
 	XP_CYAN;
 	// Observing these messages confirms the initialisation sequence
@@ -162,8 +162,8 @@ static void vBlinkyTask(void *pvParameters) {
 		}
 		else if (blinkyState == BLINKY_TASK_STATE_BLINKING) {
 			// Timed out: change the LEDs
-			pb9State = !pb9State;
-			setLeds(pb9State, !pb9State);
+			redState = !redState;
+			setLeds(redState, !redState);
 
 			if ((timePrintPeriodMs != 0) && (ww500_minimal_getElapsedMs(lastPrintTick) >= timePrintPeriodMs)) {
 				lastPrintTick = xTaskGetTickCount();
@@ -254,7 +254,7 @@ void blinky_task_notifyInactivity(void) {
  * task), once every task is ready.
  *
  * Wakes on the WAKE signal (PA0, level high) or after the alarm period (see ww500_minimal_getAlarmPeriod()).
- * The LEDs are driven low first: the state of PB9 and PB10 in DPD is not known.
+ * The LEDs are driven low first: the state of their pins in DPD is not known.
  *
  * Any clocks switched off by the 'clkoff' experiment are switched back on first. The bootloader
  * has to read the application back from flash on every wake, and a wake with the flash interface

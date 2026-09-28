@@ -16,12 +16,12 @@
 
 #include <stdint.h>
 
-#include "WE2_device.h"
-
 #include "FreeRTOS.h"
 #include "task.h"
 #include "queue.h"
 #include "timers.h"
+
+#include "WE2_device.h"
 
 #include "xprintf.h"
 #include "inactivity.h"

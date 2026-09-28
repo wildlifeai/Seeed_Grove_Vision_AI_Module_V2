@@ -60,7 +60,9 @@ typedef enum {
 	APP_MSG_IMAGETASK_SET_MODE					= 0x0404,	// Set the resting mode of the HM0360. msg_data = the mode
 	APP_MSG_IMAGETASK_REINIT					= 0x0405,	// Write the HM0360 register table again
 	APP_MSG_IMAGETASK_INACTIVITY				= 0x0406,	// All tasks are inactive: get ready for DPD
-	APP_MSG_IMAGETASK_LAST						= 0x0407,
+	APP_MSG_IMAGETASK_SET_CONTEXT				= 0x0407,	// Set the resting context of the HM0360. msg_data = CONTEXT_A or CONTEXT_B
+	APP_MSG_IMAGETASK_SET_MD_INTERVAL			= 0x0408,	// Set the motion detection interval. msg_data = ms, 0 = off
+	APP_MSG_IMAGETASK_LAST						= 0x0409,
 } APP_MSG_EVENT_E;
 
 /**

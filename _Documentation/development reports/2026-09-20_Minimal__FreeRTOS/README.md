@@ -6,21 +6,26 @@
 
 ## Status
 
-**Steps 1-8 are built and working on the bench (22 September 2026); the power work is documented; open items remain.** Steps 1-6 (the minimal app and the power
-investigation) are complete and what was learnt is in the power document. Step 7 (FatFS task, boot count) and step 8 (HM0360 image task, `capture` saves a JPEG) work
-on the bench. What is still to be measured is listed under "Step 8: outstanding" and Open items below. No GitHub issues have been filed yet for the open items. Charles
-committed the work at the end of 22 September 2026 (check `git log` for the commit); nothing has been pushed by Claude.
+**Work stopped on 28 September 2026, to be committed and put up as a PR by Charles.** Steps 1-8 and the later additions
+(23-28 September, see "After step 8" below) are built and were used on the bench. What was learnt about power is in
+`power_investigation.md`; how the app works is in `ww500_minimal/doc/README.md`. Open items remain (below); no GitHub
+issues have been filed for them yet. Changes that should be carried over to `ww500_md` are listed in
+`ww500_minimal/doc/README.md`, "Changes to transfer to ww500_md". `ww.mk` still selects `ww500_minimal`: set it back to
+`ww500_md` before the PR is merged, as the release workflow (`build_and_upload_firmware.yml`) builds whatever `ww.mk`
+selects.
+
+(Earlier status, 22 September 2026: steps 1-8 built and working; Charles committed the work at the end of that day.)
 
 ## Outcome
 
 - `ww500_minimal` is a new app (`EPII_CM55M_APP_S/app/ww_projects/ww500_minimal`) for a WW500_C00 board carrying only the HX6538. It has no camera, FatFS, BLE
   interface, neural network or flash manager, so that sleep (DPD) current and operating current can be measured on their own, as was done for the BLE processor.
-- It boots, blinks two LEDs (PB9, PB10), runs a console CLI, and enters DPD through the same inactivity mechanism as `ww500_md`. Wake sources are power-on, the RTC alarm
+- It boots, blinks two LEDs (PB9 red, and blue on PB11 since 27 September; it was PB10), runs a console CLI, and enters DPD through the same inactivity mechanism as `ww500_md`. Wake sources are power-on, the RTC alarm
   and the WAKE pin (PA0). How it works is in
-  [`ww500_minimal/doc/README.md`](../../EPII_CM55M_APP_S/app/ww_projects/ww500_minimal/doc/README.md).
+  [`ww500_minimal/doc/README.md`](../../../EPII_CM55M_APP_S/app/ww_projects/ww500_minimal/doc/README.md).
 
 **Where power results are recorded:** all of them, in one place -
-[`power_investigation.md`](../../EPII_CM55M_APP_S/app/ww_projects/ww500_minimal/doc/power_investigation.md) (its
+[`power_investigation.md`](../../../EPII_CM55M_APP_S/app/ww_projects/ww500_minimal/doc/power_investigation.md) (its
 "Short summary" section for the headline numbers, the rest for the detail, the known/unknown lists and the
 evidence). This README and `ww500_minimal/doc/README.md` point to it rather than repeating figures, so there is
 only one place to update as new results (camera current, DPD with the camera and card fitted, ...) come in.
@@ -61,6 +66,23 @@ under Open items below.
 
 No GitHub issue has been filed for these. File them with the `review-finding` template if wanted (ask Charles first).
 
+Added 28 September 2026 (the later work, see "After step 8"):
+
+- **Carry changes over to `ww500_md`:** the list in `ww500_minimal/doc/README.md`, "Changes to transfer to ww500_md"
+  (SENSOR_ENABLE an output and low in every build, with the blue LED and SWD caveats; `IMX708_POWERUP_DELAY` 10 ms; FreeRTOS
+  includes first; 400 kHz sensor I2C in the RP builds; a per-file `dbg_printf()` filter). Each is a candidate issue.
+- **The extra DPD current with the PCA9574 fitted** (10 to 13.8 uA): camera and FatFS code ruled out; not resolved. Next
+  step: meter the DC level on SDA, SCL and MISO for a floating input (`power_investigation.md`, "PCA9574 and the extra DPD
+  current").
+- **HM0360 motion detection power (parked):** shortening context B's frame and line lengths gave no measurable change.
+  Untested leads: exposure longer than the frame, pre-metering at every wake (`PMU_CFG_5` 0x3026), the unexplained
+  register block at 0x35B4, an exposure cap. Code left in, switched off (`CIS_CONTEXT_B_TIMING`, `CIS_CONTEXT_B_OUTPUT`).
+- **RP3 capture time and current:** what else might be done (PDAF gains as burst writes or left out, 1 MHz I2C, a smaller or
+  binned sensor mode, frame length or exposure, `cam on` between close pictures, the SD card write) is in
+  `power_investigation.md`, "Time from `capture` to the frame". The RP3 picture has no auto-exposure or white balance.
+- **SWD:** PB7 (SWCLK) is now a GPIO once the app starts, so SWD can only connect in the short time before
+  `pinmux_cfg_init()`. Check that `burn.bat` still works with this firmware in flash.
+
 - **SD card became unreadable in Windows (cause not established).** After the step 7 build ran, Windows said `F:\ is not accessible. The file or directory is corrupted and
   unreadable`, while the WW500 read the card fine. A read-only `chkdsk` reported nonvalid links on nearly every entry, including the root, and showed the card held `ww500_md` data and
   `FOUND.000` (so Windows had repaired it before). `chkdsk /F` fixed it. `BOOTS.TXT` was not among the entries reported. Not investigated further: the card was not imaged first and no fresh-card
@@ -86,11 +108,37 @@ No GitHub issue has been filed for these. File them with the `review-finding` te
 
 - [`CLAUDE_Minimal_FreeRTOS.md`](CLAUDE_Minimal_FreeRTOS.md): the task brief
 - [`CLAUDE_Minimal_FreeRTOS_proposal.md`](CLAUDE_Minimal_FreeRTOS_proposal.md): the proposal, Charles's answers (section 10) and the implementation notes (sections 12 and 13)
-- [`power_investigation.md`](../../EPII_CM55M_APP_S/app/ww_projects/ww500_minimal/doc/power_investigation.md): the power findings, with the short summary and the lists of what is
-  and is not known
+- [`power_investigation.md`](../../../EPII_CM55M_APP_S/app/ww_projects/ww500_minimal/doc/power_investigation.md): the power findings, with the short summary and the lists of what is
+  and is not known. Its PPK2 screenshots (`RP3_timing.png`, `early.png`, `default_after_cold_boot.png`, `Context_b_after_warm.png`, ...) are beside it in the app's `doc` folder
+- [`CLAUDE_Step8_camera_proposal.md`](CLAUDE_Step8_camera_proposal.md): the step 8 (HM0360 image task) proposal and Charles's answers
 - Bench logs (Tera Term, host timestamps): `part_b_log.txt`, `part_b_run1_log.txt` (truncated), `part_b_run2_log.txt`, `part_b_slow_24MHz_log.txt`, `part_b_fast_400MHz_log.txt`
   (FreeRTOS tick and RTC accuracy), `partd_log.txt` (DPD from the slow state), `parte_1_retention1_wake_hung_log.txt`, `parte_2_retention1_wake_ok_log.txt` and
   `parte_3_retention_tests_log.txt` (Power-down with retention)
+
+## After step 8 (23-28 September 2026)
+
+Appended at the end of the work. How each of these works is in `ww500_minimal/doc/README.md`; the power findings are in
+`power_investigation.md`.
+
+- **23 September: the PCA9574 and the extra DPD current.** With the HM0360 and SD card removed and the PCA9574 fitted, DPD
+  rose from 10 to 13.8 uA. The build flags `WW500_NO_CAMERA` and `WW500_NO_FATFS` (`ww500_minimal.mk`) were added to rule out
+  the code: no change in any combination. Cause not found (see Open items). `capture` was also changed to take the frame
+  even with no SD card, and discard it.
+- **25 September: HM0360 motion detection.** `context <A|B>` and `mdint <ms>` put the resting mode in the state `ww500_md`
+  uses before DPD. The motion wake works on the bench. After a wake the interrupt is reported and cleared, and the mode,
+  context and interval are read back from the sensor (the HX6538 RAM is lost in DPD; the sensor keeps its registers). The
+  interrupt is disabled while awake and enabled just before DPD, as in `ww500_md`.
+- **25-26 September: context B timing (parked).** Context B is already QVGA but has context A's frame timing. Shorter line
+  and frame lengths were written and confirmed in use by a register dump, but the PPK2 showed no change. Parked with the code
+  switched off; Charles's notes and screenshots are in `power_investigation.md`.
+- **27 September: pins.** LED functions renamed (`ww500_minimal_ledRed()`, `ww500_minimal_ledBlue()`). GPIO0/1/2 each appear
+  on two pins (datasheet 4.5, note 3), so the blue LED on PB10 (GPIO1) moved with SENSOR_ENABLE on PB7. The blue LED moved to
+  PB11 (GPIO2; PB8 has a pull-up) and PB7 is now always an output, low, in the new `pinmux_cfg.c`.
+- **27-28 September: the RP3 build.** `make CIS_SUPPORT_INAPP_MODEL=cis_imx708` builds for the RP3 (IMX708), powered by
+  SENSOR_ENABLE only while in use. Its power-up went from 130 to 51 ms: `IMX708_POWERUP_DELAY` 100 to 10 ms (Charles, tested),
+  sensor I2C 100 to 400 kHz, progress messages compiled out. LED markers (blue: register writes; red: stream on to frame) and
+  the PPK2 give the stages of a `capture`: about 10 ms power settling, 38 ms register writes, 52-54 ms to the frame, then
+  about 100 ms that is presumably the SD card write.
 
 ## Step 8: the HM0360 image task (built and working on the bench, 22 September 2026)
 
@@ -115,9 +163,9 @@ A proposal was written first ([CLAUDE_Step8_camera_proposal.md](CLAUDE_Step8_cam
 - Open the saved JPEG on a PC and judge the picture (only the file size and the write result were seen). A second `capture` in the same boot should give `B0010301.JPG`.
 - **Current in each HM0360 mode** (`cam 0`, `cam 2`, ...) with the 0R link lifted, to check the comment in `hm0360_md.c` (about 700 uA in mode 0, 270 uA in mode 2) and which mode is really lowest.
 - **DPD current with the camera and the SD card fitted**, after a plain boot and after a `capture` (target: still about 10 uA). If it rises, look at the camera's control pins and I2C pads and the sensor's mode before DPD.
-- Record the results of both in `power_investigation.md` (add a "Camera (HM0360)" entry to its summary table and detailed record), not here - see "Where power results are recorded" above.
-- **Sensor state over DPD:** after a wake, `Image: HM0360 was in mode N when the boot began` should show the mode it was left in, and the ready line should say `warm init` (no register table).
-  Not tested yet. Note the sensor is left in the resting mode, in which it keeps producing a frame about every 2 s with nobody listening (as in `ww500_md` in DPD).
+- (28 September: the HM0360 current was measured by Charles, see `power_investigation.md`, "Where is the HM0360 power going?".) Record the results of both in `power_investigation.md` (add a "Camera (HM0360)" entry to its summary table and detailed record), not here - see "Where power results are recorded" above.
+- **Sensor state over DPD:** done 25 September. After a wake the mode, context and motion detection interval are read back and printed (`Image: HM0360 kept mode N, ...`)
+  and the ready line says `warm init`. Note the sensor is left in the resting mode, in which it keeps producing a frame about every 2 s with nobody listening (as in `ww500_md` in DPD).
 - **Check the capture timing:** the 5 s wait for the frame is far longer than the 33 ms seen. Take more pictures, then decide whether to shorten it. (The doc says the first frame does not wait for the sleep interval in mode 2.)
 - **The file name** was my reading of `Bnnnnnnn.JPG`: `B` + boot count modulo 100000 in 5 digits + 2 digits for the picture number. Confirm it is what was wanted.
 - Not done, by decision: EXIF, exposure control, more than one frame per capture (1 frame for now), a `power_diag` check for `clkoff image/hsc` (a `capture` after them times out; use `clkon`).

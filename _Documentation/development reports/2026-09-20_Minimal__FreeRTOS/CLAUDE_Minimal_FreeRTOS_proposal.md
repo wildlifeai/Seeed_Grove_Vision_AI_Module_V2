@@ -15,7 +15,7 @@ Agreed in conversation:
 | Item | Decision |
 |---|---|
 | Wake sources | Power-on, RTC timer, and the WAKE signal on PA0 (level high). No HM0360 interrupt. |
-| LEDs | PB9 and PB10, **active high** (1 = on). Hardware to be wired by Charles. |
+| LEDs | PB9 and PB11, **active high** (1 = on). Hardware to be wired by Charles. |
 | CLI | Yes, on console UART0, 921600 baud, as in `ww500_md`. |
 | Variants | One image. No camera variants (`CIS_SUPPORT_INAPP` unset). HM0360 may return later. |
 | Excluded | Camera, FatFS/SD, BLE interface (I2C slave), neural network, PCA9574/LED flash, XIP flash manager. |
@@ -51,14 +51,14 @@ New folder: `EPII_CM55M_APP_S/app/ww_projects/ww500_minimal/`
 | `ww500_minimal.mk` | Adapted from `ww500_md.mk` | Build config; see §4 |
 | `ww500_minimal.ld` | Copy of `ww500_md.ld` | Identical memory map (checked: `ww500_md_test_1.ld` differs only in comments). Not shrinking SRAM use; that gains nothing here. |
 | `mk/image_gen.mk` | Copy of `ww500_md/mk/image_gen.mk`, no camera-variant naming | Image generation (RC24M/DPD profile) |
-| `blinky_task.c/.h` | New, small | Alternates PB9/PB10 |
+| `blinky_task.c/.h` | New, small | Alternates PB9/PB11 |
 | `power_task.c/.h` | New, small | Owns the run window; enters DPD (see §5) |
 | `CLI-commands.c/.h` | Cut down from `ww500_md` | CLI task and a short command list |
 | `FreeRTOS_CLI.c/.h` | Verbatim | FreeRTOS+CLI parser |
 | `freertos_app.c` | Trimmed | Static-allocation hooks; stack overflow hook |
 | `hardfault_handler.c` | Verbatim | |
 | `sleep_mode.c/.h` | Trimmed | Keep `sleep_mode_enter_dpd()` and `sleep_mode_print_event()`. Drop `sleep_mode_enter_sleep()` (PD mode, unused). |
-| `pinmux_cfg.c/.h` | Trimmed | UART0 only, plus a new PA0/PB9/PB10 setup |
+| `pinmux_cfg.c/.h` | Trimmed | UART0 only, plus a new PA0/PB9/PB11 setup |
 | `printf_x.c/.h` | Verbatim | Console colours |
 | `app_msg.h` | Cut down | Only the CLI/power events we use (the original is mostly DP/camera events) |
 | `rtc_util.c/.h` | **Decision needed (Q3)** | RTC read/set/alarm helpers |
@@ -103,7 +103,7 @@ calls `sleep_mode_enter_dpd()` is simpler, and touches no shared FreeRTOS config
 Sequence before DPD: stop blinky, both LEDs low, wait for the UART transmitter to drain,
 call `sleep_mode_enter_dpd(WAKE_PIN | RTC, alarmSeconds, false)`.
 
-**`blinky_task`**: alternates PB9/PB10 at a configurable rate (default 500 ms). A `blink
+**`blinky_task`**: alternates PB9/PB11 at a configurable rate (default 500 ms). A `blink
 off` CLI command lets you measure operating current with the LEDs dark.
 
 ## 6. Reuse and what I deliberately left out (power review)
@@ -150,7 +150,7 @@ LED, slots, firmware update, preview.
   `xip_manager`, nothing labels the slot on boot, so `slots` on a later `ww500_md` image
   will show `unknown`. I believe this is harmless (§4 of `SKILL.md` says it self-heals),
   but I have not confirmed the bootloader itself never needs the label.
-- **DPD pin state**: I do not know whether PB9/PB10 hold their driven level through DPD.
+- **DPD pin state**: I do not know whether PB9/PB11 hold their driven level through DPD.
   Driving them low first avoids the question for LED current, but check on the bench.
 - **Reset**: `ww500_md` implements deliberate reset as a deferred watchdog reset executed in
   `image_sleepNow()`. The minimal image has no `image_sleepNow()`, so `reset` must start the
@@ -224,7 +224,7 @@ Not yet built or run: nothing here has been compiled.
 
 ## 13. Steps 2 and 3 notes (20 September 2026)
 
-- **Step 2 built and run:** the LEDs did not light at first because of a wiring error, which was fixed. PB9 (GPIO0) and PB10 (GPIO1) work as outputs. The temporary pin diagnostic was removed afterwards.
+- **Step 2 built and run:** the LEDs did not light at first because of a wiring error, which was fixed. PB9 (GPIO0) and PB11 (GPIO1) work as outputs. The temporary pin diagnostic was removed afterwards.
 - **DPD entry (proposal step 3) was folded into step 2:** `blinky_task` enters DPD when the inactivity mechanism reports inactivity (Q4).
 - **Step 4, the CLI, is written and not yet built.** `CLI-commands.c/.h` (prefix `cli_`), plus `FreeRTOS_CLI.c/.h` copied from `ww500_md` unchanged except for the include that provides `configCOMMAND_INT_MAX_OUTPUT_SIZE`. The FreeRTOS+CLI files are third-party and were **not** reformatted to `c_file_format.md`; this is a deliberate exception, and can be reversed if you want them reformatted.
 - **Commands:** `help`, `ver`, `ps`, `states`, `getutc`, `setutc`, `wake <s>`, `awake <s>`, `blink <ms|off>`, `timeprint <s>`, `led <9|10> <0|1>`, `inactivity <s>`, `dpd`, `reset` (watchdog, Q5).

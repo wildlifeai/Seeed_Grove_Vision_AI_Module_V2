@@ -218,11 +218,26 @@ override TRUSTZONE_FW_TYPE := 1
 override CIS_SEL := HM_COMMON
 override EPII_USECASE_SEL := drv_onecore_cm55m_s
 
-# The HM0360 camera (step 8). The sensor and data path code is in cis_sensor/cis_hm0360 in this folder,
-# a copy of the one in ww500_md, as all the apps have their own copy.
+# The camera. The sensor and data path code is in cis_sensor/<model> in this folder, copies of the ones in
+# ww500_md, as all the apps have their own copy. Two cameras are supported, one per build, chosen as in ww500_md:
+#   make CIS_SUPPORT_INAPP_MODEL=cis_hm0360   HM0360 (the default): step 8, the night/IR and motion detection camera
+#   make CIS_SUPPORT_INAPP_MODEL=cis_imx708   RP3 (IMX708, 27 September 2026): powered by SENSOR_ENABLE (PB7) only
+#                                             while in use, for power measurements
+# Do a clean build when changing the camera (make clean, or in Eclipse Project > Clean...).
 CIS_SUPPORT_INAPP = cis_sensor
-CIS_SUPPORT_INAPP_MODEL = cis_hm0360
+#CIS_SUPPORT_INAPP_MODEL = cis_hm0360
+CIS_SUPPORT_INAPP_MODEL=cis_imx708
+
+ifeq ($(CIS_SUPPORT_INAPP_MODEL), cis_hm0360)
+$(info ww500_minimal camera: HM0360)
 APPL_DEFINES += -DUSE_HM0360
+else ifeq ($(CIS_SUPPORT_INAPP_MODEL), cis_imx708)
+$(info ww500_minimal camera: RP3 (IMX708))
+APPL_DEFINES += -DCIS_IMX
+APPL_DEFINES += -DUSE_RP3
+else
+$(error ww500_minimal supports CIS_SUPPORT_INAPP_MODEL=cis_hm0360 or cis_imx708, not $(CIS_SUPPORT_INAPP_MODEL))
+endif
 
 ##
 # EXPERIMENT (23 September 2026): build without ever creating or using the image task, to test whether some

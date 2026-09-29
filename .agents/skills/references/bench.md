@@ -41,6 +41,10 @@ the fact is not enough, the timing has to be built in.
 * **To make the BLE processor stop reading the AI processor, send `dfu` from the app and
   disconnect.** It stays in its bootloader for 2 minutes, then restarts its app. DTR and RTS
   on its UART do not reset it.
+* **Never stop reading the Himax port, even for a second.** At 921600 baud a boot overflows
+  the Windows serial buffer during a plain `time.sleep()`, and the lost chunk reads like the
+  firmware skipping steps (a line cut mid-word, then later events). Wait by pumping the port.
+  Cross-check a suspicious gap against the nRF log before calling it a firmware fault.
 * **Three-way logging** (`bench_log.py`, light sensor thread) is what makes a cross-processor
   finding provable: app over `adb logcat`, nRF and Himax consoles in one file. Its stamps are
   read time and the nRF flushes its deferred log in bursts, so order events by the Himax

@@ -218,6 +218,7 @@ const char *fatFsTaskEventString[APP_MSG_FATFSTASK_LAST - APP_MSG_FATFSTASK_WRIT
 	"Open file",
 	"Append file",
 	"Close file",
+	"Save config",
 };
 
 // Number of pictures to take after motion detect wake
@@ -985,8 +986,8 @@ static APP_MSG_DEST_T flagUnexpectedEvent(APP_MSG_T rxMessage) {
 	event = rxMessage.msg_event;
 
 	XP_LT_RED;
-	if ((event >= APP_MSG_IFTASK_FIRST) && (event < APP_MSG_IFTASK_LAST)) {
-		xprintf("FatFS Task unhandled event '%s' in '%s'\r\n", fatFsTaskEventString[event - APP_MSG_IFTASK_FIRST], fatFsTaskStateString[fatFs_task_state]);
+	if ((event >= APP_MSG_FATFSTASK_FIRST) && (event < APP_MSG_FATFSTASK_LAST)) {
+		xprintf("FatFS Task unhandled event '%s' in '%s'\r\n", fatFsTaskEventString[event - APP_MSG_FATFSTASK_FIRST], fatFsTaskStateString[fatFs_task_state]);
 	} else {
 		xprintf("FatFS Task unhandled event 0x%04x in '%s'\r\n", event, fatFsTaskStateString[fatFs_task_state]);
 	}

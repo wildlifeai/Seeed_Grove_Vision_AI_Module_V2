@@ -69,6 +69,14 @@ ww500_md_test_2
 Based on ww500_md_test_1
 As of now (12/4/25) there is no development work on this. It is a placeholder that permits further experiments later.
 
+ww500_minimal
+---------------
+Started 20/9/26. A minimal FreeRTOS image for the HX6538 on a WW500_C00/C02 board, for measuring DPD (sleep) and operating
+current on their own: LEDs, CLI, DPD with RTC and WAKE-pin wakes, then a light-weight FatFS task (boot count, JPEG files),
+an HM0360 image task (with motion detection wake) and an RP3 (IMX708) build. Not a product firmware (no BLE, neural network
+or firmware update). Build with CIS_SUPPORT_INAPP_MODEL=cis_hm0360 or cis_imx708. See ww500_minimal/doc/README.md and
+doc/power_investigation.md; the development record is in _Documentation/development reports/2026-09-20_Minimal__FreeRTOS/.
+
 
 
 

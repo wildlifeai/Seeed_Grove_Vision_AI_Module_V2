@@ -1,6 +1,6 @@
 # WW500 BLE commands
 #### CGP - 25 November 2025
-#### Updated 1 September 2026 (`AI light` and the `AE light check` line) and 3 September 2026 (the gain-based wording from ee65771f, checked against e8b7feb5) by Claude, reviewed by Victor Anton
+#### Updated 28 September 2026 (`AI ble`, by Claude); 1 September 2026 (`AI light` and the `AE light check` line) and 3 September 2026 (the gain-based wording from ee65771f, checked against e8b7feb5) by Claude, reviewed by Victor Anton
 
 When the smartphone app establishes a BLE connection to the WW500 it can send and receive messages.
 The messages that it sends are treated as commands to the WW500. The messages it receives are 
@@ -169,6 +169,7 @@ The "Reqd?" column indicates whether the command should be implemented by the ap
 | AI slots       |               | Reports the active firmware slot and the camera variant in each slot, e.g. `Active slot 0 running 'RP3 (day/colour)'. Slot A: 'RP3 (day/colour)', Slot B: 'HM0360 (night/IR)'. Auto-switch: on` | Y, 4 |
 | AI switchslot  |               | Boots the firmware image in the other slot (day/night camera change). Response `Switched to slot n ('variant'). Reset scheduled.` — the device resets when it next sleeps | Y, 4 |
 | AI firmware    | file [0xCRC]  | Writes `/MANIFEST/<file>` to the INACTIVE firmware slot, verifies it and updates the slot selector; `AI reset` boots it. With the optional CRC16-CCITT the file is checked before flash is touched. Used twice (once per camera image) by the app's "Update both cameras" flow — see [firmware_update_and_recovery.md](firmware_update_and_recovery.md) | Y, 4 |
+| AI ble         | [clear]       | `BLE processor responsive`, or `BLE processor unresponsive: messages to it are not sent`. `clear` clears that flag | -, 6 |
 
 Note that there are addition commands that could be run on the AI processor, not documented here.
 These can be seen by typing "help" at the console. 
@@ -209,6 +210,15 @@ __Notes:__
    periodic op24 timer wake uses. It writes no image file, arms no flash and does not run
    the auto camera-switch check, so it is the cheap way to measure light. Taking a normal
    capture purely to force a reading is no longer necessary.
+6. **`ble` is a console diagnostic** (28 September 2026), for boards without a BLE processor. After each boot the AI
+   processor sends its first message ("Wake ...", "Timer ..." or "MD ...") with a 300 ms timeout (`BLE_PROBE_TIME` in
+   `if_task.c`; later messages keep the 4000 ms `MISSINGMASTERTIME`). If the BLE processor does not read it, the AI
+   processor treats it as unresponsive: it sends it nothing more (no `/IP_INT` pulse, no I2C data, no "Sleep" message)
+   and enters DPD without it. The flag is cleared if the BLE processor sends a command, by `ble clear`, or at the next
+   boot. Not needed by the app: an app that can send `AI ble` has a working BLE processor, so the answer is always
+   "responsive". The flag is also self test bit 14 (`SELF_TEST_AI_NO_BLE`, 0x4000) in the AI processor's `selfTest.h`.
+   The self test bit list is shared with the BLE processor (`ww-hardware`, `selfTest.h`) and the app, which do not have
+   bit 14 yet.
 
 __Other AI Processor Commands__
 

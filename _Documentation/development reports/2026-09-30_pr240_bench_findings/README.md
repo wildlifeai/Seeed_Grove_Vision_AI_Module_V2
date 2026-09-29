@@ -19,4 +19,4 @@ Open. Bench board WILD-7VQI, AI processor on `dev` ecb54946, BLE processor 0.30.
 ## Open items
 
 - A: [#243](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/243).
-- B: GitHub issue to be filed.
+- B: [#245](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/245).

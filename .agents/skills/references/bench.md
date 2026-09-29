@@ -31,6 +31,16 @@ the fact is not enough, the timing has to be built in.
   land, then tap send. It wakes a sleeping device, and its typed line bypasses the app's
   queue, so it can land mid-transfer when a test needs that. Opening the Himax port with
   pyserial's default DTR resets the board, and the device never wakes on serial input.
+* **The board's RESET reboots both processors.** To reboot only the AI processor, type
+  `reset` then `dpd` on its console (a watchdog reset), or let a motion wake do it. After a
+  RESET, act only on a `Cold boot` banner: a WAKE or motion boot just before it looks the same.
+* **A keystroke in the first ~30 ms after a reset leaves the board in the 2nd bootloader's
+  menu** (`[1] Xmodem download and burn FW image`) and the app never starts. Send `0` to
+  reboot from the menu; no RESET needed. After `reset` + `dpd`, wait for `>>> Reset by
+  watchdog` before flooding for X-Modem.
+* **To make the BLE processor stop reading the AI processor, send `dfu` from the app and
+  disconnect.** It stays in its bootloader for 2 minutes, then restarts its app. DTR and RTS
+  on its UART do not reset it.
 * **Three-way logging** (`bench_log.py`, light sensor thread) is what makes a cross-processor
   finding provable: app over `adb logcat`, nRF and Himax consoles in one file. Its stamps are
   read time and the nRF flushes its deferred log in bursts, so order events by the Himax

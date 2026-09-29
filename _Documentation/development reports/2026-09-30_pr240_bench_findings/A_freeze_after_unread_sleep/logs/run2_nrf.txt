@@ -1,0 +1,20 @@
+[10:44:33] <info> app: AI state changed from SLEEP to WOKEN
+[10:44:33] <info> app: AI state changed from WOKEN to SELFTEST
+[10:44:33] <info> app: AI state changed from SELFTEST to IDLE
+[10:44:35] Wildlife Watcher 1 (WW500-C02) Ver: 00.30.51 Built: 08:16:10 Sep 18 2026 ****
+[10:44:35] Initialisation finished! Starting state machine.
+[10:44:35] <info> app: AI state changed from RESET to SLEEP
+[10:44:38] <info> app: AI state changed from SLEEP to WOKEN
+[10:44:38] <info> app: AI state changed from WOKEN to SELFTEST
+[10:44:38] <info> app: AI state changed from SELFTEST to IDLE
+[10:44:39] <info> app: AI state changed from IDLE to SLEEP
+[10:44:51] <info> app: AI state changed from SLEEP to WOKEN
+[10:44:51] <info> app: AI state changed from WOKEN to SELFTEST
+[10:44:51] <info> app: AI state changed from SELFTEST to IDLE
+[10:44:52] <info> app: AI state changed from IDLE to SLEEP
+[10:44:54] <info> app: AI state changed from SLEEP to WOKEN
+[10:44:54] <info> app: AI state changed from WOKEN to SELFTEST
+[10:44:54] <info> app: AI state changed from SELFTEST to IDLE
+[10:45:08] BLE in: Received   3 bytes 'dfu'
+[10:45:16] <info> app: Disconnected. Conn_handle: 0x0, reason: 0x13
+[10:45:16] <info> app: Entering DFU mode.

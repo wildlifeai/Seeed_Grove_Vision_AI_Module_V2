@@ -1,0 +1,74 @@
+##### 09:47:58 repro phase timer
+**** WW500 MD. (WW500_C02) Built: 06:46:54 Sep 30 2026 ****
+Wakeup_event = 0x0002, WakeupEvt1 = 0x0000 RTC Timer
+Woke at 2024:01:01 00:09:21 
+##### 09:48:04 typing 'getop 7'
+  Timelapse interval: 30s.
+##### 09:48:04 typing 'getop 11'
+##### 09:48:05 typing 'setop 11 0'
+Set OpParam 11 = 0
+##### 09:48:05 typing 'setop 7 30'
+Set OpParam 7 = 30
+##### 09:48:06 typing 'dpd'
+>>> Entering DPD at 2024:01:01 00:09:53
+Will wake at 2024:01:01 00:10:23
+**** WW500 MD. (WW500_C02) Built: 06:46:54 Sep 30 2026 ****
+Wakeup_event = 0x0002, WakeupEvt1 = 0x0000 RTC Timer
+Woke at 2024:01:01 00:09:53 
+  Timelapse interval: 30s.
+>>> Entering DPD at 2024:01:01 00:10:24
+Will wake at 2024:01:01 00:10:54
+**** WW500 MD. (WW500_C02) Built: 06:46:54 Sep 30 2026 ****
+Wakeup_event = 0x0002, WakeupEvt1 = 0x0000 RTC Timer
+Woke at 2024:01:01 00:10:24 
+  Timelapse interval: 30s.
+>>> Entering DPD at 2024:01:01 00:10:55
+Will wake at 2024:01:01 00:11:25
+**** WW500 MD. (WW500_C02) Built: 06:46:54 Sep 30 2026 ****
+Wakeup_event = 0x0002, WakeupEvt1 = 0x0000 RTC Timer
+Woke at 2024:01:01 00:10:55 
+  Timelapse interval: 30s.
+>>> Entering DPD at 2024:01:01 00:11:26
+Will wake at 2024:01:01 00:11:56
+**** WW500 MD. (WW500_C02) Built: 06:46:54 Sep 30 2026 ****
+Wakeup_event = 0x0002, WakeupEvt1 = 0x0000 RTC Timer
+Woke at 2024:01:01 00:11:26 
+  Timelapse interval: 30s.
+>>> Entering DPD at 2024:01:01 00:11:57
+Will wake at 2024:01:01 00:12:27
+**** WW500 MD. (WW500_C02) Built: 06:46:54 Sep 30 2026 ****
+Wakeup_event = 0x0002, WakeupEvt1 = 0x0000 RTC Timer
+Woke at 2024:01:01 00:11:57 
+##### 09:50:32 typing 'setop 7 90'
+  Timelapse interval: 30s.
+Set OpParam 7 = 90
+##### 09:50:32 typing 'dpd'
+>>> Entering DPD at 2024:01:01 00:12:28
+Will wake at 2024:01:01 00:13:58
+**** WW500 MD. (WW500_C02) Built: 06:46:54 Sep 30 2026 ****
+Wakeup_event = 0x0002, WakeupEvt1 = 0x0000 RTC Timer
+Woke at 2024:01:01 00:12:28 
+  Timelapse interval: 90s.
+>>> Entering DPD at 2024:01:01 00:13:59
+Will wake at 2024:01:01 00:15:29
+**** WW500 MD. (WW500_C02) Built: 06:46:54 Sep 30 2026 ****
+Wakeup_event = 0x0002, WakeupEvt1 = 0x0000 RTC Timer
+Woke at 2024:01:01 00:13:59 
+  Timelapse interval: 90s.
+>>> Entering DPD at 2024:01:01 00:15:30
+Will wake at 2024:01:01 00:17:00
+**** WW500 MD. (WW500_C02) Built: 06:46:54 Sep 30 2026 ****
+Wakeup_event = 0x0002, WakeupEvt1 = 0x0000 RTC Timer
+Woke at 2024:01:01 00:15:30 
+  Timelapse interval: 90s.
+>>> Entering DPD at 2024:01:01 00:17:01
+Will wake at 2024:01:01 00:18:31
+**** WW500 MD. (WW500_C02) Built: 06:46:54 Sep 30 2026 ****
+Wakeup_event = 0x0002, WakeupEvt1 = 0x0000 RTC Timer
+Woke at 2024:01:01 00:17:01 
+##### 09:56:18 typing 'setop 7 0'
+  Timelapse interval: 90s.
+Set OpParam 7 = 0
+##### 09:56:18 typing 'setop 11 1000'
+Set OpParam 11 = 1000
+##### 09:56:19 typing 'dpd'

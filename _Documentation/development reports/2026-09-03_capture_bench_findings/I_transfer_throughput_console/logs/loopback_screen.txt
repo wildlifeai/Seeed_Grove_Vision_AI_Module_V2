@@ -1,0 +1,20 @@
+# File Transfer Test screen, 4 September 2026 08:44, transcribed from a screenshot
+
+BLE Loopback Benchmark: 5B payload 0/10 ok, 100B payload 0/10 ok, 241B payload 0/10 ok
+  every round: 'R<n>: 50xx ms  Loopback timeout (5000ms)'
+
+Transfer Progress: 100%, 512000 / 512000 bytes, 5.2 KB/s, Packet 2125/2125, COMPLETE
+Success: LARGE.BIN transferred successfully! 512000 bytes in 96.1s, CRC verified
+
+Transfer Log:
+[8:36:26 am] Mode: Sliding Window (12-pkt)
+[8:36:26 am] Selected: LARGE.BIN (512000 bytes)
+[8:36:26 am] CRC: 0x0300
+[8:36:26 am] Packets: 2125
+[8:36:26 am] Starting transfer...
+[8:38:02 am] Transfer complete in 96.1s
+[8:38:02 am] File "LARGE.BIN" is now on the SD card at /MANIFEST/
+[8:40:55 am] Starting FILE_LOOPBACK benchmark (10 rounds x 3 sizes)...
+[8:40:55 am]   Payload size: 5 bytes
+[8:41:00 am]     R1: 5014ms  Loopback timeout (5000ms)
+[8:41:05 am]     R2: 5010ms  Loopback timeout

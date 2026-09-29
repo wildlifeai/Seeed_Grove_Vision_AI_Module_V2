@@ -1,0 +1,610 @@
+# Finding H bench log, 3 September 2026, filtered by filter_H.py: hex dumps removed, per-packet chatter kept only around the key events
+[03:43.337] nrf   | <info> app: AI state machine bumped with 'Wake' (Current state: SLEEP)
+[03:43.337] nrf   | <info> app: BLE and AI time differ by 9068s - too much!
+[03:43.337] nrf   | <info> app: AI state changed from SLEEP to WOKEN
+[03:43.337] nrf   | BLE out: Sent   5 bytes: 'Wake'
+[03:43.337] nrf   | <info> app: AI State machine scheduler called with event 8 'Send SelfTest'
+[03:43.337] nrf   | <info> app: AI state machine bumped with 'Send SelfTest' (Current state: WOKEN)
+[03:43.337] nrf   | Sending 'selftest' to AI processor (4 ctrl bytes, 8 payload, 2 CRC)<info> app: OK
+[03:43.337] nrf   | <info> app: AI state changed from WOKEN to SELFTEST
+[03:43.337] nrf   | <info> app: I2C TX complete: 14 bytes.
+            ... 2 per-packet lines ...
+[03:43.337] nrf   | <info> app: AI state machine bumped with 'Selftest Rx' (Current state: SELFTEST)
+[03:43.337] nrf   | <info> app: AI self test bits = 0x0000 (all bits now 0x0000)
+[03:43.337] nrf   | <info> app: Can't send UTC
+[03:43.337] nrf   | <info> app: AI state changed from SELFTEST to IDLE
+[03:43.337] nrf   | BLE out: Sent  20 bytes: 'Error bits = 0x0000'
+[03:43.337] nrf   | <info> app: AI State machine scheduler called with event 12 'Msg to AI'
+[03:43.337] nrf   | <info> app: AI state machine bumped with 'Msg to AI' (Current state: IDLE)
+[03:43.337] nrf   | Sending 'txfile 59200BE0.JPG' to AI processor (4 ctrl bytes, 19 payload, 2 CRC)<info> app: AI state changed from IDLE to PROCESSING
+[03:43.337] nrf   | <info> app: I2C TX complete: 25 bytes.
+            ... 3 per-packet lines ...
+[03:43.337] nrf   | <info> app: AI state machine bumped with 'Msg from AI' (Current state: PROCESSING)
+[03:43.337] nrf   | <info> app: AI processor replies: '26371 bytes in 59200BE0.JPG'
+[03:43.337] nrf   | <info> app: AI state changed from PROCESSING to IDLE
+[03:43.337] nrf   | BLE out: Sent  28 bytes: '26371 bytes in 59200BE0.JPG'
+            ... 10 per-packet lines ...
+[03:43.632] himax | Negate inter-processor interrupt.
+[03:43.632] himax | IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+[03:43.632] himax | IF Task received event 'I2C Tx' (0x0701). Rx data = 0x00000000
+[03:43.632] himax | I2C transmission complete.
+[03:43.632] himax | IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+[03:43.632] himax | IF Task received event 'Binary Continues' (0x0706). Rx data = 0x3000ea30
+[03:43.632] himax | Assert inter-processor interrupt.
+[03:43.632] himax | Sending 247 bytes: Header 4, payload 241, checksum 2
+[03:43.632] himax | Negate inter-processor interrupt.
+[03:43.632] himax | IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+[03:43.639] nrf   | BLE binary: Sending 241 byte binary payload (packet type 6, packet num 1): 
+[03:43.639] nrf   | BLE out: Sent 244 bytes: '[binary]'
+[03:43.639] nrf   | <info> app: I2C RX payload 241/250 bytes. Response type is 6. CRC OK (0x56B6)
+[03:43.639] nrf   | <info> app: !8 
+[03:43.639] nrf   | <info> app: NUS TX Ready
+[03:43.639] nrf   | BLE binary: Sending 241 byte binary payload (packet type 6, packet num 2): 
+[03:43.639] nrf   | BLE out: Sent 244 bytes: '[binary]'
+[03:43.639] nrf   | <info> app: DEBUG: we waited 1ms for BLE transfer.
+[03:43.639] nrf   | <info> app: I2C RX payload 241/250 bytes. Response type is 6. CRC OK (0x9CAE)
+[03:43.639] nrf   | <info> app: !9 
+[03:43.639] nrf   | <info> app: NUS TX Ready
+            ... 261 per-packet lines ...
+[03:47.031] app   | TX Hex: 414920736c6f7473
+[03:47.074] app   | Written AI slots to the device WILD-CNKW (22:30:01-583)
+[03:47.074] app   | [useBleListeners] RAW_TX received for D6:47:9B:89:E7:23: AI slots
+            ... 19 per-packet lines ...
+[03:47.331] himax | Deferring event 0x0700
+[03:47.331] himax | IF Task received event 'I2C Tx' (0x0701). Rx data = 0x00000000
+[03:47.331] himax | I2C transmission complete.
+[03:47.331] himax | IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+[03:47.331] himax | Issuing deferred event 0x0700 'I2C Rx'
+[03:47.331] himax | IFTask sending event 0x0700. Tx data = 0x00000000
+[03:47.331] himax | IF Task received event 'Binary Continues' (0x0706). Rx data = 0x3000ea30
+[03:47.331] himax | Assert inter-processor interrupt.
+[03:47.331] himax | Sending 247 bytes: Header 4, payload 241, checksum 2
+[03:47.645] nrf   | <info> app: NUS TX Ready
+[03:47.645] nrf   | BLE in: Received   8 bytes 'AI slots'
+[03:47.645] nrf   | BLE out: Sent 244 bytes: '[binary]'
+[03:47.645] nrf   | <info> app: AI state machine bumped with 'Msg to AI' (Current state: IDLE)
+[03:47.645] nrf   | Sending 'slots' to AI processor (4 ctrl bytes, 5 payload, 2 CRC)<info> app: AI state changed from IDLE to PROCESSING
+[03:47.645] nrf   | <info> app: I2C TX complete: 11 bytes.
+[03:47.645] nrf   | <info> app: DEBUG: we waited 16ms for BLE transfer.
+[03:47.645] nrf   | <info> app: I2C RX payload 241/250 bytes. Response type is 6. CRC OK (0xD689)
+[03:47.645] nrf   | <info> app: !29 
+[03:47.645] nrf   | BLE binary: Sending 241 byte binary payload (packet type 6, packet num 1): 
+[03:47.645] nrf   | BLE out: Failed to send 244 bytes: '[binary]'
+[03:47.645] nrf   | <info> app: NUS TX Ready
+[03:47.645] nrf   | BLE out: Sent 244 bytes: '[binary]'
+[03:47.645] nrf   | <info> app: DEBUG: we waited 3ms for BLE transfer.
+[03:47.645] nrf   | <info> app: I2C RX payload 241/250 bytes. Response type is 6. CRC OK (0x2547)
+[03:47.645] nrf   | <info> app: !30 
+[03:47.645] nrf   | BLE binary: Sending 241 byte binary payload (packet type 6, packet num 2): 
+[03:47.645] nrf   | BLE out: Failed to send 244 bytes: '[binary]'
+[03:47.645] himax | Negate inter-processor interrupt.
+[03:47.645] himax | IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+            ... 24 per-packet lines ...
+[03:47.960] himax | IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+[03:47.960] himax | Issuing deferred event 0x0700 'I2C Rx'
+[03:47.960] himax | IFTask sending event 0x0700. Tx data = 0x00000000
+[03:47.960] himax | IF Task received event 'Binary Continues' (0x0706). Rx data = 0x3000ea30
+[03:47.960] himax | Assert inter-processor interrupt.
+[03:47.960] himax | Sending 247 bytes: Header 4, payload 241, checksum 2
+[03:47.960] himax | Negate inter-processor interrupt.
+[03:47.960] himax | IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+[03:47.960] himax | IF Task received event 'I2C Rx' (0x0700). Rx data = 0x00000000
+[03:47.960] himax | Deferring event 0x0700
+[03:48.101] app   | ImageReassembler: Sequence gap — expected 23, got 1 (234 total gaps)
+[03:48.274] himax | IF Task received event 'I2C Tx' (0x0701). Rx data = 0x00000000
+[03:48.274] himax | I2C transmission complete.
+[03:48.274] himax | IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+[03:48.274] himax | Issuing deferred event 0x0700 'I2C Rx'
+[03:48.274] himax | IFTask sending event 0x0700. Tx data = 0x00000000
+[03:48.274] himax | IF Task received event 'Binary Continues' (0x0706). Rx data = 0x3000ea30
+[03:48.274] himax | Assert inter-processor interrupt.
+[03:48.274] himax | Sending 247 bytes: Header 4, payload 241, checksum 2
+[03:48.274] himax | Negate inter-processor interrupt.
+[03:48.274] himax | IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+            ... 789 per-packet lines ...
+[03:57.509] himax | IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+[03:57.509] himax | IF Task received event 'I2C Rx' (0x0700). Rx data = 0x00000000
+[03:57.509] himax | Deferring event 0x0700
+[03:57.509] nrf   | <info> app: NUS TX Ready
+[03:57.509] nrf   | BLE out: Sent 244 bytes: '[binary]'
+[03:57.509] nrf   | <info> app: DEBUG: we waited 16ms for BLE transfer.
+[03:57.509] nrf   | <info> app: I2C RX payload 241/250 bytes. Response type is 6. CRC OK (0x35B7)
+[03:57.509] nrf   | <info> app: !73 
+[03:57.509] nrf   | BLE binary: Sending 241 byte binary payload (packet type 6, packet num 45): 
+[03:57.509] nrf   | BLE out: Failed to send 244 bytes: '[binary]'
+[03:57.509] nrf   | <info> app: AI State machine scheduler called with event 15 'Response timeout'
+[03:57.509] nrf   | <info> app: AI state machine bumped with 'Response timeout' (Current state: PROCESSING)
+[03:57.509] nrf   | <info> app: AI processor response timeout - recovering to IDLE
+[03:57.509] nrf   | <info> app: AI state changed from PROCESSING to IDLE
+[03:57.509] nrf   | BLE out: Failed to send 244 bytes: '[binary]'
+[03:57.509] nrf   | <info> app: NUS TX Ready
+[03:57.509] nrf   | BLE out: Sent 244 bytes: '[binary]'
+[03:57.509] nrf   | <info> app: DEBUG: we waited 5ms for BLE transfer.
+[03:57.509] nrf   | <info> app: I2C RX payload 241/250 bytes. Response type is 6. CRC OK (0xA56B)
+[03:57.509] nrf   | <info> app: !74 
+[03:57.509] nrf   | BLE binary: Sending 241 byte binary payload (packet type 6, packet num 46): 
+[03:57.509] nrf   | BLE out: Failed to send 244 bytes: '[binary]'
+[03:57.812] himax | IF Task received event 'I2C Tx' (0x0701). Rx data = 0x00000000
+            ... 754 per-packet lines ...
+[04:05.782] himax | Sending 108 bytes: Header 4, payload 102, checksum 2
+            ... 3 per-packet lines ...
+[04:05.782] himax | Deferring event 0x0700
+[04:06.089] nrf   | <info> app: NUS TX Ready
+[04:06.089] nrf   | BLE out: Sent 244 bytes: '[binary]'
+[04:06.089] nrf   | <info> app: DEBUG: we waited 16ms for BLE transfer.
+[04:06.089] nrf   | <info> app: I2C RX payload 241/250 bytes. Response type is 6. CRC OK (0x4A29)
+[04:06.089] nrf   | <info> app: !115 
+[04:06.089] nrf   | BLE binary: Sending 241 byte binary payload (packet type 6, packet num 87): 
+[04:06.089] nrf   | BLE out: Failed to send 244 bytes: '[binary]'
+[04:06.089] himax | IF Task received event 'I2C Tx' (0x0701). Rx data = 0x00000000
+[04:06.089] himax | I2C transmission complete.
+[04:06.089] himax | Finished sending 26371 bytes (110 packets)
+[04:06.089] himax | IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+[04:06.089] himax | Issuing deferred event 0x0700 'I2C Rx'
+[04:06.089] himax | IFTask sending event 0x0700. Tx data = 0x00000000
+[04:06.089] himax | IF Task received event 'String Continues' (0x0704). Rx data = 0x3000ea30
+[04:06.089] himax | Assert inter-processor interrupt.
+[04:06.089] himax | Sending 48 bytes: Header 4, payload 42, checksum 2 'Finished sending 26371 bytes (110 packets)'
+[04:06.089] himax | Negate inter-processor interrupt.
+[04:06.089] himax | IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+[04:06.089] himax | IF Task received event 'I2C Rx' (0x0700). Rx data = 0x00000000
+[04:06.089] himax | Deferring event 0x0700
+[04:06.398] himax | IF Task received event 'I2C Tx' (0x0701). Rx data = 0x00000000
+[04:06.398] himax | I2C transmission complete.
+[04:06.398] himax | IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+[04:06.398] himax | Issuing deferred event 0x0700 'I2C Rx'
+[04:06.398] himax | IFTask sending event 0x0700. Tx data = 0x00000000
+[04:06.398] himax | IF Task received event 'I2C Rx' (0x0700). Rx data = 0x00000000
+[04:06.398] himax | Received I2C message.
+[04:06.398] himax | MKL62BA command received: 'slots'
+[04:06.398] himax | IF Task state changed from 'Idle' (1) to 'I2C RX State' (2)
+[04:06.398] himax | Flash ID 0xEF initialised
+[04:06.398] himax | Active slot 1 running 'RP3 (day/colour)'. Slot A: 'HM0360 (night/IR)', Slot B: 'RP3 (day/colour)'. Auto-switch: off
+[04:06.398] himax | IF Task received event 'String Response' (0x0703). Rx data = 0x3000ea30
+[04:06.398] himax | Assert inter-processor interrupt.
+[04:06.398] himax | Sending 121 bytes: Header 4, payload 115, checksum 2 'Active slot 1 running 'RP3 (day/colour)'. Slot A: 'HM0360 (night/IR)', Slot B: 'RP3 (day/colour)'. Auto-switch: off'
+[04:06.398] himax | Negate inter-processor interrupt.
+[04:06.398] himax | IF Task state changed from 'I2C RX State' (2) to 'I2C TX State' (3)
+[04:06.398] himax | IF Task received event 'I2C Tx' (0x0701). Rx data = 0x00000000
+[04:06.398] himax | I2C transmission complete.
+[04:06.398] himax | IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+[04:06.398] nrf   | <info> app: NUS TX Ready
+[04:06.398] nrf   | BLE out: Sent 244 bytes: '[binary]'
+[04:06.398] nrf   | <info> app: DEBUG: we waited 83ms for BLE transfer.
+[04:06.398] nrf   | <info> app: I2C RX payload 102/250 bytes. Response type is 6. CRC OK (0xD549)
+[04:06.398] nrf   | <info> app: !116 
+[04:06.398] nrf   | BLE binary: Sending 102 byte binary payload (packet type 6, packet num 88): 
+[04:06.398] nrf   | BLE out: Failed to send 105 bytes: '[binary]'
+[04:06.398] nrf   | <info> app: NUS TX Ready
+[04:06.398] nrf   | BLE out: Sent 105 bytes: '[binary]'
+[04:06.398] nrf   | <info> app: DEBUG: we waited 38ms for BLE transfer.
+[04:06.398] nrf   | <info> app: I2C RX payload 42/250 bytes. Response type is 4. CRC OK (0x57F9)
+[04:06.398] nrf   | <info> app: !117 
+[04:06.398] nrf   | <info> app: AI state machine bumped with 'Msg from AI' (Current state: IDLE)
+[04:06.398] nrf   | BLE out: Failed to send  28 bytes: 'AI processor not responding'
+[04:06.398] nrf   | BLE out: Failed to send  28 bytes: 'AI processor not responding'
+[04:06.398] nrf   | <info> app: I2C RX payload 115/250 bytes. Response type is 4. CRC OK (0x5068)
+[04:06.398] nrf   | <info> app: AI state machine bumped with 'Msg from AI' (Current state: IDLE)
+[04:06.398] nrf   | BLE out: Failed to send  28 bytes: 'AI processor not responding'
+[04:06.398] nrf   | BLE out: Failed to send  28 bytes: 'AI processor not responding'
+[04:06.664] app   | ImageReassembler: Transfer complete! Received 26371/26371 (234 gaps)
+[04:06.683] app   | ImageReassembler: Image has 234 sequence gaps — may be corrupt
+[04:06.714] nrf   | <info> app: NUS TX Ready
+[04:06.714] nrf   | BLE out: Sent  28 bytes: 'AI processor not responding'
+[04:06.714] nrf   | BLE out: Failed to send  43 bytes: 'Finished sending 26371 bytes (110 packets)'
+[04:06.714] nrf   | BLE out: Failed to send  43 bytes: 'Finished sending 26371 bytes (110 packets)'
+[04:06.714] nrf   | <info> app: NUS TX Ready
+[04:06.714] nrf   | BLE out: Sent  43 bytes: 'Finished sending 26371 bytes (110 packets)'
+[04:06.714] nrf   | BLE out: Sent 116 bytes: 'Active slot 1 running 'RP3 (day/colour)'. Slot A: 'HM0360 (night/IR)', Slot B: 'RP3 (day/colour)'. Auto-switch: off'
+[04:06.814] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: AI processor not responding
+[04:06.933] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: Finished sending 26371 bytes (110 packets)
+[04:07.002] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: Active slot 1 running 'RP3 (day/colour)'. Slot A: 'HM0360 (night/IR)', Slot B: 'RP3 (day/colour)'. Auto-switch: off
+[04:07.018] nrf   | <info> app: NUS TX Ready
+[04:07.018] nrf   | <info> app: NUS TX Ready
+[04:07.018] nrf   | <info> app: NUS TX Ready
+[04:07.018] nrf   | <info> app: NUS TX Ready
+[04:07.072] app   | ImageReassembler: Image saved to file:///data/user/0/com.wildlife.wildlifewatcher.expo/cache/capture_1788431421248.jpg [SUCCESS] [234 gaps] (26371/26371 bytes)
+[04:07.072] app   | [BleTransport] Image stream ended (image saved); 0 command(s) waiting
+[04:07.326] himax | Inactive for 1000ms
+[04:07.326] himax | IMAGE Task received event 'Image Event Inactivity' (0x0a00). Rx data = 0x00000000
+[04:07.326] himax | IMAGE Task state changed from 'Init' (1) to 'Save State' (5)
+[04:07.326] himax | FatFS Task received event 'Save State' (0x0904). Rx data = 0x00000000
+[04:07.630] himax | Saved state to SD card. Image sequence number = 27
+[04:07.630] himax | FatFS task sending event 0x0a06. Tx data = 0x00000000
+[04:07.630] himax | IMAGE task sending event 0x0904. Rx data = 0x00000000
+[04:07.630] himax | IMAGE Task received event 'Image Event Disk Write Complete' (0x0a06). Rx data = 0x00000000
+[04:07.630] himax | Image task ready to sleep.
+[04:07.630] himax | IMAGE Task state changed from 'Save State' (5) to 'Uninitialised' (0)
+            ... 2 per-packet lines ...
+[04:07.630] himax | Sending 98 bytes: Header 4, payload 92, checksum 2 'Sleep 27 0 0 10 93 1 500 0 1000 89 1 0 100 0 0 0 18 1 0 20 0 2 50 65 15 0 0 286 326 1 110 1 '
+            ... 4 per-packet lines ...
+[04:07.630] himax | IF task ready to sleep.
+[04:07.630] himax | DEBUG: ledFlashDisable()
+[04:07.630] himax | Preparing HM0360 for MD:   HM0360 Motion Detection off.
+[04:07.630] himax |    Inhibiting MD
+[04:07.630] himax |    Changing mode from 2 to 2 with nFrames=1, sleepTime=0 sleepCount = 0xffff
+[04:07.630] himax |  No LED flashes.
+[04:07.630] himax | >>> Entering DPD at 2024:01:01 00:00:30
+[04:07.798] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: Sleep
+            ... 2 per-packet lines ...
+[04:07.931] nrf   | <info> app: AI state machine bumped with 'Sleep' (Current state: IDLE)
+[04:07.931] nrf   | <info> app: AI processor sends stats: '27 0 0 10 93 1 500 0 1000 89 1 0 100 0 0 0 18 1 0 20 0 2 50 65 15 0 0 286 326 1 110 1 '
+[04:07.931] nrf   | <info> app: AI state changed from IDLE to SLEEP
+[04:07.931] nrf   | BLE out: Sent   6 bytes: 'Sleep'
+            ... 1 per-packet lines ...
+[05:05.844] app   | [BLE Heartbeat] 58s idle — sending heartbeat (get heartbeat)...
+[05:05.844] app   | TX Hex: 67657420686561727462656174
+[05:05.855] app   | Written get heartbeat to the device WILD-CNKW (22:31:20-357)
+[05:05.855] app   | [useBleListeners] RAW_TX received for D6:47:9B:89:E7:23: get heartbeat
+[05:05.914] nrf   | BLE in: Received  13 bytes 'get heartbeat'
+[05:05.914] nrf   | BLE out: Sent  17 bytes: 'heartbeat is 12h'
+[05:06.062] app   | [BLE Heartbeat] Heartbeat sent. Timer will reset on response.
+[05:06.087] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: heartbeat is 12h
+[05:06.529] nrf   | <info> app: NUS TX Ready
+[05:24.900] app   | TX Hex: 414920747866696c652035393230304245302e4a5047
+[05:24.944] app   | Written AI txfile 59200BE0.JPG to the device WILD-CNKW (22:31:39-456)
+[05:24.944] app   | [useBleListeners] RAW_TX received for D6:47:9B:89:E7:23: AI txfile 59200BE0.JPG
+[05:25.198] nrf   | BLE in: Received  22 bytes 'AI txfile 59200BE0.JPG'
+[05:25.198] nrf   | <info> app: AI state machine bumped with 'Msg to AI' (Current state: SLEEP)
+[05:25.198] nrf   | <info> app: AI processor is in DPD. Waking it. (txfile 59200BE0.JPG)
+[05:25.198] himax | 1st BL Modem Build DATE=Jan 17 2025, Version: 2.12
+[05:25.198] himax | slot flash_offset 0x00100000
+[05:25.198] himax | New MemDesp himax_sec_SB_image_process PASS
+[05:25.198] himax | set_memory_s_ns
+[05:25.198] himax | HX_DSP_FLAG 1
+[05:25.198] himax | jump_addr=0x10000000
+[05:25.198] himax | Compiler Version: ARM GNU, 14.3.1 20250623
+[05:25.198] himax | **** WW500 MD. (WW500_C02) Built: 13:32:59 Sep  3 2026 ****
+[05:25.198] himax | Git branch: 'nogit' nogit-dirty
+[05:25.198] himax | Compiler Version: ARM GNU, 14.3.1 20250623
+[05:25.198] himax | Wakeup_event = 0x0000, WakeupEvt1 = 0x0001 WAKE signal
+[05:25.198] himax | Camera: RP v3 (IMX708)
+[05:25.198] himax | Enabling RP SENSOR_ENABLE
+[05:25.198] himax | PCA9574 present at 0x20
+[05:25.198] himax | DEBUG: ledFlashSelectLED(0)
+[05:25.198] himax | Initialised LED Flash
+[05:25.198] himax | HM0360 present at 0x24
+[05:25.198] himax | Main camera present at 0x1a
+[05:25.198] himax | Disabling RP SENSOR_ENABLE
+[05:25.198] himax | ### Warm Boot ###
+[05:25.198] himax | Woke at 2024:01:01 00:00:30 
+[05:25.198] himax | BLE wake
+[05:25.198] himax | Initialising FreeRTOS tasks
+[05:25.198] himax | Created task 'CLI' Priority 4
+[05:25.198] himax | Created task 'IFTask' Priority 3
+[05:25.198] himax | Created task 'FAT' Priority 2
+[05:25.198] himax | Created task 'IMAGE' Priority 1
+[05:25.198] himax | FreeRTOS scheduler started.
+[05:25.198] himax | Starting CLI Task
+[05:25.198] himax | Enter 'help' to view a list of available commands.
+[05:25.198] himax | cmd> Starting IFTask
+[05:25.198] himax | I2C slave instance 0 configured at address 0x62
+[05:25.198] himax | I2C buffers have 256 bytes, payload is 244
+[05:25.198] himax | Starting FatFS Task
+[05:25.513] himax | Mounting FatFS on SD card OK
+[05:25.513] himax | Directory '/MANIFEST' exists
+[05:25.513] himax | SD card initialised. CWD is '0:/'
+[05:25.513] himax | Loading configuration: CWD is '0:/MANIFEST'
+[05:25.513] himax | 'CONFIG.TXT' found. (Next image #27), camera enabled. Flash brightness 89
+[05:25.513] himax | Retaining existing images directory (20 <= 100) '/MEDIA/00000000/IMAGES.000'
+[05:25.513] himax | Directory '/MEDIA/00000000/IMAGES.000' exists
+[05:25.513] himax | FatFs setup took 249ms
+[05:25.513] himax | Inactivity period set at 1000ms
+            ... 1 per-packet lines ...
+[05:25.513] himax | Starting Image Task
+[05:25.513] himax | Image 2304 x 1296. Raw buffer 460800. JPEG buffer 115860. JPEG compression x4
+[05:25.513] himax | Enabling RP SENSOR_ENABLE
+[05:25.513] himax | Initialising IMX708 at 0x1a (p.u. delay 100ms)
+[05:25.513] himax | Memory allocated: 460800 for raw buffer, 115860 for JPEG, 100 for JPEG header
+[05:25.513] himax | mclk DIV3, xshutdown_pin=82
+[05:25.800] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: Wake
+[05:25.830] himax | IMX708 Init by app (IMX708_common_setting)
+[05:25.830] himax | Get IMX708_REG_BASE_SPC_GAINS_L = 0x40
+[05:25.830] himax | Init IMX708 Default PDAF pixel correction gains 
+[05:25.830] himax | IMX708 Init by app (IMX708_2304x1296_setting)
+[05:25.830] himax | IMX708 EXPOSURE(0x0940) by app (IMX708_exposure_setting)
+[05:25.830] himax | IMX708 Init by app (IMX708_link_450Mhz_regs)
+[05:25.830] himax | Quad Bayer re-mosaic adjustments ON
+[05:25.830] himax | IMX708 Init by app (IMX708_mirror_setting)
+[05:25.830] himax | CWD is '0:/MANIFEST'
+[05:25.830] himax | Error opening '0:/RPV3_EX.BIN': 4
+[05:25.830] himax | WD1[340a6ba0], WD2_J[340a6ba0], WD3_RAW[340363a0], JPAuto[34036320]
+[05:25.830] himax | MIPI CLK change to PLL freq:(400000000 / 2)
+[05:25.830] himax | MIPI TX CLK: 200M
+[05:25.830] himax | t_input: 12943ns
+[05:25.830] himax | t_output: 11520ns
+[05:25.830] himax | t_preload: 185ns
+[05:25.830] himax | MIPI RX FIFO FILL: 70
+[05:25.830] himax | MIPI TX FIFO FILL: 0
+[05:25.830] himax | RESET MIPI CSI RX/TX
+[05:25.830] himax | sensor_type: 15
+[05:25.830] himax | DEBUG: ledFlashBrightness(89%) [brbits = 0xd]
+[05:25.830] himax | DEBUG: ledFlashSelectLED(0)
+[05:25.830] himax | [LS] In ledFlashSetFlashModeFromOpParam with 0 Mode 0
+[05:25.830] himax | DEBUG: ledFlashDisable()
+[05:25.830] himax | Not initialising NN (project ID is 0)
+[05:25.830] himax | No model found.
+[05:25.830] himax | NN Initialisation took 9ms TODO - consider doing this after taking the picture!
+[05:25.830] himax | Image sensor and data path initialised for camera RP v3
+[05:25.830] himax |   Camera system enabled.
+[05:25.830] himax |   Neural network disabled.
+[05:25.830] himax |   Flash LED(s) in use: 0
+[05:25.830] himax |   Flash brightness: 89%
+[05:25.830] himax |   Light is currently LIGHT.
+[05:25.830] himax |   Flash duration 100ms
+[05:25.830] himax |   MD disabled.
+[05:25.830] himax |   Timelapse disabled.
+            ... 2 per-packet lines ...
+[05:25.830] himax | Sending 31 bytes: Header 4, payload 25, checksum 2 'Wake 2024-01-01T00:00:30Z'
+            ... 6 per-packet lines ...
+[05:25.830] himax | Received I2C message.
+[05:25.830] himax | MKL62BA command received: 'selftest'
+[05:25.830] himax | selfTest 0000
+            ... 3 per-packet lines ...
+[05:25.830] himax | Sending 19 bytes: Header 4, payload 13, checksum 2 'selfTest 0000'
+            ... 6 per-packet lines ...
+[05:25.969] himax | Received I2C message.
+[05:25.969] himax | MKL62BA command received: 'txfile 59200BE0.JPG'
+[05:25.969] himax | 26371 bytes in 59200BE0.JPG
+            ... 3 per-packet lines ...
+[05:25.969] himax | Sending 33 bytes: Header 4, payload 27, checksum 2 '26371 bytes in 59200BE0.JPG'
+            ... 9 per-packet lines ...
+[05:25.969] himax | IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+[05:25.969] himax | IF Task received event 'I2C Tx' (0x0701). Rx data = 0x00000000
+[05:25.969] himax | I2C transmission complete.
+[05:25.969] himax | IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+[05:25.969] himax | IF Task received event 'Binary Continues' (0x0706). Rx data = 0x3000ea30
+[05:25.969] himax | Assert inter-processor interrupt.
+[05:25.969] himax | Sending 247 bytes: Header 4, payload 241, checksum 2
+[05:25.979] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: Error bits = 0x0000
+[05:26.073] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: 26371 bytes in 59200BE0.JPG
+[05:26.073] app   | [useBleListeners] Detected image transfer start: 59200BE0.JPG (26371 bytes)
+[05:26.073] app   | ImageReassembler: Initializing transfer for 26371 bytes
+[05:26.073] app   | [BleTransport] Image stream started; holding 0 queued command(s) until it ends
+[05:26.130] nrf   | <info> app: !119 
+[05:26.130] nrf   | <info> app: I2C RX payload 25/250 bytes. Response type is 4. CRC OK (0x8063)
+[05:26.130] nrf   | <info> app: AI state machine bumped with 'Wake' (Current state: SLEEP)
+[05:26.130] nrf   | <info> app: BLE and AI time differ by 9145s - too much!
+[05:26.130] nrf   | <info> app: AI state changed from SLEEP to WOKEN
+[05:26.130] nrf   | BLE out: Sent   5 bytes: 'Wake'
+[05:26.130] nrf   | <info> app: AI State machine scheduler called with event 8 'Send SelfTest'
+[05:26.130] nrf   | <info> app: AI state machine bumped with 'Send SelfTest' (Current state: WOKEN)
+[05:26.130] nrf   | Sending 'selftest' to AI processor (4 ctrl bytes, 8 payload, 2 CRC)<info> app: OK
+[05:26.130] nrf   | <info> app: AI state changed from WOKEN to SELFTEST
+[05:26.130] nrf   | <info> app: I2C TX complete: 14 bytes.
+            ... 2 per-packet lines ...
+[05:26.130] nrf   | <info> app: AI state machine bumped with 'Selftest Rx' (Current state: SELFTEST)
+[05:26.130] nrf   | <info> app: AI self test bits = 0x0000 (all bits now 0x0000)
+[05:26.130] nrf   | <info> app: Can't send UTC
+[05:26.130] nrf   | <info> app: AI state changed from SELFTEST to IDLE
+[05:26.130] nrf   | BLE out: Sent  20 bytes: 'Error bits = 0x0000'
+[05:26.130] nrf   | <info> app: AI State machine scheduler called with event 12 'Msg to AI'
+[05:26.130] nrf   | <info> app: AI state machine bumped with 'Msg to AI' (Current state: IDLE)
+[05:26.130] nrf   | Sending 'txfile 59200BE0.JPG' to AI processor (4 ctrl bytes, 19 payload, 2 CRC)<info> app: AI state changed from IDLE to PROCESSING
+[05:26.130] nrf   | <info> app: I2C TX complete: 25 bytes.
+            ... 3 per-packet lines ...
+[05:26.130] nrf   | <info> app: AI state machine bumped with 'Msg from AI' (Current state: PROCESSING)
+[05:26.130] nrf   | <info> app: AI processor replies: '26371 bytes in 59200BE0.JPG'
+[05:26.130] nrf   | <info> app: AI state changed from PROCESSING to IDLE
+[05:26.130] nrf   | BLE out: Sent  28 bytes: '26371 bytes in 59200BE0.JPG'
+            ... 28 per-packet lines ...
+[05:26.580] himax | Negate inter-processor interrupt.
+[05:26.580] himax | IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+[05:26.580] himax | IF Task received event 'I2C Tx' (0x0701). Rx data = 0x00000000
+[05:26.580] himax | I2C transmission complete.
+[05:26.580] himax | IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+[05:26.580] himax | IF Task received event 'Binary Continues' (0x0706). Rx data = 0x3000ea30
+[05:26.580] himax | Assert inter-processor interrupt.
+[05:26.580] himax | Sending 247 bytes: Header 4, payload 241, checksum 2
+[05:26.580] himax | Negate inter-processor interrupt.
+[05:26.580] himax | IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+[05:26.763] nrf   | BLE binary: Sending 241 byte binary payload (packet type 6, packet num 1): 
+[05:26.763] nrf   | BLE out: Sent 244 bytes: '[binary]'
+[05:26.763] nrf   | <info> app: I2C RX payload 241/250 bytes. Response type is 6. CRC OK (0x56B6)
+[05:26.763] nrf   | <info> app: !124 
+[05:26.763] nrf   | <info> app: NUS TX Ready
+[05:26.763] nrf   | BLE binary: Sending 241 byte binary payload (packet type 6, packet num 2): 
+[05:26.763] nrf   | BLE out: Sent 244 bytes: '[binary]'
+[05:26.763] nrf   | <info> app: DEBUG: we waited 1ms for BLE transfer.
+[05:26.763] nrf   | <info> app: I2C RX payload 241/250 bytes. Response type is 6. CRC OK (0x9CAE)
+[05:26.763] nrf   | <info> app: !125 
+[05:26.763] nrf   | <info> app: NUS TX Ready
+            ... 563 per-packet lines ...
+[05:35.332] app   | TX Hex: 414920736c6f7473
+[05:35.382] app   | Written AI slots to the device WILD-CNKW (22:31:49-895)
+[05:35.382] app   | [useBleListeners] RAW_TX received for D6:47:9B:89:E7:23: AI slots
+            ... 32 per-packet lines ...
+[05:35.846] himax | Issuing deferred event 0x0700 'I2C Rx'
+[05:35.846] himax | IFTask sending event 0x0700. Tx data = 0x00000000
+[05:35.846] himax | IF Task received event 'Binary Continues' (0x0706). Rx data = 0x3000ea30
+[05:35.846] himax | Assert inter-processor interrupt.
+[05:35.846] himax | Sending 247 bytes: Header 4, payload 241, checksum 2
+[05:35.846] himax | Negate inter-processor interrupt.
+[05:35.846] himax | IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+[05:35.846] himax | IF Task received event 'I2C Rx' (0x0700). Rx data = 0x00000000
+[05:35.846] himax | Deferring event 0x0700
+[05:35.913] nrf   | <info> app: NUS TX Ready
+[05:35.913] nrf   | BLE in: Received   8 bytes 'AI slots'
+[05:35.913] nrf   | BLE out: Sent 244 bytes: '[binary]'
+[05:35.913] nrf   | <info> app: AI state machine bumped with 'Msg to AI' (Current state: IDLE)
+[05:35.913] nrf   | Sending 'slots' to AI processor (4 ctrl bytes, 5 payload, 2 CRC)<info> app: AI state changed from IDLE to PROCESSING
+[05:35.913] nrf   | <info> app: I2C TX complete: 11 bytes.
+[05:35.913] nrf   | <info> app: DEBUG: we waited 16ms for BLE transfer.
+[05:35.913] nrf   | <info> app: I2C RX payload 241/250 bytes. Response type is 6. CRC OK (0x2E6C)
+[05:35.913] nrf   | <info> app: !166 
+[05:35.913] nrf   | BLE binary: Sending 241 byte binary payload (packet type 6, packet num 1): 
+[05:35.913] nrf   | BLE out: Failed to send 244 bytes: '[binary]'
+[05:35.913] nrf   | <info> app: NUS TX Ready
+[05:35.913] nrf   | BLE out: Sent 244 bytes: '[binary]'
+[05:35.913] nrf   | <info> app: DEBUG: we waited 3ms for BLE transfer.
+[05:35.913] nrf   | <info> app: I2C RX payload 241/250 bytes. Response type is 6. CRC OK (0xF20F)
+[05:35.913] nrf   | <info> app: !167 
+[05:35.913] nrf   | BLE binary: Sending 241 byte binary payload (packet type 6, packet num 2): 
+[05:35.913] nrf   | BLE out: Failed to send 244 bytes: '[binary]'
+[05:36.147] himax | IF Task received event 'I2C Tx' (0x0701). Rx data = 0x00000000
+[05:36.147] himax | I2C transmission complete.
+            ... 18 per-packet lines ...
+[05:36.147] himax | Negate inter-processor interrupt.
+[05:36.147] himax | IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+[05:36.213] nrf   | <info> app: NUS TX Ready
+[05:36.213] nrf   | BLE out: Sent 244 bytes: '[binary]'
+[05:36.213] nrf   | <info> app: DEBUG: we waited 16ms for BLE transfer.
+[05:36.213] nrf   | <info> app: I2C RX payload 241/250 bytes. Response type is 6. CRC OK (0xA562)
+[05:36.213] nrf   | <info> app: !168 
+[05:36.213] nrf   | BLE binary: Sending 241 byte binary payload (packet type 6, packet num 3): 
+[05:36.213] nrf   | BLE out: Failed to send 244 bytes: '[binary]'
+[05:36.213] nrf   | <info> app: NUS TX Ready
+[05:36.318] app   | ImageReassembler: Sequence gap — expected 44, got 1 (213 total gaps)
+[05:36.462] himax | IF Task received event 'I2C Rx' (0x0700). Rx data = 0x00000000
+[05:36.462] himax | Deferring event 0x0700
+[05:36.462] himax | IF Task received event 'I2C Tx' (0x0701). Rx data = 0x00000000
+[05:36.462] himax | I2C transmission complete.
+[05:36.462] himax | IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+[05:36.462] himax | Issuing deferred event 0x0700 'I2C Rx'
+[05:36.462] himax | IFTask sending event 0x0700. Tx data = 0x00000000
+[05:36.462] himax | IF Task received event 'Binary Continues' (0x0706). Rx data = 0x3000ea30
+[05:36.462] himax | Assert inter-processor interrupt.
+[05:36.462] himax | Sending 247 bytes: Header 4, payload 241, checksum 2
+            ... 748 per-packet lines ...
+[05:45.361] himax | IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+[05:45.361] himax | IF Task received event 'I2C Rx' (0x0700). Rx data = 0x00000000
+[05:45.361] himax | Deferring event 0x0700
+[05:45.680] nrf   | <info> app: NUS TX Ready
+[05:45.680] nrf   | BLE out: Sent 244 bytes: '[binary]'
+[05:45.680] nrf   | <info> app: DEBUG: we waited 83ms for BLE transfer.
+[05:45.680] nrf   | <info> app: I2C RX payload 241/250 bytes. Response type is 6. CRC OK (0x6898)
+[05:45.680] nrf   | <info> app: !209 
+[05:45.680] nrf   | BLE binary: Sending 241 byte binary payload (packet type 6, packet num 44): 
+[05:45.680] nrf   | BLE out: Failed to send 244 bytes: '[binary]'
+[05:45.680] nrf   | <info> app: AI State machine scheduler called with event 15 'Response timeout'
+[05:45.680] nrf   | <info> app: AI state machine bumped with 'Response timeout' (Current state: PROCESSING)
+[05:45.680] nrf   | <info> app: AI processor response timeout - recovering to IDLE
+[05:45.680] nrf   | <info> app: AI state changed from PROCESSING to IDLE
+[05:45.680] nrf   | BLE out: Failed to send 244 bytes: '[binary]'
+[05:45.978] himax | IF Task received event 'I2C Tx' (0x0701). Rx data = 0x00000000
+[05:45.978] himax | I2C transmission complete.
+[05:45.978] himax | IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+[05:45.978] himax | Issuing deferred event 0x0700 'I2C Rx'
+[05:45.978] himax | IFTask sending event 0x0700. Tx data = 0x00000000
+[05:45.978] himax | IF Task received event 'Binary Continues' (0x0706). Rx data = 0x3000ea30
+[05:45.978] himax | Assert inter-processor interrupt.
+[05:45.978] himax | Sending 247 bytes: Header 4, payload 241, checksum 2
+            ... 398 per-packet lines ...
+[05:50.579] himax | Sending 108 bytes: Header 4, payload 102, checksum 2
+            ... 10 per-packet lines ...
+[05:50.879] nrf   | BLE out: Failed to send 244 bytes: '[binary]'
+[05:50.879] nrf   | <info> app: NUS TX Ready
+[05:50.879] nrf   | BLE out: Sent 244 bytes: '[binary]'
+[05:50.879] nrf   | <info> app: DEBUG: we waited 16ms for BLE transfer.
+[05:50.879] nrf   | <info> app: I2C RX payload 102/250 bytes. Response type is 6. CRC OK (0xD549)
+[05:50.879] nrf   | <info> app: !232 
+[05:50.879] nrf   | BLE binary: Sending 102 byte binary payload (packet type 6, packet num 67): 
+[05:50.879] nrf   | BLE out: Failed to send 105 bytes: '[binary]'
+[05:50.879] himax | IF Task received event 'I2C Tx' (0x0701). Rx data = 0x00000000
+[05:50.879] himax | I2C transmission complete.
+[05:50.879] himax | Finished sending 26371 bytes (110 packets)
+[05:50.879] himax | IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+[05:50.879] himax | Issuing deferred event 0x0700 'I2C Rx'
+[05:50.879] himax | IFTask sending event 0x0700. Tx data = 0x00000000
+[05:50.879] himax | IF Task received event 'String Continues' (0x0704). Rx data = 0x3000ea30
+[05:50.879] himax | Assert inter-processor interrupt.
+[05:50.879] himax | Sending 48 bytes: Header 4, payload 42, checksum 2 'Finished sending 26371 bytes (110 packets)'
+[05:50.879] himax | Negate inter-processor interrupt.
+[05:50.879] himax | IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+[05:50.879] himax | IF Task received event 'I2C Rx' (0x0700). Rx data = 0x00000000
+[05:50.879] himax | Deferring event 0x0700
+[05:51.195] nrf   | <info> app: NUS TX Ready
+[05:51.195] nrf   | BLE out: Sent 105 bytes: '[binary]'
+[05:51.195] nrf   | <info> app: DEBUG: we waited 38ms for BLE transfer.
+[05:51.195] nrf   | <info> app: I2C RX payload 42/250 bytes. Response type is 4. CRC OK (0x57F9)
+[05:51.195] nrf   | <info> app: !233 
+[05:51.195] nrf   | <info> app: AI state machine bumped with 'Msg from AI' (Current state: IDLE)
+[05:51.195] nrf   | BLE out: Failed to send  28 bytes: 'AI processor not responding'
+[05:51.195] nrf   | BLE out: Failed to send  28 bytes: 'AI processor not responding'
+[05:51.195] nrf   | <info> app: I2C RX payload 115/250 bytes. Response type is 4. CRC OK (0x5068)
+[05:51.195] nrf   | <info> app: AI state machine bumped with 'Msg from AI' (Current state: IDLE)
+[05:51.195] nrf   | BLE out: Failed to send  28 bytes: 'AI processor not responding'
+[05:51.195] nrf   | BLE out: Failed to send  28 bytes: 'AI processor not responding'
+[05:51.195] nrf   | <info> app: NUS TX Ready
+[05:51.195] nrf   | BLE out: Sent  28 bytes: 'AI processor not responding'
+[05:51.195] nrf   | BLE out: Failed to send  43 bytes: 'Finished sending 26371 bytes (110 packets)'
+[05:51.195] nrf   | BLE out: Failed to send  43 bytes: 'Finished sending 26371 bytes (110 packets)'
+[05:51.195] himax | IF Task received event 'I2C Tx' (0x0701). Rx data = 0x00000000
+[05:51.195] himax | I2C transmission complete.
+[05:51.195] himax | IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+[05:51.195] himax | Issuing deferred event 0x0700 'I2C Rx'
+[05:51.195] himax | IFTask sending event 0x0700. Tx data = 0x00000000
+[05:51.195] himax | IF Task received event 'I2C Rx' (0x0700). Rx data = 0x00000000
+[05:51.195] himax | Received I2C message.
+[05:51.195] himax | MKL62BA command received: 'slots'
+[05:51.195] himax | IF Task state changed from 'Idle' (1) to 'I2C RX State' (2)
+[05:51.195] himax | Flash ID 0xEF initialised
+[05:51.195] himax | Active slot 1 running 'RP3 (day/colour)'. Slot A: 'HM0360 (night/IR)', Slot B: 'RP3 (day/colour)'. Auto-switch: off
+[05:51.195] himax | IF Task received event 'String Response' (0x0703). Rx data = 0x3000ea30
+[05:51.195] himax | Assert inter-processor interrupt.
+[05:51.195] himax | Sending 121 bytes: Header 4, payload 115, checksum 2 'Active slot 1 running 'RP3 (day/colour)'. Slot A: 'HM0360 (night/IR)', Slot B: 'RP3 (day/colour)'. Auto-switch: off'
+[05:51.195] himax | Negate inter-processor interrupt.
+[05:51.195] himax | IF Task state changed from 'I2C RX State' (2) to 'I2C TX State' (3)
+[05:51.195] himax | IF Task received event 'I2C Tx' (0x0701). Rx data = 0x00000000
+[05:51.195] himax | I2C transmission complete.
+[05:51.195] himax | IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+[05:51.372] app   | ImageReassembler: Transfer complete! Received 26371/26371 (213 gaps)
+[05:51.382] app   | ImageReassembler: Image has 213 sequence gaps — may be corrupt
+[05:51.486] app   | ImageReassembler: Image saved to file:///data/user/0/com.wildlife.wildlifewatcher.expo/cache/capture_1788431525984.jpg [SUCCESS] [213 gaps] (26371/26371 bytes)
+[05:51.486] app   | [BleTransport] Image stream ended (image saved); 0 command(s) waiting
+[05:51.496] nrf   | <info> app: NUS TX Ready
+[05:51.496] nrf   | BLE out: Sent  43 bytes: 'Finished sending 26371 bytes (110 packets)'
+[05:51.496] nrf   | BLE out: Sent 116 bytes: 'Active slot 1 running 'RP3 (day/colour)'. Slot A: 'HM0360 (night/IR)', Slot B: 'RP3 (day/colour)'. Auto-switch: off'
+[05:51.531] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: AI processor not responding
+[05:51.712] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: Finished sending 26371 bytes (110 packets)
+[05:51.809] nrf   | <info> app: NUS TX Ready
+[05:51.809] nrf   | <info> app: NUS TX Ready
+[05:51.809] nrf   | <info> app: NUS TX Ready
+[05:51.809] nrf   | <info> app: NUS TX Ready
+[05:51.829] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: Active slot 1 running 'RP3 (day/colour)'. Slot A: 'HM0360 (night/IR)', Slot B: 'RP3 (day/colour)'. Auto-switch: off
+[05:52.113] himax | Inactive for 1000ms
+[05:52.113] himax | IMAGE Task received event 'Image Event Inactivity' (0x0a00). Rx data = 0x00000000
+[05:52.113] himax | IMAGE Task state changed from 'Init' (1) to 'Save State' (5)
+[05:52.113] himax | FatFS Task received event 'Save State' (0x0904). Rx data = 0x00000000
+[05:52.113] himax | Saved state to SD card. Image sequence number = 27
+[05:52.113] himax | FatFS task sending event 0x0a06. Tx data = 0x00000000
+[05:52.113] himax | IMAGE task sending event 0x0904. Rx data = 0x00000000
+[05:52.113] himax | IMAGE Task received event 'Image Event Disk Write Complete' (0x0a06). Rx data = 0x00000000
+[05:52.113] himax | Image task ready to sleep.
+[05:52.113] himax | IMAGE Task state changed from 'Save State' (5) to 'Uninitialised' (0)
+            ... 2 per-packet lines ...
+[05:52.113] himax | Sending 98 bytes: Header 4, payload 92, checksum 2 'Sleep 27 0 0 10 94 1 500 0 1000 89 1 0 100 0 0 0 18 1 0 20 0 2 50 65 15 0 0 286 326 1 110 1 '
+            ... 4 per-packet lines ...
+[05:52.113] himax | IF task ready to sleep.
+[05:52.113] himax | DEBUG: ledFlashDisable()
+[05:52.113] himax | Preparing HM0360 for MD:   HM0360 Motion Detection off.
+[05:52.113] himax |    Inhibiting MD
+[05:52.113] himax |    Changing mode from 2 to 2 with nFrames=1, sleepTime=0 sleepCount = 0xffff
+[05:52.113] himax |  No LED flashes.
+[05:52.113] himax | >>> Entering DPD at 2024:01:01 00:00:58
+            ... 1 per-packet lines ...
+[05:52.313] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: Sleep
+            ... 1 per-packet lines ...
+[05:52.414] nrf   | <info> app: AI state machine bumped with 'Sleep' (Current state: IDLE)
+[05:52.414] nrf   | <info> app: AI processor sends stats: '27 0 0 10 94 1 500 0 1000 89 1 0 100 0 0 0 18 1 0 20 0 2 50 65 15 0 0 286 326 1 110 1 '
+[05:52.414] nrf   | <info> app: AI state changed from IDLE to SLEEP
+[05:52.414] nrf   | BLE out: Sent   6 bytes: 'Sleep'
+            ... 1 per-packet lines ...
+[06:50.329] app   | [BLE Heartbeat] 58s idle — sending heartbeat (get heartbeat)...
+[06:50.329] app   | TX Hex: 67657420686561727462656174
+[06:50.329] app   | Written get heartbeat to the device WILD-CNKW (22:33:04-849)
+[06:50.344] app   | [useBleListeners] RAW_TX received for D6:47:9B:89:E7:23: get heartbeat
+[06:50.513] nrf   | BLE in: Received  13 bytes 'get heartbeat'
+[06:50.513] nrf   | BLE out: Sent  17 bytes: 'heartbeat is 12h'
+[06:50.530] app   | [BLE Heartbeat] Heartbeat sent. Timer will reset on response.
+[06:50.609] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: heartbeat is 12h
+            ... 1 per-packet lines ...
+[07:48.622] app   | [BLE Heartbeat] 58s idle — sending heartbeat (get heartbeat)...
+[07:48.622] app   | TX Hex: 67657420686561727462656174
+[07:48.629] app   | Written get heartbeat to the device WILD-CNKW (22:34:03-146)
+[07:48.629] app   | [useBleListeners] RAW_TX received for D6:47:9B:89:E7:23: get heartbeat
+[07:48.794] nrf   | BLE in: Received  13 bytes 'get heartbeat'
+[07:48.794] nrf   | BLE out: Sent  17 bytes: 'heartbeat is 12h'
+[07:48.849] app   | [BLE Heartbeat] Heartbeat sent. Timer will reset on response.
+[07:48.907] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: heartbeat is 12h
+            ... 1 per-packet lines ...

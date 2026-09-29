@@ -1,0 +1,115 @@
+# 19:54, reproduction of finding A on demand. repro_A.py drove the app's Engineer Console over adb: 'AI slots' as the anchor, a second 'AI slots' sent at a swept delay after the anchor's reply appeared on the nRF console. First attempt (600 ms) missed, second (650 ms) hit: the device has been stuck awake since. Script output, then the three-way log from the anchor to the loop (minus hex dumps, boot chatter and I2C state lines). Times are MM:SS.mmm from 18:27:23.
+#
+# --- repro_A.py output ---
+sweeping 16 delays: [600, 650, 700, 750, 800, 850, 900, 950, 1000, 1050, 1100, 1150, 1200, 1250, 1300, 1350]
+d=600: tap at +600 ms after the anchor line -> ?
+    [87:09.974] himax | Inactive for 1000ms
+    [87:09.974] himax | >>> Entering DPD at 2024:01:01 00:01:51
+    [87:12.114] himax | Inactive for 1000ms
+    [87:12.114] himax | >>> Entering DPD at 2024:01:01 00:01:53
+d=650: tap at +651 ms after the anchor line -> HIT
+    [87:19.755] himax | Inactive for 1000ms
+    [87:20.055] himax | IF Task unhandled event 'Inactivity' in 'I2C TX State'
+Device is stuck awake. Power-cycle it.
+#
+# --- bench log 87:17 to 87:24 ---
+[87:17.788] app   | Written AI slots to the device WILD-CNKW (19:54:42-156)
+[87:17.973] nrf   | BLE in: Received   8 bytes 'AI slots'
+[87:17.973] nrf   | <info> app: AI state machine bumped with 'Msg to AI' (Current state: SLEEP)
+[87:17.973] nrf   | <info> app: AI processor is in DPD. Waking it. (slots)
+[87:18.223] himax | ### Warm Boot ###
+[87:18.538] himax | Inactivity period set at 1000ms
+[87:18.538] himax | IF Task received event 'Awake' (0x070f). Rx data = 0x00000000
+[87:18.538] himax | IF Task received event 'FreeRTOS Initialised' (0x0710). Rx data = 0x00000000
+[87:18.623] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: Wake
+[87:18.826] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: Error bits = 0x0000
+[87:18.839] himax | IF Task received event 'I2C Rx' (0x0700). Rx data = 0x00000000
+[87:18.839] himax | Received I2C message.
+[87:18.839] himax | MKL62BA command received: 'selftest'
+[87:18.839] himax | selfTest 0000
+[87:18.839] himax | IF Task received event 'String Response' (0x0703). Rx data = 0x3000ea30
+[87:18.839] himax | IF Task received event 'I2C Rx' (0x0700). Rx data = 0x00000000
+[87:18.839] himax | Received I2C message.
+[87:18.839] himax | MKL62BA command received: 'slots'
+[87:18.839] himax | Active slot 1 running 'RP3 (day/colour)'. Slot A: 'HM0360 (night/IR)', Slot B: 'RP3 (day/colour)'. Auto-switch: off
+[87:18.839] himax | IF Task received event 'String Response' (0x0703). Rx data = 0x3000ea30
+[87:18.890] nrf   | <info> app: AI state machine bumped with 'Wake' (Current state: SLEEP)
+[87:18.890] nrf   | <info> app: BLE and AI time differ by 1853s - too much!
+[87:18.890] nrf   | <info> app: AI state changed from SLEEP to WOKEN
+[87:18.890] nrf   | BLE out: Sent   5 bytes: 'Wake'
+[87:18.890] nrf   | <info> app: AI State machine scheduler called with event 8 'Send SelfTest'
+[87:18.890] nrf   | <info> app: AI state machine bumped with 'Send SelfTest' (Current state: WOKEN)
+[87:18.890] nrf   | Sending 'selftest' to AI processor (4 ctrl bytes, 8 payload, 2 CRC)<info> app: OK
+[87:18.890] nrf   | <info> app: AI state changed from WOKEN to SELFTEST
+[87:18.890] nrf   | <info> app: I2C TX complete: 14 bytes.
+[87:18.890] nrf   | <info> app: AI state machine bumped with 'Selftest Rx' (Current state: SELFTEST)
+[87:18.890] nrf   | <info> app: AI self test bits = 0x0000 (all bits now 0x0000)
+[87:18.890] nrf   | <info> app: Can't send UTC
+[87:18.890] nrf   | <info> app: AI state changed from SELFTEST to IDLE
+[87:18.890] nrf   | BLE out: Sent  20 bytes: 'Error bits = 0x0000'
+[87:18.890] nrf   | <info> app: AI State machine scheduler called with event 12 'Msg to AI'
+[87:18.890] nrf   | <info> app: AI state machine bumped with 'Msg to AI' (Current state: IDLE)
+[87:18.890] nrf   | Sending 'slots' to AI processor (4 ctrl bytes, 5 payload, 2 CRC)<info> app: AI state changed from IDLE to PROCESSING
+[87:18.890] nrf   | <info> app: I2C TX complete: 11 bytes.
+[87:18.890] nrf   | <info> app: AI processor replies: 'Active slot 1 running 'RP3 (day/colour)'. Slot A: 'HM0360 (night/IR)', Slot B: 'RP3 (day/colour)'. Auto-switch: off'
+[87:18.890] nrf   | <info> app: AI state changed from PROCESSING to IDLE
+[87:18.890] nrf   | BLE out: Sent 116 bytes: 'Active slot 1 running 'RP3 (day/colour)'. Slot A: 'HM0360 (night/IR)', Slot B: 'RP3 (day/colour)'. Auto-switch: off'
+[87:19.023] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: Active slot 1 running 'RP3 (day/colour)'. Slot A: 'HM0360 (night/IR)', Slot B: 'RP3 (day/colour)'. Auto-switch: off
+[87:19.755] himax | Inactive for 1000ms
+[87:19.755] himax | IMAGE Task received event 'Image Event Inactivity' (0x0a00). Rx data = 0x00000000
+[87:19.755] himax | IMAGE Task state changed from 'Init' (1) to 'Save State' (5)
+[87:19.755] himax | FatFS Task received event 'Save State' (0x0904). Rx data = 0x00000000
+[87:19.802] app   | Written AI slotsAI slots to the device WILD-CNKW (19:54:44-173)
+[87:20.012] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: Unrecognised
+[87:20.055] himax | IF Task received event 'I2C Rx' (0x0700). Rx data = 0x00000000
+[87:20.055] himax | Received I2C message.
+[87:20.055] himax | MKL62BA command received: 'slotsAI slots'
+[87:20.055] himax | Unrecognised
+[87:20.055] himax | IF Task received event 'String Response' (0x0703). Rx data = 0x3000ea30
+[87:20.055] himax | Saved state to SD card. Image sequence number = 27
+[87:20.055] himax | FatFS task sending event 0x0a06. Tx data = 0x00000000
+[87:20.055] himax | IMAGE task sending event 0x0904. Rx data = 0x00000000
+[87:20.055] himax | IMAGE Task received event 'Image Event Disk Write Complete' (0x0a06). Rx data = 0x00000000
+[87:20.055] himax | Image task ready to sleep.
+[87:20.055] himax | IMAGE Task state changed from 'Save State' (5) to 'Uninitialised' (0)
+[87:20.055] himax | IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+[87:20.055] himax | IF Task unhandled event 'Inactivity' in 'I2C TX State'
+[87:20.106] nrf   | BLE in: Received  16 bytes 'AI slotsAI slots'
+[87:20.106] nrf   | <info> app: AI state machine bumped with 'Msg to AI' (Current state: IDLE)
+[87:20.106] nrf   | Sending 'slotsAI slots' to AI processor (4 ctrl bytes, 13 payload, 2 CRC)<info> app: AI state changed from IDLE to PROCESSING
+[87:20.106] nrf   | <info> app: I2C TX complete: 19 bytes.
+[87:20.106] nrf   | <info> app: AI processor replies: 'Unrecognised'
+[87:20.106] nrf   | <info> app: AI state changed from PROCESSING to IDLE
+[87:20.106] nrf   | BLE out: Sent  13 bytes: 'Unrecognised'
+[87:20.956] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: IMAGE task unhandled event 'Image Event Inactivity' in 'Uninitialised'
+[87:20.972] himax | Inactive for 1000ms
+[87:20.972] himax | IMAGE Task received event 'Image Event Inactivity' (0x0a00). Rx data = 0x00000000
+[87:20.972] himax | IMAGE task unhandled event 'Image Event Inactivity' in 'Uninitialised'
+[87:20.972] himax | IF Task received event 'Message to Master' (0x070d). Rx data = 0x300113b8
+[87:20.972] himax | IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+[87:20.972] himax | IF Task unhandled event 'Inactivity' in 'I2C TX State'
+[87:21.023] nrf   | BLE out: Sent  71 bytes: 'IMAGE task unhandled event 'Image Event Inactivity' in 'Uninitialised''
+[87:22.134] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: IMAGE task unhandled event 'Image Event Inactivity' in 'Uninitialised'
+[87:22.189] himax | Inactive for 1000ms
+[87:22.189] himax | IMAGE Task received event 'Image Event Inactivity' (0x0a00). Rx data = 0x00000000
+[87:22.189] himax | IMAGE task unhandled event 'Image Event Inactivity' in 'Uninitialised'
+[87:22.189] himax | IF Task received event 'Message to Master' (0x070d). Rx data = 0x300113b8
+[87:22.189] himax | IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+[87:22.189] himax | IF Task unhandled event 'Inactivity' in 'I2C TX State'
+[87:22.255] nrf   | BLE out: Sent  71 bytes: 'IMAGE task unhandled event 'Image Event Inactivity' in 'Uninitialised''
+[87:23.106] himax | Inactive for 1000ms
+[87:23.106] himax | IMAGE Task received event 'Image Event Inactivity' (0x0a00). Rx data = 0x00000000
+[87:23.106] himax | IMAGE task unhandled event 'Image Event Inactivity' in 'Uninitialised'
+[87:23.106] himax | IF Task received event 'Message to Master' (0x070d). Rx data = 0x300113b8
+[87:23.106] himax | IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+[87:23.106] himax | IF Task unhandled event 'Inactivity' in 'I2C TX State'
+[87:23.106] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: IMAGE task unhandled event 'Image Event Inactivity' in 'Uninitialised'
+[87:23.172] nrf   | BLE out: Sent  71 bytes: 'IMAGE task unhandled event 'Image Event Inactivity' in 'Uninitialised''
+[87:24.022] himax | Inactive for 1000ms
+[87:24.022] himax | IMAGE Task received event 'Image Event Inactivity' (0x0a00). Rx data = 0x00000000
+[87:24.022] himax | IMAGE task unhandled event 'Image Event Inactivity' in 'Uninitialised'
+[87:24.022] himax | IF Task received event 'Message to Master' (0x070d). Rx data = 0x300113b8
+[87:24.022] himax | IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+[87:24.022] himax | IF Task unhandled event 'Inactivity' in 'I2C TX State'
+[87:24.073] app   | [useBleListeners] RAW_RX received for D6:47:9B:89:E7:23: IMAGE task unhandled event 'Image Event Inactivity' in 'Uninitialised'
+[87:24.088] nrf   | BLE out: Sent  71 bytes: 'IMAGE task unhandled event 'Image Event Inactivity' in 'Uninitialised''

@@ -121,8 +121,12 @@ git checkout origin/dev -- we2_image_gen_local_dpd/secureboot_tool/cert/cfg
 - Images are **not byte-reproducible**: the secure-boot signer emits ~1.6 KB of differing
   bytes on every run, and the build embeds `__DATE__`/`__TIME__`. Same-size output with the
   correct embedded strings is the expected result.
-- The build rewrites the tracked prebuilt `.a` archives in `EPII_CM55M_APP_S/prebuilt_libs/`
-  (archive re-indexing). Restore them before committing: `git checkout -- EPII_CM55M_APP_S/prebuilt_libs/`
+- The build compiles `libcommon.a`, `libfatfs.a` and `libtrustzone_cfg.a` from source and
+  copies them into `EPII_CM55M_APP_S/prebuilt_libs/gnu/`. Those three, and `output.img`,
+  are not tracked (#198), so builds no longer show them in `git status`. The other
+  archives in `prebuilt_libs/` are tracked inputs that the build links as committed. If one
+  shows as modified (e.g. after `make WW500_FAST_LIBS=n`), restore it before committing:
+  `git checkout -- EPII_CM55M_APP_S/prebuilt_libs/`
 - The makefile's `2>NUL` redirections create a stray `NUL` file when building under
   Linux/WSL - harmless, delete it.
 - Firmware version strings embed `GIT_BRANCH`/`GIT_COMMIT`/`GIT_DIRTY` evaluated when make

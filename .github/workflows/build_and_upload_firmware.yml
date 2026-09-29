@@ -1,16 +1,15 @@
 name: Build and Upload Himax Firmware
 
 # This workflow builds the Himax (HX6538) firmware image(s) and/or uploads them
-# to the Supabase firmware database. Four ways to run it:
+# to the Supabase firmware database. Three ways to run it:
 #
 #   1. Merge/push to 'dev'  -> BUILD BOTH camera variants from source, upload to the DEV database
 #   2. Merge/push to 'main' -> BUILD BOTH camera variants from source, upload to the PRODUCTION database
-#   3. Manual dispatch, source=prebuilt -> upload the committed
-#      we2_image_gen_local_dpd/output_case1_sec_wlcsp/output.img (single image;
-#      its camera variant is detected from the image content) to the chosen
-#      database (dev or production) without building
-#   4. Manual dispatch, source=build (any branch) -> BUILD BOTH variants, upload
-#      to the DEV database
+#   3. Manual dispatch (any branch) -> BUILD BOTH variants, upload to the chosen
+#      database (dev or production)
+#
+# There is no upload-without-building path. output.img is not tracked (#198), so
+# every image this workflow uploads was built from the commit it names.
 #
 # Camera variants: the WW500 holds two firmware images in A/B flash slots -
 #   RP3    = RP v3 colour camera (IMX708) as main camera  (CIS_SUPPORT_INAPP_MODEL=cis_imx708)
@@ -34,14 +33,6 @@ on:
       - main
   workflow_dispatch:
     inputs:
-      source:
-        description: 'Firmware source: build from this branch, or upload the committed pre-built image'
-        required: true
-        default: 'build'
-        type: choice
-        options:
-          - build
-          - prebuilt
       environment:
         description: 'Target Supabase database (production is gated by the GitHub environment protection rules)'
         required: true
@@ -61,23 +52,18 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       environment: ${{ steps.resolve.outputs.ENVIRONMENT }}
-      source: ${{ steps.resolve.outputs.SOURCE }}
       matrix: ${{ steps.resolve.outputs.MATRIX }}
     steps:
-      - name: Resolve source, environment and build matrix
+      - name: Resolve environment and build matrix
         id: resolve
         shell: bash
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            SOURCE="${{ inputs.source }}"
-            # Manual dispatch honours the environment input for both sources
-            # (build and prebuilt). Production is guarded by the GitHub
-            # environment's protection rules (required reviewers / allowed
-            # branches), not by this file.
+            # Production is guarded by the GitHub environment's protection
+            # rules (required reviewers / allowed branches), not by this file.
             ENVIRONMENT="${{ inputs.environment }}"
           else
-            # Push events: build from source; main -> production, dev -> dev
-            SOURCE="build"
+            # Push events: main -> production, dev -> dev
             if [ "${{ github.ref_name }}" = "main" ]; then
               ENVIRONMENT="production"
             else
@@ -85,18 +71,12 @@ jobs:
             fi
           fi
 
-          # Builds produce both camera variants; the prebuilt path is a single
-          # committed image whose variant is detected from its content
-          if [ "$SOURCE" = "build" ]; then
-            MATRIX='{"include":[{"variant":"RP3","cis_model":"cis_imx708"},{"variant":"HM0360","cis_model":"cis_hm0360"}]}'
-          else
-            MATRIX='{"include":[{"variant":"PREBUILT","cis_model":"none"}]}'
-          fi
+          # Every run builds both camera variants
+          MATRIX='{"include":[{"variant":"RP3","cis_model":"cis_imx708"},{"variant":"HM0360","cis_model":"cis_hm0360"}]}'
 
-          echo "SOURCE=$SOURCE" >> $GITHUB_OUTPUT
           echo "ENVIRONMENT=$ENVIRONMENT" >> $GITHUB_OUTPUT
           echo "MATRIX=$MATRIX" >> $GITHUB_OUTPUT
-          echo "Source: $SOURCE, target database: $ENVIRONMENT"
+          echo "Target database: $ENVIRONMENT"
 
   build-firmware:
     needs: setup
@@ -112,7 +92,6 @@ jobs:
           fetch-depth: 0 # Fetch all history for semantic versioning
 
       - name: Cache Arm GNU Toolchain
-        if: needs.setup.outputs.source == 'build'
         id: cache-toolchain
         uses: actions/cache@v4
         with:
@@ -120,7 +99,7 @@ jobs:
           key: arm-gnu-toolchain-${{ env.ARM_TOOLCHAIN_VERSION }}-x86_64
 
       - name: Download Arm GNU Toolchain
-        if: needs.setup.outputs.source == 'build' && steps.cache-toolchain.outputs.cache-hit != 'true'
+        if: steps.cache-toolchain.outputs.cache-hit != 'true'
         shell: bash
         run: |
           mkdir -p ~/arm-gnu-toolchain
@@ -130,7 +109,6 @@ jobs:
           rm "arm-gnu-toolchain-${ARM_TOOLCHAIN_VERSION}-x86_64-arm-none-eabi.tar.xz"
 
       - name: Build Firmware (${{ matrix.variant }})
-        if: needs.setup.outputs.source == 'build'
         shell: bash
         run: |
           export PATH="$HOME/arm-gnu-toolchain/arm-gnu-toolchain-${ARM_TOOLCHAIN_VERSION}-x86_64-arm-none-eabi/bin:$PATH"
@@ -144,7 +122,6 @@ jobs:
           ls -la obj_epii_evb_icv30_bdv10/gnu_epii_evb_WLCSP65/EPII_CM55M_gnu_epii_evb_WLCSP65_s.elf
 
       - name: Generate Firmware Image (${{ matrix.variant }})
-        if: needs.setup.outputs.source == 'build'
         shell: bash
         run: |
           cd we2_image_gen_local_dpd
@@ -161,23 +138,10 @@ jobs:
 
           ls -la output_case1_sec_wlcsp/output.img
 
-      - name: Check Pre-built Image Exists
-        if: needs.setup.outputs.source == 'prebuilt'
-        shell: bash
-        run: |
-          IMG_FILE="./we2_image_gen_local_dpd/output_case1_sec_wlcsp/output.img"
-          if [ ! -f "$IMG_FILE" ]; then
-            echo "Error: Pre-built .img file not found at $IMG_FILE!"
-            exit 1
-          fi
-          echo "Using pre-built image committed to the repository"
-          ls -la "$IMG_FILE"
-
       - name: Detect Camera Variant and Rename Image
         id: find_image
         shell: bash
         run: |
-          # Both paths (fresh build and prebuilt) leave the image here
           IMG_FILE="./we2_image_gen_local_dpd/output_case1_sec_wlcsp/output.img"
 
           if [ ! -f "$IMG_FILE" ]; then
@@ -187,8 +151,7 @@ jobs:
 
           # The camera variant is derived from the image content itself
           # (the firmware embeds a "Camera: ..." identification string), so it
-          # can never disagree with the binary - this also classifies the
-          # committed image on the prebuilt path.
+          # can never disagree with the binary.
           CAMERA_LINE=$(strings "$IMG_FILE" | grep -m1 -E "^Camera: " || true)
           if echo "$CAMERA_LINE" | grep -q "RP v3"; then
             VARIANT="RP3"
@@ -200,8 +163,8 @@ jobs:
           fi
           echo "Detected camera variant: '$VARIANT'"
 
-          # Sanity check: a built leg must match its matrix variant
-          if [ "${{ needs.setup.outputs.source }}" = "build" ] && [ "$VARIANT" != "${{ matrix.variant }}" ]; then
+          # Sanity check: each leg must match its matrix variant
+          if [ "$VARIANT" != "${{ matrix.variant }}" ]; then
             echo "Error: built image variant '$VARIANT' does not match matrix leg '${{ matrix.variant }}'"
             exit 1
           fi
@@ -377,7 +340,7 @@ jobs:
           RELEASE_NOTES: |
             Himax AI firmware ${{ steps.version.outputs.unique_version }}
             Camera variant: ${{ steps.version.outputs.camera_variant || 'unknown' }}
-            Source: ${{ needs.setup.outputs.source }} (${{ github.event_name }})
+            Source: build (${{ github.event_name }})
             Branch: ${{ github.ref_name }}
             Commit: ${{ github.sha }}
             Build: #${{ github.run_number }}
@@ -387,8 +350,8 @@ jobs:
         run: node upload_firmware.js
 
       - name: Create Git Tag
-        # Only one matrix leg creates the tag (RP3 for builds, PREBUILT for prebuilt uploads)
-        if: success() && (github.ref == 'refs/heads/main') && (matrix.variant == 'RP3' || matrix.variant == 'PREBUILT')
+        # Only one matrix leg creates the tag
+        if: success() && (github.ref == 'refs/heads/main') && (matrix.variant == 'RP3')
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"

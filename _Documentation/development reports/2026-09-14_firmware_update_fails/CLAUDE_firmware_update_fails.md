@@ -329,15 +329,16 @@ Charles added a 1ms `vTaskDelay()` either side of driving the pin high in
 test: 3 runs (log files 8/9/10) gave 0, 1, and 0 stalls respectively — down from the
 usual 6-9 per run, strong support for the theory, though not a full fix.
 
-**Fix implemented on the BLE side (`ww-hardware` repo, not yet tested)**: `/IP_INT` now
-switches to a dedicated, hardware-latched GPIOTE channel (`hi_accuracy = true`) only for
-the duration of a file-transfer session, reverting to the default low-power interrupt
-afterward — mirrors the existing `ble_actions_setFastConnParams()` session lifecycle in
-`fileTx.c`. New `GpioSetInterruptHiAccuracy()` in `gpio-board.h`/`WW500-C02/gpio-board.c`
-(other boards unaffected), new `aiInt_setHighAccuracy()` in `main.c` (declared in
-`aiProcessor.h`), called from `fileTx.c` alongside the connection-parameter switch. Kept
-transfer-scoped deliberately: a dedicated GPIOTE channel costs a small continuous current
-draw, negligible during an already power-hungry transfer but not worth paying 24/7 on a
-battery/solar device that spends most of its life asleep. Charles is removing the 1ms
-pulse-stretch delay to test this fix in isolation.
+**Fix implemented on the BLE side (`ww-hardware` repo, released in nRF 0.30.51)**: `/IP_INT`
+switches to a dedicated, hardware-latched GPIOTE channel (`hi_accuracy = true`) for as long
+as a phone is connected, and reverts to the default low-power interrupt on disconnect.
+`ble_actions.c` makes the switch in its connect and disconnect handlers, through
+`aiProcessorScheduleSetAiIntHighAccuracy()` in `aiProcessor.c`; the GPIO side is the new
+`GpioSetInterruptHiAccuracy()` in `gpio-board.h`/`WW500-C02/gpio-board.c` (WW500-C02 board
+only). The first version was scoped to a file-transfer session and called from `fileTx.c`.
+It was widened to the whole connection because every AI-initiated message uses this
+interrupt, not only file-transfer acks, and the channel's current cost is flat while it is
+held. It is still not left on permanently: the device spends most of its life asleep with
+no connection, which is where the low-power interrupt earns its keep. Charles is removing
+the 1ms pulse-stretch delay to test this fix in isolation.
 

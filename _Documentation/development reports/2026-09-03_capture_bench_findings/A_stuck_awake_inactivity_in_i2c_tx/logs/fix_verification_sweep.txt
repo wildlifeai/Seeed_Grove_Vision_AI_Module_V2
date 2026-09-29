@@ -1,0 +1,38 @@
+sweeping 34 delays: [520, 540, 560, 580, 600, 620, 640, 660, 680, 700, 720, 740, 760, 780, 800, 820, 840, 530, 550, 570, 590, 610, 630, 650, 670, 690, 710, 730, 750, 770, 790, 810, 830, 850]
+d=520: tap at +521 ms after the anchor line -> FIXED
+    [02:13.875] himax | Inactive for 1000ms
+    [02:13.875] himax | MKL62BA command received: 'slots'
+    [02:13.875] himax | Deferring event 0x070e
+    [02:14.176] himax | >>> Entering DPD at 2024:01:01 00:00:08
+d=540: tap at +543 ms after the anchor line -> miss
+    [02:14.307] nrf   | BLE out: Sent   6 bytes: 'Sleep'
+    [02:24.041] nrf   | BLE in: Received   8 bytes 'AI slots'
+    [02:24.825] himax | MKL62BA command received: 'slots'
+    [02:24.958] nrf   | BLE out: Sent 116 bytes: 'Active slot 1 running 'RP3 (day/colour)'. Slot A: 'HM0360 (night/IR)', Slo
+    [02:25.140] himax | MKL62BA command received: 'slots'
+    [02:25.259] nrf   | BLE in: Received   8 bytes 'AI slots'
+    [02:25.259] nrf   | BLE out: Sent 116 bytes: 'Active slot 1 running 'RP3 (day/colour)'. Slot A: 'HM0360 (night/IR)', Slo
+    [02:26.058] himax | Inactive for 1000ms
+    [02:26.175] nrf   | BLE out: Sent   6 bytes: 'Sleep'
+    [02:26.358] himax | >>> Entering DPD at 2024:01:01 00:00:11
+d=560: tap at +561 ms after the anchor line -> FIXED
+    [02:37.957] himax | Inactive for 1000ms
+    [02:38.257] himax | MKL62BA command received: 'slots'
+    [02:38.257] himax | Deferring event 0x070e
+    [02:38.257] himax | >>> Entering DPD at 2024:01:01 00:00:13
+d=580: tap at +581 ms after the anchor line -> miss
+    [02:38.374] nrf   | BLE out: Sent   6 bytes: 'Sleep'
+    [02:47.791] nrf   | BLE in: Received   8 bytes 'AI slots'
+    [02:48.593] himax | MKL62BA command received: 'slots'
+    [02:49.009] nrf   | BLE out: Sent 116 bytes: 'Active slot 1 running 'RP3 (day/colour)'. Slot A: 'HM0360 (night/IR)', Slo
+    [02:49.207] himax | MKL62BA command received: 'slots'
+    [02:49.324] nrf   | BLE in: Received   8 bytes 'AI slots'
+    [02:49.324] nrf   | BLE out: Sent 116 bytes: 'Active slot 1 running 'RP3 (day/colour)'. Slot A: 'HM0360 (night/IR)', Slo
+    [02:50.425] himax | Inactive for 1000ms
+    [02:50.425] himax | >>> Entering DPD at 2024:01:01 00:00:16
+d=600: tap at +601 ms after the anchor line -> FIXED
+    [03:02.008] himax | Inactive for 1000ms
+    [03:02.008] himax | MKL62BA command received: 'slots'
+    [03:02.008] himax | Deferring event 0x070e
+    [03:02.323] himax | >>> Entering DPD at 2024:01:01 00:00:18
+3 window hits, all slept. Done.

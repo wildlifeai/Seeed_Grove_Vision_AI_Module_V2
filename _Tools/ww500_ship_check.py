@@ -16,7 +16,7 @@ the board waits in X-Modem download mode. The click then runs:
      RP3 image into the other slot (no second RESET press)
   3. RP3 image boot: banner, camera, slot label, both cameras answering on I2C
   4. RP3 photo, after a 5 s sleep and RTC wake: on firmware without the I2C slave-ID
-     fix (branch fix/cis-i2c-slave-id-nesting) the IMX708 cannot stream after a cold
+     fix (#252, 30 Sep 2026) the IMX708 cannot stream after a cold
      boot. Photos stream over the console ('preview 1'), nothing is saved to SD
   5. shipping op 7 / op 8, 'switchslot', 'dpd' so the switch happens at once
   6. HM0360 image boot and photo, SD card state, self-test bits, 'slots'

@@ -27,6 +27,11 @@ the fact is not enough, the timing has to be built in.
   as `_Tools/ww500_ship_check.py` does. After a burn, answer `Do you want to end file
   transmission and reboot system? (y)` with `y` while still streaming and the next window
   is caught too, so two images need one RESET press.
+* **Start streaming only once the reboot is under way.** The streamed `1`s count as console
+  typing and hold the board awake, so after `reset` + `dpd` wait for `>>> Reset by watchdog`
+  before streaming. And when asking for a RESET press, act only on a `Cold boot`: the hand
+  reaching for the button can set off a motion wake first, and the press then kills a
+  transfer already running (30 Sep 2026).
 * **For a batch of boards, use `_Tools/ww500_ship_check.py`** (runbook
   `_Documentation/pcb_batch_flashing.md`): both images, a photo from each camera, one
   button per board.

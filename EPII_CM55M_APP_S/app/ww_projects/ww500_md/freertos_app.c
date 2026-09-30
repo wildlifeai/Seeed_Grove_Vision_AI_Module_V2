@@ -4,14 +4,16 @@
 #include <stdint.h>
 #include <string.h>
 #include <stdlib.h>
-#include "WE2_device.h"
 
-//#ifdef FREERTOS
 /* FreeRTOS kernel includes. */
 #include "FreeRTOS.h"
 #include "task.h"
 #include "queue.h"
 #include "timers.h"
+
+#include "WE2_device.h"
+
+//#ifdef FREERTOS
 //#endif
 
 #include "xprintf.h"

@@ -18,15 +18,29 @@
 #include "hx_drv_CIS_common.h"
 #include "hm0360_regs.h"
 #include "fatfs_task.h"
+#include "hx_drv_iic.h"
 
 
 /*************************************** Defines **************************************/
+
+// The sensor I2C bus speed (issue #249, 30 Sep 2026). platform_driver_init() sets the bus to 400 kHz. Himax says the
+// HM0360 needs 100 kHz once it is in motion detection mode, so in the RP builds (where the HM0360 is only the motion
+// detector and shares the bus with the RP camera) the bus is slowed to 100 kHz for each HM0360 access and put back to
+// 400 kHz afterwards: in saveMainCameraConfig()/restoreMainCameraConfig() and in hm0360_md_isSensorPresent(). In the
+// HM0360 build the whole bus stays at 100 kHz (ww500_md.c) and is never switched here. This is a compile-time test:
+// hm0360MainCamera is still false early in the boot, even in the HM0360 build.
+#ifdef USE_HM0360
+#define SWITCH_I2C_SPEED_FOR_HM0360		0
+#else
+#define SWITCH_I2C_SPEED_FOR_HM0360		1
+#endif // USE_HM0360
 
 
 /*************************************** Local Function Declarations ******************/
 
 static void saveMainCameraConfig(void);
 static void restoreMainCameraConfig(void);
+static void setI2cSpeedForHm0360(bool hm0360);
 
 static uint16_t calculateSleepTime(uint32_t interval);
 
@@ -73,6 +87,7 @@ static void saveMainCameraConfig(void) {
 	// Only the outermost scope samples the current ID (see idSaveDepth)
 	if (idSaveDepth++ == 0) {
 		hx_drv_cis_get_slaveID(&mainCameraID);
+		setI2cSpeedForHm0360(true);
 	}
     hx_drv_cis_set_slaveID(HM0360_SENSOR_I2CID);
 }
@@ -88,7 +103,23 @@ static void restoreMainCameraConfig(void) {
 	// Inner scopes keep the HM0360 selected; only the outermost restores
 	if (idSaveDepth > 0 && --idSaveDepth == 0) {
 		hx_drv_cis_set_slaveID(mainCameraID);
+		setI2cSpeedForHm0360(false);
 	}
+}
+
+/**
+ * Sets the sensor I2C bus speed for an HM0360 access (100 kHz), or back to the default (400 kHz) afterwards.
+ *
+ * Only in the RP builds (SWITCH_I2C_SPEED_FOR_HM0360); does nothing in the HM0360 build.
+ *
+ * @param hm0360 - true before an HM0360 access, false after it
+ */
+static void setI2cSpeedForHm0360(bool hm0360) {
+#if SWITCH_I2C_SPEED_FOR_HM0360
+	hx_drv_i2cm_set_speed(USE_DW_IIC_1, hm0360 ? DW_IIC_SPEED_STANDARD : DW_IIC_SPEED_FAST);
+#else
+	(void) hm0360;
+#endif // SWITCH_I2C_SPEED_FOR_HM0360
 }
 
 
@@ -142,7 +173,16 @@ bool hm0360_md_isSensorPresent(uint8_t sensorAddress) {
 	*      uint8_t rBuffer[2] = {0};
 	*      uint8_t dataLen = 2;
 	*/
-	ret = hx_drv_i2cm_read_data(USE_DW_IIC_1, sensorAddress, &rBuffer, 1);
+	// The HM0360 is read at 100 kHz, as in every other HM0360 access (see SWITCH_I2C_SPEED_FOR_HM0360). Not inside a
+	// save/restore scope, so the default speed can be put back straight after.
+	if ((sensorAddress == HM0360_SENSOR_I2CID) && (idSaveDepth == 0)) {
+		setI2cSpeedForHm0360(true);
+		ret = hx_drv_i2cm_read_data(USE_DW_IIC_1, sensorAddress, &rBuffer, 1);
+		setI2cSpeedForHm0360(false);
+	}
+	else {
+		ret = hx_drv_i2cm_read_data(USE_DW_IIC_1, sensorAddress, &rBuffer, 1);
+	}
 
 	sensorPresent = (ret == IIC_ERR_OK);
 

@@ -16,7 +16,8 @@ These will be tested:
 * Large file transfer (referenced in `_Documentation\development reports\
 2026-09-14_firmware_update_fails`)
 * Fixed 'RP3 camera can't take a photo after cold boot' - this was issue #238 and related to PR#239.
-* Transfer improvements from `ww500_minimal`
+* Transfer improvements from `ww500_minimal` - relates to issue #249
+* Proposed bigger changes to reduce boot ime -  [issue #251](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/251)
 
 ## Unresponsive BLE processor
 

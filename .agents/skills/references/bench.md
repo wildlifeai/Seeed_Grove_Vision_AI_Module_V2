@@ -22,15 +22,31 @@ the fact is not enough, the timing has to be built in.
   distinguishable from a quiet one when you read the transcript back.
 * **Send a `\r\n` keepalive between commands** in long sequences.
 * **X-Modem: start `xmodem_send.py` first, then reset.** It drives the handshake itself
-  and prints `Please press reset button!!` when it wants the reset.
+  and prints `Please press reset button!!` when it wants the reset. The ROM bootloader
+  listens for only 30 ms, so a script must be sending already: stream `1` continuously,
+  as `_Tools/ww500_ship_check.py` does. After a burn, answer `Do you want to end file
+  transmission and reboot system? (y)` with `y` while still streaming and the next window
+  is caught too, so two images need one RESET press.
+* **For a batch of boards, use `_Tools/ww500_ship_check.py`** (runbook
+  `_Documentation/pcb_batch_flashing.md`): both images, a photo from each camera, one
+  button per board.
 * **`PYTHONIOENCODING=utf-8` for any serial or flashing tool.** `xmodem_send.py`'s
   progress bar uses a block character cp1252 cannot encode, and the exception lands
   **mid-flash**. Re-running recovers, since the bootloader is in a separate flash region.
-* **To send commands from a script, drive the app's Engineer Console over adb**, not the
-  Himax console: `adb shell input text` (spaces as `%s`), wait about 1.5 s for the text to
-  land, then tap send. It wakes a sleeping device, and its typed line bypasses the app's
-  queue, so it can land mid-transfer when a test needs that. Opening the Himax port with
-  pyserial's default DTR resets the board, and the device never wakes on serial input.
+* **To command a sleeping device from a script, drive the app's Engineer Console over
+  adb**: `adb shell input text` (spaces as `%s`), wait about 1.5 s for the text to land,
+  then tap send. It wakes the device, and its typed line bypasses the app's queue, so it
+  can land mid-transfer when a test needs that. The device never wakes on serial input.
+* **While the device is awake, the Himax console works from a script**, with three rules:
+  one character every 30 ms (the receive buffer holds one), end with `\r\n` because the CLI
+  runs a command on `\n` only (a bare `\r` does nothing, which looks like a dead console),
+  and send Ctrl-C first to clear stray characters. Open the port with DTR and RTS held low:
+  pyserial's default DTR reset the bench board's adapter, although neither line reset the
+  PCBs flashed on 25 September 2026.
+* **Preview frames (`preview 1`) arrive with other prints inside them.** On the HM0360
+  image the report to the BLE processor lands in every frame, so parsing each line as JSON
+  drops them all. Rebuild the JPEG from the base64 runs of 100+ characters between
+  `"image": "` and `"}}` and keep it only if it fully decodes (`ww500_ship_check.py`).
 * **Three-way logging** (`bench_log.py`, light sensor thread) is what makes a cross-processor
   finding provable: app over `adb logcat`, nRF and Himax consoles in one file. Its stamps are
   read time and the nRF flushes its deferred log in bursts, so order events by the Himax

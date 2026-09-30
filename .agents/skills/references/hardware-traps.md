@@ -13,16 +13,19 @@ Verified on the bench (details and serial evidence in
   a never-booted slot is designed behaviour. Never gate the labelling call on cold boot.
 * **Deliberate reboots are deferred watchdog resets** (`reset`, `switchslot`,
   auto-switch): they execute at the next sleep and the following boot classifies as a
-  **cold** boot (PMU wakeup registers read zero).
+  **cold** boot (PMU wakeup registers read zero). A `setop 8` does not shorten an
+  inactivity countdown already running, so after raising op 8 for a session, follow the
+  reboot command with `dpd` or wait out the old period.
 * **Cold-boot IMX708 first captures fail on images built before 30 Sep 2026**. Every
   in-place retry times out (`Frame timed out - restarting sensor, retry n/5`) and the image
   task then goes Uninitialised. The cause was the I2C address left on the HM0360 by nested
-  save/restore calls in `hm0360_md.c` (issue #238), fixed on `260930_appCommsBugs`
-  (`d97839c7`). On an older image, or to rule it out, **get past one wake cycle before
-  believing a capture or light-sensor result**: `setop 7 1`, wait for
+  save/restore calls in `hm0360_md.c` (issue #238), fixed in PR #252. On an older image, or
+  to rule it out, **get past one wake cycle before believing a capture or light-sensor
+  result**: `setop 7 1`, wait for
   `Wakeup_event = 0x0002 ... RTC Timer`, test, then `setop 7 0`. **op7 is in seconds**, so
   that is a one-second timelapse: the device will capture repeatedly and faster than a
-  script polling `getop` can follow, which reads as a counter jumping by two.
+  script polling `getop` can follow, which reads as a counter jumping by two. A slower
+  way in that scripts well: `setop 7 5`, then `dpd`.
 * **Console sessions**: an untouched boot sleeps after ~1 s; most commands hold the
   device awake ~60 s; the `reset` command deliberately does not. Scripting against this
   has its own rules, see §5.

@@ -9,6 +9,10 @@ wrong here goes wrong before any code is compiled.
   reviewers' diff bases move.
 * Review edits go on `review/<name>-<topic>` branches, not directly on shared feature
   branches; they are cherry-picked across after discussion.
+* **Name a new branch `yymmdd_topic`**, the date it was created and a short topic (e.g.
+  `260930_appCommsBugs`), and add a row for it to
+  [`_Documentation/Branches/Branch_List.md`](../../../_Documentation/Branches/Branch_List.md)
+  saying what it is for, so the reason for a branch is not forgotten. Same in `ww-hardware`.
 * Ask the maintainer before pushing to any shared branch. Commit messages use
   conventional prefixes (`feat:`, `fix:`, `docs:`, `ci:`).
 * **Check whether the clone is shallow before any branch analysis.** A shallow clone makes

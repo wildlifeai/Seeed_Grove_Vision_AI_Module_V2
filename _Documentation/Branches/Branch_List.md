@@ -13,4 +13,5 @@ Also, as an experiment, I will start naming branches with the date I create them
 | Date created | Name                | Purpose | 
 |--------------|---------------------|---------|
 | 30 Sept 2026 | 260930_appCommsBugs | To test recent changes (unresponsive BLE processor, large file tx from app, and some of the github issues |
+| 30 Sept 2026 | 260930_branchListSkill | Add this naming convention to the agent skill and the workflow doc; point the ship-check doc and tool at #252 |
 |              |                     |   | 

@@ -130,7 +130,7 @@ Each of these cost time to find; keep them in mind before changing the tool.
   apart, end with `\r\n` (a bare `\r` is ignored, so nothing happens), and send Ctrl-C first
   to clear stray characters.
 * **The RP3 image cannot take a photo straight after a cold boot** on firmware without the
-  I2C slave-ID fix (branch `fix/cis-i2c-slave-id-nesting`): `hm0360_md_init()` leaves the
+  I2C slave-ID fix (#252, merged 30 Sep 2026; issue #238): `hm0360_md_init()` leaves the
   shared bus pointing at the HM0360, so the IMX708 never starts streaming and every frame
   times out. A deployed unit only meets this on its first photo after power-up. The tool
   therefore sets op 7 to 5 s, sends `dpd`, and takes the photo after the RTC wake, which

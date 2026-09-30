@@ -23,6 +23,7 @@
 #include "fatfs_task.h"
 #include "if_task.h"
 #include "image_task.h"
+#include "boot_timing.h"
 
 #include "inactivity.h"
 #include "pinmux_cfg.h"
@@ -268,10 +269,7 @@ static void checkForCameras(void) {
  	// Can't use vTaskDelay() since FreeRTOS scheduler has not started yet
     hx_drv_timer_cm55x_delay_ms(CIS_POWERUP_DELAY, TIMER_STATE_DC);
 
-	// This should be called in platform_driver_init(), called by board_init(), in main() before app_main()
-	// But Himax wrote:
-	// After HM0360 enters the motion detection I2C low-speed mode, WE2 needs to change the I2C master clock to 100K hz low-speed mode to avoid HM0360 register reading errors.
-	hx_drv_i2cm_init(USE_DW_IIC_1, HX_I2C_HOST_MST_1_BASE, DW_IIC_SPEED_STANDARD);
+	// The sensor I2C speed has already been set in app_main() (issue #249, 30 Sep 2026: this second setting was removed)
 
 	XP_LT_GREY;
 
@@ -649,6 +647,8 @@ int app_main(void){
 #endif	// USE_HM0360
 
 
+	boot_timing_start();	// Times the stages to the first frame (boot_timing.h, issue #249)
+
 	initVersionString();
 	pinmux_init();
 	selfTest_init();
@@ -678,14 +678,14 @@ int app_main(void){
 	sleep_mode_print_event(wakeup_event, wakeup_event1);	// print descriptive string
 	XP_WHITE;
 
-	// set I2C clock to 100K Hz
-	// Otherwise I2C speed is initialised in platform_driver_init() as DW_IIC_SPEED_FAST = 400kHz
-
-	// This should be called with DW_IIC_SPEED_FAST = 400kHz in platform_driver_init(),
-	// called by board_init(), in main() before app_main(). But Himax wrote:
+	// The sensor I2C speed (issue #249, 30 Sep 2026). platform_driver_init(), called by board_init() in main() before
+	// app_main(), sets it to DW_IIC_SPEED_FAST = 400kHz. But Himax wrote:
 	// After HM0360 enters the motion detection I2C low-speed mode, WE2 needs to change the I2C master clock to 100K hz low-speed mode to avoid HM0360 register reading errors.
+	// In the HM0360 build the HM0360 is the main camera, so the whole bus runs at 100 kHz. In the RP builds the bus stays
+	// at 400 kHz for the RP camera, and hm0360_md.c slows it to 100 kHz for each HM0360 access (SWITCH_I2C_SPEED_FOR_HM0360).
+#ifdef USE_HM0360
 	hx_drv_i2cm_init(USE_DW_IIC_1, HX_I2C_HOST_MST_1_BASE, DW_IIC_SPEED_STANDARD);
-	// TODO consider restoring DW_IIC_SPEED_FAST
+#endif // USE_HM0360
 
 #ifdef USE_HM0360
 #pragma message "Compiling for HM0360"
@@ -702,6 +702,7 @@ int app_main(void){
 #endif	// USE_HM0360
 
 	checkForCameras();	// see which I2C devices respond (and disable LED flash!)
+	boot_timing_mark(BOOT_TIMING_CAMERAS_CHECKED);
 
 	if ((wakeup_event == PMU_WAKEUP_NONE) && (wakeup_event1 == PMU_WAKEUPEVENT1_NONE)) {
 		showResetOnLeds(3);	// pattern on LEDs to show cold boot
@@ -872,6 +873,7 @@ int app_main(void){
 	barrier_init(&shutdownBarrier, 2, image_sleepNow);
 
 	xprintf("FreeRTOS scheduler started.\n");
+	boot_timing_mark(BOOT_TIMING_SCHEDULER);	// from here the boot timing uses the tick count
 	vTaskStartScheduler();
 
 	for (;;) {

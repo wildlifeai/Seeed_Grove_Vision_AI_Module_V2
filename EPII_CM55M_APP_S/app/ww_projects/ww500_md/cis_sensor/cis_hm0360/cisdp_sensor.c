@@ -5,6 +5,10 @@
  *      Author: 901912
  */
 
+// FreeRTOS kernel includes.
+#include "FreeRTOS.h"
+#include "timers.h"
+
 #include "cisdp_sensor.h"
 
 #include "cisdp_cfg.h"
@@ -22,10 +26,6 @@
 #include "math.h"
 #include "hm0360_regs.h"
 #include "hm0360_md.h"
-
-// FreeRTOS kernel includes.
-#include "FreeRTOS.h"
-#include "timers.h"
 
 #ifdef TRUSTZONE_SEC
 #ifdef IP_INST_NS_csirx

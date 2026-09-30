@@ -22,12 +22,12 @@
 #include <stdbool.h>
 #include <string.h>
 
+#include "FreeRTOS.h"
+#include "task.h"
+
 #include "xprintf.h"
 #include "printf_x.h"
 #include "WE2_device.h"
-
-#include "FreeRTOS.h"
-#include "task.h"
 
 #include "sw_jpeg.h"
 #include "img_correct.h"

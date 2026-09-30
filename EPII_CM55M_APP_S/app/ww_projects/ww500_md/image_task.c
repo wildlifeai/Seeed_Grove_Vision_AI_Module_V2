@@ -19,13 +19,6 @@
 #include <sys/time.h>
 #include <time.h>
 
-#include "WE2_device.h"
-#include "WE2_debug.h"
-#include "WE2_core.h"
-#include "board.h"
-#include "printf_x.h"
-#include "hx_drv_pwm.h"
-
 // FreeRTOS kernel includes.
 #include "FreeRTOS.h"
 #include "FreeRTOSConfig.h"
@@ -34,12 +27,20 @@
 #include "timers.h"
 #include "semphr.h"
 
+#include "WE2_device.h"
+#include "WE2_debug.h"
+#include "WE2_core.h"
+#include "board.h"
+#include "printf_x.h"
+#include "hx_drv_pwm.h"
+
 #ifndef TRUSTZONE_SEC_ONLY
 /* FreeRTOS includes. */
 #include "secure_port_macros.h"
 #endif
 
 #include "image_task.h"
+#include "boot_timing.h"
 #include "fatfs_task.h"
 #include "app_msg.h"
 #include "CLI-commands.h"
@@ -705,6 +706,7 @@ static APP_MSG_DEST_T handleEventForInit(APP_MSG_T img_recv_msg) {
 
             // Now start the image sensor.
             configure_image_sensor(CAMERA_CONFIG_RUN);
+            boot_timing_mark(BOOT_TIMING_CAPTURE_START);
             // Record image capture start time.
             startTime = xTaskGetTickCount();
 
@@ -827,6 +829,14 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
         	//hm0360_md_setMode(CONTEXT_A, MODE_SW_NFRAMES_SLEEP, 1, 0);
         }
 #endif // USE_HM0360_CAPTURE_TIMER
+
+        // The first frame after the boot: print how long each stage took (issue #249). On a motion wake the HM0360's
+        // SEN_INT is cleared just below, so a scope on it shows the whole time from motion to this point.
+        boot_timing_mark(BOOT_TIMING_FRAME_READY);
+        boot_timing_report((woken == APP_WAKE_REASON_MD) ? "motion" :
+        		(woken == APP_WAKE_REASON_TIMER) ? "timer" :
+        		(woken == APP_WAKE_REASON_COLD) ? "cold" :
+        		(woken == APP_WAKE_REASON_BLE) ? "BLE" : "other");
 
 #if defined(USE_HM0360) || defined(USE_HM0360_MD)
         // By deferring the clearing of the interrupt till here we can measure the latency of interrupt to image captured.
@@ -1726,6 +1736,8 @@ static void vImageTask(void *pvParameters) {
 
 #endif // USE_HM0360_MD
 #endif // USE_HM0360
+
+    boot_timing_mark(BOOT_TIMING_CAMERA_READY);
 
     // Whether this wake needs to be repeated periodically even with no motion/
     // BLE activity: a fresh light-level reading (the AE-driven flash, op13, or

@@ -17,13 +17,6 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include "WE2_device.h"
-#include "WE2_device_addr.h"
-#include "WE2_core.h"
-#include "board.h"
-
-#include "printf_x.h"
-#include "xprintf.h"
 
 // FreeRTOS kernel includes.
 #include "FreeRTOS.h"
@@ -31,6 +24,14 @@
 #include "queue.h"
 #include "timers.h"
 #include "semphr.h"
+
+#include "WE2_device.h"
+#include "WE2_device_addr.h"
+#include "WE2_core.h"
+#include "board.h"
+
+#include "printf_x.h"
+#include "xprintf.h"
 
 #include "app_msg.h"
 #include "if_task.h"

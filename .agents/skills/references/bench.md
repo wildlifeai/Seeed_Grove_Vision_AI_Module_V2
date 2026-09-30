@@ -49,11 +49,13 @@ the fact is not enough, the timing has to be built in.
   `"image": "` and `"}}` and keep it only if it fully decodes (`ww500_ship_check.py`).
 * **The board's RESET reboots both processors.** To reboot only the AI processor, type
   `reset` then `dpd` on its console (a watchdog reset), or let a motion wake do it. After a
-  RESET, act only on a `Cold boot` banner: a WAKE or motion boot just before it looks the same.
+  RESET, act only on a `Cold boot` banner: a WAKE or motion boot just before it looks the same,
+  and the hand reaching for the button can set one off.
 * **A keystroke in the first ~30 ms after a reset leaves the board in the 2nd bootloader's
   menu** (`[1] Xmodem download and burn FW image`) and the app never starts. Send `0` to
   reboot from the menu; no RESET needed. After `reset` + `dpd`, wait for `>>> Reset by
-  watchdog` before flooding for X-Modem.
+  watchdog` before flooding for X-Modem: the flood counts as console typing and holds the
+  board awake.
 * **To make the BLE processor stop reading the AI processor, send `dfu` from the app and
   disconnect.** It stays in its bootloader for 2 minutes, then restarts its app. DTR and RTS
   on its UART do not reset it.

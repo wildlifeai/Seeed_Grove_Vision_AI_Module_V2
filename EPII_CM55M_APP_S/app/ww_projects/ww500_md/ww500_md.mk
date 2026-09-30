@@ -233,14 +233,14 @@ CIS_SUPPORT_INAPP = cis_sensor
 # RP3 is the default because it is the day/colour camera most development and
 # bench work targets. The HM0360 remains present for motion detection either
 # way (USE_HM0360_MD below).
-CIS_SUPPORT_INAPP_MODEL = cis_hm0360
+#CIS_SUPPORT_INAPP_MODEL = cis_hm0360
 # OV5647 for RP v1 camera
 #CIS_SUPPORT_INAPP_MODEL = cis_ov5647
 # IMX219 for RP v2 camera
 #CIS_SUPPORT_INAPP_MODEL = cis_imx219
 #CIS_SUPPORT_INAPP_MODEL = cis_imx477
 # IMX708 for RP v3 camera (main camera; HM0360 remains for motion detection via USE_HM0360_MD)
-#CIS_SUPPORT_INAPP_MODEL = cis_imx708
+CIS_SUPPORT_INAPP_MODEL = cis_imx708
 
 # CGP added to indicate HM0360 is used:
 

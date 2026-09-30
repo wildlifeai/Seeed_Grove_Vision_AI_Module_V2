@@ -260,6 +260,9 @@ static BaseType_t prvDpd(char *pcWriteBuffer, size_t xWriteBufferLen, const char
 // Report of some status
 static BaseType_t prvStatus(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 
+// Report, or clear, the "BLE processor unresponsive" flag (see if_task.c, BLE_PROBE_TIME)
+static BaseType_t prvBle(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
+
 // Pulse PA0
 static BaseType_t prvInt(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 static BaseType_t prvI2C(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
@@ -371,6 +374,14 @@ static const CLI_Command_Definition_t xStatus = {
 	"status:\r\n Send a status report\r\n",
 	prvStatus, /* The function to run. */
 	0		   /* No parameters expected */
+};
+
+/* Structure that defines the "ble" command line command. */
+static const CLI_Command_Definition_t xBle = {
+	"ble", /* The command string to type. */
+	"ble [clear]:\r\n Reports whether the BLE processor is treated as unresponsive (it did not read the first message), or clears that\r\n",
+	prvBle, /* The function to run. */
+	-1		/* Zero or one parameter */
 };
 
 /* Structure that defines the "ver" command line command. */
@@ -852,6 +863,36 @@ static BaseType_t prvStatus(char *pcWriteBuffer, size_t xWriteBufferLen, const c
 	cli_append(&pcWriteBuffer, &xWriteBufferLen, "Status: %s", enabled ? "enabled" : "disabled");
 
 	/* There is no more data to return after this single string, so return pdFALSE. */
+	return pdFALSE;
+}
+
+/**
+ * Implements the "ble" command.
+ *
+ * With no parameter, reports whether the BLE processor is treated as unresponsive: it did not read the first message
+ * after this boot within BLE_PROBE_TIME (if_task.c), so nothing is being sent to it. With 'clear', clears that flag so
+ * messages are sent to it again. Added 28 Sep 2026 for boards with no BLE processor.
+ */
+static BaseType_t prvBle(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) {
+	const char *pcParameter;
+	BaseType_t lParameterStringLength;
+
+	configASSERT(pcWriteBuffer);
+
+	pcParameter = FreeRTOS_CLIGetParameter(pcCommandString, 1, &lParameterStringLength);
+
+	if (pcParameter == NULL) {
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "BLE processor %s",
+				ifTask_isBleUnresponsive() ? "unresponsive: messages to it are not sent" : "responsive");
+	}
+	else if ((lParameterStringLength == 5) && (strncmp(pcParameter, "clear", 5) == 0)) {
+		ifTask_clearBleUnresponsive();
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "BLE processor flag cleared: messages to it will be sent");
+	}
+	else {
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "Usage: ble [clear]");
+	}
+
 	return pdFALSE;
 }
 
@@ -2803,6 +2844,7 @@ static void vRegisterCLICommands(void)
 	FreeRTOS_CLIRegisterCommand(&xDpd);
 
 	FreeRTOS_CLIRegisterCommand(&xStatus);
+	FreeRTOS_CLIRegisterCommand(&xBle);			// BLE processor unresponsive flag
 	FreeRTOS_CLIRegisterCommand(&xVer);
 	FreeRTOS_CLIRegisterCommand(&xCamera);
 	FreeRTOS_CLIRegisterCommand(&xSlots);		// Report firmware slots and camera variants

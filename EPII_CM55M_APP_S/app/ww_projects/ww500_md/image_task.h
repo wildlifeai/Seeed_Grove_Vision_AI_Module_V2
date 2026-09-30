@@ -76,7 +76,7 @@ typedef enum {
 //#define	TIMELAPSEINTERVAL	1 * 60	// time in seconds
 #define	TIMELAPSEINTERVAL	0	// 0 disables timelapse
 
-// for now, 1s
+// Default, before values are loaded from SD card etc. For now, 1s
 #define INACTIVITYTIMEOUT 1000
 
 // Default interval in ms between frame grabs in motion detect mode

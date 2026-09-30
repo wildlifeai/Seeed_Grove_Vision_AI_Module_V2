@@ -10,6 +10,7 @@
 #ifndef APP_WW_PROJECTS_WW500_MD_IF_TASK_H_
 #define APP_WW_PROJECTS_WW500_MD_IF_TASK_H_
 
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include "WE2_device.h"
@@ -124,6 +125,12 @@ uint16_t ifTask_getState(void);
 
 // Return the internal state (as a string)
 const char * ifTask_getStateString(void);
+
+// True if the BLE processor did not read the first message after this boot (nothing is then sent to it)
+bool ifTask_isBleUnresponsive(void);
+
+// Clears that flag, so that messages are sent to the BLE processor again
+void ifTask_clearBleUnresponsive(void);
 
 // Callback for when all tasks have started and done their initialisation
 void ifTask_allTasksReady(void);

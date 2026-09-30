@@ -17,13 +17,6 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include "WE2_device.h"
-#include "WE2_device_addr.h"
-#include "WE2_core.h"
-#include "board.h"
-
-#include "printf_x.h"
-#include "xprintf.h"
 
 // FreeRTOS kernel includes.
 #include "FreeRTOS.h"
@@ -31,6 +24,14 @@
 #include "queue.h"
 #include "timers.h"
 #include "semphr.h"
+
+#include "WE2_device.h"
+#include "WE2_device_addr.h"
+#include "WE2_core.h"
+#include "board.h"
+
+#include "printf_x.h"
+#include "xprintf.h"
 
 #include "app_msg.h"
 #include "if_task.h"
@@ -83,6 +84,13 @@
 // 4000ms window rides through the renegotiation while staying under the 5s file
 // session inactivity and the app's 15s silence timeout.
 #define MISSINGMASTERTIME	4000
+
+// Time in ms for the BLE processor to read the first message after a boot ("Wake ...", "Timer ..." or "MD ...").
+// If it does not, it is treated as unresponsive (bleUnresponsive) and nothing more is sent to it until it contacts
+// us. Only the first message uses this short time; every later one uses MISSINGMASTERTIME, so file transfers keep
+// their long window. Added 28 Sep 2026 for boards with no BLE processor, where every message would otherwise wait
+// MISSINGMASTERTIME and the device never entered DPD.
+#define BLE_PROBE_TIME		300
 
 // Added 16 Sep 2026 while investigating BLE file-transfer round-trip time
 // variability (see the "firmware update fails" development report): a single
@@ -148,6 +156,7 @@ static void missingMasterExpired(xTimerHandle pxTimer);
 //static void deferPA0Pulse(uint32_t pulseWidth);
 
 static void sendI2CMessage(uint8_t * data, aiProcessor_msg_type_t messageType, uint16_t length);
+static void reportReadyToSleep(const char *why);
 
 // I2C slave address and callbacks - used for initialisation only
 I2CCOMM_CFG_T gI2CCOMM_cfg = {
@@ -285,6 +294,19 @@ static bool     inactivityExtended = false;
 //const char * lastMessage = "Sleep";
 
 bool lastMessageSent = false;
+
+// True if the BLE processor did not read the first message after this boot. While set, nothing is sent to it (no
+// interrupt pulse, no I2C data): messages to it are dropped and the "Sleep" message is skipped. Cleared when the BLE
+// processor sends us a command (it is evidently there), or by the 'ble clear' CLI command. RAM only, so every boot
+// tries again. Mirrored in the self test bits as SELF_TEST_AI_NO_BLE (bit 14).
+static bool bleUnresponsive = false;
+
+// True from sending the first message until it is read (TX_DONE) or times out (MM_TIMER, after BLE_PROBE_TIME)
+static bool bleProbePending = false;
+
+// True once this task has reported to shutdownBarrier. barrier_ready() counts calls, not tasks, and the inactivity
+// detector can fire again after any activity, so the report is made at most once per boot (see reportReadyToSleep()).
+static bool readyToSleepReported = false;
 
 bool sendWakeMsg = false;
 
@@ -812,8 +834,11 @@ static void i2ccomm_write_enable(uint8_t * message, aiProcessor_msg_type_t messa
     	xprintf("I2C write error %d\n", ret);
     }
 
-	// Start a timer in case the master does not read our data
-	if (xTimerStart(timerHndlMissingMaster, 0)!= pdPASS) {
+	// Start a timer in case the master does not read our data. The first message after a boot gets the short
+	// BLE_PROBE_TIME, to find out quickly whether there is a BLE processor. xTimerChangePeriod() also starts
+	// (or restarts) the timer.
+	if (xTimerChangePeriod(timerHndlMissingMaster,
+			pdMS_TO_TICKS(bleProbePending ? BLE_PROBE_TIME : MISSINGMASTERTIME), 0) != pdPASS) {
 		configASSERT(0);	// TODO add debug messages?
 	}
 }
@@ -845,6 +870,14 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 
 	case APP_MSG_IFTASK_I2CCOMM_RX_READY:
 		// Here when I2C message arrived
+		if (bleUnresponsive) {
+			// The BLE processor has sent us a command, so it is there after all
+			bleUnresponsive = false;
+			selfTest_clearErrorBits(1 << SELF_TEST_AI_NO_BLE);
+			XP_LT_GREEN;
+			xprintf("BLE processor has contacted us: messages to it resumed\n");
+			XP_WHITE;
+		}
 		if_task_state = APP_IF_STATE_I2C_RX;
 		// Read and parse the incoming data. Messages of type  AI_PROCESSOR_MSG_TX_STRING are passed to the CLI task for parsing and executing
 		i2cRxDataReady();
@@ -938,6 +971,8 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 
 #endif // SENDMSGEARLY
 
+		// The first message after a boot: it also finds out whether the BLE processor is there (see BLE_PROBE_TIME)
+		bleProbePending = true;
 		sendI2CMessage((uint8_t *) message, AI_PROCESSOR_MSG_RX_STRING, strlen(message) );
 		if_task_state = APP_IF_STATE_I2C_TX;
 		break;
@@ -947,6 +982,13 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 		// Then set a semaphore to say it is done and we can sleep
 
 		lastMessageSent = true;
+
+		if (bleUnresponsive) {
+			// Nobody to tell: skip the "Sleep" message and let DPD go ahead now (the image task is the other
+			// participant in shutdownBarrier)
+			reportReadyToSleep(" (BLE processor unresponsive, no Sleep message)");
+			break;
+		}
 
 		// send all of the opParameters as integers
 		snprintf(message, sizeof(message), "Sleep ");
@@ -1086,12 +1128,12 @@ static APP_MSG_DEST_T  handleEventForStateI2CTx(APP_MSG_T rxMessage) {
 	switch (event) {
 
 	case APP_MSG_IFTASK_I2CCOMM_TX_DONE:
+		bleProbePending = false;	// The BLE processor read our message, so it is there
 		i2cTransmissionComplete();
 		if_task_state = APP_IF_STATE_IDLE;
 
 		if (lastMessageSent) {
-			// special case just before entering DPD.
-			xprintf("IF task ready to sleep.\n");
+			// special case just before entering DPD. Reported to shutdownBarrier below.
 
 			// This might be a good place to add some tests, as results will be at the bottom of teh screen while in DPD
 //#define TESTFILENAMES
@@ -1114,7 +1156,7 @@ static APP_MSG_DEST_T  handleEventForStateI2CTx(APP_MSG_T rxMessage) {
 
 #endif // TESTFILENAMES
 
-			barrier_ready(&shutdownBarrier);
+			reportReadyToSleep("");
 		}
 		break;
 
@@ -1124,8 +1166,25 @@ static APP_MSG_DEST_T  handleEventForStateI2CTx(APP_MSG_T rxMessage) {
 		xprintf("I2C master did not read our I2C message\n");
 		XP_WHITE;
 
+		if (bleProbePending) {
+			// It was the first message after this boot: treat the BLE processor as absent until it contacts us
+			bleProbePending = false;
+			bleUnresponsive = true;
+			selfTest_setErrorBits(1 << SELF_TEST_AI_NO_BLE);
+			XP_LT_RED;
+			xprintf("BLE processor did not read the first message within %dms: treating it as unresponsive\n",
+					BLE_PROBE_TIME);
+			XP_WHITE;
+		}
+
 		i2cTransmissionComplete();
 		if_task_state = APP_IF_STATE_IDLE;
+
+		if (lastMessageSent) {
+			// The "Sleep" message was not read. Enter DPD anyway: without this the device never sleeps when the
+			// BLE processor stops answering (TX_DONE, above, is the only other place this is done).
+			reportReadyToSleep(" (the Sleep message was not read)");
+		}
 		break;
 
 	case APP_MSG_IFTASK_I2CCOMM_ERR:
@@ -1379,6 +1438,23 @@ static APP_MSG_DEST_T flagUnexpectedEvent(APP_MSG_T rxMessage) {
 }
 
 /**
+ * Tells shutdownBarrier that this task is ready for DPD, once per boot.
+ *
+ * Called when the "Sleep" message has been read, when it was not read in time, or instead of sending it when the
+ * BLE processor is unresponsive. The image task is the other participant; DPD follows when both have reported.
+ *
+ * @param why Text for the console.
+ */
+static void reportReadyToSleep(const char *why) {
+	if (readyToSleepReported) {
+		return;
+	}
+	readyToSleepReported = true;
+	xprintf("IF task ready to sleep%s.\n", why);
+	barrier_ready(&shutdownBarrier);
+}
+
+/**
  * Sends an I2C message to the WW130.
  *
  * This asserts the /IP_INT pin, then prepares the message and readies the I2C module to send it,
@@ -1472,6 +1548,16 @@ static void vIfTask(void *pvParameters) {
 			// IDLE handles it (sends now) and I2C_TX defers it (savedMessage); in every
 			// other state drop the message (it is best-effort telemetry) and give the
 			// semaphore back ourselves so the pipeline recovers.
+			// While the BLE processor is unresponsive nothing is sent to it: drop the message and give the semaphore
+			// back, for the same reason as below
+			if ((event == APP_MSG_IFTASK_MSG_TO_MASTER) && bleUnresponsive) {
+				XP_BROWN;
+				xprintf("BLE processor unresponsive - not sending message to master\n");
+				XP_WHITE;
+				xSemaphoreGive(xI2CTxSemaphore);
+				continue;
+			}
+
 			if ((event == APP_MSG_IFTASK_MSG_TO_MASTER)
 					&& (if_task_state != APP_IF_STATE_IDLE)
 					&& (if_task_state != APP_IF_STATE_I2C_TX)) {
@@ -2059,6 +2145,23 @@ uint16_t ifTask_getState(void) {
  */
 const char * ifTask_getStateString(void) {
 	return * &ifTaskStateString[if_task_state];
+}
+
+/**
+ * Returns true if the BLE processor did not read the first message after this boot and has not contacted us since.
+ * While true, nothing is sent to it.
+ */
+bool ifTask_isBleUnresponsive(void) {
+	return bleUnresponsive;
+}
+
+/**
+ * Clears the "BLE processor unresponsive" flag, so that messages are sent to it again (the 'ble clear' CLI command).
+ * If it still does not answer, each message waits MISSINGMASTERTIME, and the flag is not set again until the next boot.
+ */
+void ifTask_clearBleUnresponsive(void) {
+	bleUnresponsive = false;
+	selfTest_clearErrorBits(1 << SELF_TEST_AI_NO_BLE);
 }
 
 

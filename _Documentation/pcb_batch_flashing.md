@@ -14,12 +14,19 @@ It covers the Himax only. The nRF (BLE) firmware is updated separately, through 
 * A USB-serial adapter on the board's **Himax console header**, 921600 baud. The adapter
   powers the board. Find its COM port in Device Manager ("USB Serial Port"); it is the one
   that prints clean text at 921600 when the board resets.
-* Python 3.10 or later with `pip install pyserial xmodem Pillow`.
+* A Windows PC with Python 3.10 or later (the python.org installer includes Tkinter, which the
+  window needs) and `pip install pyserial xmodem Pillow`. Run it from Windows, not WSL, which
+  cannot open the COM port.
+* A complete board: both cameras fitted, since both must take a photo to pass.
 * The two images. Either let the tool download them (`--release`, needs the GitHub CLI
   `gh`, signed in) or pass the `.img` files yourself.
 * Close TeraTerm or any other program holding the port: Windows COM ports are exclusive.
 
 ## Run it
+
+Run it from any folder; the examples below run it from the repo root. It writes nothing into
+the repo: everything goes under `~/ww500_ship_check/` (`C:\Users\<you>\ww500_ship_check` on
+Windows), see [Output](#output).
 
 Ship what production serves (the newest successful release run on `main`):
 
@@ -92,6 +99,12 @@ Default folder `~/ww500_ship_check/batch_<date>` (change with `--logdir`):
   the final `slots` line.
 * `<label>.log`: every byte the board printed, with `#####` lines marking each step.
 * `<label>_RP3.jpg`, `<label>_HM0360.jpg`: the photos that were judged.
+
+Keep the batch folder as the record of what each board shipped with.
+
+Images downloaded with `--release` go to `~/ww500_ship_check/release_images/<run>/` (change
+with `--image-dir`) and are reused if the same run is flashed again. Delete them once the batch
+has shipped.
 
 ## Troubleshooting
 

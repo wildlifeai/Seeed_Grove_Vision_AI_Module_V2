@@ -14,15 +14,15 @@
 
 /*********************************************** Includes ****************************************************/
 
+// FreeRTOS kernel includes.
+#include "FreeRTOS.h"
+#include "task.h"
+
 #include "cis_file.h"
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
-// FreeRTOS kernel includes.
-#include "FreeRTOS.h"
-#include "task.h"
 
 #include "xprintf.h"
 #include "fatfs_task.h"

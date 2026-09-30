@@ -49,6 +49,13 @@
 #include <ctype.h>
 #include <string.h>		// strlen/strchr/strtok: used here, previously only pulled in transitively
 
+// FreeRTOS kernel includes.
+#include "FreeRTOS.h"
+#include "task.h"
+#include "queue.h"
+#include "timers.h"
+#include "semphr.h"
+
 #include "WE2_device.h"
 #include "WE2_debug.h"
 #include "WE2_core.h"
@@ -60,14 +67,8 @@
 #include "hx_drv_gpio.h"
 #include "hx_drv_scu.h"
 
-// FreeRTOS kernel includes.
-#include "FreeRTOS.h"
-#include "task.h"
-#include "queue.h"
-#include "timers.h"
-#include "semphr.h"
-
 #include "fatfs_task.h"
+#include "boot_timing.h"
 #include "cis_file.h"
 #include "image_task.h"
 #include "app_msg.h"
@@ -1659,6 +1660,7 @@ static void vFatFsTask(void *pvParameters) {
 	// TODO - experiment - do I need settling time for 3V3_WE?
 	vTaskDelay(pdMS_TO_TICKS(10));
 	res = fatFsInit();
+	boot_timing_mark(BOOT_TIMING_SD_MOUNTED);
 
 	if (res == FR_OK) {
 		fatFs_task_state = APP_FATFS_STATE_IDLE;
@@ -1674,6 +1676,7 @@ static void vFatFsTask(void *pvParameters) {
 
 			// Load all the saved configuration values, including the image sequence number
 			res = load_configuration(STATE_FILE, &dirManager);
+			boot_timing_mark(BOOT_TIMING_SD_CONFIG_LOADED);
 			if (res == FR_OK) {
 				// File exists and op_parameter[] has been initialised
 				enabled = op_parameter[OP_PARAMETER_CAMERA_ENABLED];
@@ -1689,6 +1692,7 @@ static void vFatFsTask(void *pvParameters) {
 			// Phase 2: now that op_parameter[] and deployment ID are valid,
 			// determine and create the correct image directory.
 			dir_mgr_init_image_dir(&dirManager);
+			boot_timing_mark(BOOT_TIMING_SD_IMAGE_DIR_READY);
 		}
 	}
 	else {
@@ -1737,6 +1741,7 @@ static void vFatFsTask(void *pvParameters) {
 
 	// The semaphore lets the Image Task proceed
 	// xprintf("DEBUG: giving semaphore so Image Task can proceed\n");
+	boot_timing_mark(BOOT_TIMING_SD_READY);
 	xSemaphoreGive(xSDInitDoneSemaphore);
 
 	barrier_ready(&startupBarrier); // Call a function when every task reaches this point

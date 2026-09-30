@@ -13,15 +13,19 @@ Verified on the bench (details and serial evidence in
   a never-booted slot is designed behaviour. Never gate the labelling call on cold boot.
 * **Deliberate reboots are deferred watchdog resets** (`reset`, `switchslot`,
   auto-switch): they execute at the next sleep and the following boot classifies as a
-  **cold** boot (PMU wakeup registers read zero).
-* **Cold-boot IMX708 first captures fail, full stop**. Every in-place retry times out
-  (`Frame timed out - restarting sensor, retry n/5`) and the image task then goes
-  Uninitialised. The progressive-dwell retry does not rescue it. DPD-wake captures are
-  reliable and take ~52 ms, so **always get past one wake cycle before believing a capture
-  or light-sensor result**. Cheapest way in: `setop 7 1`, wait for
+  **cold** boot (PMU wakeup registers read zero). A `setop 8` does not shorten an
+  inactivity countdown already running, so after raising op 8 for a session, follow the
+  reboot command with `dpd` or wait out the old period.
+* **Cold-boot IMX708 first captures fail on images built before 30 Sep 2026**. Every
+  in-place retry times out (`Frame timed out - restarting sensor, retry n/5`) and the image
+  task then goes Uninitialised. The cause was the I2C address left on the HM0360 by nested
+  save/restore calls in `hm0360_md.c` (issue #238), fixed in PR #252. On an older image, or
+  to rule it out, **get past one wake cycle before believing a capture or light-sensor
+  result**: `setop 7 1`, wait for
   `Wakeup_event = 0x0002 ... RTC Timer`, test, then `setop 7 0`. **op7 is in seconds**, so
   that is a one-second timelapse: the device will capture repeatedly and faster than a
-  script polling `getop` can follow, which reads as a counter jumping by two.
+  script polling `getop` can follow, which reads as a counter jumping by two. A slower
+  way in that scripts well: `setop 7 5`, then `dpd`.
 * **Console sessions**: an untouched boot sleeps after ~1 s; most commands hold the
   device awake ~60 s; the `reset` command deliberately does not. Scripting against this
   has its own rules, see §5.
@@ -71,3 +75,15 @@ building on any of them:
   fails on a duplicate key. The version is compiled into the image and written into the DFU
   package, so renaming a zip is never a shortcut. nRF5 SDK 16.0.0 needs **GCC 10.3.1**; 12
   and newer fail on `-Werror=array-bounds` in `nrf_section.h`.
+
+* **In the RP builds every HM0360 access must go through `hm0360_md.c`'s
+  `saveMainCameraConfig()`/`restoreMainCameraConfig()`** (added 30 Sep 2026, issue #249). The
+  sensor I2C bus is shared: the pair switches the I2C address to the HM0360 and back, and the
+  bus speed from 400 kHz (for the RP camera) to the 100 kHz Himax requires for the HM0360 in
+  motion detection, and back. It is nesting-safe (`idSaveDepth`). A direct `hx_drv_cis_*` call
+  to the HM0360 outside the pair talks to the wrong device or at the wrong speed. #238 cost a
+  bench session and a PR round.
+* **GPIO0, GPIO1 and GPIO2 each appear on two pins** (PB6/PB9, PB7/PB10, PB8/PB11; HX6538
+  datasheet 4.5, note 3), and they are one signal each. In `ww500_md` PB7 (SENSOR_ENABLE,
+  `rp_sensor_enable()`) and the blue LED on PB10 are both GPIO1, so they move together. Found
+  in `ww500_minimal`, 27 Sep 2026; `ww500_md`'s pin assignments are deliberately unchanged.

@@ -5,6 +5,10 @@
  *      Author: 901912
  */
 
+// FreeRTOS kernel includes.
+#include "FreeRTOS.h"
+#include "timers.h"
+
 #include "cisdp_sensor.h"
 
 #include "cisdp_cfg.h"
@@ -20,10 +24,6 @@
 #include "driver_interface.h"
 #include "hx_drv_scu.h"
 #include "math.h"
-
-// FreeRTOS kernel includes.
-#include "FreeRTOS.h"
-#include "timers.h"
 
 //#define GROVE_VISION_AI
 

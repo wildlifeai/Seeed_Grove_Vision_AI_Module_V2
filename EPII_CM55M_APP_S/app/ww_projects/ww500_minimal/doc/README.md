@@ -381,6 +381,11 @@ Source files follow `_Documentation/c_file_format.md`, except the third-party
 Things found or proven in `ww500_minimal` that should be made in `ww500_md` too. Not yet done there. Each is a change to
 shared behaviour, so build and test both camera variants after making it.
 
+**Status (30 September 2026):** items 2 to 5 have been made in `ww500_md` (issue #249, branch `260930_appCommsBugs`,
+built and run on the bench with the RP3 build; item 5 only in the RP3 driver). Item 1 is not being transferred: `ww500_md`'s GPIO pin
+assignments stay as they are. See `_Documentation/development reports/2026-09-30_App_Comms_Bugs/README.md`, "Transfer
+improvements from `ww500_minimal`".
+
 1. **SENSOR_ENABLE (PB7) an output, low, for both cameras** (27 September 2026). In `ww500_md` PB7 is set up (as GPIO1,
    by `rp_sensor_enable()` in `pinmux_cfg.c`) only in the RP builds (`USE_RP2`/`USE_RP3`). In the HM0360 build it is never
    set: the call in `checkForCameras()` (`ww500_md.c`) is commented out, and `rp_sensor_enable_gpio1_pinmux_cfg()` is

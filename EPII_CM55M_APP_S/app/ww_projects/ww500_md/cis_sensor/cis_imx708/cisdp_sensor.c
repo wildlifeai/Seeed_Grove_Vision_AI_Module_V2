@@ -5,6 +5,10 @@
  *      Author: 901912
  */
 
+// FreeRTOS kernel includes.
+#include "FreeRTOS.h"
+#include "timers.h"
+
 #include "cisdp_sensor.h"
 
 #include "cisdp_cfg.h"
@@ -21,9 +25,27 @@
 #include "hx_drv_scu.h"
 #include "math.h"
 
-// FreeRTOS kernel includes.
-#include "FreeRTOS.h"
-#include "timers.h"
+/*
+ * Which dbg_printf() messages this file prints (issue #249, 30 Sep 2026; as in ww500_minimal).
+ *
+ * WE2_debug.h (shared by all the apps) defines DBG_LESS itself, so everywhere else every dbg_printf(DBG_LESS_INFO, ...)
+ * prints, and that cannot be changed from the command line. Here dbg_printf() is redefined to print only the levels
+ * in CISDP_DBG_TYPE:
+ *   0                                  nothing
+ *   DBG_MORE_INFO                      only the calls marked DBG_MORE_INFO (the default: the failure messages)
+ *   DBG_LESS_INFO | DBG_MORE_INFO      everything, as before
+ * To keep a message, change its first argument from DBG_LESS_INFO to DBG_MORE_INFO. ("MORE" here just marks the
+ * messages kept; it does not mean "more detail".) A call whose level is not selected is compiled out completely,
+ * string and all, so it costs no time. The progress messages cost about 6 ms of each RP3 power-up.
+ *
+ * The do { } while (0) makes the macro safe as the only statement of an if with an else (the WE2_debug.h one is
+ * not). WE2_APP_PRINTF is the print function WE2_debug.h uses, so the output is unchanged.
+ */
+#define CISDP_DBG_TYPE		(DBG_MORE_INFO)
+
+#undef dbg_printf
+#define dbg_printf(type, fmt, ...) \
+		do { if (((type) & CISDP_DBG_TYPE) != 0) { WE2_APP_PRINTF(fmt, ##__VA_ARGS__); } } while (0)
 
 //#define GROVE_VISION_AI
 
@@ -236,7 +258,7 @@ void set_mipi_csirx_enable()
     }
     else
     {
-    	dbg_printf(DBG_LESS_INFO, "PIXEL DEPTH fail %d\n", pixel_dpp);
+    	dbg_printf(DBG_MORE_INFO, "PIXEL DEPTH fail %d\n", pixel_dpp);
         return;
     }
 
@@ -261,7 +283,7 @@ void set_mipi_csirx_enable()
     }
     else
     {
-    	dbg_printf(DBG_LESS_INFO, "PIXEL DEPTH fail %d\n", pixel_dpp);
+    	dbg_printf(DBG_MORE_INFO, "PIXEL DEPTH fail %d\n", pixel_dpp);
         return;
     }
 
@@ -297,7 +319,8 @@ void set_mipi_csirx_disable()
 
 
 int cisdp_sensor_init(bool sensor_init) {
-    dbg_printf(DBG_LESS_INFO, "Initialising IMX708 at 0x%02x (p.u. delay %dms)\r\n", CIS_I2C_ID, CIS_POWERUP_DELAY);
+    // Kept (DBG_MORE_INFO) as the start marker for timing the camera start-up (issue #249)
+    dbg_printf(DBG_MORE_INFO, "Initialising IMX708 at 0x%02x (p.u. delay %dms)\r\n", CIS_I2C_ID, CIS_POWERUP_DELAY);
     dbg_printf(DBG_LESS_INFO, "Memory allocated: %ld for raw buffer, %d for JPEG, %d for JPEG header\n",
             			sizeof(demosbuf), sizeof(jpegbuf), sizeof(jpegfilesizebuf));
 
@@ -336,13 +359,13 @@ int cisdp_sensor_init(bool sensor_init) {
      */
     if(hx_drv_cis_setRegTable(IMX708_stream_off, HX_CIS_SIZE_N(IMX708_stream_off, HX_CIS_SensorSetting_t))!= HX_CIS_NO_ERROR)
     {
-    	dbg_printf(DBG_LESS_INFO, "IMX708 off by app fail\r\n");
+    	dbg_printf(DBG_MORE_INFO, "IMX708 off by app fail\r\n");
         return -1;
     }
 
     if(hx_drv_cis_setRegTable(IMX708_common_setting, HX_CIS_SIZE_N(IMX708_common_setting, HX_CIS_SensorSetting_t))!= HX_CIS_NO_ERROR)
     {
-        dbg_printf(DBG_LESS_INFO, "IMX708 Init by app fail (IMX708_common_setting)\n");
+        dbg_printf(DBG_MORE_INFO, "IMX708 Init by app fail (IMX708_common_setting)\n");
     }
     else
     {
@@ -365,7 +388,7 @@ int cisdp_sensor_init(bool sensor_init) {
 
     if(hx_drv_cis_setRegTable(IMX708_2304x1296_setting, HX_CIS_SIZE_N(IMX708_2304x1296_setting, HX_CIS_SensorSetting_t))!= HX_CIS_NO_ERROR)
     {
-        dbg_printf(DBG_LESS_INFO, "IMX708 Init by app fail (IMX708_2304x1296_setting)\n");
+        dbg_printf(DBG_MORE_INFO, "IMX708 Init by app fail (IMX708_2304x1296_setting)\n");
     }
     else
     {
@@ -374,7 +397,7 @@ int cisdp_sensor_init(bool sensor_init) {
 
     if(hx_drv_cis_setRegTable(IMX708_exposure_setting, HX_CIS_SIZE_N(IMX708_exposure_setting, HX_CIS_SensorSetting_t))!= HX_CIS_NO_ERROR)
     {
-        dbg_printf(DBG_LESS_INFO, "IMX708 Init by app fail (IMX708_exposure_setting)\n");
+        dbg_printf(DBG_MORE_INFO, "IMX708 Init by app fail (IMX708_exposure_setting)\n");
     }
     else
     {
@@ -383,7 +406,7 @@ int cisdp_sensor_init(bool sensor_init) {
 
     if(hx_drv_cis_setRegTable(IMX708_link_450Mhz_regs, HX_CIS_SIZE_N(IMX708_link_450Mhz_regs, HX_CIS_SensorSetting_t))!= HX_CIS_NO_ERROR)
     {
-        dbg_printf(DBG_LESS_INFO, "IMX708 Init by app fail (IMX708_link_450Mhz_regs)\n");
+        dbg_printf(DBG_MORE_INFO, "IMX708 Init by app fail (IMX708_link_450Mhz_regs)\n");
     }
     else
     {
@@ -403,7 +426,7 @@ int cisdp_sensor_init(bool sensor_init) {
     //IMX708_set_mirror
     if(hx_drv_cis_setRegTable(IMX708_mirror_setting, HX_CIS_SIZE_N(IMX708_mirror_setting, HX_CIS_SensorSetting_t))!= HX_CIS_NO_ERROR)
     {
-        dbg_printf(DBG_LESS_INFO, "IMX708 Init by app fail (IMX708_mirror_setting)\n");
+        dbg_printf(DBG_MORE_INFO, "IMX708 Init by app fail (IMX708_mirror_setting)\n");
 		return -1;
     }
     else
@@ -603,7 +626,7 @@ void cisdp_stream_on()
      */
     if(hx_drv_cis_setRegTable(IMX708_stream_on, HX_CIS_SIZE_N(IMX708_stream_on, HX_CIS_SensorSetting_t))!= HX_CIS_NO_ERROR)
     {
-    	dbg_printf(DBG_LESS_INFO, "IMX708 on by app fail\r\n");
+    	dbg_printf(DBG_MORE_INFO, "IMX708 on by app fail\r\n");
         return;
     }
     else
@@ -620,7 +643,7 @@ void cisdp_stream_off()
      */
     if(hx_drv_cis_setRegTable(IMX708_stream_off, HX_CIS_SIZE_N(IMX708_stream_off, HX_CIS_SensorSetting_t))!= HX_CIS_NO_ERROR)
     {
-    	dbg_printf(DBG_LESS_INFO, "IMX708 off by app fail\r\n");
+    	dbg_printf(DBG_MORE_INFO, "IMX708 off by app fail\r\n");
     }
     else
     {
@@ -636,7 +659,7 @@ void cisdp_sensor_start()
      */
     if(hx_drv_cis_setRegTable(IMX708_stream_on, HX_CIS_SIZE_N(IMX708_stream_on, HX_CIS_SensorSetting_t))!= HX_CIS_NO_ERROR)
     {
-    	dbg_printf(DBG_LESS_INFO, "IMX708 on by app fail\r\n");
+    	dbg_printf(DBG_MORE_INFO, "IMX708 on by app fail\r\n");
         return;
     }
     else
@@ -659,7 +682,7 @@ void cisdp_sensor_stop() {
      * Stream Off
      */
     if(hx_drv_cis_setRegTable(IMX708_stream_off, HX_CIS_SIZE_N(IMX708_stream_off, HX_CIS_SensorSetting_t))!= HX_CIS_NO_ERROR){
-    	dbg_printf(DBG_LESS_INFO, "IMX708 off by app fail\r\n");
+    	dbg_printf(DBG_MORE_INFO, "IMX708 off by app fail\r\n");
     }
     else {
     	dbg_printf(DBG_LESS_INFO, "IMX708 off by app \n");
@@ -701,7 +724,7 @@ void cisdp_get_jpginfo(uint32_t *jpeg_enc_filesize, uint32_t *jpeg_enc_addr)
 
     if( jpeg_enc_filesize_real != *jpeg_enc_filesize)
     {
-        dbg_printf(DBG_LESS_INFO, "*jpeg_enc_filesize_real(0x%08X) != *jpeg_enc_filesize(0x%08X)\n"
+        dbg_printf(DBG_MORE_INFO, "*jpeg_enc_filesize_real(0x%08X) != *jpeg_enc_filesize(0x%08X)\n"
         		, jpeg_enc_filesize_real, *jpeg_enc_filesize);
 
         //change value

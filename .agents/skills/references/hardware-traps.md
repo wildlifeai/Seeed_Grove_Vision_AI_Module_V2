@@ -13,7 +13,9 @@ Verified on the bench (details and serial evidence in
   a never-booted slot is designed behaviour. Never gate the labelling call on cold boot.
 * **Deliberate reboots are deferred watchdog resets** (`reset`, `switchslot`,
   auto-switch): they execute at the next sleep and the following boot classifies as a
-  **cold** boot (PMU wakeup registers read zero).
+  **cold** boot (PMU wakeup registers read zero). A `setop 8` does not shorten an
+  inactivity countdown already running, so after raising op 8 for a session, follow the
+  reboot command with `dpd` or wait out the old period.
 * **Cold-boot IMX708 first captures fail, full stop**. Every in-place retry times out
   (`Frame timed out - restarting sensor, retry n/5`) and the image task then goes
   Uninitialised. The progressive-dwell retry does not rescue it. DPD-wake captures are
@@ -21,7 +23,15 @@ Verified on the bench (details and serial evidence in
   or light-sensor result**. Cheapest way in: `setop 7 1`, wait for
   `Wakeup_event = 0x0002 ... RTC Timer`, test, then `setop 7 0`. **op7 is in seconds**, so
   that is a one-second timelapse: the device will capture repeatedly and faster than a
-  script polling `getop` can follow, which reads as a counter jumping by two.
+  script polling `getop` can follow, which reads as a counter jumping by two. A slower
+  way in that scripts well: `setop 7 5`, then `dpd`. **Cause, found 25 September 2026:**
+  `hm0360_md_init()` runs after the IMX708 init at cold boot, and its nested
+  `saveMainCameraConfig()`/`restoreMainCameraConfig()` leave the CIS I2C slave ID on the
+  HM0360 (0x24). The stream-on write then goes to the HM0360, which acknowledges it, so
+  the log says `IMX708 on by app done` while the IMX708 never streams, and the retry path
+  re-enables the sensor without re-initialising it or re-selecting its address. A wake
+  re-initialises the IMX708, which is why it works. Fixed on branch
+  `fix/cis-i2c-slave-id-nesting`, not yet merged.
 * **Console sessions**: an untouched boot sleeps after ~1 s; most commands hold the
   device awake ~60 s; the `reset` command deliberately does not. Scripting against this
   has its own rules, see §5.

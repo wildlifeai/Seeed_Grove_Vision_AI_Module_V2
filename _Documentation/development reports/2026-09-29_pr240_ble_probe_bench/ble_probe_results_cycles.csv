@@ -1,0 +1,31 @@
+phase,boot,time,kind,probe_fail,mm_timer,nrf_first_cmd_s,nrf_cmds,dropped,contacted,inactive_s,if_sleep_path,end,end_s,typed_ok
+reset,1,09:55:52,cold,False,0,3.42,selftest,0,False,4.32,Sleep msg read,watchdog,4.37,True
+reset,2,09:55:56,cold,False,0,3.41,selftest,0,False,4.3,Sleep msg read,watchdog,4.35,True
+reset,3,09:56:01,cold,False,0,3.42,selftest,0,False,4.37,Sleep msg read,watchdog,4.42,True
+reset,4,09:56:06,cold,False,0,4.38,selftest,0,False,5.28,Sleep msg read,watchdog,5.33,True
+reset,5,09:56:11,cold,False,0,4.37,selftest,0,False,5.31,Sleep msg read,watchdog,5.41,True
+reset,6,09:56:17,cold,False,0,3.42,selftest,0,False,4.32,Sleep msg read,watchdog,4.37,True
+reset,7,09:56:22,cold,False,0,3.42,selftest,0,False,4.35,Sleep msg read,watchdog,4.41,True
+reset,8,09:56:26,cold,False,0,3.43,selftest,0,False,4.34,Sleep msg read,watchdog,4.39,True
+reset,9,09:56:31,cold,False,0,3.42,selftest,0,False,4.33,Sleep msg read,watchdog,4.38,True
+reset,10,09:56:36,cold,False,0,4.36,selftest,0,False,5.3,Sleep msg read,watchdog,5.35,True
+reset,11,09:56:42,cold,False,0,3.4,selftest,0,False,4.32,Sleep msg read,watchdog,4.37,True
+reset,12,09:56:46,cold,False,0,3.41,selftest,0,False,4.32,Sleep msg read,watchdog,4.37,True
+reset,13,09:56:51,cold,False,0,3.42,selftest,0,False,4.32,Sleep msg read,watchdog,4.38,True
+reset,14,09:56:56,cold,False,0,3.41,selftest,0,False,4.33,Sleep msg read,watchdog,4.39,True
+reset,15,09:57:00,cold,False,0,3.42,selftest,0,False,4.37,Sleep msg read,watchdog,4.42,True
+reset,16,09:57:05,cold,False,0,3.42,selftest,0,False,4.32,Sleep msg read,watchdog,4.37,True
+reset,17,09:57:10,cold,False,0,4.37,selftest,0,False,5.28,Sleep msg read,watchdog,5.33,True
+reset,18,09:57:15,cold,False,0,3.42,selftest,0,False,4.33,Sleep msg read,watchdog,4.38,True
+reset,19,09:57:20,cold,False,0,3.42,selftest,0,False,4.32,Sleep msg read,watchdog,4.37,True
+reset,20,09:57:25,cold,False,0,4.37,selftest,0,False,5.27,Sleep msg read,watchdog,5.32,True
+timer,1,09:57:35,warm 0x0000,False,0,,,0,False,1.29,Sleep msg read,DPD,1.33,
+timer,2,09:57:54,warm 0x0002,False,0,0.37,selftest,0,False,1.65,Sleep msg read,DPD,1.7,
+timer,3,09:58:14,warm 0x0002,False,0,0.37,selftest,0,False,1.65,Sleep msg read,DPD,1.71,
+timer,4,09:58:34,warm 0x0002,False,0,0.35,selftest,0,False,1.65,Sleep msg read,DPD,1.7,
+timer,5,09:58:54,warm 0x0002,False,0,0.37,selftest,0,False,1.65,Sleep msg read,DPD,1.7,
+timer,6,09:59:14,warm 0x0002,False,0,0.32,selftest,0,False,1.64,Sleep msg read,DPD,1.7,
+timer,7,09:59:34,warm 0x0002,False,0,0.33,selftest,0,False,1.66,Sleep msg read,DPD,1.7,
+timer,8,09:59:54,warm 0x0002,False,0,0.33,selftest,0,False,1.65,Sleep msg read,DPD,1.69,
+timer,9,10:00:14,warm 0x0002,False,0,0.32,selftest,0,False,1.63,Sleep msg read,DPD,1.7,
+timer,10,10:00:34,warm 0x0002,False,0,0.34,selftest,0,False,1.65,Sleep msg read,DPD,1.71,

@@ -1,0 +1,155 @@
+**** WW500 MD. (WW500_C02) Built: 06:46:54 Sep 30 2026 ****
+Git branch: 'nogit' nogit-dirty
+Compiler Version: ARM GNU, 14.3.1 20250623
+Wakeup_event = 0x0000, WakeupEvt1 = 0x0000 Cold boot
+Camera: HM0360
+PCA9574 present at 0x20
+DEBUG: ledFlashSelectLED(0)
+Initialised LED Flash
+HM0360 present at 0x24
+Main camera present at 0x24
+### Cold Boot ###
+FreeRTOS tickless idle is enabled. configMAX_PRIORITIES = 5
+Initialising FreeRTOS tasks
+Created task 'CLI' Priority 4
+Created task 'IFTask' Priority 3
+Created task 'FAT' Priority 2
+Created task 'IMAGE' Priority 1
+FreeRTOS scheduler started.
+Starting CLI Task
+Enter 'help' to view a list of available commands.
+cmd> S
+tarting IFTask
+I2C slave instance 0 configured at address 0x62
+I2C buffers have 256 bytes, payload is 244
+Inter-processor i^C
+cmd> nterrupt pulse short
+Starting FatFS Task
+Mounting FatFS on SD card OK
+Directory '/MANIFEST' exists
+SD card initialised. CWD is '0:/'
+Loading configuration: CWD is '0:/MANIFEST'
+'CONFIG.TXT' found. (Next image #492), camera enabled. Flash brightness 5
+Retaining existing images directory (0 <= 100) '/MEDIA/813471b9/IMAGES.001'
+Directory '/MEDIA/813471b9/IMAGES.001' exists
+FastFs setup took 46ms
+Inactivity period set at 1000ms
+elftest
+IF Task received event 'Awake' (0x070f). Rx data = 0x00000000
+Starting Image Task
+Flash ID 0xEF initialised
+Image 640 x 480. Raw buffer 460800. JPEG buffer 115860. JPEG compression x4
+Initialising HM0360 at 0x24 (p.u. delay 1ms)
+Memory allocated: 460800 for raw buffer, 115860 for JPEG, 100 for JPEG header
+   Inhibiting MD
+   Changing mode from 2 to 0 with nFrames=0, sleepTime=0 sleepCount = 0xffff
+HM0360 Init 
+HM0360 Init Mirror Off
+HM0360 Init finished
+HM0360 MD sensitivity 1
+CWD is '0:/MANIFEST'
+Error opening '0:/HM0360EX.BIN': 4
+sensor_type: 8
+DEBUG: ledFlashBrightness(5%) [brbits = 0x0]
+DEBUG: ledFlashSelectLED(0)
+[LS] In ledFlashSetFlashModeFromOpParam with 0 Mode 0
+DEBUG: ledFlashDisable()
+Not initialising NN (project ID is 0)
+No model found.
+NN Initialisation took 8ms TODO - consider doing this after taking the picture!
+Image sensor and data path initialised for camera HM0360
+  Camera system enabled.
+  Neural network disabled.
+  Flash LED(s) in use: 0
+  Flash brightness: 5%
+  Flash is currently not armed.
+  MD sampling: 1000ms.
+  Timelapse disabled.
+IF Task received event 'FreeRTOS Initialised' (0x0710). Rx data = 0x00000000
+Assert inter-processor interrupt.
+Sending 31 bytes: Header 4, payload 25, checksum 2 'Wake 2024-01-01T00:00:02Z'
+Negate inter-processor interrupt.
+IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+IF Task received event 'I2C Tx' (0x0701). Rx data = 0x00000000
+I2C transmission complete.
+IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+IF Task received event 'I2C Rx' (0x0700). Rx data = 0x00000000
+Received I2C message.
+MKL62BA command received: 'selftest'
+IF Task state changed from 'Idle' (1) to 'I2C RX State' (2)
+IF Task received event 'String Response' (0x0703). Rx data = 0x3000e910
+Assert inter-processor interrupt.
+Sending 19 bytes: Header 4, payload 13, checksum 2 'selfTest 0000'
+Negate inter-processor interrupt.
+IF Task state changed from 'I2C RX State' (2) to 'I2C TX State' (3)
+IF Task received event 'I2C Tx' (0x0701). Rx data = 0x00000000
+I2C transmission complete.
+IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+##### 10:35:41 typing 'ble'
+cmd> ble
+BLE processor responsive
+##### 10:36:07 typing 'dpd'
+cmd> dpd
+Forcing DPD by clearing inactivity period
+cmd> Inactive for 200ms
+IMAGE Task received event 'Image Event Inactivity' (0x0a00). Rx data = 0x00000000
+IMAGE Task state changed from 'Init' (1) to 'Save State' (5)
+FatFS Task received event 'Save State' (0x0904). Rx data = 0x00000000
+Saved state to SD card. Image sequence number = 492
+FatFS task sending event 0x0a06. Tx data = 0x00000000
+IMAGE task sending event 0x0904. Rx data = 0x00000000
+IMAGE Task received event 'Image Event Disk Write Complete' (0x0a06). Rx data = 0x00000000
+Image task ready to sleep.
+IMAGE Task state changed from 'Save State' (5) to 'Uninitialised' (0)
+IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+Assert inter-processor interrupt.
+Sending 110 bytes: Header 4, payload 104, checksum 2 'Sleep 492 0 0 76 504 1 500 0 1000 5 1 1000 100 0 0 0 18 1 0 0 1 2 50 65 0 0 0 286 326 1 110 1 0 0 0 0 0 '
+Negate inter-processor interrupt.
+IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+Inactive for 200ms
+IMAGE Task received event 'Image Event Inactivity' (0x0a00). Rx data = 0x00000000
+IMAGE task unhandled event 'Image Event Inactivity' in 'Uninitialised'
+IF Task received event 'Message to Master' (0x070d). Rx data = 0x30011428
+Deferring event 0x070d
+IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+Deferring event 0x070e
+Inactive for 200ms
+IMAGE Task received event 'Image Event Inactivity' (0x0a00). Rx data = 0x00000000
+IMAGE task unhandled event 'Image Event Inactivity' in 'Uninitialised'
+IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+Deferring event 0x070e
+Inactive for 200ms
+IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+Deferring event 0x070e
+Inactive for 200ms
+IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+Deferring event 0x070e
+Inactive for 200ms
+IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+Deferring event 0x070e
+Inactive for 200ms
+IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+Deferring event 0x070e
+Inactive for 200ms
+IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+Deferring event 0x070e
+Inactive for 200ms
+IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+Deferring event 0x070e
+Inactive for 200ms
+IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+Deferring event 0x070e
+Inactive for 200ms
+IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+Deferring event 0x070e
+Inactive for 200ms
+IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+Deferring event 0x070e
+Inactive for 200ms
+IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+Deferring event 0x070e
+Inactive for 200ms
+##### 10:36:48 repro phase watch
+##### 10:40:33 repro phase probe
+##### 10:40:38 typing 'ble'
+##### 10:40:57 repro phase watch

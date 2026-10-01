@@ -52,6 +52,22 @@ the fact is not enough, the timing has to be built in.
   image the report to the BLE processor lands in every frame, so parsing each line as JSON
   drops them all. Rebuild the JPEG from the base64 runs of 100+ characters between
   `"image": "` and `"}}` and keep it only if it fully decodes (`ww500_ship_check.py`).
+* **The board's RESET reboots both processors.** To reboot only the AI processor, type
+  `reset` then `dpd` on its console (a watchdog reset), or let a motion wake do it. After a
+  RESET, act only on a `Cold boot` banner: a WAKE or motion boot just before it looks the same,
+  and the hand reaching for the button can set one off.
+* **A keystroke in the first ~30 ms after a reset leaves the board in the 2nd bootloader's
+  menu** (`[1] Xmodem download and burn FW image`) and the app never starts. Send `0` to
+  reboot from the menu; no RESET needed. After `reset` + `dpd`, wait for `>>> Reset by
+  watchdog` before flooding for X-Modem: the flood counts as console typing and holds the
+  board awake.
+* **To make the BLE processor stop reading the AI processor, send `dfu` from the app and
+  disconnect.** It stays in its bootloader for 2 minutes, then restarts its app. DTR and RTS
+  on its UART do not reset it.
+* **Never stop reading the Himax port, even for a second.** At 921600 baud a boot overflows
+  the Windows serial buffer during a plain `time.sleep()`, and the lost chunk reads like the
+  firmware skipping steps (a line cut mid-word, then later events). Wait by pumping the port.
+  Cross-check a suspicious gap against the nRF log before calling it a firmware fault.
 * **Three-way logging** (`bench_log.py`, light sensor thread) is what makes a cross-processor
   finding provable: app over `adb logcat`, nRF and Himax consoles in one file. Its stamps are
   read time and the nRF flushes its deferred log in bursts, so order events by the Himax

@@ -12,7 +12,7 @@ shows `setop`. Stamps are the bench PC's clock (NZDT); the device keeps UTC.
 
 | Issue | Result | Log |
 |---|---|---|
-| #152 Watchdog reset rewinds the clock | Reproduces. Clock at `2026-10-02T01:25:50Z`, then `reset` + `dpd`: the board announces `Wake 2024-01-01T00:00:02Z`. | [152](152_rtc_reset_by_watchdog.txt) |
+| #152 Watchdog reset rewinds the clock | Reproduces. Clock at `2026-10-02T01:25:50Z`, then `reset` + `dpd`: the board announces `Wake 2024-01-01T00:00:02Z`. | [152](152_rtc_reset_by_watchdog.txt), [after an update](152_after_firmware_update.txt) |
 | #153 EXIF Model on RP3 photos | Reproduces. A photo taken by the RP3 image (Software `WW500_C02 14:06:13`) says Model `WW500 HM0360`. | [153](153_exif_model_rp3.txt), [photo](ABF08401.JPG) |
 | #158 AE lost across DPD | Reproduces. Four wakes in lamp light all start from 2368 lines; the first frame of each reads p75 156 to 236 against a target of 110. | [158](158_ae_restarts_each_wake.txt) |
 | #211 MD sensitivity on the RP3 image | Reproduces. `md 2` is `Command not recognised` and op17 = 3 is never applied. On the HM0360 image both work. | [211](211_md_sensitivity_rp3.txt) |

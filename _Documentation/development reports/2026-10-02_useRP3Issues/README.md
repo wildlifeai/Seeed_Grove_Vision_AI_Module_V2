@@ -10,6 +10,9 @@
 Some HM0360-related code is inadvertently compiled out when the RP3 camera is selected. This is because code is
 inside `#define USE_HM0360` switches instead of `#if defined(USE_HM0360) || defined(USE_HM0360_MD)`
 
+That is, when the main camera is the RP3 and the HM0360 is still needed for motion detection, 
+some commands are accidently disabled. This is fixed by the current development work.
+
 __How?__
 
 The ww500_md makefile (`ww500_md.mk:247-264`) gives the two builds these defines:
@@ -58,7 +61,9 @@ and is guarded by `#ifdef USE_HM0360` alone is missing from the RP3 build.
 5. The message printed before DPD (`hm0360_md_prepare()`) leaves out the sensitivity in the RP3 build, which is
    correct today but would be wrong once op 17 is applied.
 
-## Possible code locations requiring a fix
+## Code locations requiring a fix
+
+_This section describes where changes were required - these have now all been made._
 
 This is the survey as it was before the changes below. Line numbers are on branch `261002_useRP3Fixes` at 1cc34fd0, paths under
 `EPII_CM55M_APP_S/app/ww_projects/ww500_md/`. I have listed every camera conditional in ww500_md (outside the
@@ -134,7 +139,28 @@ for telemetry), `:2744` (prepare HM0360 for MD before DPD); `ww500_md.c:247` (HM
 |---|---|
 | `image_task.c:2275-2283` | EXIF Model, issue #153. Test `USE_RP3` (and `USE_RP2`) before the HM0360, or use `#if defined(USE_HM0360)` alone. EXIF fields are a cross-repo contract (website `camera_variant`), but this is a bug fix to the documented values, not a change to them |
 
-### Testing
+
+## Changes made (2 October 2026)
+
+Issues #211 and #153 are fixed together on branch `261002_useRP3Fixes`.
+
+| File | Change | Survey item |
+|---|---|---|
+| `hm0360_md.c`, `hm0360_md.h` | New `hm0360_md_setSensitivity()`, with the four sensitivity tables and `MD_SENSITIVITY_CONFIG_E` moved here. The writes are bracketed by `saveMainCameraConfig()`/`restoreMainCameraConfig()` | A |
+| `cis_sensor/cis_hm0360/cisdp_sensor.c`, `.h` | `cisdp_sensor_set_md_sensitivity()`, its tables and the enum removed, with a comment saying where they went | A |
+| `image_task.c` `image_sleepNow()` | op 17 applied before `hm0360_md_prepare()` in every build (inner `#ifdef USE_HM0360` removed) | B5 |
+| `hm0360_md.c` `hm0360_md_prepare()` | op 17 read and reported in every build; `MD_SENSITIVITY_OFF` used instead of the literal 0 | B6, B7 |
+| `CLI-commands.c` | `md` and `inithm0360` in both builds. `md` now says if the HM0360 did not respond (op 17 is still saved) | B1 to B4 |
+| `image_task.c` `configure_image_sensor()` | Cold and warm init call the new function, still HM0360 build only; TODOs replaced by a comment (#250 item 2) | C1, C2 |
+| `image_task.c` EXIF Model | Tests `USE_RP3`, then `USE_RP2`, then `USE_HM0360` | F (#153) |
+| `.agents/skills/references/git-and-build.md` | Build invariant: what the defines mean and which test to use | |
+
+The op 17 and EXIF Model values themselves are unchanged (cross-repo contracts): the RP3 build now does what
+`config_file.md` and the website already say.
+
+## Testing
+
+_These are tests that I asked for to confirm that the code changes have worked._
 
 Console tests, on the Himax console (921600 baud). From the app's Engineer Console, put `AI ` in front of each
 command. Run them on the RP3 image first, because that is where behaviour changes. Then run them on the HM0360
@@ -159,34 +185,14 @@ Optional, from the app: in the motion test, change the sensitivity. On the RP3 i
 `MD sensitivity set to <n>` where it used to show `Unrecognised`. With the device on a bench, High should pick up a
 smaller or more distant movement than Low.
 
-## Changes made (2 October 2026)
-
-Issues #211 and #153 are fixed together on branch `261002_useRP3Fixes`. Not yet built or bench-tested.
-
-| File | Change | Survey item |
-|---|---|---|
-| `hm0360_md.c`, `hm0360_md.h` | New `hm0360_md_setSensitivity()`, with the four sensitivity tables and `MD_SENSITIVITY_CONFIG_E` moved here. The writes are bracketed by `saveMainCameraConfig()`/`restoreMainCameraConfig()` | A |
-| `cis_sensor/cis_hm0360/cisdp_sensor.c`, `.h` | `cisdp_sensor_set_md_sensitivity()`, its tables and the enum removed, with a comment saying where they went | A |
-| `image_task.c` `image_sleepNow()` | op 17 applied before `hm0360_md_prepare()` in every build (inner `#ifdef USE_HM0360` removed) | B5 |
-| `hm0360_md.c` `hm0360_md_prepare()` | op 17 read and reported in every build; `MD_SENSITIVITY_OFF` used instead of the literal 0 | B6, B7 |
-| `CLI-commands.c` | `md` and `inithm0360` in both builds. `md` now says if the HM0360 did not respond (op 17 is still saved) | B1 to B4 |
-| `image_task.c` `configure_image_sensor()` | Cold and warm init call the new function, still HM0360 build only; TODOs replaced by a comment (#250 item 2) | C1, C2 |
-| `image_task.c` EXIF Model | Tests `USE_RP3`, then `USE_RP2`, then `USE_HM0360` | F (#153) |
-| `.agents/skills/references/git-and-build.md` | Build invariant: what the defines mean and which test to use | |
-
-The op 17 and EXIF Model values themselves are unchanged (cross-repo contracts): the RP3 build now does what
-`config_file.md` and the website already say.
-
-Still to do: build both variants, then tests T1 to T9 above.
-
 ## Text for the GitHub issues
 
-To paste as comments once the PR is open. Replace `#PR` with the PR number. The README link points at the branch, so
-it works before the merge.
+_This work will be submitted as PR #259. It should resolve (fully or partly) some isses, 
+and I will be pasting the following comments into these issues:_
 
 ### Issue #211
 
-> Fixed in #PR (branch `261002_useRP3Fixes`).
+> Fixed in #PR259 (branch `261002_useRP3Fixes`).
 >
 > The sensitivity setter was in the HM0360 sensor driver, which the RP3 build does not compile. It is now
 > `hm0360_md_setSensitivity()` in `hm0360_md.c`, which both builds compile, together with its four register tables
@@ -208,7 +214,7 @@ it works before the merge.
 
 ### Issue #153
 
-> Fixed in #PR (branch `261002_useRP3Fixes`).
+> Fixed in #PR259 (branch `261002_useRP3Fixes`).
 >
 > The EXIF Model block in `image_task.c` now tests `USE_RP3` first, then `USE_RP2`, then `USE_HM0360`. The RP builds
 > also define `USE_HM0360_MD`, for motion detection, and the old test for it came first. The strings are unchanged, so
@@ -219,7 +225,7 @@ it works before the merge.
 ### Issue #250 (second item only)
 
 > The two `TODO should be #if defined(USE_HM0360) || defined(USE_HM0360_MD)` comments in `image_task.c` are removed in
-> #PR. As this issue says, doing what they said would have broken the RP3 build. Instead, the setter moved to
+> #PR259. As this issue says, doing what they said would have broken the RP3 build. Instead, the setter moved to
 > `hm0360_md.c` (#211), and op 17 is applied before each DPD in both builds. The two calls in
 > `configure_image_sensor()` stay HM0360-build only, with a comment saying why. Ticking this item; the rest of #250
 > is unchanged.

@@ -84,6 +84,8 @@ building on any of them:
   to the HM0360 outside the pair talks to the wrong device or at the wrong speed. #238 cost a
   bench session and a PR round.
 * **GPIO0, GPIO1 and GPIO2 each appear on two pins** (PB6/PB9, PB7/PB10, PB8/PB11; HX6538
-  datasheet 4.5, note 3), and they are one signal each. In `ww500_md` PB7 (SENSOR_ENABLE,
-  `rp_sensor_enable()`) and the blue LED on PB10 are both GPIO1, so they move together. Found
-  in `ww500_minimal`, 27 Sep 2026; `ww500_md`'s pin assignments are deliberately unchanged.
+  datasheet 4.5, note 3), and they are one signal each. In `ww500_md` PB7 is SENSOR_ENABLE
+  (GPIO1, `rp_sensor_enable()`), so PB10 must not be made GPIO1 as well (the old blue-LED code
+  did that; it was removed on 2 Oct 2026). Found in `ww500_minimal`, 27 Sep 2026. Since 2 Oct 2026
+  `pinmux_init()` makes PB7 an output, low, in every build (not with `ENABLESWD`), so PB7
+  (SWCLK) stops being SWD once the app starts: SWD can only connect just after reset.

@@ -334,6 +334,9 @@ int cisdp_sensor_init(bool sensor_init) {
 
 #if defined  (WW500)
 #pragma message "WW500 in IMX708 driver"     // Need a delay here for the power to come on!
+    // SENSOR_ENABLE (the camera's power enable) is not handled in this driver: it is common code in ww500_md, set up
+    // as an output, low, in every build by pinmux_init() (ww500_md.c), and switched by rp_sensor_enable()
+    // (pinmux_cfg.c) before this is called. This only waits for the camera's power to come up.
     vTaskDelay(pdMS_TO_TICKS(CIS_POWERUP_DELAY));
 
 #elif defined(GROVE_VISION_AI)

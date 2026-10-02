@@ -68,6 +68,68 @@ static HX_CIS_SensorSetting_t HM0360_md_init_setting[] = {
 #include "../cis_hm0360/HM0360_OSC_Bayer_640x480_setA_VGA_setB_QVGA_md_8b_ParallelOutput_R2.i"
 };
 
+// Writes to the Motion detection registers - see data sheet section 4.1
+// There are 3 groups, for low, medium and high sensitivity.
+// This does both contexts A & B
+static HX_CIS_SensorSetting_t HM0360_md_sensitivity_low[] = {
+		{HX_CIS_I2C_Action_W, 0x3550, 0x30},	// Context A MD_TH_STR_L [0x30/0x20/0x10]
+		{HX_CIS_I2C_Action_W, 0x354f, 0x30},	// Context A MD_TH_STR_H [0x30/0x20/0x10]
+		{HX_CIS_I2C_Action_W, 0x354b, 0x41},	// Context A MD_LIGHT_COEF [0x41/0x31/0x21]
+		//{HX_CIS_I2C_Action_W, 0x354c, 0x04},	// Context A MD_BLOCK_NUM_TH
+		//{HX_CIS_I2C_Action_W, 0x354d, 0xe0},	// Context A ROI_V [7:4] ROI_END_V, [3:0] ROI_START_V - so 14:0
+		//{HX_CIS_I2C_Action_W, 0x354e, 0xf0},	// Context A ROI_H [7:4] ROI_END_H, [3:0] ROI_START_H - So 15:0
+
+		{HX_CIS_I2C_Action_W, 0x209a, 0x00},	// MD_IIR_PARAMETER (for context A&B) {0x00, 0x80, 0xf0}
+
+		{HX_CIS_I2C_Action_W, 0x35aa, 0x30},	// Context B MD_TH_STR_L [0x30/0x20/0x10]
+		{HX_CIS_I2C_Action_W, 0x35a9, 0x30},	// Context B MD_TH_STR_H [0x30/0x20/0x10]
+		{HX_CIS_I2C_Action_W, 0x35a5, 0x41},	// Context B MD_LIGHT_COEF [0x41/0x31/0x21]
+		//{HX_CIS_I2C_Action_W, 0x35a6, 0x04},	// Context B MD_BLOCK_NUM_TH
+		//{HX_CIS_I2C_Action_W, 0x35a7, 0xe0},	// Context B ROI_V [7:4] ROI_END_V, [3:0] ROI_START_V - so 14:0
+		//{HX_CIS_I2C_Action_W, 0x35a8, 0xf0},	// Context B ROI_H [7:4] ROI_END_H, [3:0] ROI_START_H - So 15:0
+};
+
+static HX_CIS_SensorSetting_t HM0360_md_sensitivity_medium[] = {
+		{HX_CIS_I2C_Action_W, 0x3550, 0x20},	// Context A MD_TH_STR_L [0x30/0x20/0x10]
+		{HX_CIS_I2C_Action_W, 0x354f, 0x20},	// Context A MD_TH_STR_H [0x30/0x20/0x10]
+		{HX_CIS_I2C_Action_W, 0x354b, 0x31},	// Context A MD_LIGHT_COEF [0x41/0x31/0x21]
+		//{HX_CIS_I2C_Action_W, 0x354c, 0x04},	// Context A MD_BLOCK_NUM_TH
+		//{HX_CIS_I2C_Action_W, 0x354d, 0xe0},	// Context A ROI_V [7:4] ROI_END_V, [3:0] ROI_START_V - so 14:0
+		//{HX_CIS_I2C_Action_W, 0x354e, 0xf0},	// Context A ROI_H [7:4] ROI_END_H, [3:0] ROI_START_H - So 15:0
+
+		{HX_CIS_I2C_Action_W, 0x209a, 0x80},	// MD_IIR_PARAMETER (for context A&B) {0x00, 0x80, 0xf0}
+
+		{HX_CIS_I2C_Action_W, 0x35aa, 0x20},	// Context B MD_TH_STR_L [0x30/0x20/0x10]
+		{HX_CIS_I2C_Action_W, 0x35a9, 0x20},	// Context B MD_TH_STR_H [0x30/0x20/0x10]
+		{HX_CIS_I2C_Action_W, 0x35a5, 0x31},	// Context B MD_LIGHT_COEF [0x41/0x31/0x21]
+		//{HX_CIS_I2C_Action_W, 0x35a6, 0x04},	// Context B MD_BLOCK_NUM_TH
+		//{HX_CIS_I2C_Action_W, 0x35a7, 0xe0},	// Context B ROI_V [7:4] ROI_END_V, [3:0] ROI_START_V - so 14:0
+		//{HX_CIS_I2C_Action_W, 0x35a8, 0xf0},	// Context B ROI_H [7:4] ROI_END_H, [3:0] ROI_START_H - So 15:0
+};
+
+static HX_CIS_SensorSetting_t HM0360_md_sensitivity_high[] = {
+		{HX_CIS_I2C_Action_W, 0x3550, 0x10},	// Context A MD_TH_STR_L [0x30/0x20/0x10]
+		{HX_CIS_I2C_Action_W, 0x354f, 0x10},	// Context A MD_TH_STR_H [0x30/0x20/0x10]
+		{HX_CIS_I2C_Action_W, 0x354b, 0x21},	// Context A MD_LIGHT_COEF [0x41/0x31/0x21]
+		//{HX_CIS_I2C_Action_W, 0x354c, 0x04},	// Context A MD_BLOCK_NUM_TH
+		//{HX_CIS_I2C_Action_W, 0x354d, 0xe0},	// Context A ROI_V [7:4] ROI_END_V, [3:0] ROI_START_V - so 14:0
+		//{HX_CIS_I2C_Action_W, 0x354e, 0xf0},	// Context A ROI_H [7:4] ROI_END_H, [3:0] ROI_START_H - So 15:0
+
+		{HX_CIS_I2C_Action_W, 0x209a, 0xf0},	// MD_IIR_PARAMETER (for context A&B) {0x00, 0x80, 0xf0}
+
+		{HX_CIS_I2C_Action_W, 0x35aa, 0x10},	// Context B MD_TH_STR_L [0x30/0x20/0x10]
+		{HX_CIS_I2C_Action_W, 0x35a9, 0x10},	// Context B MD_TH_STR_H [0x30/0x20/0x10]
+		{HX_CIS_I2C_Action_W, 0x35a5, 0x21},	// Context B MD_LIGHT_COEF [0x41/0x31/0x21]
+		//{HX_CIS_I2C_Action_W, 0x35a6, 0x04},	// Context B MD_BLOCK_NUM_TH
+		//{HX_CIS_I2C_Action_W, 0x35a7, 0xe0},	// Context B ROI_V [7:4] ROI_END_V, [3:0] ROI_START_V - so 14:0
+		//{HX_CIS_I2C_Action_W, 0x35a8, 0xf0},	// Context B ROI_H [7:4] ROI_END_H, [3:0] ROI_START_H - So 15:0
+};
+
+static HX_CIS_SensorSetting_t HM0360_md_sensitivity_off[] = {
+		{HX_CIS_I2C_Action_W, 0x354b, 0x00},	// Context A MD_LIGHT_COEF [0x41/0x31/0x21]
+		{HX_CIS_I2C_Action_W, 0x35a5, 0x00},	// Context B MD_LIGHT_COEF [0x41/0x31/0x21]
+};
+
 /*************************************** Local Function Definitions *******************/
 
 /**
@@ -797,31 +859,23 @@ HX_CIS_ERROR_E hm0360_md_prepare(bool cameraSystemEnabled, uint16_t mdFrameInter
 	// Maybe we should remove the md 0 value as it is a second way to disable MD.
 
 	// The message reports whether motion detection can really happen (28 Sep 2026). Sensitivity 0
-	// (OP_PARAMETER_MD_SENSITIVITY, op 17) sets MD_LIGHT_COEF to 0 in cisdp_sensor_set_md_sensitivity(), so the
+	// (OP_PARAMETER_MD_SENSITIVITY, op 17) sets MD_LIGHT_COEF to 0 in hm0360_md_setSensitivity(), so the
 	// sensor never raises a motion interrupt even though the frame interval is set. The sensor set-up below is unchanged:
-	// it still takes its frames at the interval. Only the HM0360 build applies op 17 (image_task.c); in the RP builds the
-	// sensor keeps the register table's sensitivity whatever op 17 says, so there it is not reported.
-#ifdef USE_HM0360
+	// it still takes its frames at the interval. image_sleepNow() applies op 17 just before this in every build
+	// (issue #211, 2 Oct 2026).
 	sensitivity = fatfs_getOperationalParameter(OP_PARAMETER_MD_SENSITIVITY);
-#else
-	sensitivity = 1;	// op 17 is not applied in this build: the register table's (low) sensitivity is in use
-#endif // USE_HM0360
 
 	if (mdInterval == 0) {
 		dbg_printf(DBG_LESS_INFO, "   HM0360 Motion Detection off (%s).\r\n",
 				cameraSystemEnabled ? "the frame interval, op 11, is 0" : "the camera system is disabled");
 	}
-	else if (sensitivity == 0) {	// MD_SENSITIVITY_OFF (cis_hm0360/cisdp_sensor.h, not visible in the RP builds)
+	else if (sensitivity == MD_SENSITIVITY_OFF) {
 		dbg_printf(DBG_LESS_INFO, "   HM0360 Motion Detection off (the sensitivity, op 17, is 0), frames every %dms.\r\n",
 				mdFrameInterval);
 	}
 	else {
-#ifdef USE_HM0360
 		dbg_printf(DBG_LESS_INFO, "   HM0360 Motion Detection on! %dms frame interval, sensitivity %d\r\n",
 				mdFrameInterval, (int) sensitivity);
-#else
-		dbg_printf(DBG_LESS_INFO, "   HM0360 Motion Detection on! %dms frame interval\r\n", mdFrameInterval);
-#endif // USE_HM0360
 	}
 
 	saveMainCameraConfig();
@@ -859,6 +913,56 @@ HX_CIS_ERROR_E hm0360_md_reInitialise(void) {
 		dbg_printf(DBG_LESS_INFO, "OK\n");
 		hm0360_present = true;
 		ret = HX_CIS_NO_ERROR;
+	}
+
+	restoreMainCameraConfig();
+
+	return ret;
+}
+
+/**
+ * Programs one of 4 alternative motion detection sensitivity settings
+ * See Himax app note "HM0360 Motion Detection Setting"
+ *
+ * Was cisdp_sensor_set_md_sensitivity() in the HM0360 sensor driver, which the RP builds do not compile, so op 17
+ * and the 'md' command did nothing on the RP3 camera (issue #211). Moved here on 2 Oct 2026. The writes are bracketed
+ * by saveMainCameraConfig()/restoreMainCameraConfig(), so in the RP builds they go to the HM0360 at 100 kHz and the
+ * bus is then put back to the RP camera.
+ *
+ * @param option - one of MD_SENSITIVITY_CONFIG_E
+ * @return error code
+ */
+HX_CIS_ERROR_E hm0360_md_setSensitivity(MD_SENSITIVITY_CONFIG_E option) {
+	HX_CIS_ERROR_E ret;
+
+	if (option < MD_SENSITIVITY_NUMBER) {
+		xprintf("HM0360 MD sensitivity %d\n", option);
+	}
+
+	saveMainCameraConfig();
+
+	switch (option) {
+
+	case MD_SENSITIVITY_OFF:
+		ret = hx_drv_cis_setRegTable(HM0360_md_sensitivity_off, HX_CIS_SIZE_N(HM0360_md_sensitivity_off, HX_CIS_SensorSetting_t));
+		break;
+
+	case MD_SENSITIVITY_LOW:
+		ret = hx_drv_cis_setRegTable(HM0360_md_sensitivity_low, HX_CIS_SIZE_N(HM0360_md_sensitivity_low, HX_CIS_SensorSetting_t));
+		break;
+
+	case MD_SENSITIVITY_MEDIUM:
+		ret = hx_drv_cis_setRegTable(HM0360_md_sensitivity_medium, HX_CIS_SIZE_N(HM0360_md_sensitivity_medium, HX_CIS_SensorSetting_t));
+		break;
+
+	case MD_SENSITIVITY_HIGH:
+		ret = hx_drv_cis_setRegTable(HM0360_md_sensitivity_high, HX_CIS_SIZE_N(HM0360_md_sensitivity_high, HX_CIS_SensorSetting_t));
+		break;
+
+	default:
+		// should not happen
+		ret = HX_CIS_ERROR_INVALID_PARAMETERS;
+		break;
 	}
 
 	restoreMainCameraConfig();

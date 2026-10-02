@@ -11,7 +11,8 @@ Some HM0360-related code is inadvertently compiled out when the RP3 camera is se
 inside `#define USE_HM0360` switches instead of `#if defined(USE_HM0360) || defined(USE_HM0360_MD)`
 
 That is, when the main camera is the RP3 and the HM0360 is still needed for motion detection, 
-some commands are accidently disabled. This is fixed by the current development work.
+some commands are accidently disabled. This work fixes thes bugs. Issues #211, #153 and (partly) #250 are
+fixed by this work.
 
 __How?__
 

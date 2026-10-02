@@ -23,7 +23,9 @@ Also seen in the same logs:
 - **#56 (closed in December 2025) still happens.** After DPD the clock carries on from the time it
   went to sleep, so each sleep is lost: 29 s over four short sleeps. A photo from a motion wake
   carries the time the camera went to sleep unless the BLE processor's time update lands first.
-  [56](56_rtc_loses_dpd_time.txt)
+  [56](56_rtc_loses_dpd_time.txt). Re-tested that afternoon on the CI build: after a motion or BLE wake
+  the clock never catches up, so the error grows with every sleep; after a timer wake only the first
+  reading is stale and the clock catches up within about 2 s ([56, motion and timer](56_retest_motion_vs_timer.txt)).
 - **#245:** two 40 s timer sleeps woke after 37.3 s and 37.9 s ([247](247_md_off_frames.txt)).
 
 ## Files

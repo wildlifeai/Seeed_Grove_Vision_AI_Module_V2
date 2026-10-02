@@ -49,6 +49,10 @@ python swdflash.py --bin="4k_dummy0xFF.img" --addr=0x00fff000
 ```
 4k_dummy0xFF.img is a 4K file with all contents being 0xFF.
 
+**WW500 note:** the RP3 (colour) image makes PB7 (SWCLK) a GPIO as soon as it starts, so while it runs SWD only connects
+in the moment after reset. The HM0360 image leaves PB7 alone. See [SWD100_SWD_Programmer.md](SWD100_SWD_Programmer.md)
+and #200.
+
 
 ![bootloader memory map](images/bootloader.png)
 

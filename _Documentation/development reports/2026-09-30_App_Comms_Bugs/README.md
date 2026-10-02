@@ -127,6 +127,11 @@ removed from `ww500_md` altogether. That also removes about 600 ms of busy-waiti
 pattern, which flashed LEDs that were not set up). The IMX708 driver had no SENSOR_ENABLE code; a comment there now says it is common code. Once PB7 is a GPIO, SWD
 can only connect in the short time between the bootloader and `pinmux_init()`.
 
+**Changed the same day, for #200:** the HM0360 build leaves PB7 as SWCLK again, so SWD still works on the night image,
+as #200 planned; only the RP builds make SENSOR_ENABLE an output, low, from boot. Holding it low in the HM0360 build only
+matters if an RP camera is fitted, and nobody has measured whether that saves current. If a measurement shows it does,
+the condition in `pinmux_init()` is the one place to change.
+
 **How the I2C speed now works (item 2).** `platform_driver_init()` (board code, shared by all apps, unchanged) already
 sets the sensor I2C bus to 400 kHz. `ww500_md.c` now slows it to 100 kHz only in the HM0360 build, where the HM0360 is the
 main camera; the second, redundant setting in `checkForCameras()` was removed. In the RP builds the outermost
@@ -162,7 +167,7 @@ Code, all in `EPII_CM55M_APP_S/app/ww_projects/ww500_md`:
 | Sensor I2C at 400 kHz in the RP builds, 100 kHz for each HM0360 access (and throughout the HM0360 build) | `ww500_md.c`, `hm0360_md.c` | #249 |
 | RP3 driver progress messages compiled out (`CISDP_DBG_TYPE`), failures and `Initialising IMX708` kept | `cis_sensor/cis_imx708/cisdp_sensor.c` | #249 |
 | `FreeRTOS.h` first among the includes | `cis_file.c`, `cis_sensor/cis_hm0360/`, `cis_imx219/` and `cis_imx708/cisdp_sensor.c`, `fatfs_task.c`, `freertos_app.c`, `if_task.c`, `image_task.c`, `img_correct.c`, `timer_task.c` | From `ww500_minimal` |
-| SENSOR_ENABLE an output, low, in every build (2 Oct) | `ww500_md.c` (`pinmux_init()`, `checkForCameras()`), `cis_sensor/cis_imx708/cisdp_sensor.c` (comment) | From `ww500_minimal` |
+| SENSOR_ENABLE an output, low, in the RP builds (2 Oct; the HM0360 build keeps PB7 as SWCLK, #200) | `ww500_md.c` (`pinmux_init()`, `checkForCameras()`), `cis_sensor/cis_imx708/cisdp_sensor.c` (comment) | From `ww500_minimal` |
 | Unused LED code removed (`ledInit()`, `app_ledGreen/Blue()`, `showResetOnLeds()`, their defines), about 600 ms less at each cold boot (2 Oct) | `ww500_md.c`, `ww500_md.h` | No longer needed (Charles) |
 | Boot timing to the first frame (`Boot timing` console line, `BOOT_TIMING_ENABLED`) | new `boot_timing.c/.h`; marks in `ww500_md.c`, `fatfs_task.c`, `image_task.c` | Measuring #249 and #251 |
 

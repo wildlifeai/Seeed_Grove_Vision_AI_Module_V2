@@ -183,14 +183,14 @@ static void pinmux_init(void) {
 
 	hx_drv_scu_set_all_pinmux_cfg(&pinmux_cfg, 1);
 
-#if defined(WW500) && !defined(ENABLESWD)
-	// SENSOR_ENABLE (PB7 on WW500_C00) is an output, low, in every build (2 Oct 2026). In the RP builds the camera
-	// is then powered only while in use (rp_sensor_enable() in checkForCameras() and image_task.c). In the HM0360
-	// build it keeps an RP camera that may be fitted powered down. Done after hx_drv_scu_set_all_pinmux_cfg(),
-	// which would otherwise write back PB7's earlier function. Not with ENABLESWD, where PB7 is SWCLK. Note that
-	// once PB7 is a GPIO, SWD can only connect in the short time before this runs.
+#if defined(WW500) && !defined(USE_HM0360) && !defined(ENABLESWD)
+	// SENSOR_ENABLE (PB7 on WW500_C00) is an output, low, from boot in the RP builds (2 Oct 2026), so the camera is
+	// powered only while in use (rp_sensor_enable() in checkForCameras() and image_task.c). Done after
+	// hx_drv_scu_set_all_pinmux_cfg(), which would otherwise write back PB7's earlier function. Once PB7 is a GPIO,
+	// SWD can only connect in the short time before this runs. The HM0360 build leaves PB7 as SWCLK, so SWD keeps
+	// working on that image (#200); so does a build with ENABLESWD.
 	rp_sensor_enable(false);
-#endif // WW500 && !ENABLESWD
+#endif // WW500 && !USE_HM0360 && !ENABLESWD
 }
 
 
@@ -273,7 +273,7 @@ static void checkForCameras(void) {
 	// Only needed if using a RP camera
  	rp_sensor_enable(false);	// Negate SENSOR_ENABLE
 #else
- 	// SENSOR_ENABLE is already an output, low, in this build too: pinmux_init() sets it for every build
+ 	// The HM0360 build leaves SENSOR_ENABLE (PB7) as SWCLK, so SWD keeps working (#200)
 #endif
 }
 

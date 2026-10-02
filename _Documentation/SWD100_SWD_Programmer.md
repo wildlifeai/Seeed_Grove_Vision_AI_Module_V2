@@ -59,6 +59,11 @@ You can the program the bootloader firmware image into the WW50 using section 6 
 
 (Later I might merge that document with this one...)
 
+**If SWD will not connect:** the RP3 (colour) image makes PB7, which is SWCLK, a GPIO as soon as it starts, to drive
+SENSOR_ENABLE, so SWD stops working once that image runs. Connect in the moment after reset, before the application
+starts, or use the HM0360 image, which leaves PB7 alone, or a build with `ENABLESWD`. A board that will not connect may
+simply be running the RP3 image (#200).
+
 
 ## HX6538 Bootloaders
 

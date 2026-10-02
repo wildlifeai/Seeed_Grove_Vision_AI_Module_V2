@@ -383,7 +383,7 @@ shared behaviour, so build and test both camera variants after making it.
 
 **Status (30 September 2026):** items 2 to 5 have been made in `ww500_md` (issue #249, branch `260930_appCommsBugs`,
 built and run on the bench with the RP3 build; item 5 only in the RP3 driver). Item 1: SENSOR_ENABLE is now an output, low, in
-every `ww500_md` build (2 October 2026); the LED pin changes are not transferred: `ww500_md` never used the blue LED on PB10, and its
+the RP builds of `ww500_md` (2 October 2026; the HM0360 build leaves PB7 as SWCLK, #200); the LED pin changes are not transferred: `ww500_md` never used the blue LED on PB10, and its
 unused LED code has since been removed (2 October 2026). See `_Documentation/development reports/2026-09-30_App_Comms_Bugs/README.md`, "Transfer
 improvements from `ww500_minimal`".
 

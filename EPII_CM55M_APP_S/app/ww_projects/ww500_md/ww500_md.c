@@ -88,9 +88,6 @@
 // Enable SWD functions on PB6, PB7, PB8
 //#define ENABLESWD
 
-// Flash time at reset
-#define LED_DELAY						50
-
 // Uncomment this to print linker stats
 //#define PRINTLINKERSTATS
 
@@ -136,8 +133,6 @@ static bool resetRequested = false;
 
 static void pinmux_init(void);
 static void initVersionString(void);
-static void ledInit(void);
-static void showResetOnLeds(uint8_t numFlashes);
 static void checkForCameras(void);
 
 #ifdef PRINTLINKERSTATS
@@ -163,12 +158,9 @@ static void pinmux_init(void) {
 
 #ifdef WW500
 	// WW500 is defined in ww.mk
-	// Init PB10 for sensor enable pin.
+	// SENSOR_ENABLE (the RP camera enable) is set up below, after the pin mux is written.
 	// This differs from the Grove AI V2, in which sensor enable is PA1.
 	// But I need PA1 to control the power supply switches
-
-	// later: pretty sure this is not required as it is done by rp_sensor_enable()
-	//rp_sensor_enable_gpio1_pinmux_cfg(&pinmux_cfg);
 #else
 	// For Seeed Grove Vision AI V2 only
 	// Init AON_GPIO1 pin mux to PA1 for OV5647 enable pin
@@ -191,61 +183,17 @@ static void pinmux_init(void) {
 
 	hx_drv_scu_set_all_pinmux_cfg(&pinmux_cfg, 1);
 
-	// TODO - properly intergrate these in the pattern above
-	// Activate green and blue LEDs for user feedback
-	ledInit();
-
-//#ifdef WW500
-//	// Sets initial state of the SENSOR_ENABLE signal
-//	sensor_enable(false);
-//#endif // WW500
+#if defined(WW500) && !defined(ENABLESWD)
+	// SENSOR_ENABLE (PB7 on WW500_C00) is an output, low, in every build (2 Oct 2026). In the RP builds the camera
+	// is then powered only while in use (rp_sensor_enable() in checkForCameras() and image_task.c). In the HM0360
+	// build it keeps an RP camera that may be fitted powered down. Done after hx_drv_scu_set_all_pinmux_cfg(),
+	// which would otherwise write back PB7's earlier function. Not with ENABLESWD, where PB7 is SWCLK. Note that
+	// once PB7 is a GPIO, SWD can only connect in the short time before this runs.
+	rp_sensor_enable(false);
+#endif // WW500 && !ENABLESWD
 }
 
-/**
- * Initialise GPIO pins so they can be used to indicate activity during testing
- *
- * 	PB9  = LED3 (green), SENSOR_GPIO (connects to a normally n/c pin on the sensor connector)
- *  PB10 = LED2 (blue),  SENSOR_ENABLE (normally the RP camera enable signal)
- */
-static void ledInit(void) {
 
-#ifdef PB9ISLEDGREEN
-	// PB9 = LED3 (green), SENSOR_GPIO (connects to a normally n/c pin on the sensor connector)
-    hx_drv_gpio_set_output(GPIO0, GPIO_OUT_LOW);
-    hx_drv_scu_set_PB9_pinmux(SCU_PB9_PINMUX_GPIO0, 1);
-	hx_drv_gpio_set_out_value(GPIO0, GPIO_OUT_LOW);
-#endif // PB9ISLEDGREEN
-
-#ifdef PB10ISLEDBLUE
-	// PB10 = LED2(blue), SENSOR_ENABLE
-	// This is normally the camera enable signal (active high) so would not normally be an LED output!
-    hx_drv_gpio_set_output(GPIO1, GPIO_OUT_LOW);
-    hx_drv_scu_set_PB10_pinmux(SCU_PB10_PINMUX_GPIO1, 1);
-	hx_drv_gpio_set_out_value(GPIO1, GPIO_OUT_LOW);
-#endif //PB10ISLEDBLUE
-}
-
-/**
- * Flash a distinctive pattern on all LEDs at reset,
- * to show life
- *
- * TODO - use the flash timer mechanism!!!
- */
-static void showResetOnLeds(uint8_t numFlashes) {
-
-    for (uint8_t i=0; i < numFlashes; i++) {
-
-    	app_ledGreen(true);
-    	hx_drv_timer_cm55s_delay_ms(LED_DELAY, TIMER_STATE_DC);
-    	app_ledBlue(true);
-    	hx_drv_timer_cm55s_delay_ms(LED_DELAY, TIMER_STATE_DC);
-
-    	app_ledGreen(false);
-    	hx_drv_timer_cm55s_delay_ms(LED_DELAY, TIMER_STATE_DC);
-    	app_ledBlue(false);
-    	hx_drv_timer_cm55s_delay_ms(LED_DELAY, TIMER_STATE_DC);
-    }
-}
 
 
 /**
@@ -325,9 +273,7 @@ static void checkForCameras(void) {
 	// Only needed if using a RP camera
  	rp_sensor_enable(false);	// Negate SENSOR_ENABLE
 #else
- 	// TODO - we could disable even if not using RP camera so this pin is set to output, 0
- 	// However enabling this means the SWD debugger won't work
- 	//rp_sensor_enable(false);	// Negate SENSOR_ENABLE
+ 	// SENSOR_ENABLE is already an output, low, in this build too: pinmux_init() sets it for every build
 #endif
 }
 
@@ -553,34 +499,6 @@ char * app_get_camera_string(void) {
 }
 
 
-/**
- * activates the green LED
- * This is on PB9
- */
-void app_ledGreen(bool on) {
-#ifdef PB9ISLEDGREEN
-	if (on) {
-		hx_drv_gpio_set_out_value(GPIO0, GPIO_OUT_HIGH);
-	}
-	else {
-		hx_drv_gpio_set_out_value(GPIO0, GPIO_OUT_LOW);
-	}
-#endif // PB9ISLEDGREEN
-}
-/**
- * activates the blue LED
- * This is on PB10
- */
-void app_ledBlue(bool on) {
-#ifdef PB10ISLEDBLUE
-	if (on) {
-		hx_drv_gpio_set_out_value(GPIO1, GPIO_OUT_HIGH);
-	}
-	else {
-		hx_drv_gpio_set_out_value(GPIO1, GPIO_OUT_LOW);
-	}
-#endif // PB10ISLEDBLUE
-}
 
 /**
  * Calculates an elapsed time
@@ -653,9 +571,6 @@ int app_main(void){
 	pinmux_init();
 	selfTest_init();
 
-	app_ledGreen(false);	// On to show camera activity
-	app_ledBlue(true);		// On to show processor is active (not in DPD)
-
 	XP_YELLOW;
 	xprintf("\n**** WW500 MD. (%s) Built: %s %s ****\r\n\n", app_get_board_name_string(), __TIME__, __DATE__);
 	XP_WHITE;
@@ -705,8 +620,6 @@ int app_main(void){
 	boot_timing_mark(BOOT_TIMING_CAMERAS_CHECKED);
 
 	if ((wakeup_event == PMU_WAKEUP_NONE) && (wakeup_event1 == PMU_WAKEUPEVENT1_NONE)) {
-		showResetOnLeds(3);	// pattern on LEDs to show cold boot
-
 		XP_LT_BLUE;
 		xprintf("\n### Cold Boot ###\n");
 		XP_WHITE;

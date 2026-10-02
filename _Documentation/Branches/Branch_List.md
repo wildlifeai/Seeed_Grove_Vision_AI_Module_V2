@@ -14,4 +14,5 @@ Also, as an experiment, I will start naming branches with the date I create them
 |--------------|---------------------|---------|
 | 30 Sept 2026 | 260930_appCommsBugs | To test recent changes (unresponsive BLE processor, large file tx from app, and some of the github issues |
 | 30 Sept 2026 | 260930_branchListSkill | Add this naming convention to the agent skill and the workflow doc; point the ship-check doc and tool at #252 |
+| 2 Oct 2026   | 261002_todoRebench  | Bench evidence: the Todo issues re-run on dev before Charles picks them up |
 |              |                     |   | 

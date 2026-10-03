@@ -32,7 +32,8 @@ Also seen in the same logs:
 
 - `bench_daemon.py` holds both consoles open, logs them with timestamps, and runs commands
   appended to `cmd.txt`: type a command, catch the next boot's console, flash both images.
-- `ec.py` types into the app's Engineer Console over adb.
+- `ec.py` types into the app's Engineer Console over adb; `ec2.py` sends a second command a set
+  time after the first (used for #33).
 - `merge3.py` merges the Himax, nRF and app logs into one timeline for a time window.
 - `retest58.py` is the timing test for ww-hardware #58.
 

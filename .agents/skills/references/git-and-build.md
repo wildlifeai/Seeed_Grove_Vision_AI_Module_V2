@@ -13,6 +13,9 @@ wrong here goes wrong before any code is compiled.
   `260930_appCommsBugs`), and add a row for it to
   [`_Documentation/Branches/Branch_List.md`](../../../_Documentation/Branches/Branch_List.md)
   saying what it is for, so the reason for a branch is not forgotten. Same in `ww-hardware`.
+* **A branch cut from someone else's branch gets its `Branch_List.md` row on `dev`**, not on
+  that branch: their copy of the list may be older than `dev`'s, and a row added there makes
+  their PR conflict when it merges (2 Oct 2026, #258 on top of #257).
 * Ask the maintainer before pushing to any shared branch. Commit messages use
   conventional prefixes (`feat:`, `fix:`, `docs:`, `ci:`).
 * **Check whether the clone is shallow before any branch analysis.** A shallow clone makes

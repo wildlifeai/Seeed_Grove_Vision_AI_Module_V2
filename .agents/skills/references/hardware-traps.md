@@ -84,5 +84,6 @@ building on any of them:
   datasheet 4.5, note 3), and they are one signal each. In `ww500_md` PB7 is SENSOR_ENABLE
   (GPIO1, `rp_sensor_enable()`), so PB10 must not be made GPIO1 as well (the old blue-LED code
   did that; it was removed on 2 Oct 2026). Found in `ww500_minimal`, 27 Sep 2026. Since 2 Oct 2026
-  `pinmux_init()` makes PB7 an output, low, in every build (not with `ENABLESWD`), so PB7
-  (SWCLK) stops being SWD once the app starts: SWD can only connect just after reset.
+  PB7 is a GPIO output in every build (not with `ENABLESWD`), so PB7 (SWCLK) stops being SWD
+  once `checkForCameras()` runs. Since 3 Oct 2026 the cold-boot RTC set (about 1.4 s) comes
+  first, so SWD can connect for about 1.4 s after a reset; after a DPD wake the window is short.

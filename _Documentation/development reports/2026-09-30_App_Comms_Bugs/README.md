@@ -118,7 +118,9 @@ Together 1-3 should take the RP3 power-up at each wake from about 320 ms to abou
 `dbg_printf()` filter in the other drivers.
 
 **SENSOR_ENABLE (2 October 2026, transferred after all):** SENSOR_ENABLE (PB7 on WW500_C00, GPIO1) is now an output,
-low, in every build, set in `pinmux_init()` (`ww500_md.c`) by `rp_sensor_enable(false)` after the pin mux is written. In
+low, in every build, set in `pinmux_init()` (`ww500_md.c`) by `rp_sensor_enable(false)` after the pin mux is written
+(on 3 October this moved to the start of `checkForCameras()`, after the cold-boot RTC set, to give SWD time to connect
+after a reset; see the 2026-10-02_useRP3Issues README). In
 the HM0360 build this keeps an RP camera that may be fitted powered down; in the RP builds the camera is still powered
 only while in use (`checkForCameras()`, `image_task.c`). Not with `ENABLESWD`, where PB7 is SWCLK. The blue LED on PB10
 (also GPIO1) is not affected: it was never set up (`PB10ISLEDBLUE` was not defined), and on 2 October the unused LED code

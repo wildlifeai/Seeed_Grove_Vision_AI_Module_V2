@@ -230,3 +230,32 @@ and I will be pasting the following comments into these issues:_
 > `hm0360_md.c` (#211), and op 17 is applied before each DPD in both builds. The two calls in
 > `configure_image_sensor()` stay HM0360-build only, with a comment saying why. Ticking this item; the rest of #250
 > is unchanged.
+
+## SWD access after reset (3 October 2026)
+
+Not part of #211 or #153, but done on the same branch. Making PB7 (SENSOR_ENABLE, also SWCLK) a GPIO at the start of
+`app_main()` (2 October) locked SWD out a few ms after every reset.
+
+| Before | Now |
+|---|---|
+| `pinmux_init()` ends with `rp_sensor_enable(false)`: PB7 is a GPIO a few ms into `app_main()` | `pinmux_init()` leaves PB7 alone. `checkForCameras()` starts with `rp_sensor_enable(true)` (RP builds, as before) or `rp_sensor_enable(false)` (HM0360 build) |
+| Cold boot: `checkForCameras()`, then "### Cold Boot ###" and `exif_utc_init()` | Cold boot: "### Cold Boot ###" and `exif_utc_init()` straight after the wake event is printed, then `checkForCameras()` |
+| Warm boot steps after `checkForCameras()` | Unchanged (they read the HM0360, so they need `checkForCameras()` first) |
+
+`exif_utc_init()` takes about 1.4 s (`hx_drv_rtc_set_time()` waits for the 32 kHz RTC), and PB7 is still SWCLK
+throughout, so a debugger has about 1.4 s after a reset to connect. After a DPD wake there is no RTC set, so the
+window stays short. Total boot time is unchanged; the boot timing "cameras checked" mark is about 1.4 s later on a
+cold boot.
+
+While PB7 is SWCLK, SENSOR_ENABLE is not driven by the AI processor (as it was in the HM0360 build before 2 October).
+The PCA9574 (flash LED control) must still be set up early: its pins float at reset, and `pca9574_init()` (called by
+`ledFlashInit()`) is what drives FLASHEN low. So its block moved out of `checkForCameras()` into a new
+`initFlashEarly()`, called straight after the wake event is printed, before the RTC set. FLASHEN now goes low slightly
+earlier than before, on every boot. It uses only the I2C bus, not PB7. In the HM0360 build the bus is still at 400 kHz
+at that point (it is slowed to 100 kHz just before `checkForCameras()`), as it always is in the RP builds.
+
+Tests: after a reset, the debugger connects (pyOCD, second attempt about 0.5 s after release). The cold-boot console
+shows the PCA9574 lines, then "### Cold Boot ###" and the tickless message, then the camera lines. The flash LEDs
+stay off through a cold boot. Both builds still find their
+cameras and take a photo.
+

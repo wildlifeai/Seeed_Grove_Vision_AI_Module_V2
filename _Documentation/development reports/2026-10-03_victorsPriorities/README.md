@@ -34,20 +34,20 @@ Related GitHub issues:
   build only. Superseded by this change (suggested rejecting, 3 Oct), but its `bootloader.md` and
   `SWD100_SWD_Programmer.md` text could be reused for #200.
 
-Comments to post (replace `#PR` with the PR number):
+Comments to post in some github issues:
 
 **#200:**
-> Addressed in #PR, differently from the plan above. PB7 is still made a GPIO in both builds, but on a cold boot
+> Addressed in #PR260, differently from the plan above. PB7 is still made a GPIO in both builds, but on a cold boot
 > only after the RTC is set (about 1.4 s), so an SWD programmer can take control after a reset. Tested with the
 > `Download bootloader to the board using SWD` steps in `Compile_and_flash.md`. After a DPD wake the window is still
 > short. The HM0360 build keeps PB7 low so a fitted RP3 camera stays off. Still to do here: document the hazard in
 > `bootloader.md` and `SWD100_SWD_Programmer.md`.
 
 **#201:**
-> For the record: not needed. #PR gives SWD about 1.4 s after every reset in both builds, without a CONFIG.TXT key.
+> For the record: not needed. #PR260 gives SWD about 1.4 s after every reset in both builds, without a CONFIG.TXT key.
 
 **PR #258:**
-> Superseded by #PR (see #200): SWD works after a reset in both builds, and the HM0360 build still holds an RP3
+> Superseded by #PR260 (see #200): SWD works after a reset in both builds, and the HM0360 build still holds an RP3
 > camera off. Closing this; the `bootloader.md` and `SWD100_SWD_Programmer.md` text may be reused to finish #200.
 
 ## Others - from Victor's email of 2/10/26:

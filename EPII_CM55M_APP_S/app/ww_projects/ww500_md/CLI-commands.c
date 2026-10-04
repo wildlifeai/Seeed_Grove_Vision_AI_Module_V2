@@ -275,6 +275,7 @@ static BaseType_t prvSetUtc(char *pcWriteBuffer, size_t xWriteBufferLen, const c
 static BaseType_t prvExifUtcTests(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 static BaseType_t prvWriteFile(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 static BaseType_t prvReadFile(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
+static BaseType_t prvNnFiles(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 static BaseType_t prvSend(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 static BaseType_t prvCapture(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 // Live image preview streaming over the console UART (see preview.c)
@@ -618,6 +619,14 @@ static const CLI_Command_Definition_t xPreview = {
 	"preview <mode>:\r\n Live image preview on the console UART. 0=off, 1=stream (skip SD save), 2=stream+save.\r\n Then use 'capture <n> <ms>' to stream frames. View with _Tools/live_view.py\r\n",
 	prvPreview, /* The function to run. */
 	1			/* One parameter expected */
+};
+
+/* Structure that defines the "nnfiles" command line command. */
+static const CLI_Command_Definition_t xNnFiles = {
+	"nnfiles", /* The command string to type. */
+	"nnfiles <folder> [first]:\r\n Run the loaded model on <folder>/F0001.BIN, F0002.BIN... (raw 640x480 grayscale frames on the SD card)\r\n and write <folder>/RESULTS.CSV. See _Documentation/nn_files_bench.md\r\n",
+	prvNnFiles, /* The function to run. */
+	-1			/* One or two parameters */
 };
 
 /* Structure that defines the "setop" command line command. */
@@ -1810,6 +1819,224 @@ static BaseType_t prvReadFile(char *pcWriteBuffer, size_t xWriteBufferLen, const
 	return pdFALSE;
 }
 
+/*************************************** nnfiles: run the model on frames from the SD card ****************************/
+
+// 'nnfiles <folder> [first]' reads <folder>/F0001.BIN, F0002.BIN, ... (raw 8-bit grayscale frames of the
+// camera's size, 640x480 = 307200 bytes) into the raw frame buffer, runs the loaded model on each exactly
+// as a capture does (img_rescale() then Invoke(), in cv_run()), and appends one line per frame to
+// <folder>/RESULTS.CSV: frame, ms, the int8 output per class, the percentage per class. It stops at the
+// first missing frame. The frames are prepared by _Tools/nnfiles_prepare.py. For comparing candidate
+// models on the same frames on the real camera (the rat challenge, 5 Oct 2026).
+//
+// The CLI task drives it as a small state machine on the FatFS task's replies, so the console stays
+// responsive and the FatFS task keeps sole ownership of the card. The CSV goes through the open/append/
+// close path that file transfers from the app use, so the two cannot run at the same time.
+typedef enum {
+	NN_FILES_IDLE = 0,
+	NN_FILES_OPEN_CSV,		// waiting for RESULTS.CSV to be opened
+	NN_FILES_HEADER,		// waiting for the two header lines to be written
+	NN_FILES_READ,			// waiting for a frame to be read into the raw buffer
+	NN_FILES_LINE,			// waiting for a result line to be written
+	NN_FILES_CLOSE			// waiting for RESULTS.CSV to be closed
+} NN_FILES_STATE_E;
+
+#define NN_FILES_PATH_LEN	32		// "/<8.3 folder>/RESULTS.CSV"
+#define NN_FILES_LINE_LEN	400		// the label line: 16 labels of up to 20 bytes
+
+static NN_FILES_STATE_E nnFilesState = NN_FILES_IDLE;
+static fileOperation_t nnFileOp;			// one operation at a time; the fatfs_task echoes its address back
+static char nnFolder[9];					// 8.3 folder name at the root of the card
+static char nnFramePath[NN_FILES_PATH_LEN];	// "/<folder>/F0001.BIN"
+static char nnCsvPath[NN_FILES_PATH_LEN];	// "/<folder>/RESULTS.CSV"
+static char nnLine[NN_FILES_LINE_LEN];
+static uint16_t nnIndex;					// frame number being processed
+static uint16_t nnDone;						// frames classified in this run
+static TickType_t nnRunStart;
+
+/**
+ * Sends one file operation to the FatFS task. Replies come back as APP_MSG_CLITASK_DISK_READ_COMPLETE or
+ * APP_MSG_CLITASK_DISK_WRITE_COMPLETE with msg_parameter == &nnFileOp.
+ */
+static void nnFilesSend(APP_MSG_EVENT_E event, char *path, uint8_t *buffer, uint32_t length) {
+	APP_MSG_T sendMsg;
+
+	nnFileOp.fileName = path;
+	nnFileOp.buffer = buffer;
+	nnFileOp.length = length;
+	nnFileOp.closeWhenDone = true;
+	nnFileOp.unmountWhenDone = false;
+	nnFileOp.deleteOnClose = false;
+	nnFileOp.senderQueue = xCliTaskQueue;
+	sendMsg.msg_event = event;
+	sendMsg.msg_data = (uint32_t) &nnFileOp;
+	sendMsg.msg_parameter = 0;
+	if (xQueueSend(xFatTaskQueue, (void *) &sendMsg, __QueueSendTicksToWait) != pdTRUE) {
+		xprintf("nnfiles: failed to send 0x%x to the FatFS task\n", sendMsg.msg_event);
+		nnFilesState = NN_FILES_IDLE;
+	}
+}
+
+/**
+ * Ends the run: closes RESULTS.CSV and reports.
+ */
+static void nnFilesFinish(const char *why) {
+	xprintf("nnfiles: %s. %d frames classified in %lus, results in %s\n",
+			why, (int) nnDone, (unsigned long) (app_getElapsedMs(nnRunStart) / 1000), nnCsvPath);
+	nnFilesState = NN_FILES_CLOSE;
+	nnFilesSend(APP_MSG_FATFSTASK_CLOSE_FILE, nnCsvPath, NULL, 0);
+}
+
+/**
+ * Asks the FatFS task for the next frame, straight into the raw buffer where a capture would land.
+ * On the RP3 image the raw buffer is YUV420; the frame fills its Y plane, which is all the model reads.
+ */
+static void nnFilesReadNext(void) {
+	snprintf(nnFramePath, sizeof(nnFramePath), "/%s/F%04d.BIN", nnFolder, (int) nnIndex);
+	nnFilesState = NN_FILES_READ;
+	nnFilesSend(APP_MSG_FATFSTASK_READ_FILE, nnFramePath, (uint8_t *) app_get_raw_addr(),
+			app_get_raw_width() * app_get_raw_height());
+}
+
+/**
+ * A frame is in the raw buffer: run the model as a capture would, and queue the result line.
+ */
+static void nnFilesClassify(void) {
+	int8_t raw[MAX_CLASSES];
+	uint8_t count = 0;
+	ClassConfidenceData conf;
+	TickType_t t0;
+	uint32_t ms;
+	int n;
+
+	inactivity_reset();		// a long run must not put the board to sleep
+	t0 = xTaskGetTickCount();
+	if (cv_run(raw, &count) != kTfLiteOk) {
+		nnFilesFinish("model error");
+		return;
+	}
+	ms = app_getElapsedMs(t0);
+	cv_get_confidence_data(&conf);
+
+	n = snprintf(nnLine, sizeof(nnLine), "F%04d.BIN,%lu", (int) nnIndex, (unsigned long) ms);
+	for (uint8_t i = 0; (i < count) && (n < NN_FILES_LINE_LEN - 8); i++) {
+		n += snprintf(nnLine + n, sizeof(nnLine) - n, ",%d", (int) raw[i]);
+	}
+	for (uint8_t i = 0; (i < count) && (n < NN_FILES_LINE_LEN - 8); i++) {
+		n += snprintf(nnLine + n, sizeof(nnLine) - n, ",%u", (unsigned) conf.confidence_percent[i]);
+	}
+	n += snprintf(nnLine + n, sizeof(nnLine) - n, "\n");
+	xprintf("nnfiles: %s", nnLine);
+	nnDone++;
+	nnFilesState = NN_FILES_LINE;
+	nnFilesSend(APP_MSG_FATFSTASK_APPEND_FILE, nnCsvPath, (uint8_t *) nnLine, (uint32_t) n);
+}
+
+/**
+ * The FatFS task has finished reading a frame (or failed to find one).
+ */
+static void nnFilesReadComplete(void) {
+	uint32_t expected = app_get_raw_width() * app_get_raw_height();
+
+	if ((nnFileOp.res == FR_NO_FILE) || (nnFileOp.res == FR_NO_PATH)) {
+		nnFilesFinish("no more frames");
+	}
+	else if (nnFileOp.res != FR_OK) {
+		xprintf("nnfiles: reading %s failed (%d)\n", nnFramePath, (int) nnFileOp.res);
+		nnFilesFinish("read error");
+	}
+	else if (nnFileOp.length != expected) {
+		xprintf("nnfiles: %s is %lu bytes, expected %lu (%lux%lu 8-bit grayscale)\n", nnFramePath,
+				(unsigned long) nnFileOp.length, (unsigned long) expected,
+				(unsigned long) app_get_raw_width(), (unsigned long) app_get_raw_height());
+		nnFilesFinish("wrong frame size");
+	}
+	else {
+		nnFilesClassify();
+	}
+}
+
+/**
+ * The FatFS task has finished an open, append or close on RESULTS.CSV.
+ */
+static void nnFilesWriteComplete(void) {
+	int n;
+
+	if (nnFileOp.res != FR_OK) {
+		xprintf("nnfiles: writing %s failed (%d)\n", nnCsvPath, (int) nnFileOp.res);
+		nnFilesState = NN_FILES_IDLE;
+		return;
+	}
+	switch (nnFilesState) {
+	case NN_FILES_OPEN_CSV:
+		// Two header lines: the class order from the model's labels, then the column names
+		n = snprintf(nnLine, sizeof(nnLine), "# labels:");
+		for (uint8_t i = 0; (i < metaDataFlash->class_count) && (i < MAX_CLASSES) && (n < NN_FILES_LINE_LEN - 24); i++) {
+			n += snprintf(nnLine + n, sizeof(nnLine) - n, "%s%s", (i == 0) ? " " : ",", cv_getLabel(i));
+		}
+		n += snprintf(nnLine + n, sizeof(nnLine) - n, "\nframe,ms,raw...,pct...\n");
+		xprintf("nnfiles: %s", nnLine);
+		nnFilesState = NN_FILES_HEADER;
+		nnFilesSend(APP_MSG_FATFSTASK_APPEND_FILE, nnCsvPath, (uint8_t *) nnLine, (uint32_t) n);
+		break;
+	case NN_FILES_HEADER:
+		nnFilesReadNext();
+		break;
+	case NN_FILES_LINE:
+		nnIndex++;
+		nnFilesReadNext();
+		break;
+	case NN_FILES_CLOSE:
+	default:
+		nnFilesState = NN_FILES_IDLE;
+		break;
+	}
+}
+
+/**
+ * Processes the 'nnfiles <folder> [first]' command: checks, then opens RESULTS.CSV and lets the replies drive the run.
+ */
+static BaseType_t prvNnFiles(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) {
+	const char *pcFolder;
+	const char *pcFirst;
+	BaseType_t folderLength;
+	BaseType_t firstLength;
+
+	pcFolder = FreeRTOS_CLIGetParameter(pcCommandString, 1, &folderLength);
+	pcFirst = FreeRTOS_CLIGetParameter(pcCommandString, 2, &firstLength);
+
+	if (nnFilesState != NN_FILES_IDLE) {
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "nnfiles is already running (frame %d)", (int) nnIndex);
+	}
+	else if ((pcFolder == NULL) || (folderLength < 1) || (folderLength > 8)) {
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "Usage: nnfiles <folder> [first]. The folder is at the root of the card, 8 characters at most");
+	}
+	else if (!cv_modelLoaded()) {
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "No model loaded");
+	}
+	else if (image_getState() != APP_IMAGE_TASK_STATE_INIT) {
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "Image task is '%s', not idle", image_getStateString());
+	}
+	else if ((app_get_raw_width() == 0) || (app_get_raw_height() == 0)) {
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "Camera not initialised, no raw buffer");
+	}
+	else {
+		strncpy(nnFolder, pcFolder, (size_t) folderLength);
+		nnFolder[folderLength] = '\0';
+		nnIndex = (pcFirst != NULL) ? (uint16_t) atoi(pcFirst) : 1;
+		if (nnIndex == 0) {
+			nnIndex = 1;
+		}
+		nnDone = 0;
+		nnRunStart = xTaskGetTickCount();
+		snprintf(nnCsvPath, sizeof(nnCsvPath), "/%s/RESULTS.CSV", nnFolder);
+		nnFilesState = NN_FILES_OPEN_CSV;
+		nnFilesSend(APP_MSG_FATFSTASK_OPEN_FILE, nnCsvPath, NULL, 0);
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "nnfiles: starting at /%s/F%04d.BIN, %lux%lu frames",
+				nnFolder, (int) nnIndex, (unsigned long) app_get_raw_width(), (unsigned long) app_get_raw_height());
+	}
+	return pdFALSE;
+}
+
 /**
  * Sends bytes to the WW130 to test the interface
  *
@@ -2743,6 +2970,12 @@ static void vCmdLineTask(void *pvParameters) {
 				break;
 
 			case APP_MSG_CLITASK_DISK_WRITE_COMPLETE:
+				// An nnfiles run: RESULTS.CSV was opened, appended to or closed
+				if ((nnFilesState != NN_FILES_IDLE) && (rxMessage.msg_parameter == (uint32_t) &nnFileOp))
+				{
+					nnFilesWriteComplete();
+					break;
+				}
 				// xprintf("Res code %d\n", data);	// This is the same as fileOp.res
 
 				// A camreg save uses its own fileOperation_t. The fatfs_task echoes
@@ -2791,6 +3024,12 @@ static void vCmdLineTask(void *pvParameters) {
 				break;
 
 			case APP_MSG_CLITASK_DISK_READ_COMPLETE:
+				// An nnfiles run: a frame was read into the raw buffer (or was not there)
+				if ((nnFilesState == NN_FILES_READ) && (rxMessage.msg_parameter == (uint32_t) &nnFileOp))
+				{
+					nnFilesReadComplete();
+					break;
+				}
 				// xprintf("Res code %d\n", data);	// This is the same as fileOp.res
 				//  the fileOp structure should have the results
 				if (fileOp.res)
@@ -2866,6 +3105,7 @@ static void vRegisterCLICommands(void)
 	FreeRTOS_CLIRegisterCommand(&xSend);
 	FreeRTOS_CLIRegisterCommand(&xCapture);
 	FreeRTOS_CLIRegisterCommand(&xPreview);	// Live image preview streaming on the console UART
+	FreeRTOS_CLIRegisterCommand(&xNnFiles);	// Run the model on frames from the SD card
 
 	FreeRTOS_CLIRegisterCommand(&xSetGps);
 	FreeRTOS_CLIRegisterCommand(&xGetGps);

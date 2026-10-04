@@ -32,6 +32,9 @@ the fact is not enough, the timing has to be built in.
   before streaming. And when asking for a RESET press, act only on a `Cold boot`: the hand
   reaching for the button can set off a motion wake first, and the press then kills a
   transfer already running (30 Sep 2026).
+* **To score a model on fixed frames, `nnfiles <folder>`** runs it on raw 640x480 frames from the
+  SD card and writes `RESULTS.CSV` (scores and ms per frame); `_Tools/nnfiles_prepare.py` makes
+  the frames. Runbook `_Documentation/nn_files_bench.md`. Not while the app transfers a file.
 * **For a batch of boards, use `_Tools/ww500_ship_check.py`** (runbook
   `_Documentation/pcb_batch_flashing.md`): both images, a photo from each camera, one
   button per board.

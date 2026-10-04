@@ -59,6 +59,13 @@ You can the program the bootloader firmware image into the WW50 using section 6 
 
 (Later I might merge that document with this one...)
 
+**If SWD will not connect:** PB7 is both SWCLK and SENSOR_ENABLE (RP3 camera power). `ww500_md` makes it a GPIO at
+start-up, after which SWD cannot connect. After a reset (cold boot) there is a window of about 1.4 s while the RTC is
+set; connect then. After a DPD wake the window is only a few ms. Older firmware takes PB7 straight away, so a board
+running it can look dead: recover it with X-Modem
+([firmware_update_and_recovery.md](firmware_update_and_recovery.md)), or reset and connect immediately. A build with
+`ENABLESWD` never takes PB7. See #200.
+
 
 ## HX6538 Bootloaders
 

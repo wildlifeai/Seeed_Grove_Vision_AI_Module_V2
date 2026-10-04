@@ -26,13 +26,12 @@ Related GitHub issues:
 
 * [#200](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/200) (open): firmware that takes PB7
   breaks SWD. Addressed here, differently from its plan: PB7 is still taken in both builds, but only after the
-  SWD window. Still to do from #200: document the hazard in `bootloader.md` and `SWD100_SWD_Programmer.md`.
+  SWD window. The hazard is now documented in `bootloader.md` and `SWD100_SWD_Programmer.md` (4 Oct).
 * [#201](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/201) (closed, folded into #200):
   an `SWD_ENABLE` CONFIG.TXT key. Not needed.
 * [PR #258](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/pull/258) (open, on top of
   [PR #257](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/pull/257)): keeps PB7 as SWCLK in the HM0360
-  build only. Superseded by this change (suggested rejecting, 3 Oct), but its `bootloader.md` and
-  `SWD100_SWD_Programmer.md` text could be reused for #200.
+  build only. Superseded by this change (suggested rejecting, 3 Oct).
 
 Comments to post in some github issues:
 
@@ -40,15 +39,15 @@ Comments to post in some github issues:
 > Addressed in #PR260, differently from the plan above. PB7 is still made a GPIO in both builds, but on a cold boot
 > only after the RTC is set (about 1.4 s), so an SWD programmer can take control after a reset. Tested with the
 > `Download bootloader to the board using SWD` steps in `Compile_and_flash.md`. After a DPD wake the window is still
-> short. The HM0360 build keeps PB7 low so a fitted RP3 camera stays off. Still to do here: document the hazard in
-> `bootloader.md` and `SWD100_SWD_Programmer.md`.
+> short. The HM0360 build keeps PB7 low so a fitted RP3 camera stays off. The hazard is now documented in
+> `bootloader.md` and `SWD100_SWD_Programmer.md`, so this can be closed.
 
 **#201:**
 > For the record: not needed. #PR260 gives SWD about 1.4 s after every reset in both builds, without a CONFIG.TXT key.
 
 **PR #258:**
 > Superseded by #PR260 (see #200): SWD works after a reset in both builds, and the HM0360 build still holds an RP3
-> camera off. Closing this; the `bootloader.md` and `SWD100_SWD_Programmer.md` text may be reused to finish #200.
+> camera off, and #PR260 documents the SWD hazard in `bootloader.md` and `SWD100_SWD_Programmer.md`. Closing this.
 
 ## Others - from Victor's email of 2/10/26:
 

@@ -956,8 +956,10 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 #else
 		if (woken == APP_WAKE_REASON_MD) {
 			// Special wake message if the wake was due to motion detection
-			snprintf(message, sizeof(message), "MD ");
-			exif_utc_get_rtc_as_utc_string(&message[3], UTCSTRINGLENGTH );
+			//snprintf(message, sizeof(message), "MD ");
+			//exif_utc_get_rtc_as_utc_string(&message[3], UTCSTRINGLENGTH );
+			snprintf(message, sizeof(message), "Motion ");
+			exif_utc_get_rtc_as_utc_string(&message[7], UTCSTRINGLENGTH );
 		}
 		else if (woken == APP_WAKE_REASON_TIMER) {
 			// Special wake message if the wake was due to timer

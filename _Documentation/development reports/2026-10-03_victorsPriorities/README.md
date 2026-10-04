@@ -49,6 +49,17 @@ Comments to post in some github issues:
 > Superseded by #PR260 (see #200): SWD works after a reset in both builds, and the HM0360 build still holds an RP3
 > camera off, and #PR260 documents the SWD hazard in `bootloader.md` and `SWD100_SWD_Programmer.md`. Closing this.
 
+## Changed message following motion detect wait
+
+This relates to ww-hardware issue #52: Unnecessary 7 s wait before every motion detection test.
+
+The AI processor sends two types of message starting with 'MD' - wake due to motion detection
+and when the MD sensitivity is changed. The latter should be sent to the app but is not
+because it is confused with the first.
+
+The solution to to change the first to 'Motion <time>'
+
+
 ## Others - from Victor's email of 2/10/26:
 
 *  [#152](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/152) 

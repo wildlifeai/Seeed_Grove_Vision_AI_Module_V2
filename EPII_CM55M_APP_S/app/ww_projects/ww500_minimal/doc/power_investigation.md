@@ -102,6 +102,9 @@ __Interesting:__ The `ww500_md` project uses mode 2 rather than mode 0 when MD i
 because mode 0 seemed to have much higher power. See `hm0360_md_setMode()` in `hm0360_md.c`.
 This is not what we see here. Perhaps some other bug in `ww500_md` build?. 
 
+See also [WW500_Power_Measurements.md](../../ww500_md/doc/WW500_Power_Measurements.md) in the `ww500_md` folder
+as this has new measurements of the high mode 0 current!.
+
 __HM0360 data sheet__
 
 Section 2 Sensor Overview says:

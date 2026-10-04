@@ -7,11 +7,7 @@
 
 ## Purpose
 
-This set of work will address some issues outstanding.
-
-## Status
-
-Open.
+This set of work will address some issues outstanding - some from Victor's email of 2/10/26.
 
 ## Deferred programming of PB7 as SENSOR_ENABLE
 
@@ -54,16 +50,21 @@ Comments to post (replace `#PR` with the PR number):
 > Superseded by #PR (see #200): SWD works after a reset in both builds, and the HM0360 build still holds an RP3
 > camera off. Closing this; the `bootloader.md` and `SWD100_SWD_Programmer.md` text may be reused to finish #200.
 
-## Others - from Victor's email:
+## Others - from Victor's email of 2/10/26:
 
-*    ww-hardware #58: the nRF drops a phone connection after it connects.
-*    ww-hardware #52: Unnecessary 7 s wait before every motion detection test.
-*    ww-hardware #34: Slow BLE transfer of images.
-    
-*    Seeed #152: Every reset rewinds the clock
-*    Seeed #56. Photo times fall behind.
-*    Seeed #211 and #247: motion sensitivity on the RP3 image, and the HM0360 still taking frames with MD off.
-*    Seeed #158 and #251. AE exposure and time to photo after DPD.
+*  [#152](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/152) 
+Every reset rewinds the clock - I suggest handling this as part of 
+ [#251](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/251)
+ 'Restructure the way state is saved across DPD to decrease time to the first photo'
+* [#56](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/56) - also handle in #251
+* [#211](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/211) is fixed I think.
+*  [#247](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/247)
+I repeated the experiment and find that I can't use the lowest power mode. 
+ This is documented in ww500_md/doc/WW500_Power_Measurements.md - keep this open and revisit later 
+ when we want to spend time on further improvements to power consumption.
+* [#158](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/158)
+I still have not allocated any time to look at how Claude modified the RP3 camera code. 
+ I should get round to it in due course, but don't propose looking at this now.
+* [#246](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/246)
+AI processor error bits - AFAIK there is no problem to address here. I have added a comment at this issue.
 
-
-And an extra one: Seeed #246, should self-test bit 14 reach the app (ww-hardware #56 waits on it)?

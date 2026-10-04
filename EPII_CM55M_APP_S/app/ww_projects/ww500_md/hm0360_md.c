@@ -424,7 +424,7 @@ HX_CIS_ERROR_E hm0360_md_setMode(uint8_t context, mode_select_t newMode,
 		return ret;
 	}
 
-	if (numFrames != 0) {
+	if ((numFrames != 0) && (newMode == MODE_SW_NFRAMES_SLEEP)) {
 		// Applies to MODE_SW_NFRAMES_SLEEP, MODE_SW_NFRAMES_STANDBY and MODE_HW_NFRAMES_SLEEP
 		// This is the number of frames to take continguously, after the sleep finishes
 		// It is NOT the total number of frames
@@ -842,6 +842,7 @@ HX_CIS_ERROR_E hm0360_md_prepare(bool cameraSystemEnabled, uint16_t mdFrameInter
 	HX_CIS_ERROR_E ret;
 	uint16_t mdInterval;
 	uint16_t sensitivity;
+	mode_select_t newMode = MODE_SW_NFRAMES_SLEEP;
 
 	// Don't proceed if the HM0360 is missing or faulty
 	if (!hm0360_present) {
@@ -866,14 +867,17 @@ HX_CIS_ERROR_E hm0360_md_prepare(bool cameraSystemEnabled, uint16_t mdFrameInter
 	sensitivity = fatfs_getOperationalParameter(OP_PARAMETER_MD_SENSITIVITY);
 
 	if (mdInterval == 0) {
+		//newMode = MODE_SLEEP;
 		dbg_printf(DBG_LESS_INFO, "   HM0360 Motion Detection off (%s).\r\n",
 				cameraSystemEnabled ? "the frame interval, op 11, is 0" : "the camera system is disabled");
 	}
 	else if (sensitivity == MD_SENSITIVITY_OFF) {
+		//newMode = MODE_SLEEP;
 		dbg_printf(DBG_LESS_INFO, "   HM0360 Motion Detection off (the sensitivity, op 17, is 0), frames every %dms.\r\n",
 				mdFrameInterval);
 	}
 	else {
+		//newMode = MODE_SW_NFRAMES_SLEEP;
 		dbg_printf(DBG_LESS_INFO, "   HM0360 Motion Detection on! %dms frame interval, sensitivity %d\r\n",
 				mdFrameInterval, (int) sensitivity);
 	}
@@ -885,7 +889,7 @@ HX_CIS_ERROR_E hm0360_md_prepare(bool cameraSystemEnabled, uint16_t mdFrameInter
 	hm0360_md_clearInterrupt(0xff);		// clear all bits
 
 	// Don't use MODE_SLEEP even if camera system is disabled, as it draws more power!
-	ret = hm0360_md_setMode(CONTEXT_B, MODE_SW_NFRAMES_SLEEP, 1, mdInterval);
+	ret = hm0360_md_setMode(CONTEXT_B, newMode, 1, mdInterval);
 
 	restoreMainCameraConfig();
 

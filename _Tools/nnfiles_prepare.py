@@ -30,7 +30,7 @@ def sources(arg):
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("src"); ap.add_argument("dest")
-    ap.add_argument("--limit", type=int, default=9999, help="at most this many frames (the command stops at the first gap)")
+    ap.add_argument("--limit", type=int, default=1000, help="at most this many frames (bigger folders slow the camera down; the command stops at the first gap)")
     ap.add_argument("--start", type=int, default=1, help="index of the first frame")
     a = ap.parse_args()
     folder = os.path.basename(os.path.normpath(a.dest))

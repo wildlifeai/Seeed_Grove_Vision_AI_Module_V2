@@ -17,7 +17,8 @@ challenge.
 
    It writes `F0001.BIN`, `F0002.BIN`, ... (raw 640x480 8-bit grayscale, 307,200 bytes each) and
    `FRAMES.CSV` (frame, source file, label). The folder name is 8.3: up to 8 upper-case characters,
-   at the root of the card. 1,000 frames are about 300 MB.
+   at the root of the card. Keep a folder to 1,000 frames, the script's default, about 300 MB, and
+   put more frames in more folders (see the limits below).
 2. Put the model on the card as usual (`MANIFEST/<id>V<ver>.TFL` and `.TXT`, or the app's
    firmware update) and load it (`loadmodel <id> <ver>`).
 
@@ -30,7 +31,12 @@ nnfiles NNTEST     or: nnfiles NNTEST 501   to resume from frame 501
 
 The command refuses to start if no model is loaded, if the image task is not idle, or if a run
 is already going. It stops by itself at the first missing frame number, on a read or write error,
-or if the model fails to run. Put op 8 back afterwards (`setop 8 1000`).
+or if the model fails to run, and ends with a line such as
+`nnfiles: no more frames. 20 frames classified in 4s, results in /NNTEST/RESULTS.CSV`. Put op 8
+back afterwards (`setop 8 1000`).
+
+A frame takes about 0.17 s at the start of a folder, so 1,000 frames take about 3 minutes
+(MobileNetV2 0.35 at 96 px, 45 to 46 ms of it inference, 5 October 2026).
 
 Do not capture, transfer files from the app, or change the model while it runs: the run owns the
 raw buffer and the FatFS task's open file.
@@ -58,6 +64,11 @@ prints follow each frame, so a console log of the run is a complete record too.
 
 - Frames must be exactly 640x480 8-bit grayscale. A frame of the wrong size stops the run with a
   message; `nnfiles_prepare.py` cannot produce one.
+- Big folders are slow. In a folder of 9,999 frames the run did 347 frames a minute at the start and
+  144 near the end, 3,075 s in all, while inference stayed at 45 to 46 ms. The time goes in opening
+  files, which FatFS finds by reading the folder from its start, so a later frame costs more.
+- For a model that already ends in softmax, `pct...` is a second softmax and tops out near 73% for
+  two classes. Rank on `raw...`.
 - On the RP3 image the raw buffer is YUV420, 1.5 bytes a pixel; the frame fills its Y plane, which
   is all the model reads. On the HM0360 image the buffer is the grayscale frame itself.
 - The console prints of a frame's result are the firmware's normal capture output. At 921600 baud

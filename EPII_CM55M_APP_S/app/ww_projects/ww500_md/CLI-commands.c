@@ -1241,7 +1241,11 @@ static BaseType_t prvLedFlash(char *pcWriteBuffer, size_t xWriteBufferLen, const
 				"Must supply duration in range 1-1000ms");
 		return pdFALSE;
 	}
-	duration = (uint16_t)paramLong;
+	else {
+		duration = (uint16_t)paramLong;
+		cli_append(&pcWriteBuffer, &xWriteBufferLen,
+						"Flash at %d%% for %dms", brightness, duration);
+	}
 
 	// Else OK
 	ledFlashInit();

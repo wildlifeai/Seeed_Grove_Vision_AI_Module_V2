@@ -14,5 +14,7 @@ Also, as an experiment, I will start naming branches with the date I create them
 |--------------|---------------------|---------|
 | 30 Sept 2026 | 260930_appCommsBugs | To test recent changes (unresponsive BLE processor, large file tx from app, and some of the github issues |
 | 30 Sept 2026 | 260930_branchListSkill | Add this naming convention to the agent skill and the workflow doc; point the ship-check doc and tool at #252 |
+| 2 Oct 2026   | 261002_todoRebench  | Bench evidence: the Todo issues re-run on dev before Charles picks them up |
+| 2 Oct 2026   | 261002_pb7SwdHm0360 | On top of 260930_appCommsBugs (#257): keep PB7 as SWCLK in the HM0360 build (#200), PR #258 |
 | 5 Oct 2026   | 261005_nnfiles      | 'nnfiles' console command: run the loaded model on frames from the SD card and write RESULTS.CSV, to score candidate models (rat challenge) |
 |              |                     |   | 

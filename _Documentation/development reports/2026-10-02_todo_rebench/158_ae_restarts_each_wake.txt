@@ -1,0 +1,40 @@
+# #158: every wake starts the RP3's exposure again from the default 2368 lines
+# Images built from Seeed dev 5750f8b5 (RP3 14:06:13, HM0360 14:07:37), WILD-KOMB, 2 Oct 2026. Stamps are the PC's clock (NZDT); the device keeps UTC. A desk lamp on the scene; AE target 110.
+[14:25:43.658] himax | ##### typing 'capture 1 1000'
+[14:25:44.477] himax | AE: p75=236 (target 110) exposure 2368->1008 gain code 0->0
+[14:25:44.776] himax | Wrote 19467 byte image to SD: ABF081B0.JPG at 1:25:47 2/10/2026
+[14:25:48.378] himax | Set OpParam 11 = 1000
+[14:25:50.414] himax | Set OpParam 17 = 3
+[14:25:52.374] himax | Set OpParam 5 = 3
+[14:26:18.860] himax | >>> Entering DPD at 2026:10:02 01:26:23
+[14:26:19.926] himax | Wakeup_event = 0x0000, WakeupEvt1 = 0x0001 WAKE signal
+[14:26:20.456] himax | AE: p75=236 (target 110) exposure 2368->1008 gain code 0->0
+[14:26:20.757] himax | Wrote 19279 byte image to SD: ABF08400.JPG at 1:26:24 2/10/2026
+[14:26:21.361] himax | AE: p75=172 (target 110) exposure 1008->606 gain code 0->0
+[14:26:21.663] himax | Wrote 22482 byte image to SD: ABF08401.JPG at 1:26:25 2/10/2026
+[14:26:22.244] himax | AE: p75=132 (target 110) exposure 606->490 gain code 0->0
+[14:26:22.543] himax | Wrote 22038 byte image to SD: ABF08410.JPG at 1:26:25 2/10/2026
+[14:26:25.647] himax | >>> Entering DPD at 2026:10:02 01:26:29
+[14:26:39.406] himax | Wakeup_event = 0x0000, WakeupEvt1 = 0x0001 WAKE signal
+[14:26:39.954] himax | AE: p75=228 (target 110) exposure 2368->1045 gain code 0->0
+[14:26:40.261] himax | Wrote 20496 byte image to SD: ABF08460.JPG at 1:26:30 2/10/2026
+[14:26:40.853] himax | AE: p75=124 (target 110) exposure 1045->906 gain code 0->0
+[14:26:41.146] himax | Wrote 22505 byte image to SD: ABF08470.JPG at 1:26:31 2/10/2026
+[14:26:42.041] himax | Wrote 23400 byte image to SD: ABF08471.JPG at 1:26:32 2/10/2026
+[14:26:45.144] himax | >>> Entering DPD at 2026:10:02 01:26:35
+[14:26:55.968] himax | Wakeup_event = 0x0000, WakeupEvt1 = 0x0001 WAKE signal
+[14:26:56.511] himax | AE: p75=156 (target 110) exposure 2368->1581 gain code 0->0
+[14:26:56.811] himax | Wrote 22486 byte image to SD: ABF084C0.JPG at 1:26:36 2/10/2026
+[14:26:57.411] himax | AE: p75=164 (target 110) exposure 1581->1000 gain code 0->0
+[14:26:57.710] himax | Wrote 25111 byte image to SD: ABF084D0.JPG at 1:26:37 2/10/2026
+[14:26:58.294] himax | AE: p75=172 (target 110) exposure 1000->601 gain code 0->0
+[14:26:58.594] himax | Wrote 22482 byte image to SD: ABF084E0.JPG at 1:26:38 2/10/2026
+[14:27:01.694] himax | >>> Entering DPD at 2026:10:02 01:26:41
+[14:27:08.612] himax | Wakeup_event = 0x0000, WakeupEvt1 = 0x0001 WAKE signal
+[14:27:09.160] himax | AE: p75=180 (target 110) exposure 2368->1350 gain code 0->0
+[14:27:09.465] himax | Wrote 20061 byte image to SD: ABF08520.JPG at 1:26:42 2/10/2026
+[14:27:10.048] himax | AE: p75=196 (target 110) exposure 1350->701 gain code 0->0
+[14:27:10.356] himax | Wrote 24789 byte image to SD: ABF08530.JPG at 1:26:43 2/10/2026
+[14:27:10.954] himax | AE: p75=124 (target 110) exposure 701->607 gain code 0->0
+[14:27:11.254] himax | Wrote 27899 byte image to SD: ABF08540.JPG at 1:26:44 2/10/2026
+[14:27:14.351] himax | >>> Entering DPD at 2026:10:02 01:26:47

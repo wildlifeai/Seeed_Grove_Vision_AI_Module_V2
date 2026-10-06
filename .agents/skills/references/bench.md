@@ -9,10 +9,12 @@ Section 4 is what the hardware does; this is what your script must do about it. 
 these has cost a session, and a human at a terminal meets almost none of them. Knowing
 the fact is not enough, the timing has to be built in.
 
-* **Send the first byte the instant you see `Starting CLI Task`**, before any drain,
-  sleep, or banner parsing. The console sleeps ~1 s after the boot chatter stops (§4) and
-  one keystroke raises it to the ~60 s CLI window. Miss it and every command returns
-  nothing, which looks exactly like a dead port rather than a sleeping device.
+* **Send `setop 8 60000` the instant you see `Starting CLI Task`**, before any drain,
+  sleep, or banner parsing. On default settings the board sleeps about 2.5 s after the
+  console starts, and a bare keystroke does not hold it (2 Oct 2026, op8 = 1000 ms, empty SD
+  card: the keystroke was echoed and the board slept anyway). Miss it and every command
+  returns nothing, which looks exactly like a dead port rather than a sleeping device. Put
+  op8 back (`setop 8 1000`, or the deployment's value) before the board is left to sleep.
 * **Arm the script first, then ask for the reset.** The device does not wake on serial
   input, so opening the port and sending has already lost. Wait for the boot banner.
 * **Probe for the console port every session; never hard-code it.** It moves between
@@ -77,6 +79,29 @@ the fact is not enough, the timing has to be built in.
   lines. Strip NULs (`tr -d '\000'`) from any excerpt before committing it, or git stores it
   as binary.
 
+* **The device clock is not a stopwatch.** Time every measurement with the PC's clock: the
+  AI processor's clock runs about 5 % fast (#245), stops for the whole sleep after a motion
+  or BLE wake (#56), and goes back to 2024 on every restart (#152).
+* **`Can't send UTC` after `BLE and AI time differ by ... too much!`** means the BLE
+  processor has no time of its own, which happens after its own restart or firmware update.
+  Give it one with `setutc <UTC>` from the app (no `AI ` prefix) before any test that
+  depends on photo times.
+* **`AI txfile <name>` looks only in the current images folder**, which moves on every 100
+  photos (`IMAGES.000` to `IMAGES.001`; the boot log's `Retaining existing images directory`
+  line names it). An older photo needs its full path, but the app only reassembles a
+  download asked for by bare name, so pick a recent photo for a download test.
+* **Driving the app over adb**: the phone needs Developer options, Stay awake (the user's
+  setting to change, not ours); a locked phone stops the heartbeat and the nRF drops the
+  link after 60 s. The camera advertises only after its middle button is pressed, so adb
+  alone cannot reconnect: ask. `ec.py` and `ec2.py` in `2026-10-02_todo_rebench/` type into
+  the Engineer Console, the second sending a follow-up command a set time after the first.
+* **The app's Motion Detection test leaves op9 (LED brightness) and op13 (flash LED) at the
+  test's values** (ww-mobile-app #387). Check `AI getop -1` after it and put them back.
+* **Bench drivers from 2 Oct 2026** (`2026-10-02_todo_rebench/`): `bench_daemon.py` holds
+  both consoles open, logs them with timestamps and runs a command file (type, catch the
+  next boot, flash both images, wait for a regex); `merge3.py` merges the Himax, nRF and app
+  logs into one timeline. Each carries its own usage notes.
+
 Windows shell, unrelated to the hardware but the same class of silent failure:
 
 * **`MSYS_NO_PATHCONV=1`** for git revspecs (`origin/dev:path`) and for `/tmp` paths passed
@@ -85,3 +110,8 @@ Windows shell, unrelated to the hardware but the same class of silent failure:
 * **Write multi-line WSL scripts to a file** and run `wsl bash /tmp/x.sh`. Passing them as
   `wsl -- bash -c '...'` mangles them: variables arrive empty, the script runs in the wrong
   directory, and it still exits 0.
+* **Scripts that read or write issue and PR bodies must use UTF-8 everywhere**:
+  `encoding="utf-8"` on every `open()` and `subprocess.run()`, and `PYTHONIOENCODING=utf-8`
+  for anything printed. Python's default on this PC is cp1252, which turned the ellipsis, dash,
+  arrow and section-sign characters into three-byte junk in three issue bodies on 2 Oct 2026
+  (repaired the same day).

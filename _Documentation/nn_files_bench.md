@@ -7,6 +7,8 @@ scores and the time each inference took. It exists so candidate models can be co
 same frames on the real camera, without a lens or a scene. Added 5 October 2026 for the rat
 challenge.
 
+To try it with a known model and ten frames, follow `_Tools/nnfiles_example/README.md`.
+
 ## On the PC
 
 1. Put the frames on the card with `_Tools/nnfiles_prepare.py`:

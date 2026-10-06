@@ -40,6 +40,13 @@ What that means for an agent, beyond reading the rules:
   learned, edit the explanation and the issue body together; never add a comment that a
   reader has to reconcile with the document. Worked example:
   `2026-09-03_capture_bench_findings/`.
+* **Write the issue for the person who has to act on it.** Name the processor, "the BLE
+  processor (nRF)" or "the AI processor (Himax)", never "the camera" or "the device". Open
+  with what the user sees, then what happens, then why (with permalinks), then the fix. For
+  anything timed, a `Time | What happened` table from the bench log. The title says what the
+  user experiences, not the mechanism. A re-test adds one dated line at the top, "Re-tested
+  <date>: still happens on <build> ([log])", and keeps the original report. Worked examples:
+  ww-hardware #58 and #52, Seeed #56 (2 Oct 2026).
 
 ---
 

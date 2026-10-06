@@ -1,0 +1,89 @@
+# #56 re-tested on the CI build of dev 5750f8b5 (RP3 image, built 08:37:20 1 Oct), nRF 0.30.52, WILD-KOMB, 2 Oct 2026
+# Stamps are the bench PC's clock (NZDT); real UTC = PC time - 13 h. 'behind by' = real UTC minus the AI processor's clock.
+## setup: both clocks set over BLE, then a 120 s timer wake (op7 = 120), app disconnected
+[17:32:54.986] nrf   | BLE in: Received  27 bytes 'setutc 2026-10-02T04:32:51Z'
+[17:32:54.986] nrf   | <info> app: System time set successfully
+[17:33:04.920] nrf   | BLE in: Received  30 bytes 'AI setutc 2026-10-02T04:33:00Z'
+[17:33:06.884] himax | RTC set to 2026-10-02T04:33:01Z (this took 1464ms)
+[17:33:06.884] himax | Sending 56 bytes: Header 4, payload 50, checksum 2 'RTC set to 2026-10-02T04:33:01Z (this took 1464ms)'
+[17:33:08.785] himax | RTC set to 2026-10-02T04:33:00Z (this took 1817ms)
+[17:33:08.785] himax | Sending 56 bytes: Header 4, payload 50, checksum 2 'RTC set to 2026-10-02T04:33:00Z (this took 1817ms)'
+[17:33:18.117] himax | Set OpParam 7 = 120
+[17:33:18.117] himax | Sending 25 bytes: Header 4, payload 19, checksum 2 'Set OpParam 7 = 120'
+[17:33:18.237] nrf   | <info> app: AI processor replies: 'Set OpParam 7 = 120'
+[17:33:18.237] nrf   | BLE out: Sent  20 bytes: 'Set OpParam 7 = 120'
+[17:33:19.235] himax | Will wake at 2026:10:02 04:35:03
+[17:33:41.918] nrf   | <info> app: Disconnected. Conn_handle: 0x0, reason: 0x13
+## timer wakes: the photo gets the time the camera went to sleep, then the clock catches up within about 2 s
+17:35:12.617 wake: real 04:35:12.6 UTC, AI clock 2026:10:02 04:33:03, behind by 130 s
+17:35:13.347   BLE processor: BLE and AI time differ by 126s
+17:35:13.458   photo ABF33FF0.JPG stamped 4:33:3 2/10/2026, behind by 130 s
+17:35:14.553   sleeps: real 04:35:14.6, AI clock 2026:10:02 04:35:05, behind by 10 s
+17:37:08.689 wake: real 04:37:08.7 UTC, AI clock 2026:10:02 04:35:05, behind by 124 s
+17:37:09.381   BLE processor: BLE and AI time differ by 120s
+17:37:09.531   photo ABF34790.JPG stamped 4:35:5 2/10/2026, behind by 125 s
+17:37:10.609   sleeps: real 04:37:10.6, AI clock 2026:10:02 04:37:07, behind by 4 s
+17:39:04.747 wake: real 04:39:04.7 UTC, AI clock 2026:10:02 04:37:07, behind by 118 s
+17:39:05.465   BLE processor: BLE and AI time differ by 114s
+17:39:05.597   photo ABF34F30.JPG stamped 4:37:7 2/10/2026, behind by 119 s
+17:39:06.681   sleeps: real 04:39:06.7, AI clock 2026:10:02 04:39:09, behind by -2 s
+17:41:00.817 wake: real 04:41:00.8 UTC, AI clock 2026:10:02 04:39:09, behind by 112 s
+17:41:01.543   BLE processor: BLE and AI time differ by 108s
+17:41:01.676   photo ABF356D0.JPG stamped 4:39:9 2/10/2026, behind by 113 s
+17:41:02.758   sleeps: real 04:41:02.8, AI clock 2026:10:02 04:41:11, behind by -8 s
+## motion wakes (op7 = 0, op11 = 1000, a hand waved): the clock never catches up, so the error grows with every sleep
+17:46:09.438 wake: real 04:46:09.4 UTC, AI clock 2026:10:02 04:45:09, behind by 60 s
+17:46:10.156   BLE processor: BLE and AI time differ by 56s
+17:46:10.284   photo ABF36D60.JPG stamped 4:45:10 2/10/2026, behind by 60 s
+17:46:11.373   sleeps: real 04:46:11.4, AI clock 2026:10:02 04:45:11, behind by 60 s
+17:46:26.202 wake: real 04:46:26.2 UTC, AI clock 2026:10:02 04:45:11, behind by 75 s
+17:46:26.904   BLE processor: BLE and AI time differ by 71s
+17:46:27.047   photo ABF36D80.JPG stamped 4:45:12 2/10/2026, behind by 75 s
+17:46:28.145   sleeps: real 04:46:28.1, AI clock 2026:10:02 04:45:13, behind by 75 s
+17:46:29.225 wake: real 04:46:29.2 UTC, AI clock 2026:10:02 04:45:13, behind by 76 s
+17:46:29.910   BLE processor: BLE and AI time differ by 72s
+17:46:30.070   photo ABF36DA0.JPG stamped 4:45:14 2/10/2026, behind by 76 s
+17:46:31.153   sleeps: real 04:46:31.2, AI clock 2026:10:02 04:45:15, behind by 76 s
+17:46:35.172 wake: real 04:46:35.2 UTC, AI clock 2026:10:02 04:45:15, behind by 80 s
+17:46:35.888   BLE processor: BLE and AI time differ by 76s
+17:46:36.016   photo ABF36DC0.JPG stamped 4:45:16 2/10/2026, behind by 80 s
+17:46:37.112   sleeps: real 04:46:37.1, AI clock 2026:10:02 04:45:17, behind by 80 s
+17:46:38.195 wake: real 04:46:38.2 UTC, AI clock 2026:10:02 04:45:17, behind by 81 s
+17:46:38.909   BLE processor: BLE and AI time differ by 77s
+17:46:39.038   photo ABF36DE0.JPG stamped 4:45:18 2/10/2026, behind by 81 s
+17:46:40.121   sleeps: real 04:46:40.1, AI clock 2026:10:02 04:45:19, behind by 81 s
+17:46:43.173 wake: real 04:46:43.2 UTC, AI clock 2026:10:02 04:45:19, behind by 84 s
+17:46:43.901   BLE processor: BLE and AI time differ by 79s
+17:46:44.013   photo ABF36E00.JPG stamped 4:45:20 2/10/2026, behind by 84 s
+17:46:45.110   sleeps: real 04:46:45.1, AI clock 2026:10:02 04:45:21, behind by 84 s
+17:46:45.206 wake: real 04:46:45.2 UTC, AI clock 2026:10:02 04:45:21, behind by 84 s
+17:46:45.938   BLE processor: BLE and AI time differ by 79s
+17:46:46.049   photo ABF36E20.JPG stamped 4:45:22 2/10/2026, behind by 84 s
+17:46:47.148   sleeps: real 04:46:47.1, AI clock 2026:10:02 04:45:23, behind by 84 s
+17:47:00.994 wake: real 04:47:01.0 UTC, AI clock 2026:10:02 04:45:23, behind by 98 s
+17:47:01.704   BLE processor: BLE and AI time differ by 93s
+17:47:01.838   photo ABF36E40.JPG stamped 4:45:24 2/10/2026, behind by 98 s
+17:47:02.922   sleeps: real 04:47:02.9, AI clock 2026:10:02 04:45:25, behind by 98 s
+17:47:03.018 wake: real 04:47:03.0 UTC, AI clock 2026:10:02 04:45:26, behind by 97 s
+17:47:03.770   BLE processor: BLE and AI time differ by 93s
+17:47:03.876   photo ABF36E60.JPG stamped 4:45:26 2/10/2026, behind by 98 s
+17:47:04.957   sleeps: real 04:47:05.0, AI clock 2026:10:02 04:45:28, behind by 97 s
+17:47:13.888 wake: real 04:47:13.9 UTC, AI clock 2026:10:02 04:45:28, behind by 106 s
+17:47:14.603   BLE processor: BLE and AI time differ by 102s
+17:47:14.731   photo ABF36E90.JPG stamped 4:45:29 2/10/2026, behind by 106 s
+17:47:15.826   sleeps: real 04:47:15.8, AI clock 2026:10:02 04:45:30, behind by 106 s
+17:47:15.922 wake: real 04:47:15.9 UTC, AI clock 2026:10:02 04:45:30, behind by 106 s
+17:47:16.655   BLE processor: BLE and AI time differ by 102s
+17:47:16.766   photo ABF36EB0.JPG stamped 4:45:31 2/10/2026, behind by 106 s
+17:47:17.866   sleeps: real 04:47:17.9, AI clock 2026:10:02 04:45:32, behind by 106 s
+17:47:31.711 wake: real 04:47:31.7 UTC, AI clock 2026:10:02 04:45:32, behind by 120 s
+17:47:32.417   BLE processor: BLE and AI time differ by 116s
+17:47:32.557   photo ABF36ED0.JPG stamped 4:45:33 2/10/2026, behind by 120 s
+17:47:33.654   sleeps: real 04:47:33.7, AI clock 2026:10:02 04:45:34, behind by 120 s
+## the raw lines for one motion wake
+[17:46:26.186] himax | Wakeup_event = 0x0000, WakeupEvt1 = 0x0001 WAKE signal
+[17:46:26.202] himax | Woke at 2026:10:02 04:45:11
+[17:46:26.202] himax | Motion detected INT_INDIC = 0xc8
+[17:46:26.904] nrf   | <info> app: BLE and AI time differ by 71s
+[17:46:27.047] himax | Wrote 22348 byte image to SD: ABF36D80.JPG at 4:45:12 2/10/2026
+[17:46:28.145] himax | >>> Entering DPD at 2026:10:02 04:45:13

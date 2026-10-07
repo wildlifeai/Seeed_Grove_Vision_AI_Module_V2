@@ -135,4 +135,23 @@ void ifTask_clearBleUnresponsive(void);
 // Callback for when all tasks have started and done their initialisation
 void ifTask_allTasksReady(void);
 
+// Download (txfile) timing, added 7 Oct 2026 to find where the time goes (see the 2026-10-06_speedImageTx
+// development report). One of these per part of the per-packet cycle. FreeRTOS tick resolution (1 ms), so
+// a single time is +/- 1 ms but the average over a whole download is good to a fraction of a ms.
+typedef struct {
+	uint32_t count;
+	uint32_t totalMs;
+	uint32_t maxMs;
+} ifTask_timeStat_t;
+
+// Adds one time to a stat
+void ifTask_timeStatAdd(ifTask_timeStat_t * stat, uint32_t ms);
+
+// Clears the download timing. Call at the start of a download.
+void ifTask_resetDownloadTiming(void);
+
+// Copies the download timing: aiTime is from the BLE processor reading one binary packet to us signalling
+// the next one; bleTime is from signalling a binary packet to the BLE processor reading it
+void ifTask_getDownloadTiming(ifTask_timeStat_t * aiTime, ifTask_timeStat_t * bleTime);
+
 #endif /* APP_WW_PROJECTS_WW500_MD_IF_TASK_H_ */

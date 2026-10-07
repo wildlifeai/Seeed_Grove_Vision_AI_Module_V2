@@ -32,10 +32,12 @@
 
 /* FreeRTOS includes. */
 #include "FreeRTOS.h"
+#include "task.h"
 #include "FreeRTOS_CLI.h"
 #include "CLI-commands.h"
 #include "CLI-FATFS-commands.h"
 #include "printf_x.h"
+#include "xprintf.h"
 
 #include "ff.h"
 #include "ffconf.h"		// This may need to be adjusted
@@ -71,6 +73,8 @@ extern directoryManager_t dirManager;
 
 static void vRegisterCLICommands( void );
 static void strip_newline(char *str, uint16_t maxlen);
+static void printTimeStat(const char * name, const ifTask_timeStat_t * stat, const char * meaning);
+static void printDownloadTiming(uint32_t bytes, uint32_t elapsedMs, const ifTask_timeStat_t * readTime);
 
 /*
  * Defines a command that returns a table showing the state of each task at the
@@ -596,6 +600,11 @@ static BaseType_t prvTxFileCommand( char *pcWriteBuffer, size_t xWriteBufferLen,
 	static FIL fil;
 	UINT br;			// Bytes read
 
+	// Download timing, printed at the end (printDownloadTiming())
+	static TickType_t startTick;
+	static ifTask_timeStat_t readTime;
+	TickType_t readStart;
+
 	switch (state) {
 
 	case TXFILE_START:
@@ -631,6 +640,10 @@ static BaseType_t prvTxFileCommand( char *pcWriteBuffer, size_t xWriteBufferLen,
 		if (res == FR_OK) {
 			cli_append(&pcWriteBuffer, &xWriteBufferLen, "%d bytes in %s", (int) f_size(&fil), fileName);
 			state = TXFILE_TRANSMITTING;
+
+			memset(&readTime, 0, sizeof(readTime));
+			ifTask_resetDownloadTiming();
+			startTick = xTaskGetTickCount();
 			return pdTRUE;
 		}
 		else {
@@ -643,7 +656,9 @@ static BaseType_t prvTxFileCommand( char *pcWriteBuffer, size_t xWriteBufferLen,
 		// Here on the second and subsequent calls, until the file is all read.
 
 		// Read 244 - 3 bytes (since we will pre-pend 3 bytes)
+		readStart = xTaskGetTickCount();
 		res = f_read(&fil, line, (CLI_OUTPUT_BUF_SIZE - 3), &br);
+		ifTask_timeStatAdd(&readTime, app_getElapsedMs(readStart));
 
 		if (res == FR_OK) {
 			if (asciiReplacement) {
@@ -687,6 +702,9 @@ static BaseType_t prvTxFileCommand( char *pcWriteBuffer, size_t xWriteBufferLen,
 
 		cli_append(&pcWriteBuffer, &xWriteBufferLen,
 				"Finished sending %u bytes (%d packets)", brTotal, packetNum);
+
+		// Console only: the line above is what the app sees
+		printDownloadTiming(brTotal, app_getElapsedMs(startTick), &readTime);
 		state = TXFILE_START;
 		brTotal = 0;
 
@@ -974,6 +992,45 @@ static void strip_newline(char *str, uint16_t maxlen) {
     if (len > 0 && (str[len - 1] == '\n' || str[len - 1] == '\r')) {
         str[len - 1] = '\0';
     }
+}
+
+/**
+ * Prints one line of the download timing: average (to 0.1 ms), maximum and total
+ */
+static void printTimeStat(const char * name, const ifTask_timeStat_t * stat, const char * meaning) {
+	uint32_t avgTenths = 0;
+
+	if (stat->count > 0) {
+		avgTenths = ((stat->totalMs * 10) + (stat->count / 2)) / stat->count;
+	}
+	xprintf("  %s avg %u.%u ms, max %u ms, total %u ms over %u (%s)\n",
+			name, (unsigned) (avgTenths / 10), (unsigned) (avgTenths % 10),
+			(unsigned) stat->maxMs, (unsigned) stat->totalMs, (unsigned) stat->count, meaning);
+}
+
+/**
+ * Prints the timing of a txfile download, once, at the end. See ifTask_getDownloadTiming() for the parts.
+ *
+ * Added 7 Oct 2026 to find where the time goes (2026-10-06_speedImageTx development report).
+ */
+static void printDownloadTiming(uint32_t bytes, uint32_t elapsedMs, const ifTask_timeStat_t * readTime) {
+	ifTask_timeStat_t aiTime;
+	ifTask_timeStat_t bleTime;
+	uint32_t rate = 0;
+
+	ifTask_getDownloadTiming(&aiTime, &bleTime);
+
+	if (elapsedMs > 0) {
+		rate = (bytes * 1000) / elapsedMs;
+	}
+
+	XP_LT_BLUE;
+	xprintf("Download timing: %u bytes, %u packets in %u ms (%u bytes/s)\n",
+			(unsigned) bytes, (unsigned) readTime->count, (unsigned) elapsedMs, (unsigned) rate);
+	printTimeStat("f_read:", readTime, "SD card read, part of the AI time");
+	printTimeStat("AI:    ", &aiTime, "BLE read of a packet to /IP_INT for the next");
+	printTimeStat("BLE:   ", &bleTime, "/IP_INT to BLE read of the packet");
+	XP_WHITE;
 }
 
 /********************************** Public Function Definitions  *************************************/

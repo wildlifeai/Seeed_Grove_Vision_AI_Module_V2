@@ -56,9 +56,14 @@ building on any of them:
   wake-then-command can do it. In that state the nRF parks in SELFTEST and drops every app
   command. A `setop` in the same window is acknowledged and never saved (#207).
 * **The nRF forwards any command mid-`txfile` and restarts its packet counter** (ww-hardware
-  #33); **its console hex dump holds the download to about 1 KB/s** while its upload path is
-  already gated quiet (#34); **`Failed to send` on its console is normal back-pressure**
-  (#35); **the app's loopback benchmark never echoes** (#36).
+  #33); **`Failed to send` on its console is normal back-pressure** (#35); **the app's
+  loopback benchmark never echoes** (#36).
+* **A `txfile` download moves one packet per BLE connection interval**, about 1.5 KB/s at the
+  standard 100 to 200 ms, because only uploads hold the fast 15 to 30 ms interval. Both
+  consoles are quiet for downloads now: the BLE processor from 0.30.55 (#34), the AI processor
+  since 7 Oct 2026. `txfile` prints a `Download timing` block that splits each packet into AI
+  processor and BLE processor time. The BLE processor's `we waited Nms for BLE transfer` counts
+  retries of about 2.9 ms each, not milliseconds. See `2026-10-06_speedImageTx`.
 * **The bench nRF runs ww-hardware `dev`, not `main`.** `ver` reports the nRF build, `AI ver`
   the Himax build; cite nRF line numbers from `dev`. **The device lags the branch**: it was
   flashed at 0.30.48 (75406df) and moves only when someone runs the app's firmware update,

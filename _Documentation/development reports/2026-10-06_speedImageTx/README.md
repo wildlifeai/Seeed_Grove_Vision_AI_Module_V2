@@ -23,6 +23,9 @@ and maybe the app.
   up needs BLE processor (and maybe app) changes, described in
   [Fast_SD_to_app_transfer_BLE_processor_work.md](Fast_SD_to_app_transfer_BLE_processor_work.md).
 
+PR: [#264](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/pull/264), branch
+`261006_speedImageTx` into `dev`.
+
 Documents:
 - [CLAUDE_download_speed_proposal.md](CLAUDE_download_speed_proposal.md): the proposal, with
   status and measured results.

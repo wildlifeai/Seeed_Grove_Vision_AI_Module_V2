@@ -71,7 +71,7 @@ captured first.
 |    29 | OP_PARAMETER_CAM_AE_ENABLE 			| 1             | RP camera auto-exposure: 0 = off (init-table exposure), 1 = on. Highlight-metered loop steps sensor exposure (8-5000 lines) then analog gain (to 16x) toward the target - see `ae.c` |
 |    30 | OP_PARAMETER_CAM_AE_TARGET 			| 110           | Auto-exposure target: raw bright-quartile (p75) luma, 0-250 (0 = built-in default 95). Bright parts of the scene render just below white after the tone curve |
 |    31 | OP_PARAMETER_CAM_WB_MODE 				| 1             | RP camera white balance: 0 = off (hardware JPEG), 1 = auto (warmth-biased grey-world measured per frame), 2 = manual op27/op28. Auto falls back to manual for flash-lit or too-dark frames - see `img_correct.c` |
-|    32 | OP_PARAMETER_RFU_1 					| 0             | Reserved for future use |
+|    32 | OP_PARAMETER_LORAWAN_PING_MINUTES 	| 0             | LoRaWAN ping period in minutes (0 = the normal 12-hour ping). Not read yet |
 |    33 | OP_PARAMETER_RFU_2 					| 0             | Reserved for future use |
 |    34 | OP_PARAMETER_FLASH_MODE 				| 0             | Capture flash mode: 0 = off, 1 = AE-driven, 2 = always on, 3 = time of day |
 |    35 | OP_PARAMETER_FLASH_TOD_START 			| 0             | FLASH_MODE_TIME_OF_DAY only: minutes after midnight UTC when the flash turns on |

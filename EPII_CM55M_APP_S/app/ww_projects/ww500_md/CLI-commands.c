@@ -294,8 +294,8 @@ static BaseType_t prvGetOpParam(char *pcWriteBuffer, size_t xWriteBufferLen, con
 static BaseType_t prvFormatCommand( char * pcWriteBuffer, size_t xWriteBufferLen, const char * pcCommandString );
 
 
-#if defined(USE_HM0360)
-
+// In the RP builds too, where the HM0360 is the motion detector (issue #211, 2 Oct 2026)
+#if defined(USE_HM0360) || defined(USE_HM0360_MD)
 static BaseType_t prvMd(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) ;
 static BaseType_t prvReinitHM0360(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) ;
 #endif // defined(USE_HM0360) || defined(USE_HM0360_MD)
@@ -699,7 +699,7 @@ static BaseType_t prvFormatCommand( char * pcWriteBuffer,
 }
 
 
-#if defined(USE_HM0360)
+#if defined(USE_HM0360) || defined(USE_HM0360_MD)
 /* Structure that defines the "md" command line command. */
 static const CLI_Command_Definition_t xMd = {
 	"md", /* The command string to type. */
@@ -1241,7 +1241,11 @@ static BaseType_t prvLedFlash(char *pcWriteBuffer, size_t xWriteBufferLen, const
 				"Must supply duration in range 1-1000ms");
 		return pdFALSE;
 	}
-	duration = (uint16_t)paramLong;
+	else {
+		duration = (uint16_t)paramLong;
+		cli_append(&pcWriteBuffer, &xWriteBufferLen,
+						"Flash at %d%% for %dms", brightness, duration);
+	}
 
 	// Else OK
 	ledFlashInit();
@@ -2340,9 +2344,7 @@ static BaseType_t prvEraseModel(char *pcWriteBuffer, size_t xWriteBufferLen, con
 	return pdFALSE;
 }
 
-//#if defined(USE_HM0360) || defined(USE_HM0360_MD)
-// TODO - if we need this command while using RP camera then we need to move cisdp_sensor_set_md_sensitivity()
-#if defined(USE_HM0360)
+#if defined(USE_HM0360) || defined(USE_HM0360_MD)
 /**
  * Sets motion detection sensitivity:
  *
@@ -2367,9 +2369,14 @@ static BaseType_t prvMd(char *pcWriteBuffer, size_t xWriteBufferLen, const char 
 		}
 		else {
 			sensitivity = (uint16_t)sensitivity_long;
-			cisdp_sensor_set_md_sensitivity(sensitivity);
 			fatfs_setOperationalParameter(OP_PARAMETER_MD_SENSITIVITY, sensitivity);
-			cli_append(&pcWriteBuffer, &xWriteBufferLen, "MD sensitivity set to %u", sensitivity);
+			if (hm0360_md_setSensitivity(sensitivity) == HX_CIS_NO_ERROR) {
+				cli_append(&pcWriteBuffer, &xWriteBufferLen, "MD sensitivity set to %u", sensitivity);
+			}
+			else {
+				// op 17 is saved anyway: image_sleepNow() applies it before the next DPD
+				cli_append(&pcWriteBuffer, &xWriteBufferLen, "MD sensitivity saved as %u, but the HM0360 did not respond", sensitivity);
+			}
 		}
 	}
 	else {
@@ -2886,7 +2893,7 @@ static void vRegisterCLICommands(void)
 
 	FreeRTOS_CLIRegisterCommand( &xFormat );
 
-#if defined(USE_HM0360)
+#if defined(USE_HM0360) || defined(USE_HM0360_MD)
 	FreeRTOS_CLIRegisterCommand(&xMd);	// Sets motion detection sensitivity
 	FreeRTOS_CLIRegisterCommand(&xReinitHM0360);	// Reinitialise HM0360 long register list
 #endif // defined(USE_HM0360) || defined(USE_HM0360_MD)

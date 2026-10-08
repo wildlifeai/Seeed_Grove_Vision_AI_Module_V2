@@ -31,6 +31,7 @@ Some baseline measurements with kit I have at hand follow. Unless otherwise note
 |  "         |  "        | Added HM0360, MD inhibited       | 343uA          | 7     |
 |  "         |  "        | Added HM0360, MD @ 1Hz           | c. 350uA       | 8     |
 |  "         |  "        | As above, _not_in DPD            | 28.5mA         | 9     |
+|  "         |  "        | HM0360 in DPD with MODE_SLEEP    | 940uA          | 10    |
 
 #### Notes
 
@@ -46,7 +47,27 @@ Baseline for MKL62BA - it can operate OK (LoRa & BLE) at low currents.
 7. HM0360 mode reported at 2 - why not 0? Comment in hm0360_md_setMode() says mode 2 is lower power than 0!
 8. Meter says c. 348uA but probably every 1s a brief increase.
 9. By accident, entry to DP inhibited. This is possibly the FreeRTOS tickless idel (but very high). 
+10. Excessive sleep current in MODE_SLEEP - see below.
 
+## HM0360 MODE_SLEEP
+
+The experiments in `ww500_minimal` show that mode 0 (`MODE_SLEEP`) gives the best power consumption.
+Comments in the source code `hm0360_md_setMode()` show that this mode actually gives a high power and show be avoided.
+
+I repeated this experiemnt on 4/10/26 wth the Power Profiler Lit II and this is confirmed. Wvaeforms captured are:
+
+* [HM0360_MODE_SLEEP](HM0360_MODE_SLEEP.png) shows a high c. 800uA basline with regular 10ms spikes.
+* [HM0360_MODE_SW_NFRAMES_SLEEP_1](HM0360_MODE_SW_NFRAMES_SLEEP_1.png) shows the slowest (1.9s) 
+frame capture 
+* [HM0360_MODE_SW_NFRAMES_SLEEP_2](HM0360_MODE_SW_NFRAMES_SLEEP_2.png) zooms into the frame capture. 
+
+The baseline for the HM0360_MODE_SW_NFRAMES_SLEEP mode is still higher than I would like - c. 330uA.
+
+_This remains an open issue to resolve later, perhpas with Himax help._
+
+However lower powers might be possible, as suggested in 
+[this TinML talk](https://www.youtube.com/watch?v=7tuq-vz4aVk) - see  the HM0360 demo at 28:40)
+which talks  about = "150uW average".
 
 #### Reset
 

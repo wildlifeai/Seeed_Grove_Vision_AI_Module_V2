@@ -37,6 +37,12 @@ wrong here goes wrong before any code is compiled.
 * Toolchain is pinned: **Arm GNU 14.3.rel1**. Build under WSL/Linux;
   `make clean` between camera variants is **mandatory** (objects don't encode the `-D`
   flags). Both variants must build, a change that compiles for one only is broken.
+* **The RP3 build defines `USE_HM0360_MD` as well as `USE_RP3`** (the HM0360 is its motion
+  detector); the HM0360 build defines only `USE_HM0360`. So `#ifdef USE_HM0360` leaves code
+  out of the RP3 build, and `USE_HM0360 || USE_HM0360_MD` means "an HM0360 is fitted", not
+  "it is the main camera". Motion detection code takes the combined test; main-camera
+  choices test `USE_RP3` first (#211, #153; survey in
+  `_Documentation/development reports/2026-10-02_useRP3Issues/`).
 * **`make` runs image generation itself** (`ww500_md/mk/image_gen.mk`, RC24M profile) and
   writes both `output_case1_sec_wlcsp/output.img` and an 8.3 `VYMDDHMM.IMG` copy named for
   the variant (`R`/`H`). Do **not** run `we2_local_image_gen` by hand, it destroys the

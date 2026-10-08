@@ -17,7 +17,7 @@ These will be tested:
 2026-09-14_firmware_update_fails`)
 * Fixed 'RP3 camera can't take a photo after cold boot' - this was issue #238 and related to PR#239.
 * Transfer improvements from `ww500_minimal` - relates to issue #249
-* Proposed bigger changes to reduce boot ime -  [issue #251](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/251)
+* Proposed bigger changes to reduce boot time -  [issue #251](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/251)
 
 ## Unresponsive BLE processor
 
@@ -30,8 +30,25 @@ I2C master did not read our I2C message
 BLE processor did not read the first message within 300ms: treating it as unresponsive
 ```
 and reports `selfTest 4000` - this is correct mitigation
-3.	Then Victor will return a WW500 which shows a fault (the subject of the `2026-09-17_BLE_processor_unresponsive` 
-development report) - and I will carry out further tests.
+
+3.	Victor returned a WW500 (WILD-CMSS) which shows a fault (the subject of the `2026-09-17_BLE_processor_unresponsive` 
+development report) - report follows:
+
+#### Faulty WW500 (WILD-CMSS)
+
+1. Arrived with AI processor code `05:31:27 Sep 15 2026` - showed first message to BLE processor did not arrive.
+2. BLE processor `Ver: 00.30.51 Built: 12:49:29 Sep 19 2026` - this seemed to see interrupts from the AI procesor and responded 
+`app: I2C error: address NACK`
+3. Updated BLE processor image first (using DFU via app) to `Ver: 00.30.52 Built: 21:08:18 Sep 29 2026` - no change to fault.
+4. Update AI processor to `19:08:12 Sep 30 2026` - no change to fault, though it now fails gracefully as expected. 
+5. Visual inspection of PCB, esp. relating to the SDA and SCL signals: these seem OK - there are some
+ MKL62BA pins with very little solder but not SDA & SCL.
+6. I put scope on SDA & SCL pins. Attempt a message to the AI processor (`AI ver`) - there is correct looking waveform 
+on SCL but SDA remains high.
+7. I resoldered the SDA and SCL pins on the MKL62BA - the problem went away.
+8. I resoldered all the pins.
+
+__Conclusion:__ the problem was an intermittant solder connection on the MKL62BA.
 
 
 ## Large file transfer
@@ -39,7 +56,7 @@ development report) - and I will carry out further tests.
 Use the app FILE_TRANSFER_TEST menu.
 
 1.	I tested with no SD card - failed gracefully. Error reported on app.
-2.	I tested with BIG.TXT then LARGE.BIN (500k) - no errors seen. transfer speed (my phone and SD card) 3.5kB/s
+2.	I tested with BIG.TXT then LARGE.BIN (500k) - no errors seen. The transfer speed (my phone and SD card) 3.5kB/s
 
 ## RP3 camera can't take a photo after cold boot
 
@@ -48,8 +65,8 @@ This was [issue #238](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module
 (by Victor's AI). The problem related to nested calls to `saveMainCameraConfig()` and `restoreMainCameraConfig()` 
 in `hm0360_md.c`
 
-The changes seemsed quite intensive. I asked my Claude to comment. We agreed to make a fix but only in `hm0360_md.c`
-as the other chnages were unnecessary.
+The changes seemed quite intensive. I asked my Claude to comment. We agreed to make a fix but only in `hm0360_md.c`
+as the other changes were unnecessary.
 
 We made the changes to `hm0360_md.c` in this branch and I will add a comment to [PR#239](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/pull/239) :
 
@@ -97,9 +114,20 @@ The first three are the #249 changes; the times are from #249 and the `ww500_min
 
 Together 1-3 should take the RP3 power-up at each wake from about 320 ms to about 60 ms.
 
-**Not transferred:** making SENSOR_ENABLE (PB7) an output, low, in every build, and the LED pin changes. Those pin
-assignments were for the `ww500_minimal` board only. In `ww500_md` the GPIO pin assignments stay as they are (PB7 and the
-blue LED on PB10 share GPIO1). Also not transferred for now: the same `dbg_printf()` filter in the other drivers.
+**Not transferred:** the LED pin changes, which were for the `ww500_minimal` board only, and for now the same
+`dbg_printf()` filter in the other drivers.
+
+**SENSOR_ENABLE (2 October 2026, transferred after all):** SENSOR_ENABLE (PB7 on WW500_C00, GPIO1) is now an output,
+low, in every build, set in `pinmux_init()` (`ww500_md.c`) by `rp_sensor_enable(false)` after the pin mux is written
+(on 3 October this moved to the start of `checkForCameras()`, after the cold-boot RTC set, to give SWD time to connect
+after a reset; see the 2026-10-02_useRP3Issues README). In
+the HM0360 build this keeps an RP camera that may be fitted powered down; in the RP builds the camera is still powered
+only while in use (`checkForCameras()`, `image_task.c`). Not with `ENABLESWD`, where PB7 is SWCLK. The blue LED on PB10
+(also GPIO1) is not affected: it was never set up (`PB10ISLEDBLUE` was not defined), and on 2 October the unused LED code
+(`ledInit()`, `app_ledGreen()`, `app_ledBlue()`, `showResetOnLeds()`, `LED_DELAY`, `PB9ISLEDGREEN`/`PB10ISLEDBLUE`) was
+removed from `ww500_md` altogether. That also removes about 600 ms of busy-waiting from every cold boot (the reset LED
+pattern, which flashed LEDs that were not set up). The IMX708 driver had no SENSOR_ENABLE code; a comment there now says it is common code. Once PB7 is a GPIO, SWD
+can only connect in the short time between the bootloader and `pinmux_init()`.
 
 **How the I2C speed now works (item 2).** `platform_driver_init()` (board code, shared by all apps, unchanged) already
 sets the sensor I2C bus to 400 kHz. `ww500_md.c` now slows it to 100 kHz only in the HM0360 build, where the HM0360 is the
@@ -136,6 +164,8 @@ Code, all in `EPII_CM55M_APP_S/app/ww_projects/ww500_md`:
 | Sensor I2C at 400 kHz in the RP builds, 100 kHz for each HM0360 access (and throughout the HM0360 build) | `ww500_md.c`, `hm0360_md.c` | #249 |
 | RP3 driver progress messages compiled out (`CISDP_DBG_TYPE`), failures and `Initialising IMX708` kept | `cis_sensor/cis_imx708/cisdp_sensor.c` | #249 |
 | `FreeRTOS.h` first among the includes | `cis_file.c`, `cis_sensor/cis_hm0360/`, `cis_imx219/` and `cis_imx708/cisdp_sensor.c`, `fatfs_task.c`, `freertos_app.c`, `if_task.c`, `image_task.c`, `img_correct.c`, `timer_task.c` | From `ww500_minimal` |
+| SENSOR_ENABLE an output, low, in every build (2 Oct) | `ww500_md.c` (`pinmux_init()`, `checkForCameras()`), `cis_sensor/cis_imx708/cisdp_sensor.c` (comment) | From `ww500_minimal` |
+| Unused LED code removed (`ledInit()`, `app_ledGreen/Blue()`, `showResetOnLeds()`, their defines), about 600 ms less at each cold boot (2 Oct) | `ww500_md.c`, `ww500_md.h` | No longer needed (Charles) |
 | Boot timing to the first frame (`Boot timing` console line, `BOOT_TIMING_ENABLED`) | new `boot_timing.c/.h`; marks in `ww500_md.c`, `fatfs_task.c`, `image_task.c` | Measuring #249 and #251 |
 
 Documentation:

@@ -1,0 +1,46 @@
+# #247: with op17 = 0 or op11 = 0 the HM0360 keeps taking frames while the camera sleeps, and waving does not wake it
+# Images built from Seeed dev 5750f8b5 (RP3 14:06:13, HM0360 14:07:37), WILD-KOMB, 2 Oct 2026. Stamps are the PC's clock (NZDT); the device keeps UTC. A hand waved at the camera from about 14:31: sleep B (op11 = 0) and the control are fully covered.
+[14:30:40.262] himax | ##### typing 'setop 17 0'
+[14:30:40.837] himax | Set OpParam 17 = 0
+[14:30:42.355] himax | ##### typing 'setop 7 40'
+[14:30:42.961] himax | Set OpParam 7 = 40
+[14:30:44.469] himax | ##### typing 'setop 8 3000'
+[14:30:45.164] himax | Set OpParam 8 = 3000
+[14:30:47.152] himax | Preparing HM0360 for MD:   HM0360 Motion Detection off (the sensitivity, op 17, is 0), frames every 1000ms.
+[14:30:47.167] himax |    Changing mode from 0 to 2 with nFrames=1, sleepTime=1000 sleepCount = 0x8030
+[14:30:47.167] himax | >>> Entering DPD at 2024:01:01 00:02:18
+[14:30:47.167] himax | Will wake at 2024:01:01 00:02:58
+[14:31:24.429] himax | Wakeup_event = 0x0002, WakeupEvt1 = 0x0000 RTC Timer
+[14:31:24.444] himax | Timer wake
+[14:31:24.446] himax | ##### typing 'setop 8 60000'
+[14:31:25.191] himax | Set OpParam 8 = 60000
+[14:31:27.198] himax | ##### typing 'setop 11 0'
+[14:31:27.797] himax | Set OpParam 11 = 0
+[14:31:29.305] himax | ##### typing 'setop 17 1'
+[14:31:29.912] himax | Set OpParam 17 = 1
+[14:31:31.416] himax | ##### typing 'setop 8 3000'
+[14:31:32.112] himax | Set OpParam 8 = 3000
+[14:31:34.116] himax | Preparing HM0360 for MD:   HM0360 Motion Detection off (the frame interval, op 11, is 0).
+[14:31:34.116] himax |    Changing mode from 0 to 2 with nFrames=1, sleepTime=0 sleepCount = 0xffff
+[14:31:34.116] himax | >>> Entering DPD at 2024:01:01 00:03:08
+[14:31:34.117] himax | Will wake at 2024:01:01 00:03:48
+[14:32:12.013] himax | Wakeup_event = 0x0002, WakeupEvt1 = 0x0000 RTC Timer
+[14:32:12.028] himax | Timer wake
+[14:32:12.031] himax | ##### typing 'setop 8 60000'
+[14:32:12.774] himax | Set OpParam 8 = 60000
+[14:32:14.790] himax | ##### typing 'setop 11 1000'
+[14:32:15.534] himax | Set OpParam 11 = 1000
+[14:32:17.039] himax | ##### typing 'setop 7 0'
+[14:32:17.588] himax | Set OpParam 7 = 0
+[14:32:19.091] himax | ##### typing 'setop 8 3000'
+[14:32:19.784] himax | Set OpParam 8 = 3000
+[14:32:21.784] himax | Preparing HM0360 for MD:   HM0360 Motion Detection on! 1000ms frame interval, sensitivity 1
+[14:32:21.784] himax |    Changing mode from 0 to 2 with nFrames=1, sleepTime=1000 sleepCount = 0x8030
+[14:32:21.784] himax | >>> Entering DPD at 2024:01:01 00:03:58
+[14:32:22.837] himax | Wakeup_event = 0x0000, WakeupEvt1 = 0x0001 WAKE signal
+[14:32:22.852] himax | Motion detected INT_INDIC = 0xc8
+[14:32:27.482] himax | Preparing HM0360 for MD:   HM0360 Motion Detection on! 1000ms frame interval, sensitivity 1
+[14:32:27.482] himax |    Changing mode from 0 to 2 with nFrames=1, sleepTime=1000 sleepCount = 0x8030
+[14:32:27.482] himax | >>> Entering DPD at 2024:01:01 00:04:03
+[14:32:28.545] himax | Wakeup_event = 0x0000, WakeupEvt1 = 0x0001 WAKE signal
+[14:32:28.545] himax | Motion detected INT_INDIC = 0xc8

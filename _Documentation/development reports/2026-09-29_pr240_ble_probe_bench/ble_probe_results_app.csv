@@ -1,0 +1,11 @@
+phase,boot,time,kind,first_msg,wake_sent_s,wake_read_s,probe_fail,mm_timer,nrf_first_cmd_s,nrf_cmds,dropped,contacted,inactive_s,if_sleep_path,end,end_s,typed_ok
+app,1,10:44:45,cold,Wake,3.5,3.52,False,0,3.59,selftest,0,False,4.55,Sleep msg read,watchdog,4.6,True
+app,2,10:44:50,cold,Wake,4.3,4.31,False,0,4.37,selftest,0,False,5.29,Sleep msg read,watchdog,5.34,True
+app,3,10:44:55,cold,Wake,4.29,4.3,False,0,4.37,selftest,0,False,5.3,Sleep msg read,watchdog,5.35,True
+app,4,10:45:01,cold,Wake,3.35,3.36,False,0,3.41,selftest,0,False,4.33,Sleep msg read,watchdog,4.38,True
+app,5,10:45:06,cold,Wake,4.29,4.31,False,0,4.38,selftest,0,False,5.33,Sleep msg read,watchdog,5.38,True
+app,6,10:45:11,cold,Wake,4.3,4.32,False,0,4.38,selftest,0,False,5.31,Sleep msg read,watchdog,5.38,True
+app,7,10:45:17,cold,Wake,3.33,3.35,False,0,3.41,selftest,0,False,4.31,Sleep msg read,watchdog,4.36,True
+app,8,10:45:22,cold,Wake,3.34,3.36,False,0,3.43,selftest,0,False,4.39,Sleep msg read,watchdog,4.44,True
+app,9,10:45:26,cold,Wake,4.28,4.3,False,0,4.37,selftest,0,False,5.3,Sleep msg read,watchdog,5.35,True
+app,10,10:45:32,cold,Wake,3.33,3.35,False,0,3.42,selftest,0,False,4.32,Sleep msg read,watchdog,4.37,True

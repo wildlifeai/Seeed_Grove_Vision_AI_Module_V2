@@ -1,0 +1,38 @@
+09:55:34 nRF console COM5 logged
+09:55:37 Press RESET on the bench board now
+09:55:49 booted: **** WW500 MD. (WW500_C02) Built: 09:34:32 Sep 29 2026
+09:55:50 board: op7=0 op8=1000 op24=15; Camera: HM0360; SD card initialised
+09:55:56 reset 1: cold; probe ok; nRF first cmd 3.42s (selftest); mm_timer 0; IF sleep path 'Sleep msg read'; watchdog at 4.37s
+09:56:01 reset 2: cold; probe ok; nRF first cmd 3.41s (selftest); mm_timer 0; IF sleep path 'Sleep msg read'; watchdog at 4.35s
+09:56:06 reset 3: cold; probe ok; nRF first cmd 3.42s (selftest); mm_timer 0; IF sleep path 'Sleep msg read'; watchdog at 4.42s
+09:56:11 reset 4: cold; probe ok; nRF first cmd 4.38s (selftest); mm_timer 0; IF sleep path 'Sleep msg read'; watchdog at 5.33s
+09:56:17 reset 5: cold; probe ok; nRF first cmd 4.37s (selftest); mm_timer 0; IF sleep path 'Sleep msg read'; watchdog at 5.41s
+09:56:22 reset 6: cold; probe ok; nRF first cmd 3.42s (selftest); mm_timer 0; IF sleep path 'Sleep msg read'; watchdog at 4.37s
+09:56:26 reset 7: cold; probe ok; nRF first cmd 3.42s (selftest); mm_timer 0; IF sleep path 'Sleep msg read'; watchdog at 4.41s
+09:56:31 reset 8: cold; probe ok; nRF first cmd 3.43s (selftest); mm_timer 0; IF sleep path 'Sleep msg read'; watchdog at 4.39s
+09:56:36 reset 9: cold; probe ok; nRF first cmd 3.42s (selftest); mm_timer 0; IF sleep path 'Sleep msg read'; watchdog at 4.38s
+09:56:41 reset 10: cold; probe ok; nRF first cmd 4.36s (selftest); mm_timer 0; IF sleep path 'Sleep msg read'; watchdog at 5.35s
+09:56:46 reset 11: cold; probe ok; nRF first cmd 3.4s (selftest); mm_timer 0; IF sleep path 'Sleep msg read'; watchdog at 4.37s
+09:56:51 reset 12: cold; probe ok; nRF first cmd 3.41s (selftest); mm_timer 0; IF sleep path 'Sleep msg read'; watchdog at 4.37s
+09:56:55 reset 13: cold; probe ok; nRF first cmd 3.42s (selftest); mm_timer 0; IF sleep path 'Sleep msg read'; watchdog at 4.38s
+09:57:00 reset 14: cold; probe ok; nRF first cmd 3.41s (selftest); mm_timer 0; IF sleep path 'Sleep msg read'; watchdog at 4.39s
+09:57:05 reset 15: cold; probe ok; nRF first cmd 3.42s (selftest); mm_timer 0; IF sleep path 'Sleep msg read'; watchdog at 4.42s
+09:57:09 reset 16: cold; probe ok; nRF first cmd 3.42s (selftest); mm_timer 0; IF sleep path 'Sleep msg read'; watchdog at 4.37s
+09:57:15 reset 17: cold; probe ok; nRF first cmd 4.37s (selftest); mm_timer 0; IF sleep path 'Sleep msg read'; watchdog at 5.33s
+09:57:20 reset 18: cold; probe ok; nRF first cmd 3.42s (selftest); mm_timer 0; IF sleep path 'Sleep msg read'; watchdog at 4.38s
+09:57:24 reset 19: cold; probe ok; nRF first cmd 3.42s (selftest); mm_timer 0; IF sleep path 'Sleep msg read'; watchdog at 4.37s
+09:57:30 reset 20: cold; probe ok; nRF first cmd 4.37s (selftest); mm_timer 0; IF sleep path 'Sleep msg read'; watchdog at 5.32s
+09:57:30 SUMMARY reset: 20 boots, probe failed 0, mm_timer boots 0, nRF answered 20, ended by DPD/watchdog 20, nRF first cmd s: [3.4, 3.41, 3.41, 3.41, 3.42, 3.42, 3.42, 3.42, 3.42, 3.42, 3.42, 3.42, 3.42, 3.42, 3.43, 4.36, 4.37, 4.37, 4.37, 4.38]
+09:57:34 timelapse 20 s set; 10 timer wakes with nothing typed
+09:57:36 timer 1: warm 0x0000; probe ok; nRF first cmd -s (none); mm_timer 0; IF sleep path 'Sleep msg read'; DPD at 1.33s
+09:57:56 timer 2: warm 0x0002; probe ok; nRF first cmd 0.37s (selftest); mm_timer 0; IF sleep path 'Sleep msg read'; DPD at 1.7s
+09:58:16 timer 3: warm 0x0002; probe ok; nRF first cmd 0.37s (selftest); mm_timer 0; IF sleep path 'Sleep msg read'; DPD at 1.71s
+09:58:36 timer 4: warm 0x0002; probe ok; nRF first cmd 0.35s (selftest); mm_timer 0; IF sleep path 'Sleep msg read'; DPD at 1.7s
+09:58:56 timer 5: warm 0x0002; probe ok; nRF first cmd 0.37s (selftest); mm_timer 0; IF sleep path 'Sleep msg read'; DPD at 1.7s
+09:59:16 timer 6: warm 0x0002; probe ok; nRF first cmd 0.32s (selftest); mm_timer 0; IF sleep path 'Sleep msg read'; DPD at 1.7s
+09:59:36 timer 7: warm 0x0002; probe ok; nRF first cmd 0.33s (selftest); mm_timer 0; IF sleep path 'Sleep msg read'; DPD at 1.7s
+09:59:55 timer 8: warm 0x0002; probe ok; nRF first cmd 0.33s (selftest); mm_timer 0; IF sleep path 'Sleep msg read'; DPD at 1.69s
+10:00:15 timer 9: warm 0x0002; probe ok; nRF first cmd 0.32s (selftest); mm_timer 0; IF sleep path 'Sleep msg read'; DPD at 1.7s
+10:00:35 timer 10: warm 0x0002; probe ok; nRF first cmd 0.34s (selftest); mm_timer 0; IF sleep path 'Sleep msg read'; DPD at 1.71s
+10:00:35 SUMMARY timer: 10 boots, probe failed 0, mm_timer boots 0, nRF answered 9, ended by DPD/watchdog 10, nRF first cmd s: [0.32, 0.32, 0.33, 0.33, 0.34, 0.35, 0.37, 0.37, 0.37]
+10:00:55 PHASE cycles DONE. Board asleep on the PR #240 HM0360 image. Next: connect the app, then phase 'app'.

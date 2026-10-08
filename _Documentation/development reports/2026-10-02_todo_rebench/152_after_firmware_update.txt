@@ -1,0 +1,36 @@
+# #152 after a firmware update from the app: the AI processor restarts with its clock at 2024-01-01, and the BLE processor,
+# restarted by its own update, has no time to correct it. WILD-KOMB, 2 Oct 2026. Stamps are the bench PC's clock (NZDT = UTC+13).
+## the update and the versions read back afterwards (app log, shifted 2 s to the PC clock)
+[16:31:13.102] app   | [FW Update] Phase: transferring → sending
+[16:31:18.900] app   | [FW Update] Phase: sending → rebooting
+[16:31:23.929] app   | [FW Update] Phase: rebooting → verifying
+[16:31:24.911] app   | [useBleListeners] RAW_RX received for E7:52:81:76:CC:8E: WW500_C02 08:37:20 Oct  1 2026
+[16:31:25.944] app   | [FW Update] Phase: verifying → complete
+[16:31:57.394] app   | [useBleListeners] RAW_RX received for E7:52:81:76:CC:8E: WW500-C02 V 00.30.52 21:08:18 Sep 29 2026
+[16:31:58.372] app   | [useBleListeners] RAW_RX received for E7:52:81:76:CC:8E: WW500_C02 08:37:20 Oct  1 2026
+[16:32:00.322] app   | [useBleListeners] RAW_RX received for E7:52:81:76:CC:8E: WW500-C02 V 00.30.52 21:08:18 Sep 29 2026
+[16:32:01.294] app   | [useBleListeners] RAW_RX received for E7:52:81:76:CC:8E: WW500_C02 08:37:20 Oct  1 2026
+## the first wakes afterwards: AI processor clock in 2024, the BLE processor cannot send the time, photos dated 2024
+[16:36:09.507] himax | Sending 31 bytes: Header 4, payload 25, checksum 2 'Wake 2024-01-01T00:00:08Z'
+[16:36:09.825] nrf   | <info> app: BLE and AI time differ by 524s - too much!
+[16:36:09.825] nrf   | <info> app: Can't send UTC
+[16:36:10.807] himax | >>> Entering DPD at 2024:01:01 00:00:10
+[16:37:37.178] nrf   | <info> app: BLE and AI time differ by 609s - too much!
+[16:37:37.178] nrf   | <info> app: Can't send UTC
+[16:37:37.298] himax | Wrote 15497 byte image to SD: 592008A0.JPG at 0:0:10 1/1/2024
+[16:37:38.391] himax | >>> Entering DPD at 2024:01:01 00:01:42
+[16:39:04.723] nrf   | <info> app: BLE and AI time differ by 605s - too much!
+[16:39:04.723] nrf   | <info> app: Can't send UTC
+[16:39:04.872] himax | Wrote 16068 byte image to SD: 59200E60.JPG at 0:1:42 1/1/2024
+[16:39:05.969] himax | >>> Entering DPD at 2024:01:01 00:03:14
+[16:40:32.313] nrf   | <info> app: BLE and AI time differ by 601s - too much!
+[16:40:32.313] nrf   | <info> app: Can't send UTC
+[16:40:32.438] himax | Wrote 15760 byte image to SD: 59201420.JPG at 0:3:14 1/1/2024
+[16:40:33.539] himax | >>> Entering DPD at 2024:01:01 00:04:46
+[16:41:59.903] nrf   | <info> app: BLE and AI time differ by 596s - too much!
+[16:41:59.904] nrf   | <info> app: Can't send UTC
+[16:42:00.010] himax | Wrote 14190 byte image to SD: 592019E0.JPG at 0:4:46 1/1/2024
+[16:42:01.103] himax | >>> Entering DPD at 2024:01:01 00:06:18
+[16:43:27.453] nrf   | <info> app: BLE and AI time differ by 592s - too much!
+[16:43:27.453] nrf   | <info> app: Can't send UTC
+[16:43:27.604] himax | Wrote 13155 byte image to SD: 59201FA0.JPG at 0:6:18 1/1/2024

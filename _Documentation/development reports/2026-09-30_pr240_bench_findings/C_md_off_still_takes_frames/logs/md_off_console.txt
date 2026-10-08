@@ -1,0 +1,70 @@
+##### 11:53:40 repro phase md0
+Wakeup_event = 0x0002, WakeupEvt1 = 0x0000 RTC Timer
+HM0360 MD sensitivity 1
+Camera reg 0x2099 = 0x20
+##### 11:53:51 typing 'setop 17 0'
+##### 11:53:51 typing 'setop 7 20'
+Preparing HM0360 for MD:   HM0360 Motion Detection on! 1000ms frame interval
+   Changing mode from 0 to 2 with nFrames=1, sleepTime=1000 sleepCount = 0x8030
+>>> Entering DPD at 2024:01:01 00:00:29
+Wakeup_event = 0x0002, WakeupEvt1 = 0x0000 RTC Timer
+HM0360 MD sensitivity 0
+Camera reg 0x2099 = 0x00
+##### 11:54:14 typing 'setop 17 0'
+##### 11:54:15 typing 'setop 11 1000'
+Camera reg 0x2099 = 0x00
+Preparing HM0360 for MD:   HM0360 Motion Detection on! 1000ms frame interval
+   Changing mode from 0 to 2 with nFrames=1, sleepTime=1000 sleepCount = 0x8030
+>>> Entering DPD at 2024:01:01 00:00:56
+Wakeup_event = 0x0002, WakeupEvt1 = 0x0000 RTC Timer
+HM0360 MD sensitivity 0
+Camera reg 0x2099 = 0x00
+##### 11:54:40 typing 'setop 17 0'
+##### 11:54:40 typing 'setop 11 1000'
+Camera reg 0x2099 = 0x00
+Preparing HM0360 for MD:   HM0360 Motion Detection on! 1000ms frame interval
+   Changing mode from 0 to 2 with nFrames=1, sleepTime=1000 sleepCount = 0x8030
+>>> Entering DPD at 2024:01:01 00:01:23
+Wakeup_event = 0x0002, WakeupEvt1 = 0x0000 RTC Timer
+HM0360 MD sensitivity 0
+Camera reg 0x2099 = 0x00
+##### 11:55:05 typing 'setop 17 0'
+##### 11:55:06 typing 'setop 11 1000'
+Camera reg 0x2099 = 0x00
+Preparing HM0360 for MD:   HM0360 Motion Detection on! 1000ms frame interval
+   Changing mode from 0 to 2 with nFrames=1, sleepTime=1000 sleepCount = 0x8030
+>>> Entering DPD at 2024:01:01 00:01:50
+Wakeup_event = 0x0002, WakeupEvt1 = 0x0000 RTC Timer
+HM0360 MD sensitivity 0
+Camera reg 0x2099 = 0x00
+##### 11:55:31 typing 'setop 17 0'
+##### 11:55:32 typing 'setop 11 0'
+Camera reg 0x2099 = 0x00
+Preparing HM0360 for MD:   HM0360 Motion Detection off.
+   Changing mode from 0 to 2 with nFrames=1, sleepTime=0 sleepCount = 0xffff
+>>> Entering DPD at 2024:01:01 00:02:16
+Wakeup_event = 0x0002, WakeupEvt1 = 0x0000 RTC Timer
+HM0360 MD sensitivity 0
+Camera reg 0x2099 = 0x00
+##### 11:55:56 typing 'setop 17 1'
+##### 11:55:56 typing 'setop 11 0'
+Camera reg 0x2099 = 0x00
+Preparing HM0360 for MD:   HM0360 Motion Detection off.
+   Changing mode from 0 to 2 with nFrames=1, sleepTime=0 sleepCount = 0xffff
+>>> Entering DPD at 2024:01:01 00:02:42
+Wakeup_event = 0x0002, WakeupEvt1 = 0x0000 RTC Timer
+HM0360 MD sensitivity 1
+Camera reg 0x2099 = 0x20
+##### 11:56:21 typing 'setop 17 1'
+##### 11:56:21 typing 'setop 11 1000'
+Camera reg 0x2099 = 0x20
+Preparing HM0360 for MD:   HM0360 Motion Detection on! 1000ms frame interval
+   Changing mode from 0 to 2 with nFrames=1, sleepTime=1000 sleepCount = 0x8030
+>>> Entering DPD at 2024:01:01 00:03:09
+Wakeup_event = 0x0000, WakeupEvt1 = 0x0001 WAKE signal
+Motion detected INT_INDIC = 0x88
+HM0360 MD sensitivity 1
+Camera reg 0x2099 = 0x20
+##### 11:56:33 typing 'setop 7 20'
+##### 11:56:34 typing 'setop 11 1000'
+##### 11:56:34 typing 'setop 17 1'

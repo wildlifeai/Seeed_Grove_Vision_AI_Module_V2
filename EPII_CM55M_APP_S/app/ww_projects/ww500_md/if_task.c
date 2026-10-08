@@ -929,35 +929,14 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 		break;
 
 	case APP_MSG_IFTASK_AWAKE:
-#ifdef SENDMSGEARLY
-		// else send when APP_MSG_IFTASK_FREERTOS_INIT arrives
-		// We have just woken, so send a message to the BLE processor
-		// Include the AI's time
-		if (woken == APP_WAKE_REASON_MD) {
-			// Special wake message if the wake was due to motion detection
-			snprintf(message, sizeof(message), "MD ");
-			exif_utc_get_rtc_as_utc_string(&message[3], UTCSTRINGLENGTH );
-		}
-		else {
-			snprintf(message, sizeof(message), "Wake ");
-			exif_utc_get_rtc_as_utc_string(&message[5], UTCSTRINGLENGTH );
-		}
-
-		if_task_state = APP_IF_STATE_I2C_TX;
-#endif // SENDMSGEARLY
+		// Nothing to send yet: the wake message goes when APP_MSG_IFTASK_FREERTOS_INIT arrives
 		break;
 
 	case APP_MSG_IFTASK_FREERTOS_INIT:
 		// Here when the last FreeRTOStask has done its one-off initialisation
-		// Time to send selfTest bits to BLE processor.
-#ifdef SENDMSGEARLY
-		// Report any error bits to the BLE processor
-		snprintf(message, sizeof(message), "selfTest %04x", selfTest_getErrorBits());
-#else
+		// Time to send the wake message, with the AI processor's time, to the BLE processor.
 		if (woken == APP_WAKE_REASON_MD) {
 			// Special wake message if the wake was due to motion detection
-			//snprintf(message, sizeof(message), "MD ");
-			//exif_utc_get_rtc_as_utc_string(&message[3], UTCSTRINGLENGTH );
 			snprintf(message, sizeof(message), "Motion ");
 			exif_utc_get_rtc_as_utc_string(&message[7], UTCSTRINGLENGTH );
 		}
@@ -970,8 +949,6 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 			snprintf(message, sizeof(message), "Wake ");
 			exif_utc_get_rtc_as_utc_string(&message[5], UTCSTRINGLENGTH );
 		}
-
-#endif // SENDMSGEARLY
 
 		// The first message after a boot: it also finds out whether the BLE processor is there (see BLE_PROBE_TIME)
 		bleProbePending = true;

@@ -85,7 +85,7 @@
 // session inactivity and the app's 15s silence timeout.
 #define MISSINGMASTERTIME	4000
 
-// Time in ms for the BLE processor to read the first message after a boot ("Wake ...", "Timer ..." or "MD ...").
+// Time in ms for the BLE processor to read the first message after a boot ("Wake ...", "Timer ..." or "Motion ...").
 // If it does not, it is treated as unresponsive (bleUnresponsive) and nothing more is sent to it until it contacts
 // us. Only the first message uses this short time; every later one uses MISSINGMASTERTIME, so file transfers keep
 // their long window. Added 28 Sep 2026 for boards with no BLE processor, where every message would otherwise wait

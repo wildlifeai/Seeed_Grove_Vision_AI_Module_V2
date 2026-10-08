@@ -1,0 +1,18 @@
+# #153: a photo taken on the RP3 image carries EXIF Model 'WW500 HM0360'
+# Images built from Seeed dev 5750f8b5 (RP3 14:06:13, HM0360 14:07:37), WILD-KOMB, 2 Oct 2026. Stamps are the PC's clock (NZDT); the device keeps UTC.
+[14:22:19.967] himax | WW500_C02 14:06:13 Oct  2 2026
+[14:22:21.764] himax | Active slot 1 running 'RP3 (day/colour)'. Slot A: 'unknown', Slot B: 'RP3 (day/colour)'. Auto-switch: off
+[14:26:20.456] himax | AE: p75=236 (target 110) exposure 2368->1008 gain code 0->0
+[14:26:21.361] himax | AE: p75=172 (target 110) exposure 1008->606 gain code 0->0
+[14:26:21.628] himax | Writing 22484 bytes (21972 + 512) to 'ABF08401.JPG' from jpeg buffer of 115860 bytes
+[14:26:21.663] himax | Wrote 22482 byte image to SD: ABF08401.JPG at 1:26:25 2/10/2026
+## downloaded over BLE later (AI txfile ABF08401.JPG, see ww-hardware #34) and read with Pillow
+[14:56:12.572] app   | Written AI txfile ABF08401.JPG to the device WILD-KOMB (14:56:14-571)
+[14:56:12.572] app   | [useBleListeners] RAW_TX received for E7:52:81:76:CC:8E: AI txfile ABF08401.JPG
+[14:56:31.882] app   | ImageReassembler: Transfer complete! Received 22482/22482 (0 gaps)
+[14:56:32.202] app   | ImageReassembler: Image saved to file:///data/user/0/com.wildlife.wildlifewatcher.expo/cache/capture_1790906193958.jpg [SUCCESS] (22482/22482 bytes)
+## EXIF of ABF08401.JPG (22482 bytes, 640 x 480)
+  Make: 'Wildlife.ai'
+  Model: 'WW500 HM0360'
+  Software: 'WW500_C02 14:06:13 Oct  2 2026'
+  DateTimeOriginal: '2026:10:02 01:26:24'

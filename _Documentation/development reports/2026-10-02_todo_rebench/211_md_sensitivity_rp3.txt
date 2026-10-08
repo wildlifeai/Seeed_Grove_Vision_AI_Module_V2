@@ -1,0 +1,29 @@
+# #211: the md command and op17 on the RP3 image, then the same on the HM0360 image
+# Images built from Seeed dev 5750f8b5 (RP3 14:06:13, HM0360 14:07:37), WILD-KOMB, 2 Oct 2026. Stamps are the PC's clock (NZDT); the device keeps UTC.
+## RP3 image: md is not a command
+[14:22:19.764] himax | ##### typing 'ver'
+[14:22:19.967] himax | WW500_C02 14:06:13 Oct  2 2026
+[14:22:21.482] himax | ##### typing 'slots'
+[14:22:21.764] himax | Active slot 1 running 'RP3 (day/colour)'. Slot A: 'unknown', Slot B: 'RP3 (day/colour)'. Auto-switch: off
+[14:22:30.596] himax | ##### typing 'md 2'
+[14:22:30.862] himax | Command not recognised.  Enter 'help' to view a list of available commands.
+## RP3 image: op17 set to 3, then the sleep: no sensitivity is applied
+[14:25:48.378] himax | Set OpParam 11 = 1000
+[14:25:50.414] himax | Set OpParam 17 = 3
+[14:26:18.860] himax | Preparing HM0360 for MD:   HM0360 Motion Detection on! 1000ms frame interval
+[14:26:18.860] himax |    Changing mode from 0 to 2 with nFrames=1, sleepTime=1000 sleepCount = 0x8030
+[14:26:18.860] himax | >>> Entering DPD at 2026:10:02 01:26:23
+## HM0360 image: op17 is applied at boot, and md answers
+[14:28:33.815] himax | **** WW500 MD. (WW500_C02) Built: 14:07:37 Oct  2 2026 ****
+[14:28:33.815] himax | Camera: HM0360
+[14:28:36.963] himax | Slot A labelled variant 1 = HM0360 (night/IR)
+[14:28:37.184] himax | HM0360 MD sensitivity 3
+[14:28:38.615] himax | ##### typing 'ver'
+[14:28:38.895] himax | WW500_C02 14:07:37 Oct  2 2026
+[14:28:40.399] himax | ##### typing 'slots'
+[14:28:40.773] himax | Active slot 0 running 'HM0360 (night/IR)'. Slot A: 'HM0360 (night/IR)', Slot B: 'RP3 (day/colour)'. Auto-switch: off
+[14:28:42.277] himax | ##### typing 'md 2'
+[14:28:42.605] himax | HM0360 MD sensitivity 2
+[14:28:42.605] himax | MD sensitivity set to 2
+[14:28:44.617] himax | ##### typing 'getop 17'
+[14:28:45.131] himax | OpParam 17 = 2

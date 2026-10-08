@@ -9,7 +9,7 @@ This document describes the team's process for managing branches, pull requests,
 |--------|---------|-----------------|
 | `main` | Stable production releases | **Never** — only merged from `dev` via PR |
 | `dev` | Integration branch (head branch for all work) | **Never** — only merged from feature branches via PR |
-| `feature/*` | Individual task or feature work | Yes |
+| `yymmdd_topic` | Individual task or feature work (see below) | Yes |
 
 > [!IMPORTANT]
 > All work starts and ends with `dev`. Never commit directly to `dev` or `main`.
@@ -46,10 +46,12 @@ git checkout dev
 git pull origin dev
 
 # Create a new branch for your task
-git checkout -b feature/my-task-description
+git checkout -b 260930_myTask
 ```
 
-Use a short, descriptive name: `feature/ble-timeout-fix`, `feature/add-lora-retry`, etc.
+Name it with the date you create it and a short topic, `yymmdd_topic` (e.g. `260930_appCommsBugs`), and add a row to
+[`Branches/Branch_List.md`](Branches/Branch_List.md) saying what the branch is for. (Older examples below still use
+`feature/...`.)
 
 ---
 

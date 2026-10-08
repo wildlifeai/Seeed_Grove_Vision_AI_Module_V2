@@ -1,0 +1,24 @@
+# #152: the clock is set, then a watchdog reset (reset + dpd) puts it back to 2024-01-01
+# Images built from Seeed dev 5750f8b5 (RP3 14:06:13, HM0360 14:07:37), WILD-KOMB, 2 Oct 2026. Stamps are the PC's clock (NZDT); the device keeps UTC.
+[14:22:19.764] himax | ##### typing 'ver'
+[14:22:19.967] himax | WW500_C02 14:06:13 Oct  2 2026
+[14:22:21.482] himax | ##### typing 'slots'
+[14:22:21.764] himax | Active slot 1 running 'RP3 (day/colour)'. Slot A: 'unknown', Slot B: 'RP3 (day/colour)'. Auto-switch: off
+[14:22:32.866] himax | ##### typing 'setutc 2026-10-02T01:23:25Z'
+[14:22:35.251] himax | RTC set to 2026-10-02T01:23:25Z (this took 1286ms)
+[14:22:37.012] himax | ##### typing 'getutc'
+[14:22:37.330] himax | 2026-10-02T01:23:28Z
+[14:24:52.848] himax | ##### typing 'getutc'
+[14:24:53.181] himax | 2026-10-02T01:25:50Z
+[14:24:54.695] himax | ##### typing 'reset'
+[14:24:54.979] himax | Forcing reset soon.
+[14:24:55.995] himax | ##### typing 'dpd'
+[14:24:56.197] himax | Forcing DPD by clearing inactivity period
+[14:24:56.430] himax | >>> Reset by watchdog
+[14:24:56.712] himax | **** WW500 MD. (WW500_C02) Built: 14:06:13 Oct  2 2026 ****
+[14:24:56.712] himax | Wakeup_event = 0x0000, WakeupEvt1 = 0x0000 Cold boot
+[14:24:57.329] himax | ### Cold Boot ###
+[14:24:58.764] himax | ##### typing 'setop 8 60000'
+[14:25:00.128] himax | Sending 31 bytes: Header 4, payload 25, checksum 2 'Wake 2024-01-01T00:00:02Z'
+[14:25:01.348] himax | ##### typing 'getutc'
+[14:25:01.680] himax | 2024-01-01T00:00:04Z

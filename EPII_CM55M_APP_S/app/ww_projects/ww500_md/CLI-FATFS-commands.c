@@ -1021,7 +1021,7 @@ static void printDownloadTiming(uint32_t bytes, uint32_t elapsedMs, const ifTask
 	ifTask_getDownloadTiming(&aiTime, &bleTime);
 
 	if (elapsedMs > 0) {
-		rate = (bytes * 1000) / elapsedMs;
+		rate = (uint32_t) (((uint64_t) bytes * 1000) / elapsedMs);	// 64-bit: bytes * 1000 overflows above 4.29 MB
 	}
 
 	XP_LT_BLUE;

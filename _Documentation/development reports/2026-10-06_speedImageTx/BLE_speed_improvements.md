@@ -5,6 +5,10 @@
 #### Author: Claude, for Charles Palmer
 #### Date: 6 October 2026
 
+**Status, 9 Oct 2026:** a record of 6 October, now out of date. The AI processor's download
+output is quiet since #264, and the BLE processor holds the fast connection interval for a
+download from 0.30.57 (ww-hardware #34). See [`txfile.md`](../../txfile.md).
+
 ## Summary
 
 The main cost on both processors is console output on the per-packet path. On the BLE processor

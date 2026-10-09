@@ -15,6 +15,11 @@ the fact is not enough, the timing has to be built in.
   card: the keystroke was echoed and the board slept anyway). Miss it and every command
   returns nothing, which looks exactly like a dead port rather than a sleeping device. Put
   op8 back (`setop 8 1000`, or the deployment's value) before the board is left to sleep.
+  The running countdown keeps the old period, and the app's live monitor polls every 60 s,
+  so with the app connected a board left at 60000 never sleeps and motion detection never
+  arms (8 Oct 2026). Send `dpd` to put it to sleep.
+* **`read <file>` prints only up to the first zero byte**, so it cannot show a JPEG's EXIF.
+  Read the card on a PC.
 * **Arm the script first, then ask for the reset.** The device does not wake on serial
   input, so opening the port and sending has already lost. Wait for the boot banner.
 * **Probe for the console port every session; never hard-code it.** It moves between

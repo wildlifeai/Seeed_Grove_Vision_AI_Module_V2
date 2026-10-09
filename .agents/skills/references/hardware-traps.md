@@ -67,14 +67,13 @@ building on any of them:
   flashed at 0.30.48 (75406df) and moves only when someone runs the app's firmware update,
   most recently to 0.30.51 on 18 September. Read the version off the device rather than
   assuming it matches the tip.
-* **Releasing nRF firmware takes two workflows, in order:** **Build BLE Firmware** compiles
-  and signs at whatever `version.mk` declares and opens a PR with the `.zip` and `.hex`, then
-  **Upload BLE Firmware to Supabase** publishes it. Editing `version.mk` alone ships nothing:
-  the upload silently falls back to the newest zip present and takes the version from *its*
-  filename, so a bump with no build republishes the old image under the old number and then
-  fails on a duplicate key. The version is compiled into the image and written into the DFU
-  package, so renaming a zip is never a shortcut. nRF5 SDK 16.0.0 needs **GCC 10.3.1**; 12
-  and newer fail on `-Werror=array-bounds` in `nrf_section.h`.
+* **Releasing nRF firmware** is two workflows in ww-hardware, Build BLE Firmware then Upload
+  BLE Firmware to Supabase, at the version `version.mk` names. The procedure and its traps
+  live in ww-hardware's `.agents/skills/references/build-and-release.md`.
+* **A model file that is not a TFLite flatbuffer halts the image task** (#241). `loadmodel`
+  copies it to flash, prints `No valid TFLite model in flash` and `TFLM: model = NULL`, and
+  the camera then answers commands but never captures or sleeps until a reset. A real model
+  has `TFL3` at bytes 4 to 7; on 8 Oct 2026 the dev backend's model 7 v1 was a ZIP (`PK`).
 
 * **In the RP builds every HM0360 access must go through `hm0360_md.c`'s
   `saveMainCameraConfig()`/`restoreMainCameraConfig()`** (added 30 Sep 2026, issue #249). The

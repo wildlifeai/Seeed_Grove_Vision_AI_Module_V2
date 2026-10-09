@@ -7,7 +7,8 @@ scores and the time each inference took. It exists so candidate models can be co
 same frames on the real camera, without a lens or a scene. Added 5 October 2026 for the rat
 challenge.
 
-To try it with a known model and ten frames, follow `_Tools/nnfiles_example/README.md`.
+To try it with a known model and ten frames, follow `_Tools/nnfiles_example/README.md` (a rat model) or
+`_Tools/nnfiles_example_cat/README.md` (a cat model).
 
 ## On the PC
 
@@ -31,6 +32,9 @@ setop 8 60000      hold the board awake; the run resets the inactivity timer per
 nnfiles NNTEST     or: nnfiles NNTEST 501   to resume from frame 501
 ```
 
+Type `setop 8 60000` as soon as the CLI starts after a RESET. In the 9 October 2026 runs the board went to
+deep sleep about 3 s after a RESET otherwise, and it does not wake on console input, so later commands were lost.
+
 The command refuses to start if no model is loaded, if the image task is not idle, or if a run
 is already going. It stops by itself at the first missing frame number, on a read or write error,
 or if the model fails to run, and ends with a line such as
@@ -45,7 +49,9 @@ raw buffer and the FatFS task's open file.
 
 ## What it writes
 
-`<folder>/RESULTS.CSV`, one line per frame, appended as it goes (a resumed run appends too):
+`<folder>/RESULTS.CSV`, one line per frame, appended as it goes. A new run without a start frame writes the
+file afresh and only a resumed run appends, so copy it off the card before running another model on the same
+folder (the console log has every line too):
 
 ```
 # labels: not rat,rat
@@ -64,6 +70,9 @@ prints follow each frame, so a console log of the run is a complete record too.
 
 ## Limits and traps
 
+- Seat the SD card before pressing RESET. If the card is not ready at boot, the log says `SD card initialisation
+  failed (reason 3)`, and `loadmodel` then fails with `No valid TFLite model in flash` and `MODEL UPDATE FAILED`,
+  which does not name the card.
 - Frames must be exactly 640x480 8-bit grayscale. A frame of the wrong size stops the run with a
   message; `nnfiles_prepare.py` cannot produce one.
 - Big folders are slow. In a folder of 9,999 frames the run did 347 frames a minute at the start and

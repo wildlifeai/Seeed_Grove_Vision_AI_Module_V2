@@ -84,6 +84,24 @@ events at the app, MKL62BA, HX6538 and SD card).
 At the time of writing I have an occasional error in which one whole BLE packet is lost. I expect I will find and fix this bug. 
 However, the app could consider retrying if it detects an error.
 
+## Transfer Speed and Timing (7 October 2026)
+
+* A transfer moves one packet at a time. The AI processor prepares the next packet only after the BLE
+processor has read the previous one over I2C.
+* At the end of a transfer the AI processor console prints a `Download timing` block: bytes, packets, time
+and rate, plus the average, maximum and total time per packet for the SD card read (`f_read`), the AI
+processor (`AI`) and the BLE processor (`BLE`, from `/IP_INT` to its I2C read). A `txfile` typed on the
+local console prints it too, with the `AI` and `BLE` lines `over 0`.
+* The per-packet console output is suppressed during a transfer (as it is for uploads), so the AI processor
+takes about 0.5 ms per packet. The SD card read takes about 0.4 ms.
+* With nothing printed between raising and lowering `/IP_INT`, its pulse is microseconds long during a
+download, not about 16 ms. The BLE processor must be 0.30.51 or later, which catches the pulse on a
+dedicated GPIOTE channel while connected; an older one can miss packets.
+* The rate is set by the BLE connection interval: one packet per connection event. At the standard 195 ms
+that is about 1.3 KB/s. From 0.30.57 (ww-hardware #34) the BLE processor holds the fast 15 to 30 ms
+interval for a download, and a 22 KB photo takes about 4 s (9 Oct 2026). See the development report
+[2026-10-06_speedImageTx](development%20reports/2026-10-06_speedImageTx/README.md).
+
 ## Future Developments
 
 At the moment the file transferred to the app is the same as the file saved to the SD card. So if it is a large file we will have to wait 

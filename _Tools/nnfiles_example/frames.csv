@@ -1,0 +1,11 @@
+path,label
+_Tools/nnfiles_example/frames/rat_1.jpg,rat
+_Tools/nnfiles_example/frames/rat_2.jpg,rat
+_Tools/nnfiles_example/frames/rat_3.jpg,rat
+_Tools/nnfiles_example/frames/rat_4.jpg,rat
+_Tools/nnfiles_example/frames/rat_5.jpg,rat
+_Tools/nnfiles_example/frames/notrat_1_mouse.jpg,not rat
+_Tools/nnfiles_example/frames/notrat_2_hedgehog.jpg,not rat
+_Tools/nnfiles_example/frames/notrat_3_possum.jpg,not rat
+_Tools/nnfiles_example/frames/notrat_4_cat.jpg,not rat
+_Tools/nnfiles_example/frames/notrat_5_empty.jpg,not rat

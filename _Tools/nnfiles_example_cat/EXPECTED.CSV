@@ -1,0 +1,11 @@
+frame,file,label,pc not cat,pc cat,pc call,camera ms,camera not cat,camera cat,camera call
+F0001.BIN,cat_1.jpg,cat,-75,75,cat,46,-52,52,cat
+F0002.BIN,cat_2.jpg,cat,-42,42,cat,45,-31,31,cat
+F0003.BIN,cat_3.jpg,cat,-48,48,cat,45,-34,34,cat
+F0004.BIN,cat_4.jpg,cat,-55,55,cat,45,16,-16,not cat
+F0005.BIN,cat_5.jpg,cat,-70,70,cat,45,-55,55,cat
+F0006.BIN,possum.jpg,not cat,80,-80,not cat,45,80,-80,not cat
+F0007.BIN,rabbit.jpg,not cat,116,-116,not cat,46,117,-117,not cat
+F0008.BIN,hedgehog.jpg,not cat,126,-126,not cat,46,126,-126,not cat
+F0009.BIN,bird.jpg,not cat,55,-55,not cat,46,58,-58,not cat
+F0010.BIN,empty.jpg,not cat,125,-125,not cat,46,125,-125,not cat

@@ -8,7 +8,8 @@ same frames on the real camera, without a lens or a scene. Added 5 October 2026 
 challenge.
 
 To try it with a known model and ten frames, follow `_Tools/nnfiles_example/README.md` (a rat model) or
-`_Tools/nnfiles_example_cat/README.md` (a cat model).
+`_Tools/nnfiles_example_cat/README.md` (a cat model). The challenges' current models run on the same frames
+([below](#the-challenges-current-models)).
 
 ## On the PC
 
@@ -86,3 +87,32 @@ prints follow each frame, so a console log of the run is a complete record too.
   they do not slow the run.
 - The run uses the FatFS task's transfer file handle, shared with file transfers from the app, so
   the two cannot overlap.
+
+## The challenges' current models
+
+The best models of the WW Rat and WW Cat challenges are not in this repo: some trained on photos under a
+non-commercial licence, so they stay within wildlife.ai. They are on the team's shared drive, in
+[Data/ww500-models](https://drive.google.com/drive/folders/1rCAShUiT_xAp8Z_npBzJ3aBiqvBb_6aH), with the PC's
+answers on the examples' frames in `EXPECTED.CSV`. Never commit them here.
+
+| Model | Finds | Network | Input | Vela 5.2.0 | Arena | ms on a WW500 | Test AP, unseen cameras |
+|---|---|---|---|---|---|---|---|
+| `71V1` | cat | MobileNetV2 0.35, distilled from a DINOv2-B teacher | 160x160 | `--optimise Performance` | 425 KiB | 51 | NZ 0.63, Wellington 0.82 |
+| `72V1` | cat | MobileNetV2 0.35, first layer folded to one channel | 224x168 | `--optimise Size` | 131 KiB | 68 | NZ 0.62, Wellington 0.82 |
+| `93V1` | rat | MobileNetV2 0.35, trained on 13 species first | 160x160 | `--optimise Performance` | 425 KiB | 51 | Wellington 0.57, old device 0.06, with mice counted as targets |
+
+All three start from ImageNet weights and train on camera-trap frames (LILA BC, iNaturalist) turned into the
+camera's 640x480 grayscale and squashed as the firmware squashes. They are full int8 and output two numbers,
+class 0 (`not cat`, `not rat`) then class 1. The challenges rank a model on class 1 minus class 0. The recipes are
+in the challenges' private repos, `wildlifeai/ww-cat-challenge` and `wildlifeai/ww-rat-challenge`
+(`agents/ROUND1.md`).
+
+To run one, follow the matching example's steps with the drive's `.TFL` and `.TXT` in `MANIFEST`: `loadmodel 71 1`
+or `loadmodel 72 1` then `nnfiles CATDEMO`, or `loadmodel 93 1` then `nnfiles NNDEMO`. Compare `RESULTS.CSV` with
+the model's rows in `EXPECTED.CSV`. On 200 test frames the camera made the PC's call on 196 for each cat model
+(9 October 2026), and `93V1` on 40 of 40 (6 October 2026).
+
+The camera's detection is not the challenges' score. The firmware reports a detection when class 1 alone is above
+op 16 (`processNNOutput()` in `image_task.c`, default 18, range 0 to 127). At the default, `93V1` detects none of
+the example's five rats, `71V1` one of the five cats and `72V1` four. Rank on class 1 minus class 0 from
+`RESULTS.CSV` until the two agree.

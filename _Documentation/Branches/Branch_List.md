@@ -19,4 +19,5 @@ Also, as an experiment, I will start naming branches with the date I create them
 | 2 Oct 2026   | 261002_pb7SwdHm0360 | On top of 260930_appCommsBugs (#257): keep PB7 as SWCLK in the HM0360 build (#200), PR #258, closed in favour of #260 |
 | 3 Oct 2026   | 261003_victorsPriorities  | Address some outstanding issues selected by Victor |
 | 5 Oct 2026   | 261005_nnfiles      | 'nnfiles' console command: run the loaded model on frames from the SD card and write RESULTS.CSV, to score candidate models (rat challenge) |
+| 6 Oct 2026   | 261006_speedImageTx  | Some measures to increase the speed of the transfer of image files to the app. |
 |              |                     |   | 

@@ -1,0 +1,14 @@
+10:44:34 nRF console COM5 logged
+10:44:34 App connected? Press RESET on the bench board now
+10:44:49 app 1: cold; 'Wake' sent 3.5s read 3.52s; probe ok; nRF first cmd 3.59s (selftest); mm_timer 0; IF sleep path 'Sleep msg read'; watchdog at 4.6s
+10:44:55 app 2: cold; 'Wake' sent 4.3s read 4.31s; probe ok; nRF first cmd 4.37s (selftest); mm_timer 0; IF sleep path 'Sleep msg read'; watchdog at 5.34s
+10:45:01 app 3: cold; 'Wake' sent 4.29s read 4.3s; probe ok; nRF first cmd 4.37s (selftest); mm_timer 0; IF sleep path 'Sleep msg read'; watchdog at 5.35s
+10:45:05 app 4: cold; 'Wake' sent 3.35s read 3.36s; probe ok; nRF first cmd 3.41s (selftest); mm_timer 0; IF sleep path 'Sleep msg read'; watchdog at 4.38s
+10:45:11 app 5: cold; 'Wake' sent 4.29s read 4.31s; probe ok; nRF first cmd 4.38s (selftest); mm_timer 0; IF sleep path 'Sleep msg read'; watchdog at 5.38s
+10:45:17 app 6: cold; 'Wake' sent 4.3s read 4.32s; probe ok; nRF first cmd 4.38s (selftest); mm_timer 0; IF sleep path 'Sleep msg read'; watchdog at 5.38s
+10:45:21 app 7: cold; 'Wake' sent 3.33s read 3.35s; probe ok; nRF first cmd 3.41s (selftest); mm_timer 0; IF sleep path 'Sleep msg read'; watchdog at 4.36s
+10:45:26 app 8: cold; 'Wake' sent 3.34s read 3.36s; probe ok; nRF first cmd 3.43s (selftest); mm_timer 0; IF sleep path 'Sleep msg read'; watchdog at 4.44s
+10:45:32 app 9: cold; 'Wake' sent 4.28s read 4.3s; probe ok; nRF first cmd 4.37s (selftest); mm_timer 0; IF sleep path 'Sleep msg read'; watchdog at 5.35s
+10:45:36 app 10: cold; 'Wake' sent 3.33s read 3.35s; probe ok; nRF first cmd 3.42s (selftest); mm_timer 0; IF sleep path 'Sleep msg read'; watchdog at 4.37s
+10:45:36 SUMMARY app: 10 boots, probe failed 0, mm_timer boots 0, nRF answered 10, ended by DPD/watchdog 10, nRF first cmd s: [3.41, 3.41, 3.42, 3.43, 3.59, 4.37, 4.37, 4.37, 4.38, 4.38]
+10:45:36 PHASE app DONE (the board reboots once more and sleeps by itself)

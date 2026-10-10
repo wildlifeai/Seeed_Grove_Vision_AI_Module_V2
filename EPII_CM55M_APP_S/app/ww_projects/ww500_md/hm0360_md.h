@@ -47,6 +47,16 @@ typedef enum {
 	MODE_HW_NFRAMES_SLEEP,	// 7 HW trigger, output N frames then sleep
 } mode_select_t;
 
+// Motion detection sensitivity options, the values of op 17 (OP_PARAMETER_MD_SENSITIVITY).
+// Moved from cis_hm0360/cisdp_sensor.h so the RP builds can use them too (issue #211, 2 Oct 2026)
+typedef enum {
+	MD_SENSITIVITY_OFF,
+	MD_SENSITIVITY_LOW,
+	MD_SENSITIVITY_MEDIUM,
+	MD_SENSITIVITY_HIGH,
+	MD_SENSITIVITY_NUMBER		// This is not one of the options - it serves to define the number of options (=4)
+} MD_SENSITIVITY_CONFIG_E;
+
 /*************************************** Public Function Declarations **************************/
 
 bool hm0360_md_isSensorPresent(uint8_t sensorAddress);
@@ -100,6 +110,9 @@ HX_CIS_ERROR_E hm0360_md_configureStrobe(bool flashRequired);
 
 // Re-program the HM0360 with the long register list
 HX_CIS_ERROR_E hm0360_md_reInitialise(void);
+
+// Set the motion detection sensitivity (op 17), in both the HM0360 and the RP builds
+HX_CIS_ERROR_E hm0360_md_setSensitivity(MD_SENSITIVITY_CONFIG_E option);
 
 // Replaced by hm0360_md_prepare()
 //HX_CIS_ERROR_E hm0360_md_enableMD(uint16_t mdFrameInterval);

@@ -59,9 +59,17 @@ building on any of them:
   wake-then-command can do it. In that state the nRF parks in SELFTEST and drops every app
   command. A `setop` in the same window is acknowledged and never saved (#207).
 * **The nRF forwards any command mid-`txfile` and restarts its packet counter** (ww-hardware
-  #33); **its console hex dump holds the download to about 1 KB/s** while its upload path is
-  already gated quiet (#34); **`Failed to send` on its console is normal back-pressure**
-  (#35); **the app's loopback benchmark never echoes** (#36).
+  #33); **`Failed to send` on its console is normal back-pressure** (#35); **the app's
+  loopback benchmark never echoes** (#36).
+* **A `txfile` download moves one packet per BLE connection event**, about 1.3 KB/s at the
+  standard 195 ms. The BLE processor holds the fast 15 to 30 ms interval for a download from
+  0.30.57 (ww-hardware #34), and Android then picks 30 ms. Both consoles are quiet for download
+  packets: the BLE processor from 0.30.56, the AI processor from #264. `txfile` prints a
+  `Download timing` block that splits each packet into AI processor and BLE processor time.
+  With no console output, `/IP_INT` is microseconds long during a download, so the BLE
+  processor must be 0.30.51 or later (dedicated GPIOTE channel). Before 0.30.57 the BLE
+  processor's `we waited Nms` counted retries of about 3 ms, not milliseconds. See
+  `2026-10-06_speedImageTx`.
 * **The bench nRF runs ww-hardware `dev`, not `main`.** `ver` reports the nRF build, `AI ver`
   the Himax build; cite nRF line numbers from `dev`. **The device lags the branch**: it was
   flashed at 0.30.48 (75406df) and moves only when someone runs the app's firmware update,
@@ -84,6 +92,9 @@ building on any of them:
   to the HM0360 outside the pair talks to the wrong device or at the wrong speed. #238 cost a
   bench session and a PR round.
 * **GPIO0, GPIO1 and GPIO2 each appear on two pins** (PB6/PB9, PB7/PB10, PB8/PB11; HX6538
-  datasheet 4.5, note 3), and they are one signal each. In `ww500_md` PB7 (SENSOR_ENABLE,
-  `rp_sensor_enable()`) and the blue LED on PB10 are both GPIO1, so they move together. Found
-  in `ww500_minimal`, 27 Sep 2026; `ww500_md`'s pin assignments are deliberately unchanged.
+  datasheet 4.5, note 3), and they are one signal each. In `ww500_md` PB7 is SENSOR_ENABLE
+  (GPIO1, `rp_sensor_enable()`), so PB10 must not be made GPIO1 as well (the old blue-LED code
+  did that; it was removed on 2 Oct 2026). Found in `ww500_minimal`, 27 Sep 2026. Since 2 Oct 2026
+  PB7 is a GPIO output in every build (not with `ENABLESWD`), so PB7 (SWCLK) stops being SWD
+  once `checkForCameras()` runs. Since 3 Oct 2026 the cold-boot RTC set (about 1.4 s) comes
+  first, so SWD can connect for about 1.4 s after a reset; after a DPD wake the window is short.

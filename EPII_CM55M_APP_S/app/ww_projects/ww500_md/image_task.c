@@ -2012,9 +2012,10 @@ static bool configure_image_sensor(CAMERA_CONFIG_E operation) {
         	processedOK = false;
         }
         else  {
-        	// TODO should be #if defined(USE_HM0360) || defined(USE_HM0360_MD)
 #ifdef USE_HM0360
-        	cisdp_sensor_set_md_sensitivity(fatfs_getOperationalParameter(OP_PARAMETER_MD_SENSITIVITY));
+        	// cisdp_sensor_init() has just reloaded the HM0360's register table, so re-apply op 17. HM0360 build only:
+        	// in the RP builds this is the RP camera's init, and image_sleepNow() applies op 17 to the HM0360 (#211)
+        	hm0360_md_setSensitivity(fatfs_getOperationalParameter(OP_PARAMETER_MD_SENSITIVITY));
 #endif // USE_HM0360
         	// Initialise extra registers from file
         	cis_file_process(CAMERA_EXTRA_FILE);
@@ -2047,10 +2048,9 @@ static bool configure_image_sensor(CAMERA_CONFIG_E operation) {
             processedOK = false;
         }
         else  {
-        	// TODO should be #if defined(USE_HM0360) || defined(USE_HM0360_MD)
-        	// TODO should other similar instances be chnaged?
 #ifdef USE_HM0360
-        	cisdp_sensor_set_md_sensitivity(fatfs_getOperationalParameter(OP_PARAMETER_MD_SENSITIVITY));
+        	// Only reached in the HM0360 build (see above)
+        	hm0360_md_setSensitivity(fatfs_getOperationalParameter(OP_PARAMETER_MD_SENSITIVITY));
 #endif // USE_HM0360
         	// if wdma variable is zero when not init yet, then this step is a must be to retrieve wdma address
             //  Datapath events give callbacks to os_app_dplib_cb() in dp_task
@@ -2272,12 +2272,14 @@ static void prepareJpegFile(int8_t * outCategories, uint8_t classCount, fileBuff
 	 * the camera variant so a photo is self-describing (colour RP3 vs mono/IR
 	 * HM0360) - the website maps this to its camera_variant. Software matches
 	 * the firmware version recorded in the firmware database. */
-#if defined(USE_HM0360) || defined(USE_HM0360_MD)
-	exif_input.camera_model = "WW500 HM0360";
+#if defined(USE_RP3)
+	// Test the RP cameras first: their builds define USE_HM0360_MD as well, for motion detection. Testing that first
+	// labelled every RP3 photo "WW500 HM0360" (issue #153, fixed 2 Oct 2026)
+	exif_input.camera_model = "WW500 RP3";
 #elif defined(USE_RP2)
 	exif_input.camera_model = "WW500 RP2";
-#elif defined(USE_RP3)
-	exif_input.camera_model = "WW500 RP3";
+#elif defined(USE_HM0360)
+	exif_input.camera_model = "WW500 HM0360";
 #else
 	exif_input.camera_model = NULL;	/* exif_builder falls back to "WW500" */
 #endif
@@ -2744,12 +2746,11 @@ void image_sleepNow(void) {
 #if defined(USE_HM0360) || defined(USE_HM0360_MD)
     // HM0360 as main camera
     if (hm0360_md_isHM0360Present()) {
-#ifdef USE_HM0360
     	// Apply the MD sensitivity (op 17) now, not only at boot (configure_image_sensor()), so that a change made
     	// while awake (setop 17, AI setop over BLE) takes effect for this DPD rather than after the next wake, and so
-    	// matches the message hm0360_md_prepare() prints (28 Sep 2026)
-    	cisdp_sensor_set_md_sensitivity(fatfs_getOperationalParameter(OP_PARAMETER_MD_SENSITIVITY));
-#endif // USE_HM0360
+    	// matches the message hm0360_md_prepare() prints (28 Sep 2026). In every build, including the RP builds where
+    	// the HM0360 is only the motion detector: before 2 Oct 2026 op 17 had no effect there (issue #211)
+    	hm0360_md_setSensitivity(fatfs_getOperationalParameter(OP_PARAMETER_MD_SENSITIVITY));
     	XP_LT_GREY;
        	xprintf("Preparing HM0360 for MD:");
     	hm0360_md_prepare(cameraSystemEnabled, mdInterval); // select CONTEXT_B registers (if enabled)

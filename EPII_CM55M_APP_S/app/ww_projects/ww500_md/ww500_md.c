@@ -88,9 +88,6 @@
 // Enable SWD functions on PB6, PB7, PB8
 //#define ENABLESWD
 
-// Flash time at reset
-#define LED_DELAY						50
-
 // Uncomment this to print linker stats
 //#define PRINTLINKERSTATS
 
@@ -136,9 +133,8 @@ static bool resetRequested = false;
 
 static void pinmux_init(void);
 static void initVersionString(void);
-static void ledInit(void);
-static void showResetOnLeds(uint8_t numFlashes);
 static void checkForCameras(void);
+static void initFlashEarly(void);
 
 #ifdef PRINTLINKERSTATS
 static void printLinkerStats(void);
@@ -163,12 +159,9 @@ static void pinmux_init(void) {
 
 #ifdef WW500
 	// WW500 is defined in ww.mk
-	// Init PB10 for sensor enable pin.
+	// SENSOR_ENABLE (the RP camera enable) is set up below, after the pin mux is written.
 	// This differs from the Grove AI V2, in which sensor enable is PA1.
 	// But I need PA1 to control the power supply switches
-
-	// later: pretty sure this is not required as it is done by rp_sensor_enable()
-	//rp_sensor_enable_gpio1_pinmux_cfg(&pinmux_cfg);
 #else
 	// For Seeed Grove Vision AI V2 only
 	// Init AON_GPIO1 pin mux to PA1 for OV5647 enable pin
@@ -191,61 +184,11 @@ static void pinmux_init(void) {
 
 	hx_drv_scu_set_all_pinmux_cfg(&pinmux_cfg, 1);
 
-	// TODO - properly intergrate these in the pattern above
-	// Activate green and blue LEDs for user feedback
-	ledInit();
-
-//#ifdef WW500
-//	// Sets initial state of the SENSOR_ENABLE signal
-//	sensor_enable(false);
-//#endif // WW500
+	// SENSOR_ENABLE (PB7 on WW500_C00) is not set up here: checkForCameras() makes it a GPIO output, after the
+	// cold-boot RTC set, so that PB7 stays SWCLK long enough for a debugger to connect after a reset (3 Oct 2026)
 }
 
-/**
- * Initialise GPIO pins so they can be used to indicate activity during testing
- *
- * 	PB9  = LED3 (green), SENSOR_GPIO (connects to a normally n/c pin on the sensor connector)
- *  PB10 = LED2 (blue),  SENSOR_ENABLE (normally the RP camera enable signal)
- */
-static void ledInit(void) {
 
-#ifdef PB9ISLEDGREEN
-	// PB9 = LED3 (green), SENSOR_GPIO (connects to a normally n/c pin on the sensor connector)
-    hx_drv_gpio_set_output(GPIO0, GPIO_OUT_LOW);
-    hx_drv_scu_set_PB9_pinmux(SCU_PB9_PINMUX_GPIO0, 1);
-	hx_drv_gpio_set_out_value(GPIO0, GPIO_OUT_LOW);
-#endif // PB9ISLEDGREEN
-
-#ifdef PB10ISLEDBLUE
-	// PB10 = LED2(blue), SENSOR_ENABLE
-	// This is normally the camera enable signal (active high) so would not normally be an LED output!
-    hx_drv_gpio_set_output(GPIO1, GPIO_OUT_LOW);
-    hx_drv_scu_set_PB10_pinmux(SCU_PB10_PINMUX_GPIO1, 1);
-	hx_drv_gpio_set_out_value(GPIO1, GPIO_OUT_LOW);
-#endif //PB10ISLEDBLUE
-}
-
-/**
- * Flash a distinctive pattern on all LEDs at reset,
- * to show life
- *
- * TODO - use the flash timer mechanism!!!
- */
-static void showResetOnLeds(uint8_t numFlashes) {
-
-    for (uint8_t i=0; i < numFlashes; i++) {
-
-    	app_ledGreen(true);
-    	hx_drv_timer_cm55s_delay_ms(LED_DELAY, TIMER_STATE_DC);
-    	app_ledBlue(true);
-    	hx_drv_timer_cm55s_delay_ms(LED_DELAY, TIMER_STATE_DC);
-
-    	app_ledGreen(false);
-    	hx_drv_timer_cm55s_delay_ms(LED_DELAY, TIMER_STATE_DC);
-    	app_ledBlue(false);
-    	hx_drv_timer_cm55s_delay_ms(LED_DELAY, TIMER_STATE_DC);
-    }
-}
 
 
 /**
@@ -261,10 +204,19 @@ static void showResetOnLeds(uint8_t numFlashes) {
  */
 static void checkForCameras(void) {
 
+	// SENSOR_ENABLE (PB7 on WW500_C00) becomes a GPIO output here, in every build. In the RP builds the camera is
+	// then powered only while in use (here and in image_task.c). In the HM0360 build it is held low, keeping an RP
+	// camera that may be fitted powered down (2 Oct 2026). This is the first time PB7 is used as a GPIO: until now it
+	// has been SWCLK, as the bootloader left it, so a debugger can connect after a reset. On a cold boot that is
+	// about 1.4 s, as app_main() sets the RTC first (3 Oct 2026). Once PB7 is a GPIO, SWD can no longer connect.
+	// Not with ENABLESWD, where PB7 stays SWCLK.
+#if defined(WW500) && !defined(ENABLESWD)
 #if defined (USE_RP2) || defined (USE_RP3)
-	// Only needed if using a RP camera
-	rp_sensor_enable(true);
-#endif
+	rp_sensor_enable(true);		// power the RP camera for the I2C check below
+#else
+	rp_sensor_enable(false);
+#endif // USE_RP2 || USE_RP3
+#endif // WW500 && !ENABLESWD
 
  	// Can't use vTaskDelay() since FreeRTOS scheduler has not started yet
     hx_drv_timer_cm55x_delay_ms(CIS_POWERUP_DELAY, TIMER_STATE_DC);
@@ -273,28 +225,8 @@ static void checkForCameras(void) {
 
 	XP_LT_GREY;
 
-#ifdef WW500_C00
-	// Test for the I2C extender
-	if (hm0360_md_isSensorPresent(PCA9574_I2C_ADDRESS_0)) {
-		xprintf("PCA9574 present at 0x%02x\n", PCA9574_I2C_ADDRESS_0);
+	// The PCA9574 (flash LED control) is now set up earlier, by initFlashEarly() (3 Oct 2026)
 
-		// Place this early as PCA9574 has floating pins at reset.
-		if (ledFlashInit()) {
-			xprintf("Initialised LED Flash\n");
-		}
-		else {
-			xprintf("Can't initialise LED Flash\n");
-		}
-	}
-	else {
-		xprintf("PCA9574 not present at 0x%02x\n", PCA9574_I2C_ADDRESS_0);
-		// expect a driver error message as well...
-
-		selfTest_setErrorBits(1 << SELF_TEST_AI_NO_FLASH);
-	}
-#endif // WW500_C00
-
-	XP_LT_GREY;
 
 #if defined (USE_HM0360) || defined (USE_HM0360_MD)
 	// Test for the HM0360, if it is our main camera or in use for motion detection
@@ -321,14 +253,43 @@ static void checkForCameras(void) {
 
 	XP_WHITE;
 
-#if defined (USE_RP2) || defined (USE_RP3)
-	// Only needed if using a RP camera
+#if defined(WW500) && !defined(ENABLESWD) && (defined (USE_RP2) || defined (USE_RP3))
  	rp_sensor_enable(false);	// Negate SENSOR_ENABLE
-#else
- 	// TODO - we could disable even if not using RP camera so this pin is set to output, 0
- 	// However enabling this means the SWD debugger won't work
- 	//rp_sensor_enable(false);	// Negate SENSOR_ENABLE
 #endif
+}
+
+/**
+ * Sets up the PCA9574 I/O expander, which drives FLASHEN and the LED selection, so the flash LEDs are off.
+ *
+ * The PCA9574's pins float at reset, so this is done as early as possible in app_main(): before the cold-boot RTC set
+ * (about 1.4 s) and before checkForCameras(). Moved out of checkForCameras() on 3 Oct 2026, when the RTC set was moved
+ * before checkForCameras() to give SWD time to connect. Uses only the sensor I2C bus, not PB7 (SENSOR_ENABLE/SWCLK).
+ *
+ * Sets self test bits.
+ */
+static void initFlashEarly(void) {
+#ifdef WW500_C00
+	XP_LT_GREY;
+	// Test for the I2C extender
+	if (hm0360_md_isSensorPresent(PCA9574_I2C_ADDRESS_0)) {
+		xprintf("PCA9574 present at 0x%02x\n", PCA9574_I2C_ADDRESS_0);
+
+		// ledFlashInit() -> pca9574_init() sets all outputs to 0, so FLASHEN is driven low
+		if (ledFlashInit()) {
+			xprintf("Initialised LED Flash\n");
+		}
+		else {
+			xprintf("Can't initialise LED Flash\n");
+		}
+	}
+	else {
+		xprintf("PCA9574 not present at 0x%02x\n", PCA9574_I2C_ADDRESS_0);
+		// expect a driver error message as well...
+
+		selfTest_setErrorBits(1 << SELF_TEST_AI_NO_FLASH);
+	}
+	XP_WHITE;
+#endif // WW500_C00
 }
 
 /**
@@ -553,34 +514,6 @@ char * app_get_camera_string(void) {
 }
 
 
-/**
- * activates the green LED
- * This is on PB9
- */
-void app_ledGreen(bool on) {
-#ifdef PB9ISLEDGREEN
-	if (on) {
-		hx_drv_gpio_set_out_value(GPIO0, GPIO_OUT_HIGH);
-	}
-	else {
-		hx_drv_gpio_set_out_value(GPIO0, GPIO_OUT_LOW);
-	}
-#endif // PB9ISLEDGREEN
-}
-/**
- * activates the blue LED
- * This is on PB10
- */
-void app_ledBlue(bool on) {
-#ifdef PB10ISLEDBLUE
-	if (on) {
-		hx_drv_gpio_set_out_value(GPIO1, GPIO_OUT_HIGH);
-	}
-	else {
-		hx_drv_gpio_set_out_value(GPIO1, GPIO_OUT_LOW);
-	}
-#endif // PB10ISLEDBLUE
-}
 
 /**
  * Calculates an elapsed time
@@ -653,9 +586,6 @@ int app_main(void){
 	pinmux_init();
 	selfTest_init();
 
-	app_ledGreen(false);	// On to show camera activity
-	app_ledBlue(true);		// On to show processor is active (not in DPD)
-
 	XP_YELLOW;
 	xprintf("\n**** WW500 MD. (%s) Built: %s %s ****\r\n\n", app_get_board_name_string(), __TIME__, __DATE__);
 	XP_WHITE;
@@ -678,35 +608,13 @@ int app_main(void){
 	sleep_mode_print_event(wakeup_event, wakeup_event1);	// print descriptive string
 	XP_WHITE;
 
-	// The sensor I2C speed (issue #249, 30 Sep 2026). platform_driver_init(), called by board_init() in main() before
-	// app_main(), sets it to DW_IIC_SPEED_FAST = 400kHz. But Himax wrote:
-	// After HM0360 enters the motion detection I2C low-speed mode, WE2 needs to change the I2C master clock to 100K hz low-speed mode to avoid HM0360 register reading errors.
-	// In the HM0360 build the HM0360 is the main camera, so the whole bus runs at 100 kHz. In the RP builds the bus stays
-	// at 400 kHz for the RP camera, and hm0360_md.c slows it to 100 kHz for each HM0360 access (SWITCH_I2C_SPEED_FOR_HM0360).
-#ifdef USE_HM0360
-	hx_drv_i2cm_init(USE_DW_IIC_1, HX_I2C_HOST_MST_1_BASE, DW_IIC_SPEED_STANDARD);
-#endif // USE_HM0360
+	initFlashEarly();	// flash LEDs off (FLASHEN low) as early as possible: the PCA9574's pins float at reset
 
-#ifdef USE_HM0360
-#pragma message "Compiling for HM0360"
-	xprintf("Camera: HM0360\n");
-#elif defined (USE_RP2)
-#pragma message "Compiling for IMX219"
-	xprintf("Camera: RP v2 (IMX219)\n");
-#elif defined (USE_RP3)
-#pragma message "Compiling for IMX708"
-	xprintf("Camera: RP v3 (IMX708)\n");
-#else
-#pragma message "Compiling for unknown camera"
-	xprintf("Camera: Unknown\n");
-#endif	// USE_HM0360
-
-	checkForCameras();	// see which I2C devices respond (and disable LED flash!)
-	boot_timing_mark(BOOT_TIMING_CAMERAS_CHECKED);
-
+	// The cold-boot steps are done here, before checkForCameras(), so that PB7 is still SWCLK while the RTC is set:
+	// exif_utc_init() takes about 1.4 s (hx_drv_rtc_set_time() waits for the 32 kHz RTC), and that gives a debugger
+	// time to connect after a reset (3 Oct 2026). The warm-boot steps stay after checkForCameras(), as they read
+	// the HM0360. wakeReason is set for a warm boot there.
 	if ((wakeup_event == PMU_WAKEUP_NONE) && (wakeup_event1 == PMU_WAKEUPEVENT1_NONE)) {
-		showResetOnLeds(3);	// pattern on LEDs to show cold boot
-
 		XP_LT_BLUE;
 		xprintf("\n### Cold Boot ###\n");
 		XP_WHITE;
@@ -732,6 +640,37 @@ int app_main(void){
 #endif // PRINTLINKERSTATS
 	}
 	else {
+		wakeReason = APP_WAKE_REASON_UNKNOWN;	// refined after checkForCameras()
+	}
+
+	// The sensor I2C speed (issue #249, 30 Sep 2026). platform_driver_init(), called by board_init() in main() before
+	// app_main(), sets it to DW_IIC_SPEED_FAST = 400kHz. But Himax wrote:
+	// After HM0360 enters the motion detection I2C low-speed mode, WE2 needs to change the I2C master clock to 100K hz low-speed mode to avoid HM0360 register reading errors.
+	// In the HM0360 build the HM0360 is the main camera, so the whole bus runs at 100 kHz. In the RP builds the bus stays
+	// at 400 kHz for the RP camera, and hm0360_md.c slows it to 100 kHz for each HM0360 access (SWITCH_I2C_SPEED_FOR_HM0360).
+#ifdef USE_HM0360
+	hx_drv_i2cm_init(USE_DW_IIC_1, HX_I2C_HOST_MST_1_BASE, DW_IIC_SPEED_STANDARD);
+#endif // USE_HM0360
+
+#ifdef USE_HM0360
+#pragma message "Compiling for HM0360"
+	xprintf("Camera: HM0360\n");
+#elif defined (USE_RP2)
+#pragma message "Compiling for IMX219"
+	xprintf("Camera: RP v2 (IMX219)\n");
+#elif defined (USE_RP3)
+#pragma message "Compiling for IMX708"
+	xprintf("Camera: RP v3 (IMX708)\n");
+#else
+#pragma message "Compiling for unknown camera"
+	xprintf("Camera: Unknown\n");
+#endif	// USE_HM0360
+
+	checkForCameras();	// see which cameras respond. PB7 stops being SWCLK here
+	boot_timing_mark(BOOT_TIMING_CAMERAS_CHECKED);
+
+	// Warm boot (the cold-boot steps were done above, before checkForCameras())
+	if (wakeReason != APP_WAKE_REASON_COLD) {
 		XP_LT_GREEN;
 		xprintf("### Warm Boot ###\n");
 		XP_WHITE;

@@ -262,7 +262,7 @@ uint16_t op_parameter[OP_PARAMETER_NUM_ENTRIES] = {
 	1,	    	   		// 29 OP_PARAMETER_CAM_AE_ENABLE (RP camera auto-exposure on/off - see ae.c)
 	110,	   			// 30 OP_PARAMETER_CAM_AE_TARGET (target mean luma; 0 = built-in default)
 	1,	    	   		// 31 OP_PARAMETER_CAM_WB_MODE (1 = auto grey-world; 2 = manual op27/28; 0 = off)
-	0,	    	   		// 32 OP_PARAMETER_RFU_1
+	0,	    	   		// 32 OP_PARAMETER_LORAWAN_PING_MINUTES
 	0,	    	   		// 33 OP_PARAMETER_RFU_2
 	0,	    	   		// 34 OP_PARAMETER_FLASH_MODE (0 = off - matches today's default behaviour)
 	0,	    	   		// 35 OP_PARAMETER_FLASH_TOD_START

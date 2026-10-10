@@ -1,0 +1,228 @@
+**** WW500 MD. (WW500_C02) Built: 06:46:54 Sep 30 2026 ****
+Git branch: 'nogit' nogit-dirty
+Compiler Version: ARM GNU, 14.3.1 20250623
+Wakeup_event = 0x0000, WakeupEvt1 = 0x0001 WAKE signal
+Camera: HM0360
+PCA9574 present at 0x20
+DEBUG: ledFlashSelectLED(0)
+Initialised LED Flash
+HM0360 present at 0x24
+Main camera present at 0x24
+### Warm Boot ###
+Woke at 2024:01:01 00:00:05 
+Motion detected INT_INDIC = 0xc8
+Initialising FreeRTOS tasks
+Created task 'CLI' Priority 4
+Created task 'IFTask' Priority 3
+Created task 'FAT' Priority 2
+Created task 'IMAGE' Priority 1
+FreeRTOS scheduler started.
+Starting CLI Task
+Enter 'help' to view a list of available commands.
+cmd> Starting IFTask
+I2C slave instance 0 configured at address 0x62
+I2C buffers have 256 bytes, payload is 244
+Inter-processor interrupt pulse short
+Starting FatFS Task
+Mounting FatFS on SD card OK
+Directory '/MANIFEST' exists
+SD card initialised. CWD is '0:/'
+Loading configuration: CWD is '0:/MANIFEST'
+'CONFIG.TXT' found. (Next image #493), camera enabled. Flash brightness 5
+Retaining existing images directory (1 <= 100) '/MEDIA/813471b9/IMAGES.001'
+Directory '/MEDIA/813471b9/IMAGES.001' exists
+FatFs setup took 204ms
+Inactivity period set at 1000ms
+IF Task received event 'Awake' (0x070f). Rx data = 0x00000000
+Starting Image Task
+Image 640 x 480. Raw buffer 460800. JPEG buffer 115860. JPEG compression x4
+Initialising HM0360 at 0x24 (p.u. delay 1ms)
+Memory allocated: 460800 for raw buffer, 115860 for JPEG, 100 for JPEG header
+   Inhibiting MD
+   Changing mode from 2 to 0 with nFrames=0, sleepTime=0 sleepCount = 0xffff
+HM0360 MD sensitivity 1
+sensor_type: 8
+DEBUG: ledFlashBrightness(5%) [brbits = 0x0]
+DEBUG: ledFlashSelectLED(0)
+[LS] In ledFlashSetFlashModeFromOpParam with 0 Mode 0
+DEBUG: ledFlashDisable()
+Not initialising NN (project ID is 0)
+No model found.
+NN Initialisation took 8ms TODO - consider doing this after taking the picture!
+Image sensor and data path initialised for camera HM0360
+  Camera system enabled.
+  Neural network disabled.
+  Flash LED(s) in use: 0
+  Flash brightness: 5%
+  Flash is currently not armed.
+  MD sampling: 1000ms.
+  Timelapse disabled.
+IF Task received event 'FreeRTOS Initialised' (0x0710). Rx data = 0x00000000
+Assert inter-processor interrupt.
+Sending 29 bytes: Header 4, payload 23, checksum 2 'MD 2024-01-01T00:00:05Z'
+Negate inter-processor interrupt.
+IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+IMAGE Task received event 'Image Event Start Capture' (0x0a01). Rx data = 0x00000001
+Images to capture: 1
+Interval: 500ms
+sensor_type: 8
+   Interval of 500ms gives sleep count = 0x4018
+   Changing mode from 0 to 2 with nFrames=1, sleepTime=500 sleepCo
+IF Task received event 'I2C Tx' (0x0701). Rx data = 0x00000000
+I2C transmission complete.
+IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+unt = 0x4018
+IMAGE Task state changed from 'Init' (1) to 'Capturing' (2)
+IMAGE Task received event 'Image Event Frame Ready' (0x0a04). Rx data = 0x00000000
+   Inhibiting MD
+   Changing mode from 2 to 0 with nFrames=0, sleepTime=0 sleepCount = 0xffff
+DEBUG: ledFlashDisable()
+Image capture 1/1 took 42ms
+Skipping NN processing (no model loaded).
+HM0360 AE regs:
+  Integration time = 97 lines
+  Analog gain = 0
+  Digital gain = 64
+  AE Mean = 81
+  AEConverged?: Y
+IF Task received event 'Message to Master' (0x070d). Rx data = 0x30011428
+Assert inter-processor interrupt.
+Sending 122 bytes: Header 4, payload 116, checksum 2 'HM0360 AE regs:
+  Integration time = 97 lines
+  Analog gain = 0
+  Digital gain = 64
+  AE Mean = 81
+  AEConverged?: Y'
+Negate inter-processor interrupt.
+IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+IF Task received event 'I2C Rx' (0x0700). Rx data = 0x00000000
+Deferring event 0x0700
+HM0360 motion in 0 blocks:
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 
+IF Task received event 'I2C Tx' (0x0701). Rx data = 0x00000000
+I2C transmission complete.
+IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+Issuing deferred event 0x0700 'I2C Rx'
+IFTask sending event 0x0700. Tx data = 0x00000000
+IF Task received event 'I2C Rx' (0x0700). Rx data = 0x00000000
+Received I2C message.
+MKL62BA command received: 'selftest'
+IF Task state changed from 'Idle' (1) to 'I2C RX State' (2)
+IF Task received event 'String Response' (0x0703). Rx data = 0x3000e910
+Assert inter-processor interrupt.
+Sending 19 bytes: Header 4, payload 13, checksum 2 'selfTest 0000'
+Negate inter-processor interrupt.
+IF Task state changed from 'I2C RX State' (2) to 'I2C TX State' (3)
+IF Task received event 'I2C Tx' (0x0701). Rx data = 0x00000000
+I2C transmission complete.
+IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+IF Task received event 'Message to Master' (0x070d). Rx data = 0x30011428
+Assert inter-processor interrupt.
+Sending 129 bytes: Header 4, payload 123, checksum 2 'HM0360 motion in 0 blocks:
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 '
+Negate inter-processor interrupt.
+IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+................
+................
+................
+................
+................
+................
+................
+................
+................
+................
+................
+................
+................
+................
+................
+................
+EXIF: Adding DeploymentID: 813471b9-e151-4d55-a9e2-c5a894b094e1
+Added 13 EXIF tags
+Writing 12340 bytes (11828 + 512) to '59200860.JPG' from jpeg buffer of 115860 bytes
+IMAGE Task state changed from 'Capturing' (2) to 'NN Processing' (3)
+FatFS Task received event 'Write image' (0x0901). Rx data = 0x3001fe9c
+Wrote 12338 byte image to SD: 59200860.JPG at 0:0:6 1/1/2024
+File write took 20ms
+FatFS task sending event 0x0a06. Tx data = 0x00000000
+IMAGE task sending event 0x0901. Rx data = 0x3001fe9c
+IMAGE Task received event 'Image Event Disk Write Complete' (0x0a06). Rx data = 0x00000000
+Current captures completed: 1
+Average file write time 20ms
+Total frames captured since last reset: 1
+IF Task received event 'I2C Tx' (0x0701). Rx data = 0x00000000
+I2C transmission complete.
+IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+IF Task received event 'Message to Master' (0x070d). Rx data = 0x30011428
+Assert inter-processor interrupt.
+Sending 68 bytes: Header 4, payload 62, checksum 2 'Captured 1 images. Last is 59200860.JPG (File write 20ms avg.)'
+Negate inter-processor interrupt.
+IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+IMAGE Task state changed from 'NN Processing' (3) to 'Init' (1)
+IF Task received event 'I2C Tx' (0x0701). Rx data = 0x00000000
+I2C transmission complete.
+IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+##### 10:45:17 typing 'dpd'
+cmd> dpd
+Forcing DPD by clearing inactivity period
+cmd> Inactive for 200ms
+IMAGE Task received event 'Image Event Inactivity' (0x0a00). Rx data = 0x00000000
+IMAGE Task state changed from 'Init' (1) to 'Save State' (5)
+FatFS Task received event 'Save State' (0x0904). Rx data = 0x00000000
+Saved state to SD card. Image sequence number = 494
+FatFS task sending event 0x0a06. Tx data = 0x00000000
+IMAGE task sending event 0x0904. Rx data = 0x00000000
+IMAGE Task received event 'Image Event Disk Write Complete' (0x0a06). Rx data = 0x00000000
+Image task ready to sleep.
+IMAGE Task state changed from 'Save State' (5) to 'Uninitialised' (0)
+IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+Assert inter-processor interrupt.
+Sending 110 bytes: Header 4, payload 104, checksum 2 'Sleep 494 0 0 78 506 1 500 0 1000 5 1 1000 100 0 0 0 18 1 0 2 1 2 50 65 0 0 0 286 326 1 110 1 0 0 0 0 0 '
+Negate inter-processor interrupt.
+IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+Inactive for 200ms
+IMAGE Task received event 'Image Event Inactivity' (0x0a00). Rx data = 0x00000000
+IMAGE task unhandled event 'Image Event Inactivity' in 'Uninitialised'
+IF Task received event 'Message to Master' (0x070d). Rx data = 0x30011428
+Deferring event 0x070d
+IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+Deferring event 0x070e
+Inactive for 200ms
+IMAGE Task received event 'Image Event Inactivity' (0x0a00). Rx data = 0x00000000
+IMAGE task unhandled event 'Image Event Inactivity' in 'Uninitialised'
+IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+Deferring event 0x070e
+Inactive for 200ms
+IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+Deferring event 0x070e
+Inactive for 200ms
+IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+Deferring event 0x070e
+Inactive for 200ms
+IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+Deferring event 0x070e
+Inactive for 200ms
+IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+Deferring event 0x070e
+Inactive for 200ms
+IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+Deferring event 0x070e
+Inactive for 200ms
+IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+Deferring event 0x070e
+Inactive for 200ms
+IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+Deferring event 0x070e
+Inactive for 200ms
+IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+Deferring event 0x070e
+Inactive for 200ms
+IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+Deferring event 0x070e
+Inactive for 200ms
+IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+Deferring event 0x070e
+Inactive for 200ms
+##### 10:46:38 repro phase probe
+##### 10:46:44 typing 'ble'

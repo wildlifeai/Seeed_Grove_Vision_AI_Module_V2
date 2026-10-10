@@ -101,9 +101,9 @@
 
 #define DBG_EVT_IICS_CMD_LOG 1
 #if DBG_EVT_IICS_CMD_LOG
-    // Suppressed during an active file-receive session (g_fileRxActive) — the
+    // Suppressed by consoleQuiet(): during a file receive (upload) or a binary send (download). The
     // per-packet I2C trace is high-volume and throttles the transfer at 921600 baud.
-    #define dbg_evt_iics_cmd(fmt, ...)   do { if (!g_fileRxActive) xprintf(fmt, ##__VA_ARGS__); } while (0)
+    #define dbg_evt_iics_cmd(fmt, ...)   do { if (!consoleQuiet()) xprintf(fmt, ##__VA_ARGS__); } while (0)
 #else
     #define dbg_evt_iics_cmd(fmt, ...)
 #endif
@@ -133,10 +133,12 @@ static APP_MSG_DEST_T  flagUnexpectedEvent(APP_MSG_T rxMessage);
 
 static uint16_t app_i2ccomm_init();
 // Functions relating to interprocessor interrupts
-static void interprocessor_interrupt_cb(uint8_t group, uint8_t aIndex);
 static void interprocessor_interrupt_init(void);
 static void interprocessor_interrupt_assert(void);
 static void interprocessor_interrupt_negate(void);
+#ifdef BIDIRECTIONAL_INTERRUPT
+static void interprocessor_interrupt_cb(uint8_t group, uint8_t aIndex);
+#endif // BIDIRECTIONAL_INTERRUPT
 
 // Three callbacks from the I2C module - execute in ISR context
 static void i2csTxDoneEvent(void *param);
@@ -318,10 +320,31 @@ bool sendWakeMsg = false;
 // transfer, so it can never stay stuck. Read from ISR/callback context too, so volatile.
 volatile bool g_fileRxActive = false;
 
+// True from sending a binary message (a txfile download packet) until the next non-binary message is sent.
+// Suppresses the same per-packet console output as g_fileRxActive. That output cost 18.5 ms per download
+// packet, all of it before the /IP_INT rising edge (measured 7 Oct 2026, 2026-10-06_speedImageTx report).
+static bool binaryTxActive = false;
+
 // Measure interval between events
 static TickType_t fileRxStartTime;
 
+// Download (txfile) timing - see ifTask_getDownloadTiming()
+static ifTask_timeStat_t dlAiTime;		// TX done for one binary packet to /IP_INT for the next
+static ifTask_timeStat_t dlBleTime;		// /IP_INT for a binary packet to its TX done
+static TickType_t dlPulseTick;			// when the last binary packet was signalled
+static TickType_t dlTxDoneTick;			// when the last binary packet was read
+static bool dlBinaryInFlight = false;	// a binary packet has been signalled and not yet read
+static bool dlTxDoneValid = false;		// dlTxDoneTick belongs to this download
+
 /*********************************** I2C Local Function Definitions ************************************************/
+
+/**
+ * True when the per-packet console output should be suppressed: during an upload (g_fileRxActive) or
+ * a download (binaryTxActive)
+ */
+static bool consoleQuiet(void) {
+	return (g_fileRxActive || binaryTxActive);
+}
 
 /**
  * Restore the inactivity period saved when the file receive session started.
@@ -374,7 +397,8 @@ static void i2csTxDoneEvent(void *param) {
 	hx_lib_i2ccomm_enable_read(iic_id, (unsigned char *) gRead_buf, WW130_MAX_RBUF_SIZE);
 
 	//send_msg.msg_data = iic_info_ptr->slv_addr;
-	send_msg.msg_data = 0;
+	// The time the master read our message, for the download timing (taken here, before the ifTask's console output)
+	send_msg.msg_data = (uint32_t) xTaskGetTickCountFromISR();
 	send_msg.msg_event = APP_MSG_IFTASK_I2CCOMM_TX_DONE;
 
 	xQueueSendFromISR( xIfTaskQueue, &send_msg, &xHigherPriorityTaskWoken );
@@ -822,7 +846,7 @@ static void i2ccomm_write_enable(uint8_t * message, aiProcessor_msg_type_t messa
 
     // for debugging, print the buffer (suppressed during a file transfer)
     XP_LT_GREY;
-    if (!g_fileRxActive) {
+    if (!consoleQuiet()) {
         printf_x_printBuffer((uint8_t *) gWrite_buf, I2CCOMM_HEADER_SIZE + length + I2CCOMM_CHECKSUM_SIZE);
     }
     XP_WHITE;
@@ -956,8 +980,10 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 #else
 		if (woken == APP_WAKE_REASON_MD) {
 			// Special wake message if the wake was due to motion detection
-			snprintf(message, sizeof(message), "MD ");
-			exif_utc_get_rtc_as_utc_string(&message[3], UTCSTRINGLENGTH );
+			//snprintf(message, sizeof(message), "MD ");
+			//exif_utc_get_rtc_as_utc_string(&message[3], UTCSTRINGLENGTH );
+			snprintf(message, sizeof(message), "Motion ");
+			exif_utc_get_rtc_as_utc_string(&message[7], UTCSTRINGLENGTH );
 		}
 		else if (woken == APP_WAKE_REASON_TIMER) {
 			// Special wake message if the wake was due to timer
@@ -1129,6 +1155,15 @@ static APP_MSG_DEST_T  handleEventForStateI2CTx(APP_MSG_T rxMessage) {
 
 	case APP_MSG_IFTASK_I2CCOMM_TX_DONE:
 		bleProbePending = false;	// The BLE processor read our message, so it is there
+
+		if (dlBinaryInFlight) {
+			// Download timing. Before i2cTransmissionComplete(), which releases the CLI task to send the next packet.
+			dlTxDoneTick = (TickType_t) rxMessage.msg_data;	// when the ISR saw the read
+			ifTask_timeStatAdd(&dlBleTime, ((dlTxDoneTick - dlPulseTick) * 1000) / configTICK_RATE_HZ);
+			dlTxDoneValid = true;
+			dlBinaryInFlight = false;
+		}
+
 		i2cTransmissionComplete();
 		if_task_state = APP_IF_STATE_IDLE;
 
@@ -1176,6 +1211,10 @@ static APP_MSG_DEST_T  handleEventForStateI2CTx(APP_MSG_T rxMessage) {
 					BLE_PROBE_TIME);
 			XP_WHITE;
 		}
+
+		// Not a time worth averaging: the next packet's AI time starts again from its own read
+		dlBinaryInFlight = false;
+		dlTxDoneValid = false;
 
 		i2cTransmissionComplete();
 		if_task_state = APP_IF_STATE_IDLE;
@@ -1466,8 +1505,21 @@ static void reportReadyToSleep(const char *why) {
  */
 static void sendI2CMessage(uint8_t * data, aiProcessor_msg_type_t messageType, uint16_t payloadLength) {
 
+	// Quiet for a download packet, verbose again for the string that ends the download (or any other message)
+	binaryTxActive = (messageType == AI_PROCESSOR_MSG_RX_BINARY);
+
 	interprocessor_interrupt_assert();
 	i2ccomm_write_enable(data, messageType, payloadLength);	// Get the I2C dat ready to transmit.
+
+	if (messageType == AI_PROCESSOR_MSG_RX_BINARY) {
+		// Download timing: the BLE processor can start reading from the rising edge, just below
+		dlPulseTick = xTaskGetTickCount();
+		if (dlTxDoneValid) {
+			ifTask_timeStatAdd(&dlAiTime, ((dlPulseTick - dlTxDoneTick) * 1000) / configTICK_RATE_HZ);
+		}
+		dlBinaryInFlight = true;
+	}
+
 	interprocessor_interrupt_negate();	// WW130 responds on the rising edge. It starts the I2Cread process
 }
 
@@ -1531,7 +1583,12 @@ static void vIfTask(void *pvParameters) {
 				eventString = "Unexpected";
 			}
 
-			if (!g_fileRxActive) {
+			if ((event == APP_MSG_IFTASK_I2CCOMM_CLI_BINARY_RESPONSE) || (event == APP_MSG_IFTASK_I2CCOMM_CLI_BINARY_CONTINUES)) {
+				// A download packet: quiet from here, so the first packet's own event is not printed either
+				binaryTxActive = true;
+			}
+
+			if (!consoleQuiet()) {
 				XP_LT_CYAN
 				xprintf("\nIF Task ");
 				XP_WHITE;
@@ -1603,7 +1660,7 @@ static void vIfTask(void *pvParameters) {
 				break;
 			}
 
-			if ((old_state != if_task_state) && !g_fileRxActive) {
+			if ((old_state != if_task_state) && !consoleQuiet()) {
 				// state has changed
 				XP_LT_CYAN;
 				xprintf("IF Task state changed ");
@@ -1771,7 +1828,7 @@ static void interprocessor_interrupt_assert(void) {
 	xprintf("Set PB11 as an output, driven to 0 (GPIO2). Read back as %d\n", pinValue);
 	XP_WHITE;
 #else
-	if (!g_fileRxActive) {
+	if (!consoleQuiet()) {
 		XP_LT_GREEN;
 		xprintf("Assert inter-processor interrupt.\n");
 		XP_WHITE;
@@ -1808,7 +1865,7 @@ static void interprocessor_interrupt_negate(void) {
 	xprintf("Set PB11 as an output, drive to 1 (GPIO2). Read back as %d\n", pinValue);
 	XP_WHITE;
 #else
-	if (!g_fileRxActive) {
+	if (!consoleQuiet()) {
 		XP_LT_GREEN;
 		xprintf("Negate inter-processor interrupt.\n");
 		XP_WHITE;
@@ -2162,6 +2219,47 @@ bool ifTask_isBleUnresponsive(void) {
 void ifTask_clearBleUnresponsive(void) {
 	bleUnresponsive = false;
 	selfTest_clearErrorBits(1 << SELF_TEST_AI_NO_BLE);
+}
+
+/**
+ * Adds one time to a download timing stat
+ *
+ * @param stat - the stat
+ * @param ms - the time
+ */
+void ifTask_timeStatAdd(ifTask_timeStat_t * stat, uint32_t ms) {
+	stat->count++;
+	stat->totalMs += ms;
+	if (ms > stat->maxMs) {
+		stat->maxMs = ms;
+	}
+}
+
+/**
+ * Clears the download timing. Called by the txfile command when it opens the file, before any binary packet.
+ */
+void ifTask_resetDownloadTiming(void) {
+	memset(&dlAiTime, 0, sizeof(dlAiTime));
+	memset(&dlBleTime, 0, sizeof(dlBleTime));
+	dlBinaryInFlight = false;
+	dlTxDoneValid = false;
+}
+
+/**
+ * Copies the download timing, for the txfile command to print at the end of a download.
+ *
+ * Each binary packet is a cycle of two parts:
+ * 	aiTime: from the BLE processor reading one packet (the TX done interrupt) to us pulsing /IP_INT for the next.
+ * 		This processor's share: the CLI task's f_read(), the queue to this task, and its console output.
+ * 	bleTime: from pulsing /IP_INT to the BLE processor reading the packet. Includes the I2C read itself (about 6 ms
+ * 		for 256 bytes at 400 kHz) and the BLE processor's wait for its previous BLE send.
+ *
+ * @param aiTime - receives the AI share
+ * @param bleTime - receives the BLE processor share
+ */
+void ifTask_getDownloadTiming(ifTask_timeStat_t * aiTime, ifTask_timeStat_t * bleTime) {
+	*aiTime = dlAiTime;
+	*bleTime = dlBleTime;
 }
 
 

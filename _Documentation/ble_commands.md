@@ -211,7 +211,7 @@ __Notes:__
    the auto camera-switch check, so it is the cheap way to measure light. Taking a normal
    capture purely to force a reading is no longer necessary.
 6. **`ble` is a console diagnostic** (28 September 2026), for boards without a BLE processor. After each boot the AI
-   processor sends its first message ("Wake ...", "Timer ..." or "MD ...") with a 300 ms timeout (`BLE_PROBE_TIME` in
+   processor sends its first message ("Wake ...", "Timer ..." or "Motion ...") with a 300 ms timeout (`BLE_PROBE_TIME` in
    `if_task.c`; later messages keep the 4000 ms `MISSINGMASTERTIME`). If the BLE processor does not read it, the AI
    processor treats it as unresponsive: it sends it nothing more (no `/IP_INT` pulse, no I2C data, no "Sleep" message)
    and enters DPD without it. The flag is cleared if the BLE processor sends a command, by `ble clear`, or at the next

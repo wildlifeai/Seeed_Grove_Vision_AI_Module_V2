@@ -5,6 +5,39 @@
 #### Author: Charles Palmer
 #### Date: 3 October 2026
 
+## Status
+
+**Closed** (9 October 2026). Merged into `dev` on 8 October 2026 as
+[PR #260](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/pull/260).
+
+## Outcome
+
+- PB7 (SENSOR_ENABLE, also SWCLK) becomes a GPIO in `checkForCameras()`, so after a cold boot an SWD programmer has
+  about 1.4 s to connect. The hazard is in `bootloader.md` and `SWD100_SWD_Programmer.md`. This fixes
+  [#200](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/200) and supersedes
+  [PR #258](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/pull/258) and
+  [#201](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/201) (both closed).
+- The motion wake message is `Motion <time>` (was `MD <time>`), so it is not confused with `MD sensitivity set to N`
+  ([ww-hardware #52](https://github.com/wildlifeai/ww-hardware/issues/52)). It shipped with
+  [ww-hardware #60](https://github.com/wildlifeai/ww-hardware/pull/60), and the app accepts both names
+  ([ww-mobile-app #412](https://github.com/wildlifeai/ww-mobile-app/issues/412)).
+- Op 32 is `OP_PARAMETER_LORAWAN_PING_MINUTES`, 0 = never join LoRaWAN (Charles's meaning; the app follows it). Defined
+  in `ww500_md/MANIFEST/config_file.md`.
+- The HM0360 stays in `MODE_SW_NFRAMES_SLEEP` before DPD, as `MODE_SLEEP` draws more current
+  (`ww500_md/doc/WW500_Power_Measurements.md`).
+- The RP3 fixes for #211 and #153 merged in the same PR: see the
+  [2026-10-02_useRP3Issues](../2026-10-02_useRP3Issues/README.md) thread.
+
+## Open items
+
+- [#247](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/247): turning motion detection off
+  leaves the HM0360 taking frames, which wastes power.
+- [#152](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/152) and
+  [#56](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/56): the AI processor's clock, to be
+  handled in [#251](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/251).
+- [#158](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/158): persist AE exposure and gain
+  across DPD, also part of [#251](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/251).
+
 ## Purpose
 
 This set of work will address some issues outstanding - some from Victor's email of 2/10/26.

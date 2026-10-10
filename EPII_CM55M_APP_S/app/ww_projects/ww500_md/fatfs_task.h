@@ -92,7 +92,7 @@ typedef enum {
 	OP_PARAMETER_CAM_AE_ENABLE,		// 29 RP camera auto-exposure: 0 = off (init-table exposure), 1 = on. See ae.c
 	OP_PARAMETER_CAM_AE_TARGET,		// 30 RP camera auto-exposure target mean luma (0-250; 0 = built-in default 110). See ae.c
 	OP_PARAMETER_CAM_WB_MODE,		// 31 RP camera white balance: 0 = off, 1 = auto (grey-world per frame), 2 = manual op27/op28. See img_correct.c
-	OP_PARAMETER_RFU_1,				// 32 RFU
+	OP_PARAMETER_LORAWAN_PING_MINUTES,	// 32 LoRaWAN ping period (0 disables LoRaWAN network join attempts).
 	OP_PARAMETER_RFU_2,				// 33 RFU
 	OP_PARAMETER_FLASH_MODE,			// 34 Capture flash mode: 0=off, 1=AE, 2=always-on, 3=time-of-day
 	OP_PARAMETER_FLASH_TOD_START,		// 35 FLASH_MODE_TIME_OF_DAY: minutes after midnight UTC when the flash turns on

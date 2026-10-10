@@ -26,10 +26,6 @@ extern "C" {
 
 /*************************************** Definitions *******************************************/
 
-// Uncomment this if PB9 is to be used as the green LED.
-// Otherwise it can be PWM for the Flash LED
-// #define PB9ISLEDGREEN
-
 #if defined(FREERTOS_SECONLY) || \
     defined(FREERTOS_NS) || \
     defined(RTE_CMSIS_RTOS2_FreeRTOS) || \
@@ -83,10 +79,6 @@ typedef enum {
 } APP_WAKE_REASON_E;
 
 int app_main(void);
-
-// LED control
-void app_ledGreen(bool on);
-void app_ledBlue(bool on);
 
 char * app_get_version_string(void);
 char * app_get_board_name_string(void);

@@ -49,6 +49,9 @@ python swdflash.py --bin="4k_dummy0xFF.img" --addr=0x00fff000
 ```
 4k_dummy0xFF.img is a 4K file with all contents being 0xFF.
 
+**WW500 note:** the application makes PB7 (SWCLK) a GPIO, so SWD only connects in the window after a reset (about
+1.4 s on a cold boot). See [SWD100_SWD_Programmer.md](SWD100_SWD_Programmer.md) and #200.
+
 
 ![bootloader memory map](images/bootloader.png)
 

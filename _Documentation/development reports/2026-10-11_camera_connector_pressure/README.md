@@ -19,11 +19,13 @@ handled well.
 
 ## Open items
 
-- Seeed #TBD: the AI processor does not recover from a camera datapath failure (watchdog, hard
-  fault handler, unhandled datapath events).
-- ww-hardware #TBD: the BLE processor does not notice a dead AI processor.
-- ww-hardware #TBD: the holder must not press on the connector; PCB revision (camera supplies,
-  HM0360 power).
+- [#272](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/272): the AI
+  processor does not recover from a camera datapath failure (watchdog, hard fault handler,
+  unhandled datapath events).
+- [ww-hardware#69](https://github.com/wildlifeai/ww-hardware/issues/69): the BLE processor does
+  not notice a dead AI processor.
+- [ww-hardware#70](https://github.com/wildlifeai/ww-hardware/issues/70): the holder must not
+  press on the connector; PCB revision (camera supplies, HM0360 power).
 
 ## Boards
 

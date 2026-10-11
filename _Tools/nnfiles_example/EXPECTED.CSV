@@ -1,0 +1,11 @@
+frame,label,not rat,rat,call
+F0001.BIN,rat,-128,127,rat
+F0002.BIN,rat,-126,126,rat
+F0003.BIN,rat,-126,126,rat
+F0004.BIN,rat,-123,123,rat
+F0005.BIN,rat,-125,125,rat
+F0006.BIN,not rat,127,-128,not rat
+F0007.BIN,not rat,127,-128,not rat
+F0008.BIN,not rat,127,-128,not rat
+F0009.BIN,not rat,127,-128,not rat
+F0010.BIN,not rat,127,-128,not rat

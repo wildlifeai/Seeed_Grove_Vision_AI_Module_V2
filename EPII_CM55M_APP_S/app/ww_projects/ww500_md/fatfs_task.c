@@ -175,6 +175,21 @@ static bool mounted;
 static FIL transferFile;
 static bool transferFileOpen = false;
 
+/**
+ * The 'disk write complete' event a task expects, by its queue. The file-transfer path (open, append,
+ * close) used to reply to the IF task whatever the sender; the CLI's 'nnfiles' command uses the same
+ * path, so the reply now follows the sender like the other operations.
+ */
+static APP_MSG_EVENT_E diskWriteCompleteEvent(QueueHandle_t dest) {
+	if (dest == xIfTaskQueue) {
+		return APP_MSG_IFTASK_DISK_WRITE_COMPLETE;
+	}
+	if (dest == xImageTaskQueue) {
+		return APP_MSG_IMAGETASK_DISK_WRITE_COMPLETE;
+	}
+	return APP_MSG_CLITASK_DISK_WRITE_COMPLETE;
+}
+
 // Flush FAT metadata with f_sync() every N appends. Without this a long
 // transfer accumulates unbounded dirty filesystem state (cluster chain and
 // directory updates), which is the suspected cause of the non-deterministic
@@ -554,6 +569,7 @@ static APP_MSG_DEST_T handleEventForUninit(APP_MSG_T rxMessage) {
 		// just msg_data - see APP_MSG_FATFSTASK_WRITE_FILE above).
 		fileOp->res = FR_NO_FILESYSTEM;
 		sendMsg.message.msg_data = (uint32_t)FR_NO_FILESYSTEM;
+		sendMsg.message.msg_parameter = (uint32_t)fileOp;
 		sendMsg.destination = fileOp->senderQueue;
 		// The message to send depends on the destination! In retrospect it would have been better
 		// if the messages were grouped by the sender rather than the receiver, so this next test was not necessary:
@@ -590,7 +606,8 @@ static APP_MSG_DEST_T handleEventForUninit(APP_MSG_T rxMessage) {
 		fileOp->res = FR_NO_FILESYSTEM;
 		sendMsg.message.msg_data = (uint32_t)FR_NO_FILESYSTEM;
 		sendMsg.destination = fileOp->senderQueue;
-		sendMsg.message.msg_event = APP_MSG_IFTASK_DISK_WRITE_COMPLETE;
+		sendMsg.message.msg_parameter = (uint32_t)fileOp;
+		sendMsg.message.msg_event = diskWriteCompleteEvent(sendMsg.destination);
 		break;
 
 	case APP_MSG_IMAGETASK_DISK_WRITE_COMPLETE:
@@ -730,6 +747,7 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 
 		// Inform the if task that the disk operation is complete
 		sendMsg.message.msg_data = (uint32_t)res;
+		sendMsg.message.msg_parameter = (uint32_t)fileOp;
 		sendMsg.destination = fileOp->senderQueue;
 		// The message to send depends on the destination! In retrospect it would have been better
 		// if the messages were grouped by the sender rather than the receiver, so this next test was not necessary:
@@ -849,7 +867,8 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 
 		sendMsg.message.msg_data = (uint32_t)res;
 		sendMsg.destination = fileOp->senderQueue;
-		sendMsg.message.msg_event = APP_MSG_IFTASK_DISK_WRITE_COMPLETE;
+		sendMsg.message.msg_parameter = (uint32_t)fileOp;
+		sendMsg.message.msg_event = diskWriteCompleteEvent(sendMsg.destination);
 
 		break;
 
@@ -900,7 +919,8 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 
 		sendMsg.message.msg_data = (uint32_t)res;
 		sendMsg.destination = fileOp->senderQueue;
-		sendMsg.message.msg_event = APP_MSG_IFTASK_DISK_WRITE_COMPLETE;
+		sendMsg.message.msg_parameter = (uint32_t)fileOp;
+		sendMsg.message.msg_event = diskWriteCompleteEvent(sendMsg.destination);
 
 		break;
 	}
@@ -931,7 +951,8 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 
 		sendMsg.message.msg_data = (uint32_t)res;
 		sendMsg.destination = fileOp->senderQueue;
-		sendMsg.message.msg_event = APP_MSG_IFTASK_DISK_WRITE_COMPLETE;
+		sendMsg.message.msg_parameter = (uint32_t)fileOp;
+		sendMsg.message.msg_event = diskWriteCompleteEvent(sendMsg.destination);
 
 		break;
 

@@ -86,6 +86,27 @@ Three different endings, none of which recover without RESET or sleep:
 
 In every case the BLE processor logged nothing about the AI processor.
 
+## Where to look in the logs
+
+Start with the capture failures: they are what #272 fixes. Line numbers are in the files in
+`logs/`.
+
+| Log | Lines | What it shows |
+|---|---|---|
+| `b1_1712_capture_30s_press_hardfault` | 120-123 | First corrupted text, frame timeout, `retry 1/5` |
+| | 124-214 | Timeout events every 2 ms, then about 70 `No Register EDM Timing Callback Fun` |
+| | 215-234 | Hard fault (`CFSR 0x00020000`), then silent: the handler loops |
+| `b2_1735_capture_30s_press_stuck` | 432-434 | Unhandled 0x012a and 0x0131 in 'Capturing' |
+| | 448-524 | Answers `selftest` but never captures again, sleeps at the second inactivity |
+| `b1_1716_capture_30s_press_freeze` | 240-314 | Last frame, then silent, no echo to `selftest` |
+| `b2_1734_capture_30s_press_freeze` | 303-375 | Same |
+| `b2_1740_capture_30s_press_freeze` | 18-115 | Same, twice |
+| `b1_1711_capture_5s_press` | 268-280 | What recovery should look like: timeout, `retry 1/5`, next frame |
+| `*_pressure_at_boot` | top of each | Corrupted text, then the boot stops (ww-hardware#70) |
+| `b2_1729_tape_hm0360_latched` | 30, 163, 303, 460 | Not present after three RESETs, present after a power cycle |
+
+The `nrf |` lines in the capture logs show the BLE processor never reacting (ww-hardware#69).
+
 ## Where in the code
 
 AI processor (`dev` 22531acf):

@@ -58,6 +58,11 @@ the fact is not enough, the timing has to be built in.
   `reset` then `dpd` on its console (a watchdog reset), or let a motion wake do it. After a
   RESET, act only on a `Cold boot` banner: a WAKE or motion boot just before it looks the same,
   and the hand reaching for the button can set one off.
+* **Ask for the board to be unplugged before anyone reseats a camera ribbon.** On 11 Oct 2026 a
+  ribbon moved with the power on hung the 2nd bootloader until a power cycle, and pressure on
+  the HM0360 connector stops the boot or kills a running capture (`development reports/
+  2026-10-11_camera_connector_pressure/`). `_Tools/ww500_ship_check.py`'s photo buttons
+  report a disconnected camera, a garbled console or a boot that never starts.
 * **A keystroke in the first ~30 ms after a reset leaves the board in the 2nd bootloader's
   menu** (`[1] Xmodem download and burn FW image`) and the app never starts. Send `0` to
   reboot from the menu; no RESET needed. After `reset` + `dpd`, wait for `>>> Reset by

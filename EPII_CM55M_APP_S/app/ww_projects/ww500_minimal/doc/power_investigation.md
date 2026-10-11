@@ -144,11 +144,11 @@ It might be useful to use the logic port to monitor some signals:
 | 1 blue    | D0       | STROBE     | T7                 |
 | 2 yellow  | D1       | VSYNC      | T1                 |
 | 3 green   | D2       | HSYNC      | T2                 |
-| 6 purple  | D3       | SENSOR_ENABLE | j3 PIN 5        |
-| 7 grey    | D4       | SEN_INT    | (MD interrupt) R33 |
-| 8 orange  | D5       |            |                    |
-| 4 brown   | D6       | LED RED    | R22                |
-| 5 white   | D7       | LED BLUE   | R20                |
+| 4 purple  | D3       | SENSOR_ENABLE | j3 PIN 5        |
+| 5 grey    | D4       | SEN_INT    | (MD interrupt) R33 |
+| 6 orange  | D5       |            |                    |
+| 7 brown   | D6       | LED RED    | R22                |
+| 8 white   | D7       | LED BLUE   | R20                |
 | 9 black   | GND      | GND at U1  |                    |
 | 10 red    | VCC      | WW500 3V3  | U1 pin 13          |
 

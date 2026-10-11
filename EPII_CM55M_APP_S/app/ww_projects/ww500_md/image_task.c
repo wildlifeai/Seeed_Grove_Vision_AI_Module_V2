@@ -200,6 +200,8 @@ static void sleepWhenPossible(void);
 
 static void captureSequenceComplete(uint32_t accumulatedTime);
 
+static const char * ledName(uint16_t ledMask);
+
 static void changeEnableState(bool setEnabled);
 
 static void processNNOutput(int8_t * outCategories, uint8_t classCount);
@@ -349,6 +351,25 @@ static TickType_t startTime;
 #endif
 
 /********************************** Local Functions  *************************************/
+
+/**
+ * Names the LED(s) in an LED bit mask (OP_PARAMETER_FLASH_LED, OP_PARAMETER_MD_FLASH_LED), for console messages
+ *
+ * @param ledMask - VIS_LED and/or IR_LED bits
+ * @return the name
+ */
+static const char * ledName(uint16_t ledMask) {
+	switch (ledMask & (VIS_LED | IR_LED)) {
+	case VIS_LED:
+		return "visible";
+	case IR_LED:
+		return "IR";
+	case (VIS_LED | IR_LED):
+		return "visible + IR";
+	default:
+		return "none";
+	}
+}
 
 #ifdef INVESTIGATE_FLASH_BRIGHTNESS
 
@@ -1808,8 +1829,13 @@ static void vImageTask(void *pvParameters) {
 
     xprintf("  Camera system %s.\n", (cameraSystemEnabled > 0) ? "enabled": "disabled");
     xprintf("  Neural network %s.\n", (nnStatus < 0) ? "disabled" : "enabled");
-    xprintf("  Flash LED(s) in use: %d\n", fatfs_getOperationalParameter(OP_PARAMETER_FLASH_LED));
-    xprintf("  Flash brightness: %d%%\n", (uint8_t) fatfs_getOperationalParameter(OP_PARAMETER_LED_BRIGHTNESS_PERCENT));
+    // Capture flash (ops 13 and 9), and the LED that lights the HM0360's motion-detection frames during DPD (ops 21, 22)
+    xprintf("  Picture flash LED: %s, brightness %d%%\n",
+    		ledName(fatfs_getOperationalParameter(OP_PARAMETER_FLASH_LED)),
+			(uint8_t) fatfs_getOperationalParameter(OP_PARAMETER_LED_BRIGHTNESS_PERCENT));
+    xprintf("  MD flash LED: %s, brightness %d%%\n",
+    		ledName(fatfs_getOperationalParameter(OP_PARAMETER_MD_FLASH_LED)),
+			(uint8_t) fatfs_getOperationalParameter(OP_PARAMETER_MD_FLASH_BRIGHTNESS_PERCENT));
     xprintf("  Flash is currently %s.\n", ledFlashIsActive() ? "armed" : "not armed");
 
 #ifdef USE_HM0360
@@ -2757,7 +2783,9 @@ void image_sleepNow(void) {
 
 		if ((ledFlashIsActive() > 0) && (mdInterval > 0)
 				&& (fatfs_getOperationalParameter(OP_PARAMETER_MD_FLASH_LED) != 0)) {
-			xprintf(" LED flashes.\n");
+			xprintf(" LED flashes: %s LED, brightness %d%%.\n",
+					ledName(fatfs_getOperationalParameter(OP_PARAMETER_MD_FLASH_LED)),
+					(uint8_t) fatfs_getOperationalParameter(OP_PARAMETER_MD_FLASH_BRIGHTNESS_PERCENT));
 			// While the processor sleeps, the HM0360 STROBE pin gates the LED
 			// hardware directly, using whatever LED selection and brightness are
 			// in the PCA9574 (it retains its state through DPD). Write the

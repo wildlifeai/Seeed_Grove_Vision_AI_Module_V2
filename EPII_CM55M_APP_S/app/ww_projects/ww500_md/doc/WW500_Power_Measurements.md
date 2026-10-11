@@ -73,3 +73,91 @@ which talks  about = "150uW average".
 
 It looks like the AI processor does not reset properly at power up?
 
+## Battery Board Measurements
+
+I thought would measure the efficiency of the VBATT to 3V3 PSU on the battery board.
+I did this with the battery board alone, with two cases:
+
+1. No load at all.
+2. Soldered a 10k resistor across the 3V3 rail.
+
+Input power source is 4 x AA batteries (measured 5.54V)
+
+Input current measured with a multimeter. Output current calculated by ohms law.
+
+Results:
+
+1. Input current nothing! 0.0uA (perhaps an occasional pulse - perhaps when the chip wakes up
+to deliver a bit of current to the output). The input current is measureable if I put my finger across 
+the 3V3 output capacitor.
+
+2. Should draw 330uA. Input current = 222uA.
+* Power in = 5.54 x 220 = 1218uW
+* Power out = V^2 / R = 3.32^2 / 0.01 = 1102uW
+* efficiency = 1102/1218 = 0.90
+
+I suppose I should measure at higher currents...
+
+## LED Flash currents
+
+I used the PPK2 to capture waveforms as the flash LED operated. Setup as follows:
+
+* Power source = 4 x AA batteries, but I deliberately inserted some cells that were slightly discharged so that the 
+total voltage was c. 5.0V which is the max imum that the PPK2 can accept.
+* I enabled the motion detection and set a 1s MD rate.
+* Operational parameters initially set as:
+ - OP_PARAMETER_LED_BRIGHTNESS_PERCENT (9) = 0 (minimal brightness)
+ - OP_PARAMETER_FLASH_LED (13) = 1 (visible LED)
+ - OP_PARAMETER_MD_FLASH_LED (21) = 1 (visible LED)
+ - OP_PARAMETER_MD_FLASH_BRIGHTNESS_PERCENT (22) = 0
+* PPK2 measured current from the battery to the WW500 battery board.
+* PPK2 digital channel 2 monitored the STROBE signal - which aligns with the high current pulse.
+ 
+ I let the device run. I waited till it entered DPD and took measurements with the PPK2:
+ 
+ 1. Peak current when the LED turned on. 
+ 2. Average current between the 1s pulses.
+ 3.	After taking measuremenst with the visible LED I swithec to the IR LED and took some spot measurements - the results were the same.
+ 4. Note the '0 (off)' value below is with OP_PARAMETER_MD_FLASH_LED =0 (no LED).
+ 
+ Later, I compiled a version for the RP3 camera and took a screen shot when the flash LED turd on to take the picture.
+ In this case the LED flash is controlled by a FLASHEN signal from the PCA9574 I/O extender chip - since there
+ is no equivalent of the `strobe` signal when operating the RP3 camera. 
+ 
+ I took tthree screen shots from the PPK2 :
+ 
+ * [10% setting](LED_Flash_Current_10_percent.png)
+ * [100% setting](LED_Flash_Current_100_percent.png)
+ * [10%, RP3](LED_Flash_Current_10_percent_RP3.png)
+ 
+__Results follow__
+
+| Percentage setting | Ipk | Iavg | Percentage setting | Ipk | Iavg | 
+|--------------------|-----|------|--------------------|-----|------|
+| 0 (off)            |   4 | 0.3  |                    |     |      |
+| 0 (low)            |  11 | 0.46 |                    |     |      |
+| 5                  |  11 | 0.46 | 55                 | 540 | 13.0 |
+| 10                 |  18 | 0.66 | 60                 | 540 | 13.0 |
+| 15                 |  41 | 1.3  | 65                 | 580 | 13.7 |
+| 20                 |  50 | 1.6  | 70                 | 580 | 13.7 |
+| 25                 |  50 | 1.6  | 75                 | 580 | 13.7 |
+| 30                 | 139 | 4.0  | 80                 | 580 | 13.7 |
+| 35                 | 146 | 4.2  | 85                 | 580 | 13.7 |
+| 40                 | 167 | 5.0  | 90                 | 580 | 13.7 |
+| 45                 | 169 | 5.0  | 90                 | 580 | 13.7 |
+| 50                 | 175 | 4.6  | 100                | 580 | 13.7 |
+
+__Notes:__
+
+1. The percentage values are approaximate and convert into 16-bit values which drive the 
+LED circuit in a non-linear way. That goes some way to explaining the odd steps in the 
+meausred currents.
+2. Some limiting is happening at 65% - possibly a current limit in the PPK2 or
+possibly a reflection of high internal resistance of the less-fully-charged AA cells.
+This is indicated by the downwards-facing slope at the peak of the [100% setting](LED_Flash_Current_100_percent.png) screenshot. 
+
+
+
+
+
+

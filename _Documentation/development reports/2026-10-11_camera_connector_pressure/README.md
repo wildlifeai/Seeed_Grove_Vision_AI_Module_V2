@@ -111,19 +111,38 @@ It can pull the AI processor's reset line (P0.06) but cannot switch its power.
 
 ## How to reproduce
 
-Needs both consoles (AI processor 921600, BLE processor 115200) and the HM0360 image.
+Needs the HM0360 image and the console adapters on the AI processor (921600) and the BLE
+processor (115200). Windows COM ports are exclusive: one tool at a time on the AI processor's.
 
-1. Run `py ribbon_bench.py --dir <folder> --himax COM6 --nrf COM5`. It logs both consoles with
-   times and types whatever is appended to `<folder>/inbox_himax.txt`.
-2. Press RESET, then type `capture 300 1000` (one frame a second for 5 minutes).
-3. After about 10 s, press on the HM0360 connector firmly for 30 s, then release.
-4. Watch `bench.log`: frames stop. Two minutes later type `selftest`. A healthy board answers;
-   a failed one stays silent, or answers but never captures again.
-5. For the boot case: hold the pressure and press RESET. The boot stops; release and press RESET
-   again to recover.
+**Camera check and pressure at boot**, with the photo app (`_Tools/ww500_ship_check.py`, runbook
+`_Documentation/pcb_batch_flashing.md`, "Taking a photo"):
+
+1. Run `python _Tools\ww500_ship_check.py --port COM6`. Without image files only the photo
+   buttons work.
+2. Click **Take a black and white photo**. Each click restarts the AI processor (it asks for
+   RESET if the board sleeps), reads `selftest`, and either takes a photo ("No issues") or says
+   the camera is disconnected.
+3. Hold firm pressure on the HM0360 connector and click again. A failed boot is named in the
+   window ("console output is garbled", "did not finish booting", "did not start"). Release,
+   press RESET and click: it recovers.
+4. If RESET keeps giving "disconnected" afterwards, the HM0360 is latched: unplug and replug the
+   board without touching the ribbon, then click.
+
+Each click goes to `~/ww500_ship_check/batch_<date>/<label>.log`.
+
+**Pressure during a capture**, with the logger in this folder:
+
+1. Close the photo app and run `py ribbon_bench.py --dir <folder> --himax COM6 --nrf COM5`. It
+   logs both consoles with a time on every line, types each line appended to
+   `<folder>/inbox_himax.txt`, and reconnects when the board is unplugged.
+2. Press RESET, then append `capture 300 1000` to the inbox (one frame a second for 5 minutes).
+3. After about 10 s, press firmly on the HM0360 connector for 30 s, then release.
+4. Watch `<folder>/events.log`: the frames stop. Two minutes later append `selftest`. A healthy
+   board answers; a failed one stays silent, or answers but never captures again.
 
 ## Files
 
 - `ribbon_bench.py`: the logger used for the capture tests.
-- `logs/`: one excerpt per event, named `b<board>_<time>_<what>.log`. The photo app's logs carry
-  only `#####` times; the logger's have a time on every line. Full logs on request.
+- `logs/`: one excerpt per event, named `b<board>_<time>_<what>.log`. The `*_pressure_at_boot`,
+  `b1_1612` and `b2_1729` excerpts come from the photo app and carry only its `#####` times; the
+  logger's have a time on every line. Full logs on request.

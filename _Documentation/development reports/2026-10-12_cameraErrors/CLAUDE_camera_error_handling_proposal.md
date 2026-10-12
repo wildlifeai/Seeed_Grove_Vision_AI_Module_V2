@@ -7,7 +7,8 @@
 
 ## Summary
 
-Eight steps, each small enough to build and test alone. No code has been written. Sources:
+Eight steps, each small enough to build and test alone. Step 4 has since been merged into
+step 2 (see "Agreed plan"). Steps 1 and 2 are coded. Sources:
 [`README.md`](README.md) in this folder, the
 [connector-pressure report](../2026-10-11_camera_connector_pressure/README.md) and its logs, and
 the code on `261012_cameraErrors`.
@@ -15,21 +16,46 @@ the code on `261012_cameraErrors`.
 | Step | What | Risk | Fixes |
 |---|---|---|---|
 | 1 | Names for datapath events in the console | none | `'Unrecognised' (0x011c)` |
-| 2 | Settle `WDTIMOUTFIX` | low | the open question from July |
+| 2 | One "frame fault" path with one retry, replacing `WDTIMOUTFIX` (now includes step 4) | low | the open question from July, and "stuck in Capturing" (`b2_1735`) |
 | 3 | One "capture failed" path that tells the app | low | silent failures |
-| 4 | Handle the other datapath errors in Capturing | low | "stuck in Capturing" (`b2_1735`) |
-| 5 | A software timeout on each frame | low | 44 s with no event at all (`b2_1735`) |
+| 4 | Merged into step 2 | | |
+| 5 | A software timeout on each frame. More urgent than first rated | low | 44 s with no event at all (`b2_1735`) |
 | 6 | Quieter repeated inactivity | low | the `Inactive for 1ms` flood (`b2_1729`) |
 | 7 | Hard fault handler resets the processor | medium | dead after a hard fault (`b1_1712`) |
 | 8 | A watchdog while awake | high, experiment first | silent freezes (3 logs) |
 
-Not proposed as a step: blocking captures after a cold boot. See "Captures after a cold boot"
-below, because it would break the ship-check photo tool.
+Added on 12 October as step 9: refuse captures before the first DPD. See "Captures after a
+cold boot" below.
 
 **Limits.** Pressure on the connector also corrupts the console and stops the boot ROM, so it
 disturbs more than the camera. Firmware can't prevent that. Steps 1 to 6 make the AI processor
 behave sensibly when the datapath misbehaves but the processor still runs. Steps 7 and 8 are for
 when it doesn't.
+
+## Agreed plan (12 October 2026)
+
+Charles reviewed the proposal and the discussion that followed. Agreed so far:
+
+| Step | State |
+|---|---|
+| 1 | Done. Built and run by Charles |
+| 2, with 4 | Done. Built by Charles, and seen to recover a real frame timeout |
+| 3, 5, 6, 7, 8 | Not yet agreed |
+| Captures after a cold boot | Decided: refuse them. Not yet coded (step 9) |
+
+What changed from the first draft, and why:
+
+- **The retry stays, with one attempt.** Only the first retry has ever worked.
+- **`0x011c` and `0x011b` are not given separate paths.** We have never seen `0x011b` alone, and
+  nothing shows they mean different things. The split is between the first event of a fault and
+  the events that follow it.
+- **Step 4 is merged into step 2.** `0x012a` and `0x0131` are WDMA2 and WDMA3, the same two
+  channels as WDT2 and WDT3, so they are the same kind of fault and belong on the same path.
+- **Step 5 matters more than first rated.** In `b2_1735` the board (August firmware) only slept
+  because the IF task reported "ready to sleep" twice. That bug is fixed
+  (`readyToSleepReported` in `if_task.c`), and the image task ignores inactivity while
+  Capturing. So on current code a board with no frame and no datapath event would probably stay
+  awake in Capturing indefinitely. This is from reading the code, not from a log.
 
 ## What the logs show
 
@@ -63,7 +89,7 @@ once. Nothing else.
 
 ## Step 1: names for datapath events
 
-**Status, 12 October 2026: coded, not yet built or tested.** `dpEventString()` is in
+**Status, 12 October 2026: done, built and run by Charles.** `dpEventString()` is in
 `image_task.c` and names all 77 `APP_MSG_DPEVENT_*` events. The app message is now
 `IMAGE task unhandled event '<name>' (0x....) in '<state>'`. Not checked: whether the app parses
 that text. The app repo is not on this machine. No bench script in this repo depends on it.
@@ -89,27 +115,83 @@ message.
 **Check first.** The "unhandled event" text goes to the app. I'll confirm the app doesn't parse
 it.
 
-## Step 2: settle `WDTIMOUTFIX`
+## Step 2: one "frame fault" path with one retry
 
-The evidence is in Appendix A. In short: the retry recovered 9 of 10 HM0360 frame timeouts, only
-the first retry has ever worked, and every case where all retries failed was the I2C address
-fault (#238), which no restart could fix.
+**Status, 12 October 2026: done, built and tested by Charles (see "Bench result").** This replaces the
+`WDTIMOUTFIX` code and includes what was step 4. The evidence for keeping the retry is in
+Appendix A.
 
-**Change (my suggestion).**
-- Keep the retry and make it unconditional: remove the `#define`, the four `#ifdef` pairs and the
-  `#else` branch.
-- `MAX_CAPTURE_RETRIES` 1, with a fixed 100 ms delay. Giving up then takes about 10 s, not 30 s.
-- Keep the guard that ignores the `0x011b` arriving just after the restart.
+**A frame fault** is any of these datapath events arriving in Capturing, when a frame is
+expected:
+- the four timeouts (`0x011b` to `0x011e`)
+- the CDM FIFO errors (`0x011f`, `0x0120`)
+- the WDMA and RDMA errors (`0x0121` to `0x013e`)
+- the parser error (`0x0151`)
 
-**The alternative** is to remove the retry. The first timeout would then end the capture
-sequence, with a sleep and a 1 s re-wake.
+These are all the error events that `os_app_dplib_cb()` can send. It has no case for the EDM
+timing errors (`0x0109` to `0x011a`), and it folds the nine parser errors into `0x0151`. Only
+`0x011b`, `0x011c`, `0x012a` and `0x0131` have ever appeared in a saved log.
 
-**The one log against it** is `b1_1712`, where the restart was followed by the hard fault. The
-logs can't show whether the restart contributed. The old code would have stopped the sensor and
-slept within a second or two, which might have avoided the fault, or might not. Step 7 covers
-the fault either way.
+**The change, in `image_task.c`.**
+- `isFrameFaultEvent()` says whether an event is one of the above.
+- `frameFault()` handles one in Capturing. It replaces the timeout cases in
+  `handleEventForCapturing()`.
+- **First event and followers.** The first event of a fault is acted on. Any frame fault event
+  in the next 500 ms (`FRAME_FAULT_FOLLOWER_MS`) is part of the same fault: it is printed and
+  ignored. This replaces the guard that dropped events less than 1000 ms after `startTime`.
+- **One retry.** `MAX_CAPTURE_RETRIES` is 1, with a fixed 100 ms delay
+  (`CAPTURE_RETRY_DELAY_MS`). The count is per frame: it is cleared at Frame Ready.
+- **Give up** as before: stop the sensor, set `g_wdt_event` (the 1 s re-wake), save state if
+  there is an SD card, sleep.
+- **Other states.** A frame fault event outside Capturing is a leftover from a capture that has
+  ended. `flagUnexpectedEvent()` prints it on the console and no longer sends it to the app.
+- The `#define WDTIMOUTFIX`, its four `#ifdef` pairs and the old `#else` branch are removed.
 
-**Decision needed:** keep with one retry, or remove.
+**Console text.**
+```
+>>>> Frame fault 'EDM WDT2 timeout' (0x011c) after 5073ms <<<<
+>>>> Frame fault - restarting sensor, retry 1/1
+>>>> 'EDM WDT3 timeout' (0x011b) follows the frame fault - ignored
+```
+On giving up: `>>>> Frame fault after 1 retries - giving up`. The words "restarting sensor" and
+"giving up" are kept, because `ribbon_bench.py` looks for them. "Frame timed out" is gone.
+
+**Not in this step.** Telling the app that the capture failed, and limiting the 1 s re-wake.
+Those are step 3.
+
+**What to test.** A frame timeout is hard to cause without pressing a connector. Things that
+can be checked on any board:
+- normal captures on both variants are unchanged
+- `capture 3 500` after a cold boot still works on the HM0360
+
+**Bench result, 12 October 2026 (Charles, HM0360 image, this branch).** `capture 3 1000` after
+a cold boot, on an undisturbed board:
+
+```
+IMAGE Task received event 'EDM WDT2 timeout' (0x011c). Rx data = 0x00000000
+>>>> Frame fault 'EDM WDT2 timeout' (0x011c) after 5026ms <<<<
+>>>> Frame fault - restarting sensor, retry 1/1
+IMAGE Task received event 'EDM WDT3 timeout' (0x011b). Rx data = 0x00000000
+>>>> 'EDM WDT3 timeout' (0x011b) follows the frame fault - ignored
+IMAGE Task received event 'Image Event Frame Ready' (0x0a04). Rx data = 0x00000000
+Image capture 1/3 took 52ms
+```
+
+- The first frame never arrived, one restart recovered it, and captures 2 and 3 were normal.
+- Charles: this happens sometimes after a cold boot, not always. Usually the same command works
+  at once. He has seen it more than once.
+- This is the first recovery seen without pressure on a connector, and the first HM0360
+  cold-boot frame timeout on record. The #238 fix is in this build, so that fault is not the
+  cause.
+- Not yet known: whether it ever happens after a DPD wake on the same board.
+- The "took 52ms" is measured from the restart. The real time was about 5.2 s.
+
+**Known limit.** With the HM0360's own capture timer, the sensor keeps running while the image
+task is in NN Processing (waiting for the disk write). A datapath error arriving then is printed
+and ignored. The next frame then never arrives, and the EDM timeout, or step 5, has to catch it.
+
+**The one log against the retry** is `b1_1712`, where the restart was followed by the hard
+fault. The logs can't show whether the restart contributed. Step 7 covers the fault either way.
 
 ## Step 3: one "capture failed" path that tells the app
 
@@ -118,7 +200,7 @@ nothing. The give-up code is written inline in the timeout case.
 
 **Change.** A function `captureFailed(reason)` in `image_task.c`, holding the existing give-up
 code: stop the sensor, save state if there is an SD card, sleep. It also sends one line to the
-app, for example `Capture failed: EDM WDT2 timeout`. Steps 4 and 5 call it.
+app, for example `Capture failed: EDM WDT2 timeout`. Step 5 calls it, and so does the give-up branch of `frameFault()` from step 2.
 
 **Also.** The give-up path sets `g_wdt_event`, which makes the device re-wake after 1 s and try
 again. Nothing limits that. With a persistent fault it would wake every few seconds until the
@@ -127,19 +209,9 @@ battery is flat. I suggest a limit of 3 re-wakes in a row, then the normal sleep
 **Check first.** The new string goes to the app, so it is a cross-repo contract. Agree the
 wording with the app developers.
 
-## Step 4: handle the other datapath errors in Capturing
+## Step 4: merged into step 2
 
-**Now.** In Capturing, only the four timeout events are handled. Every other datapath error goes
-to `flagUnexpectedEvent()`, and the task keeps waiting for a frame that will not come.
-
-**Change.** In `handleEventForCapturing()`, treat the datapath error events (`0x0100` to
-`0x013e`: parser, EDM timing, CDM FIFO, WDMA and RDMA errors) like a frame timeout: restart the
-sensor once if step 2 keeps the retry, otherwise call `captureFailed()`. Two events from one
-fault, as with `0x012a` then `0x0131`, count once.
-
-In the other states (NN Processing, Wait For Timer, Save State, Init) these events are leftovers
-from a capture that has already ended. Print them with their names, and don't send "unhandled
-event" to the app.
+The other datapath errors in Capturing are now frame faults. See step 2.
 
 ## Step 5: a software timeout on each frame
 
@@ -220,8 +292,10 @@ The README asks for captures before the first DPD to fail gracefully. Before doi
 
 - **The ship-check photo tool depends on it.** `_Tools/ww500_ship_check.py` (PR #274) has the
   operator press RESET, then sends `capture 3 500`. RESET is a cold boot.
-- **It works on current code, for the HM0360.** `b1_1702` (11 October, `dev` 6c8ee1ca): cold
-  boot, `capture 3 500`, `Image capture 1/3 took 73ms`. The failures in August and September
+- **It usually works on current code, for the HM0360.** `b1_1702` (11 October, `dev` 6c8ee1ca):
+  cold boot, `capture 3 500`, `Image capture 1/3 took 73ms`. But on 12 October Charles saw the
+  first frame time out after a cold boot, more than once, recovered by the retry (step 2,
+  "Bench result"). The failures in August and September
   were on the RP3 and were the #238 fault, fixed on 30 September. I found no RP3 cold-boot
   capture logged since the fix.
 - **`reset` and `switchslot` also produce a cold boot,** because they are watchdog resets. So a
@@ -234,15 +308,23 @@ The README asks for captures before the first DPD to fail gracefully. Before doi
 2. Refuse it, with a message to the console and the app, and change the ship-check tool to go
    through one DPD first (it already does this for the RP3 with `setop 7 5` and `dpd`).
 
-**Decision needed.**
+**Decided, 12 October 2026 (Charles): option 2, as step 9.** There is no need for captures
+before the first DPD, and refusing them removes one variable. The ship-check tool will be
+updated so that it does not capture before the first DPD.
+
+To be settled when step 9 is coded:
+- the wording of the message to the console and the app
+- whether `light` (a one-frame capture) is refused too
+- that `reset` and `switchslot` are followed by a cold boot, so a capture is refused after
+  either until the next sleep
 
 ## Decisions for Charles
 
-1. Step 2: keep the retry with one attempt, or remove it?
+1. Step 2: decided, see "Agreed plan".
 2. Step 3: limit the 1 s re-wake to 3 in a row?
-3. Captures after a cold boot: option 1 or 2?
-4. Which steps to do, and in what order? I suggest 1, 2, 3, 4, 5, 6, then 7, with 8 as its own
-   task after an experiment.
+3. Captures after a cold boot: decided, option 2 (step 9).
+4. Which of the remaining steps to do, and in what order? I suggest 5, 3, 6, then 7, with 8 as
+   its own task after an experiment.
 
 When the steps are agreed, the open ones should be linked to GitHub issues. Steps 4, 5, 7 and 8
 are already inside

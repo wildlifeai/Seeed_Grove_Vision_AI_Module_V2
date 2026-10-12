@@ -5,6 +5,22 @@
 #### Author: Charles Palmer
 #### Date: 12 October 2026
 
+## Status
+
+Open. Plan and detail: [`CLAUDE_camera_error_handling_proposal.md`](CLAUDE_camera_error_handling_proposal.md).
+
+## Results so far (12 October 2026)
+
+- **Event names (step 1): done.** Datapath events print with a name, not `'Unrecognised'`.
+- **`WDTIMOUTFIX` (step 2): resolved.** The `#ifdef` is removed and the retry is kept, cut to one
+  attempt. Timeouts and the other datapath errors now share one "frame fault" path.
+- **The retry works.** On an undisturbed HM0360 board, the first frame after a cold boot
+  sometimes times out (`0x011c` then `0x011b`). One sensor restart recovered it.
+- **Decided: captures before the first DPD will be refused.** There is no need for them, and it
+  removes one variable. The ship-check tool will be changed to match. Not yet coded.
+- **Still to do:** our own frame timeout, a "capture failed" message to the app, quieter
+  inactivity, hard fault reset, a watchdog while awake.
+
 ## Background
 
 The `2026-10-11_camera_connector_pressure` development report describes how some of Victor's boards 

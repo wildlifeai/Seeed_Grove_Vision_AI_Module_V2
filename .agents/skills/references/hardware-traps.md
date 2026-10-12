@@ -16,6 +16,12 @@ Verified on the bench (details and serial evidence in
   **cold** boot (PMU wakeup registers read zero). A `setop 8` does not shorten an
   inactivity countdown already running, so after raising op 8 for a session, follow the
   reboot command with `dpd` or wait out the old period.
+* **`capture` and `light` are refused between a cold boot and the first sleep** (13 Oct 2026):
+  `Error: no captures until after the first sleep.` A cold boot follows power-on, RESET,
+  `reset`, `switchslot` and a firmware update. To capture from a script: let the board sleep
+  (`setop 7 5` then `dpd` gives a timer wake 5 s later), then send the command. The first frame
+  after a cold boot sometimes never arrived, on both cameras, so this was ruled out
+  (`development reports/2026-10-12_cameraErrors/`).
 * **Cold-boot IMX708 first captures fail on images built before 30 Sep 2026**. Every
   in-place retry times out (`Frame timed out - restarting sensor, retry n/5`) and the image
   task then goes Uninitialised. The cause was the I2C address left on the HM0360 by nested

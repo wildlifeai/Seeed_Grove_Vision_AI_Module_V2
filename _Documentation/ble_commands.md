@@ -161,7 +161,7 @@ The "Reqd?" column indicates whether the command should be implemented by the ap
 | AI status      |               | Reports whether the camera is enabled         | Y     |
 | AI getop       | n             | Requests the value of Operational Parameter n | Y, 1  |
 | AI setop       | n m           | Sets the value of Operational Parameter n to m | Y, 1   |
-| AI capture     | n m           | Trigger capture of n images at m millisecond intervals  | Y     |
+| AI capture     | n m           | Trigger capture of n images at m millisecond intervals  | Y, 7  |
 | AI txfile      | filename, or '.' | File contents returned in several chunks   | Y, 2  |
 | AI camreg      | addr [val]    | Read or write a camera sensor register (hex). Writes are saved to the SD card and re-applied at every sensor init. Also `AI camreg list` and `AI camreg clear` | 3 |
 | AI vcm         | pos           | Set focus lens position 0-1023 (RP3 camera only). `AI vcm probe` checks the actuator is present | 3 |
@@ -225,6 +225,11 @@ __Other AI Processor Commands__
 If you type "help" at the console of the AI processor you will see all of the commands that the AI processor has.
 Only some have been documented in the table above. All of them can be issued via the app by prefixing "AI ".
 Some might be useful in due course, such as those for navigating the file system.
+7. **No captures between a cold boot and the first sleep (13 October 2026).** `AI capture` and
+   `AI light` reply `Error: no captures until after the first sleep.` if the AI processor has
+   cold-booted and not yet been through DPD. A cold boot follows power-on, RESET, `AI reset`,
+   `AI switchslot` and a firmware update. The AI processor sleeps by itself after the inactivity
+   period (op 8), and the next command wakes it.
 
 ## Asynchronous Messages
 

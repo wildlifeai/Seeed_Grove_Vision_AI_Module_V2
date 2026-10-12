@@ -31,8 +31,11 @@ Open. Plan and detail: [`CLAUDE_camera_error_handling_proposal.md`](CLAUDE_camer
   failures, which the new code reported correctly.
 - **13 October: quieter inactivity.** At least 1 s between inactivity events, and the image task
   no longer reports them to the app as "unhandled".
-- **Still to do:** refusing captures before the first DPD, hard fault reset, a watchdog while
-  awake. Also open: `Sleep` is sent to the app while a capture is still running.
+- **13 October: captures before the first DPD are refused.** `capture` and `light` reply
+  `Error: no captures until after the first sleep.` after a cold boot. The ship-check tool and
+  `live_view.py` need updating to match.
+- **What the app developers need to know** is in the proposal, "Implications for the app".
+- **Still to do:** hard fault reset, a watchdog while awake. Also open: `Sleep` is sent to the app while a capture is still running.
 
 ## Background
 

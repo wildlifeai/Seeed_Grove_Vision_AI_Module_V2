@@ -8,7 +8,7 @@
 ## Summary
 
 Eight steps, each small enough to build and test alone. Step 4 has since been merged into
-step 2 (see "Agreed plan"). Steps 1, 2, 3, 5 and 6 are done. Sources:
+step 2 (see "Agreed plan"). Steps 1, 2, 3, 5, 6 and 9 are done. Steps 7 and 8 are not started. Sources:
 [`README.md`](README.md) in this folder, the
 [connector-pressure report](../2026-10-11_camera_connector_pressure/README.md) and its logs, and
 the code on `261012_cameraErrors`.
@@ -23,9 +23,10 @@ the code on `261012_cameraErrors`.
 | 6 | Quieter repeated inactivity | low | the `Inactive for 1ms` flood (`b2_1729`) |
 | 7 | Hard fault handler resets the processor | medium | dead after a hard fault (`b1_1712`) |
 | 8 | A watchdog while awake | high, experiment first | silent freezes (3 logs) |
+| 9 | Refuse captures before the first DPD (added 12 October) | low | the occasional missing first frame after a cold boot |
 
-Added on 12 October as step 9: refuse captures before the first DPD. See "Captures after a
-cold boot" below.
+Step 9 was added on 12 October. What the app developers need to know is in "Implications for
+the app", near the end.
 
 **Limits.** Pressure on the connector also corrupts the console and stops the boot ROM, so it
 disturbs more than the camera. Firmware can't prevent that. Steps 1 to 6 make the AI processor
@@ -44,7 +45,7 @@ Charles reviewed the proposal and the discussion that followed. Agreed so far:
 | 5 | Done. Built and tested by Charles, 13 October (forced timeout on the HM0360, a real fault on the RP3) |
 | 6 | Done. Built and tested by Charles, 13 October, on both variants |
 | 7, 8 | Not yet agreed |
-| Captures after a cold boot | Decided: refuse them. Not yet coded (step 9) |
+| 9 | Done. Built and tested by Charles, 13 October |
 
 What changed from the first draft, and why:
 
@@ -453,43 +454,124 @@ not catch one stuck task.
 The matching work on the BLE processor is
 [ww-hardware#69](https://github.com/wildlifeai/ww-hardware/issues/69).
 
-## Captures after a cold boot
+## Step 9: refuse captures before the first DPD
 
-The README asks for captures before the first DPD to fail gracefully. Before doing that:
+**Status, 13 October 2026: done, built and tested by Charles.**
 
-- **The ship-check photo tool depends on it.** `_Tools/ww500_ship_check.py` (PR #274) has the
-  operator press RESET, then sends `capture 3 500`. RESET is a cold boot.
-- **It usually works on current code, for the HM0360.** `b1_1702` (11 October, `dev` 6c8ee1ca):
-  cold boot, `capture 3 500`, `Image capture 1/3 took 73ms`. But on 12 October Charles saw the
-  first frame time out after a cold boot, more than once, recovered by the retry (step 2,
-  "Bench result"). The failures in August and September
-  were on the RP3 and were the #238 fault, fixed on 30 September. I found no RP3 cold-boot
-  capture logged since the fix.
-- **`reset` and `switchslot` also produce a cold boot,** because they are watchdog resets. So a
-  capture would be refused after either, until the next sleep.
-- **The app can hit it.** For a few seconds after power-on the AI processor is awake, and a
-  capture sent then would be refused.
+**Before.** A capture could be requested between a cold boot and the first DPD. Charles: that
+was never intended. A cold boot is meant to set things up and then sleep quickly. The first
+frame after a cold boot has sometimes not arrived (HM0360, 12 October), so refusing these
+captures removes one variable.
 
-**Options.**
-1. Leave it allowed, and add an RP3 cold-boot capture to the bench checks. My suggestion.
-2. Refuse it, with a message to the console and the app, and change the ship-check tool to go
-   through one DPD first (it already does this for the RP3 with `setop 7 5` and `dpd`).
+**The change, in `CLI-commands.c`.**
+- The CLI task keeps the wake reason it is given at start-up.
+- `captureRefused()` is called by the `capture` and `light` commands. After a cold boot it
+  writes the reply and nothing is sent to the image task.
+- The reply, to the console and the app:
+  ```
+  Error: no captures until after the first sleep.
+  ```
+- Refusing in the command gives one clear reply, with no "About to capture" line first.
+- `light` is refused too. It takes one frame on the same path.
 
-**Decided, 12 October 2026 (Charles): option 2, as step 9.** There is no need for captures
-before the first DPD, and refusing them removes one variable. The ship-check tool will be
-updated so that it does not capture before the first DPD.
+**What counts as a cold boot.** Power-on, RESET, and also `reset`, `switchslot` and a firmware
+update, which all end in a watchdog reset. A capture is refused after any of them until the
+next sleep.
 
-To be settled when step 9 is coded:
-- the wording of the message to the console and the app
-- whether `light` (a one-frame capture) is refused too
-- that `reset` and `switchslot` are followed by a cold boot, so a capture is refused after
-  either until the next sleep
+**Not affected.** Captures the firmware starts itself. They only happen on motion and timer
+wakes, which are never cold boots.
+
+**Tools that capture straight after a cold boot, and will now get the error.**
+- `_Tools/ww500_ship_check.py`: the black and white photo (Charles: to be updated). Its colour
+  photo already sleeps for 5 s first.
+- `_Tools/live_view.py`: it can power-cycle the board and then capture.
+- `_Tools/ae_stream.py` and `_Tools/ae_monitor.py`: only if run straight after a reset.
+
+**To capture from a console with no app.** `setop 7 5`, `dpd`, wait for the timer wake, then
+`setop 7 0` and the capture command.
+
+**Documented** in `_Documentation/ble_commands.md` (note 7) and
+`.agents/skills/references/hardware-traps.md`.
+
+**What to test.**
+- After a cold boot: `capture 1 1000` and `light` give the error and nothing else happens.
+- After a wake: both work as before.
+- After `switchslot` or `reset`: refused until the next sleep.
+
+**How this was decided.** The first draft of this proposal argued against the step:
+- the ship-check photo tool captures straight after RESET
+- a cold-boot capture usually works on current code (`b1_1702`, 11 October, HM0360; and the RP3
+  on 13 October, the first check since the #238 fix)
+- the app can hit it in the few seconds after power-on
+
+Charles decided on 12 October to refuse them anyway: there is no need for captures before the
+first DPD, and the ship-check tool will be changed.
+
+## Implications for the app
+
+Things in this work that the app sees. Items 1 to 3 probably need app changes. The rest should
+be checked.
+
+**1. A new message when a capture fails.**
+```
+Capture failed after 1 of 3 images: EDM WDT2 timeout
+```
+- Sent in place of `Captured ...` when a capture sequence is abandoned. `Captured` is not sent.
+- The first number is how many images were taken and saved before the failure.
+- The text after the colon is the reason: a datapath event name, or `No frame`.
+- Today the app waits for `Captured` and times out (2 September log: `Capture failed: TIMEOUT`
+  after 30 s). It should treat this message as the end of the capture, and show the failure.
+
+**2. The camera no longer retries a failed capture.**
+- Before, the AI processor slept for 1 s, woke and captured again by itself, using the
+  op-parameter picture count and interval. The app could then get a `Wake` and a `Captured` it
+  had not asked for. That no longer happens.
+- If a retry is wanted, the app must send the capture command again.
+
+**3. A new error reply to `AI capture` and `AI light`.**
+```
+Error: no captures until after the first sleep.
+```
+- Returned between a cold boot and the first sleep: after power-on, RESET, `AI reset`,
+  `AI switchslot` and a firmware update.
+- The app should wait for the next `Sleep` and then send the command again (the command wakes
+  the AI processor).
+- The capture preview flow already waits for the device to sleep before it sends `AI capture`.
+  The case to check is a capture sent soon after `AI switchslot`, which the camera selector
+  uses.
+- `AI light` sent soon after connecting to a newly powered camera gets the same reply.
+
+**4. How long to wait for a capture.** A failure is reported:
+- usually about 5 s after the frame was requested
+- at worst, on the HM0360, after about twice (the capture interval plus 7 s), when no datapath
+  event arrives at all and the one sensor restart does not help
+- on the RP3, after at most the capture interval plus 7 s (there is no restart)
+
+The app's timeout should be longer than this, so that it sees the failure message.
+
+**5. `Sleep` can arrive before the capture has finished.** Not new, but more visible now. If a
+capture takes longer than the inactivity period (op 8), the AI processor sends `Sleep` while
+it is still capturing, and `Captured` or `Capture failed` afterwards. The app should not treat
+`Sleep` as the end of a capture. This is finding C in the 3 September thread and is still open.
+
+**6. "Unhandled event" messages.**
+- For datapath events the text changed from `IMAGE task unhandled event 0x012a in 'Capturing'`
+  to `IMAGE task unhandled event '<name>' (0x012a) in '<state>'`.
+- Fewer are sent. Inactivity in a state that can't act on it, and datapath events left over
+  from a capture that has ended, are no longer reported.
+- These are diagnostics. This only matters if the app parses or displays them.
+
+**7. Captures the app did not ask for.** A motion or timelapse capture that fails also sends
+`Capture failed ...`. The app may receive it without having sent a command.
+
+**For the BLE processor developers.** The BLE processor passes these strings through, so no
+change is expected. Worth a check that nothing there looks for `Captured` to end a state.
 
 ## Decisions for Charles
 
 1. Step 2: decided, see "Agreed plan".
 2. Step 3: decided, no automatic retry. The 1 s re-wake is removed.
-3. Captures after a cold boot: decided, option 2 (step 9).
+3. Captures after a cold boot: decided, refuse them (step 9).
 4. Which of the remaining steps to do, and in what order? I suggest 5, 3, 6, then 7, with 8 as
    its own task after an experiment.
 

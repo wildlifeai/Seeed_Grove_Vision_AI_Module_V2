@@ -190,6 +190,9 @@ extern Barrier_t startupBarrier;  // Object that calls a function when all tasks
 TaskHandle_t cli_task_id;
 QueueHandle_t xCliTaskQueue;
 
+// Why we are awake. Used to refuse captures after a cold boot - see captureRefused()
+static APP_WAKE_REASON_E woken;
+
 // Strings for expected messages. Values must match Messages directed to Task 2 in app_msg.h
 const char *cliTaskEventString[APP_MSG_CLITASK_LAST - APP_MSG_CLITASK_FIRST] = {
 	"Console Char",
@@ -919,6 +922,28 @@ static BaseType_t prvCamera(char *pcWriteBuffer, size_t xWriteBufferLen, const c
 }
 
 /**
+ * Refuses a capture if this is the time between a cold boot and the first DPD
+ *
+ * A cold boot is meant to set things up and then enter DPD quickly. Captures are only expected
+ * after a wake from DPD, so one requested before that is refused. This removes one variable:
+ * the first frame after a cold boot has sometimes not arrived.
+ * See _Documentation/development reports/2026-10-12_cameraErrors
+ *
+ * Note that the 'reset' and 'switchslot' commands and a firmware update all end in a cold boot.
+ *
+ * @param pcWriteBuffer - the error message is written here if the capture is refused
+ * @param xWriteBufferLen - size of that buffer
+ * @return true if the capture is refused
+ */
+static bool captureRefused(char *pcWriteBuffer, size_t xWriteBufferLen) {
+	if (woken != APP_WAKE_REASON_COLD) {
+		return false;
+	}
+	snprintf(pcWriteBuffer, xWriteBufferLen, "Error: no captures until after the first sleep.");
+	return true;
+}
+
+/**
  * Implements "light" command.
  *
  * Triggers a fresh light-sensor reading on demand (ignoring whether the AE
@@ -954,6 +979,11 @@ static BaseType_t prvLight(char *pcWriteBuffer, size_t xWriteBufferLen, const ch
 
 	(void)pcCommandString;
 	configASSERT(pcWriteBuffer);
+
+	// A light check takes one frame, so it is a capture
+	if (captureRefused(pcWriteBuffer, xWriteBufferLen)) {
+		return pdFALSE;
+	}
 
 	send_msg.msg_data = 0;	// 0 = light-check only, see handleEventForInit()
 	send_msg.msg_parameter = 0;
@@ -1926,6 +1956,10 @@ static BaseType_t prvCapture(char *pcWriteBuffer, size_t xWriteBufferLen, const 
 	}
 
 	// Parameters are valid
+
+	if (captureRefused(pcWriteBuffer, xWriteBufferLen)) {
+		return pdFALSE;
+	}
 
 	if (captures == 1) {
 		cli_append(&pcWriteBuffer, &xWriteBufferLen, "About to capture 1 image with an interval of '%u' milliseconds", timerInterval);
@@ -2913,6 +2947,8 @@ static void vRegisterCLICommands(void)
  * Not sure how bug the stack needs to be...
  */
 TaskHandle_t cli_createTask(int8_t priority, APP_WAKE_REASON_E wakeReason) {
+
+	woken = wakeReason;
 
 	if (priority < 0)
 	{

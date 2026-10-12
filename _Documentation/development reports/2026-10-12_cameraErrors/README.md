@@ -23,6 +23,12 @@ Open. Plan and detail: [`CLAUDE_camera_error_handling_proposal.md`](CLAUDE_camer
   is removed. It is for the app to retry.
 - **13 October: our own frame timeout** (the capture interval plus 7 s) catches the case where
   no frame and no datapath event arrives. Coded and bench-tested with a forced timeout.
+- **13 October: no in-place retry on the RP3.** Stopping the sensor powers the RP camera down
+  and the restart does not bring it back, so the retry could never work there. The RP builds
+  now give up at the first fault. The HM0360 build keeps its one retry.
+- **13 October: both variants tested.** RP3 captures work after a wake and after a cold boot
+  (the first check of that since the #238 fix). One board with a hardware fault gave real
+  failures, which the new code reported correctly.
 - **Still to do:** quieter inactivity, hard fault reset, a watchdog while awake, refusing
   captures before the first DPD.
 

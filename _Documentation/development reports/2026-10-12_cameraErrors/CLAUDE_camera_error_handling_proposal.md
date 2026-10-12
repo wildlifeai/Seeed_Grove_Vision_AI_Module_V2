@@ -41,7 +41,7 @@ Charles reviewed the proposal and the discussion that followed. Agreed so far:
 | 1 | Done. Built and run by Charles |
 | 2, with 4 | Done. Built by Charles, and seen to recover a real frame timeout |
 | 3 | Done. Built and tested by Charles, 13 October |
-| 5 | Done. Built and tested by Charles, 13 October (forced timeout) |
+| 5 | Done. Built and tested by Charles, 13 October (forced timeout on the HM0360, a real fault on the RP3) |
 | 6, 7, 8 | Not yet agreed |
 | Captures after a cold boot | Decided: refuse them. Not yet coded (step 9) |
 
@@ -336,13 +336,31 @@ to wedge the RP3 datapath:
 
 In either case `CAMERA_CONFIG_RUN` should return false when the sensor does not start.
 
-**Decided, 13 October 2026 (Charles): option 2 for now.** Coded, not yet built:
+**Decided, 13 October 2026 (Charles): option 2 for now.** Built and tested:
 `MAX_CAPTURE_RETRIES` is 0 in the RP builds and 1 in the HM0360 build. On the RP3 a frame fault
 now prints `>>>> Frame fault - giving up` and goes straight to `captureFailed()`.
 
 Not done: making `CAMERA_CONFIG_RUN` return false when the sensor does not start.
 `cisdp_sensor_start()` returns nothing in both sensor drivers, so that needs a driver change.
 With no retry on the RP cameras it matters less.
+
+**Later the same day: the board or camera was faulty.** After the change above, `capture 3 1000`
+and `capture 1 1000` on the RP3 also gave no frame, every time, after a DPD wake, with every I2C
+write acknowledged. Raising `IMX708_POWERUP_DELAY` from 10 to 100 ms made no difference. A
+second board with the same build and the 10 ms delay captures normally. So:
+- the RP3 failures in this section came from a hardware fault on the first board or its camera,
+  not from the 0 ms interval and not from this branch
+- the 10 ms power-up delay is not the cause
+- the finding about the restart still stands: it comes from the code (`SENSOR_ENABLE` is taken
+  low and not raised again), and the failed I2C writes after the restart show it
+- on the faulty board the new code did what it should: `Frame fault - giving up` at 5 s,
+  `Capture failed after 0 of 1 images: EDM WDT2 timeout`, then sleep
+
+**RP3 on the good board, 13 October (Charles), all passed:**
+- `capture 3 1000` and `capture 3 3000` after a DPD wake
+- `capture 3 1000` straight after a cold boot. This is the first RP3 cold-boot capture on record
+  since the #238 fix, and it works
+- `capture 2 10000`: the frame timer did not fire early
 
 ## Step 6: quieter repeated inactivity
 

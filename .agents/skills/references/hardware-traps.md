@@ -16,6 +16,11 @@ Verified on the bench (details and serial evidence in
   **cold** boot (PMU wakeup registers read zero). A `setop 8` does not shorten an
   inactivity countdown already running, so after raising op 8 for a session, follow the
   reboot command with `dpd` or wait out the old period.
+* **A fault on the AI processor now ends in a reset, not a hang** (13 Oct 2026). Every fault
+  handler prints a report (`Entering HardFault interrupt!`, the status registers, the stacked
+  `PC` and `LR`), then `>>> Reset by watchdog after fault`, and a cold boot follows about 1 s
+  later. So an unexpected `Cold Boot` in a log may be a fault: search back for the report. The
+  `hardfault` console command forces one for testing.
 * **`capture` and `light` are refused between a cold boot and the first sleep** (13 Oct 2026):
   `Error: no captures until after the first sleep.` A cold boot follows power-on, RESET,
   `reset`, `switchslot` and a firmware update. To capture from a script: let the board sleep

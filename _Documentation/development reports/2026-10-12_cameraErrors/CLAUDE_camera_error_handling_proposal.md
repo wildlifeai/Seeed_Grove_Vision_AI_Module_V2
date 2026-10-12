@@ -8,7 +8,7 @@
 ## Summary
 
 Eight steps, each small enough to build and test alone. Step 4 has since been merged into
-step 2 (see "Agreed plan"). Steps 1, 2, 3, 5, 6 and 9 are done. Steps 7 and 8 are not started. Sources:
+step 2 (see "Agreed plan"). Steps 1, 2, 3, 5, 6 and 9 are done. Step 7 is done. Step 8 is not started. Sources:
 [`README.md`](README.md) in this folder, the
 [connector-pressure report](../2026-10-11_camera_connector_pressure/README.md) and its logs, and
 the code on `261012_cameraErrors`.
@@ -44,7 +44,8 @@ Charles reviewed the proposal and the discussion that followed. Agreed so far:
 | 3 | Done. Built and tested by Charles, 13 October |
 | 5 | Done. Built and tested by Charles, 13 October (forced timeout on the HM0360, a real fault on the RP3) |
 | 6 | Done. Built and tested by Charles, 13 October, on both variants |
-| 7, 8 | Not yet agreed |
+| 7 | Done. Built and tested by Charles, 13 October (HM0360 or RP3 not recorded) |
+| 8 | Not yet agreed |
 | 9 | Done. Built and tested by Charles, 13 October |
 
 What changed from the first draft, and why:
@@ -408,31 +409,57 @@ That needs a capture to count as activity, and is left for a separate change.
 
 ## Step 7: hard fault handler resets the processor
 
-**Now.** `HardFault_Handler()` prints and loops for ever (`hardfault_handler.c:93-104`). The
-reset is inside `#if 0`. NMI and MemManage loop too. Nothing but RESET or a power cycle brings
-the processor back.
+**Status, 13 October 2026: built and tested by Charles.** `hardfault` gave the report, then
+`>>> Reset by watchdog after fault`, the bootloader banner and a cold boot. So the watchdog can
+be started from inside a fault handler. The stacked `PC` (`0x10003cb8`) is two bytes after the
+stacked `LR`, which fits the forced instruction straight after the `xprintf()` call. One fix
+followed the test: the old line "Another secure bus error" was printed for any fault, and is
+now printed only for bus faults. `BFAR` and `MMFAR` are marked "(not valid)" when they hold no
+address. That fix is not yet built.
+
+**Before.** `HardFault_Handler()` printed and looped for ever. So did the NMI, MemManage,
+BusFault, SecureFault and UsageFault handlers. Nothing but RESET or a power cycle brought the
+processor back (`b1_1712`).
 
 In `b1_1712` the registers were `CFSR 0x00020000` and `HFSR 0x40000000`. That is a usage fault
 (invalid state, usually a jump to a bad address), escalated to a hard fault. The handler only
-decodes bus faults, so it printed "Another secure bus error", which is misleading.
+decoded bus faults, so it printed "Another secure bus error", which was misleading.
 
-**Change.**
-- Print `CFSR`, `HFSR`, and the stacked `PC` and `LR`, so the faulting code can be found.
-- Then reset. `NVIC_SystemReset()` is marked "does not work" in `image_task.c`, and the working
-  method there is a 100 ms watchdog reset (`hx_drv_watchdog_start()` with `WATCHDOG_RESET`). Use
-  the same.
-- The same for the NMI, MemManage, BusFault, UsageFault and SecureFault handlers.
+**The change, in `hardfault_handler.c`.** Every handler now:
+1. starts the watchdog, set to reset the processor 1 s later (`FAULT_RESET_DELAY_MS`)
+2. prints its report: `CFSR`, `HFSR`, `BFAR`, `MMFAR`, the usage fault bits by name, and the
+   stacked registers, including the `PC` and `LR` of the code that faulted
+3. prints `>>> Reset by watchdog after fault` and waits
 
-**Consequences.** A watchdog reset boots as a cold boot and the RTC restarts at the 2024 epoch
-(a known, separate item). The BLE processor gets a fresh `Wake`. While the pressure stays on,
-the board may reset repeatedly.
+The watchdog is started first, so the reset still happens if printing the report faults again.
+If the watchdog has not reset the processor after a few seconds, the handler tries a system
+reset request as a last resort.
 
-**Test.** A temporary console command that jumps to a bad address, on both variants.
+The watchdog is used because `NVIC_SystemReset()` is marked "does not work" in `image_task.c`.
+The `reset` command uses the watchdog in the same way.
 
-**Worth an experiment.** The fault came after about 70 `No Register EDM Timing Callback` lines,
-printed by the prebuilt library from inside an interrupt. `sensordplib_set_edm_timing_inlib(0)`
-turns that detection off. I can't say it caused the fault, and it can only be tested by pressing
-on a connector.
+**A test command.** `hardfault` on the console forces a hard fault: an undefined instruction
+with interrupts masked, so the usage fault escalates as it did in `b1_1712`. There is no reply,
+as the processor resets.
+
+**Consequences.**
+- The reset is followed by a cold boot, and the RTC restarts at the 2024 epoch (a known,
+  separate item). The BLE processor gets a fresh `Wake`.
+- After the cold boot, captures are refused until the first sleep (step 9).
+- While a fault persists, for example pressure on a connector, the board may reset repeatedly.
+- The fault report is only on the console. Nothing records it for the app or the next boot.
+
+**What to test,** on both variants:
+- Type `hardfault`. Expect `Entering HardFault interrupt!`, `SCB->CFSR:0x00010000`
+  (`UNDEFINSTR`), `SCB->HFSR:0x40000000`, the stacked registers, then
+  `>>> Reset by watchdog after fault`, and a cold boot about 1 s later.
+- The stacked `PC` should be an address inside `prvHardFault()` (check against the `.map` file).
+- After the cold boot the board should behave normally and sleep.
+
+**Worth an experiment, not done.** In `b1_1712` the fault came after about 70
+`No Register EDM Timing Callback` lines, printed by the prebuilt library from inside an
+interrupt. `sensordplib_set_edm_timing_inlib(0)` turns that detection off. I can't say it
+caused the fault, and it can only be tested by pressing on a connector.
 
 ## Step 8: a watchdog while awake
 

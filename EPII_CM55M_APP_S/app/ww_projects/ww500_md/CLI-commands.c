@@ -259,6 +259,7 @@ static BaseType_t prvReset(char *pcWriteBuffer, size_t xWriteBufferLen, const ch
 
 // Enter Deep Power Down
 static BaseType_t prvDpd(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
+static BaseType_t prvHardFault(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 
 // Report of some status
 static BaseType_t prvStatus(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
@@ -368,6 +369,14 @@ static const CLI_Command_Definition_t xDpd = {
 	"dpd", /* The command string to type. */
 	"dpd:\r\n Enter Deep Power Down\r\n",
 	prvDpd, /* The function to run. */
+	0		  /* No parameters are expected. */
+};
+
+/* Structure that defines the "hardfault" command line command. */
+static const CLI_Command_Definition_t xHardFault = {
+	"hardfault", /* The command string to type. */
+	"hardfault:\r\n Forces a hard fault, to test the fault handler (the processor resets)\r\n",
+	prvHardFault, /* The function to run. */
 	0		  /* No parameters are expected. */
 };
 
@@ -851,6 +860,32 @@ static BaseType_t prvDpd(char *pcWriteBuffer, size_t xWriteBufferLen, const char
 	inactivity_setPeriod(1);	// small number > 0
 
 	// There is no more data to return after this single string, so return pdFALSE.
+	return pdFALSE;
+}
+
+/**
+ * Forces a hard fault, to test the fault handler
+ *
+ * HardFault_Handler() in hardfault_handler.c should print a report and then reset the processor
+ * with the watchdog. Expect a cold boot about a second later.
+ *
+ * There is no reply, as the processor resets before one can be sent.
+ */
+static BaseType_t prvHardFault(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) {
+	(void)pcCommandString;
+	(void)xWriteBufferLen;
+	configASSERT(pcWriteBuffer);
+
+	xprintf("Forcing a hard fault. Expect a fault report, then a reset.\n");
+
+	// An undefined instruction gives a usage fault. With interrupts masked the usage fault can't be taken,
+	// so it becomes a hard fault (as happens when a fault occurs inside an interrupt handler).
+	__asm volatile (
+			"cpsid i    \n"
+			"udf   #255 \n"
+	);
+
+	// Not reached
 	return pdFALSE;
 }
 
@@ -2883,6 +2918,7 @@ static void vRegisterCLICommands(void)
 	FreeRTOS_CLIRegisterCommand(&xAssert);
 	FreeRTOS_CLIRegisterCommand(&xReset);
 	FreeRTOS_CLIRegisterCommand(&xDpd);
+	FreeRTOS_CLIRegisterCommand(&xHardFault);
 
 	FreeRTOS_CLIRegisterCommand(&xStatus);
 	FreeRTOS_CLIRegisterCommand(&xBle);			// BLE processor unresponsive flag

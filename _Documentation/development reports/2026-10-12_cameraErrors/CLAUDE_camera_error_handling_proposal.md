@@ -8,7 +8,7 @@
 ## Summary
 
 Eight steps, each small enough to build and test alone. Step 4 has since been merged into
-step 2 (see "Agreed plan"). Steps 1 and 2 are coded. Sources:
+step 2 (see "Agreed plan"). Steps 1, 2, 3 and 5 are done. Sources:
 [`README.md`](README.md) in this folder, the
 [connector-pressure report](../2026-10-11_camera_connector_pressure/README.md) and its logs, and
 the code on `261012_cameraErrors`.
@@ -40,7 +40,9 @@ Charles reviewed the proposal and the discussion that followed. Agreed so far:
 |---|---|
 | 1 | Done. Built and run by Charles |
 | 2, with 4 | Done. Built by Charles, and seen to recover a real frame timeout |
-| 3, 5, 6, 7, 8 | Not yet agreed |
+| 3 | Done. Built and tested by Charles, 13 October |
+| 5 | Done. Built and tested by Charles, 13 October (forced timeout) |
+| 6, 7, 8 | Not yet agreed |
 | Captures after a cold boot | Decided: refuse them. Not yet coded (step 9) |
 
 What changed from the first draft, and why:
@@ -141,8 +143,8 @@ timing errors (`0x0109` to `0x011a`), and it folds the nine parser errors into `
   ignored. This replaces the guard that dropped events less than 1000 ms after `startTime`.
 - **One retry.** `MAX_CAPTURE_RETRIES` is 1, with a fixed 100 ms delay
   (`CAPTURE_RETRY_DELAY_MS`). The count is per frame: it is cleared at Frame Ready.
-- **Give up** as before: stop the sensor, set `g_wdt_event` (the 1 s re-wake), save state if
-  there is an SD card, sleep.
+- **Give up** as before: stop the sensor, save state if there is an SD card, sleep. (As first
+  coded this also set `g_wdt_event` for the 1 s re-wake. That was removed in step 3.)
 - **Other states.** A frame fault event outside Capturing is a leftover from a capture that has
   ended. `flagUnexpectedEvent()` prints it on the console and no longer sends it to the app.
 - The `#define WDTIMOUTFIX`, its four `#ifdef` pairs and the old `#else` branch are removed.
@@ -195,19 +197,46 @@ fault. The logs can't show whether the restart contributed. Step 7 covers the fa
 
 ## Step 3: one "capture failed" path that tells the app
 
-**Now.** When a capture is abandoned, the console says so but the app only sees `Sleep`, or
-nothing. The give-up code is written inline in the timeout case.
+**Status, 13 October 2026: done, built and tested by Charles.**
 
-**Change.** A function `captureFailed(reason)` in `image_task.c`, holding the existing give-up
-code: stop the sensor, save state if there is an SD card, sleep. It also sends one line to the
-app, for example `Capture failed: EDM WDT2 timeout`. Step 5 calls it, and so does the give-up branch of `frameFault()` from step 2.
+**Before.** When a capture was abandoned, the console said so but the app only saw `Sleep`, or
+nothing. The give-up path set `g_wdt_event`, which makes the device re-wake after 1 s and try
+again, with no limit. With a fault that persists it would wake every few seconds until the
+battery is flat.
 
-**Also.** The give-up path sets `g_wdt_event`, which makes the device re-wake after 1 s and try
-again. Nothing limits that. With a persistent fault it would wake every few seconds until the
-battery is flat. I suggest a limit of 3 re-wakes in a row, then the normal sleep.
+**The change, in `image_task.c`.**
+- `captureFailed(reason)` holds the give-up code: tell the console and the app, and stop the
+  sensor. The give-up branch of `frameFault()` calls it. Step 5 will
+  too.
+- State changes stay in the state handlers (Charles's convention). `frameFault()` returns true
+  when the capture is abandoned, and `handleEventForCapturing()` then saves state or sleeps and
+  sets `image_task_state`.
+- The message to the app:
+  ```
+  Capture failed after 1 of 3 images: EDM WDT2 timeout
+  ```
+  The count is the frames that arrived. `Captured` is not sent.
+- **No automatic retry (decided 13 October, Charles).** On a failure the AI processor reports
+  the error and stops. It is for the app to ask again if it wants to. The 1 s re-wake
+  (`g_wdt_event`, `>>> RETRY due to WDT event`) is removed.
 
-**Check first.** The new string goes to the app, so it is a cross-repo contract. Agree the
-wording with the app developers.
+**History of the 1 s re-wake.** Charles added it on 28 February 2026 (commit 7b73436d) as a
+workaround for the missing first frame. Before July it ran at the first frame timeout, and from
+July only after the in-place retries had failed. At the time, going through DPD was the only
+way to restart the sensor. The in-place restart now does that job. Step 3 first limited the
+re-wake to one in a row. The 13 October bench test showed what it does in practice: the retry
+uses the op-parameter picture count and interval, not the original command, and the app gets a
+`Captured` it did not ask for. So it was removed.
+
+**Consequence.** A motion-triggered capture that fails in the field has no app to retry it. That
+picture is lost, and the camera waits for the next trigger.
+
+**Cross-repo.** The new string is documented in `_Documentation/ble_commands.md`. The app
+ignores it until it is taught to show it. The wording should be agreed with the app developers
+before it is relied on.
+
+**What to test.** As with step 2, a failure is hard to cause on a healthy board. Normal captures
+on both variants should be unchanged.
 
 ## Step 4: merged into step 2
 
@@ -215,13 +244,105 @@ The other datapath errors in Capturing are now frame faults. See step 2.
 
 ## Step 5: a software timeout on each frame
 
-**Now.** Capturing relies on the EDM watchdog (5 s) to notice a missing frame. In `b2_1735` it
-never fired, and nothing happened for 44 s. The inactivity event is ignored in Capturing
-("expect WDT timeout soon?").
+**Status, 13 October 2026: done, built and tested by Charles.**
 
-**Change.** A FreeRTOS timer started when a frame is requested and stopped at Frame Ready. Its
-period is the capture interval plus 7 s, so the EDM watchdog normally gets there first. On
-expiry it sends an event to the image task, which calls `captureFailed("no frame")`.
+**Before.** Capturing relied on the EDM watchdog (5 s) to notice a missing frame. In `b2_1735`
+it never fired, and nothing happened for 44 s. The image task ignores inactivity in Capturing,
+so on current code the board would probably stay awake indefinitely.
+
+**The change.**
+- A new event, `APP_MSG_IMAGETASK_FRAME_TIMEOUT` (`0x0a0f`), in `app_msg.h`.
+- A one-shot FreeRTOS timer, `frameTimer`, in `image_task.c`. `frameTimerStart()` is called each
+  time a frame is requested, and `frameTimerStop()` at Frame Ready and in `captureFailed()`.
+- The period is the capture interval plus 7 s (`FRAME_TIMEOUT_MARGIN_MS`), so the EDM watchdog
+  normally gets there first.
+- On expiry, the event goes to the image task. In Capturing it is handled as a frame fault
+  named "No frame": one sensor restart, then give up. This is one more than the first draft,
+  which gave up at once. It keeps one path for every kind of frame fault.
+- Each event carries an id that changes whenever the timer is started or stopped, so an event
+  left over from an earlier frame is ignored.
+- `handleEventForCapturing()` now has one "capture abandoned" block after its `switch`, used by
+  both the datapath faults and this timeout. State changes stay in the handler.
+
+**Console text,** when nothing arrives at all:
+```
+IMAGE Task received event 'Image Event Frame Timeout' (0x0a0f). Rx data = 0x00000003
+>>>> Frame fault 'No frame' (0x0a0f) after 8003ms <<<<
+>>>> Frame fault - restarting sensor, retry 1/1
+```
+If the restart doesn't help either, 8 s later: `giving up`, then
+`Capture failed after 0 of 3 images: No frame`.
+
+**How to test, including the give-up path of steps 2 and 3.** This can't be caused on a healthy
+board as built. A temporary change does it, on the HM0360 image: set `FRAME_TIMEOUT_MARGIN_MS` to
+10 and send `capture 1 0`. (Don't use a 0 ms interval on the RP3, it wedges the datapath.) The timer then expires before the first frame can arrive. Expect the restart,
+a second expiry, "giving up", the `Capture failed` message on the console and in the app, then
+a normal sleep with no re-wake. Put the margin back to 7000 afterwards.
+
+**Bench, 13 October 2026 (Charles, HM0360).** `capture 3 3000` worked normally. The forced test
+(margin 10 ms, `capture 1 0`) gave the first expiry and the restart, but the second expiry was
+treated as a follower of the first and ignored, and then the frame arrived. Cause: the 500 ms
+follower window is longer than the 10 ms test period. It could not happen with the real 7 s
+margin, but the rule was wrong in principle, so our own timeout is now never a follower.
+Re-tested the same day: the restart, the second expiry, "giving up", `Capture failed` sent to the
+BLE processor, Save State, sleep. The 1 s re-wake then took a picture with the op parameters,
+which led to its removal (see step 3).
+
+Final test with the re-wake removed: the same sequence, then `Entering DPD` and no wake. The
+only noise left is `IMAGE task unhandled event 'Image Event Inactivity' in 'Uninitialised'`,
+sent to the app 3 s after giving up. That is step 6.
+
+**Also check** that normal captures are unchanged on both variants, including a long interval
+(for example `capture 3 3000`), where the timer must not expire early.
+
+## Finding, 13 October 2026: the in-place restart cannot work on the RP3
+
+**Bench (Charles, RP3 image, this branch, margin back at 7000).** `capture 1 0`, which is known
+to wedge the RP3 datapath:
+
+| Time | What happened |
+|---|---|
+| 0 | Capture starts. No frame |
+| 3 s | Inactivity. The image task ignores it. The IF task sends `Sleep` to the app |
+| 5.0 s | `0x011c`. Sensor restart, `retry 1/1` |
+| | `Stopping sensor`, `Disabling RP SENSOR_ENABLE`, then the restart: three failed I2C writes to `0x0100` (`Fail (-60)`), `IMX708 on by app fail` |
+| | `0x011b` follows, ignored |
+| 8 s, 11 s | Inactivity twice more. `Sleep` sent to the app each time |
+| 12.0 s | Our frame timer (step 5): `No frame`, `giving up`, `Capture failed after 0 of 1 images: No frame` |
+| | Save State, then DPD at once |
+
+**What it shows.**
+- **Step 5 did its job on a real fault.** After the failed restart no datapath event came at
+  all. Without the frame timer the board would have stayed awake in Capturing.
+- **The restart cannot work on the RP cameras.** `CAMERA_CONFIG_STOP` takes `SENSOR_ENABLE` low
+  (`rp_sensor_enable(false)`, in the code since November 2025, commit d50ac4cc). That powers
+  the IMX708 down and loses its registers. `CAMERA_CONFIG_RUN` does not enable it or reload
+  them, so the stream-on write gets no answer.
+- **`CAMERA_CONFIG_RUN` reports success anyway.** The result of `cisdp_sensor_start()` is not
+  checked, so `frameFault()` believes the restart worked and waits for a frame.
+- **This is a second reason the old RP3 retries all failed,** besides #238. In the 4 September
+  log the same sequence shows `IMX708 on by app done`: with the #238 fault the write went to
+  the HM0360's address, which answered. So the retry has never been able to work on the RP3,
+  and the evidence for it in Appendix A is HM0360 only.
+- **The app is told `Sleep` three times** while the AI processor is still trying to capture.
+  This is the existing IF task behaviour on inactivity (finding C in the 3 September thread).
+
+**Options for the RP3 restart.**
+1. Re-initialise fully: stop, then `CAMERA_CONFIG_INIT_COLD` (enables the sensor and reloads its
+   registers), then run. Needs a check that repeating the init does not allocate its buffers
+   again.
+2. No in-place retry on the RP cameras: give up at the first fault. Simple, and honest about
+   what we know.
+
+In either case `CAMERA_CONFIG_RUN` should return false when the sensor does not start.
+
+**Decided, 13 October 2026 (Charles): option 2 for now.** Coded, not yet built:
+`MAX_CAPTURE_RETRIES` is 0 in the RP builds and 1 in the HM0360 build. On the RP3 a frame fault
+now prints `>>>> Frame fault - giving up` and goes straight to `captureFailed()`.
+
+Not done: making `CAMERA_CONFIG_RUN` return false when the sensor does not start.
+`cisdp_sensor_start()` returns nothing in both sensor drivers, so that needs a driver change.
+With no retry on the RP cameras it matters less.
 
 ## Step 6: quieter repeated inactivity
 
@@ -321,7 +442,7 @@ To be settled when step 9 is coded:
 ## Decisions for Charles
 
 1. Step 2: decided, see "Agreed plan".
-2. Step 3: limit the 1 s re-wake to 3 in a row?
+2. Step 3: decided, no automatic retry. The 1 s re-wake is removed.
 3. Captures after a cold boot: decided, option 2 (step 9).
 4. Which of the remaining steps to do, and in what order? I suggest 5, 3, 6, then 7, with 8 as
    its own task after an experiment.

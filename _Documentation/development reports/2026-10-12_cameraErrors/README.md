@@ -18,8 +18,13 @@ Open. Plan and detail: [`CLAUDE_camera_error_handling_proposal.md`](CLAUDE_camer
   sometimes times out (`0x011c` then `0x011b`). One sensor restart recovered it.
 - **Decided: captures before the first DPD will be refused.** There is no need for them, and it
   removes one variable. The ship-check tool will be changed to match. Not yet coded.
-- **Still to do:** our own frame timeout, a "capture failed" message to the app, quieter
-  inactivity, hard fault reset, a watchdog while awake.
+- **13 October: a failed capture is reported and nothing more.** The app gets
+  `Capture failed after N of M images: <reason>`. The 1 s re-wake that used to follow a failure
+  is removed. It is for the app to retry.
+- **13 October: our own frame timeout** (the capture interval plus 7 s) catches the case where
+  no frame and no datapath event arrives. Coded and bench-tested with a forced timeout.
+- **Still to do:** quieter inactivity, hard fault reset, a watchdog while awake, refusing
+  captures before the first DPD.
 
 ## Background
 

@@ -62,6 +62,13 @@ static TickType_t idle_start_tick = 0;
 // This ensure that the inactivity callback is not called too often
 static BaseType_t inactivity_triggered = pdFALSE;
 
+// The callback makes our tasks run, which re-arms the detector. With a very short period (the 'dpd' command
+// sets 1ms) it would then fire again and again while a task is still busy. So leave at least this long
+// between callbacks. This is not longer than any normal period, so normal operation is unchanged.
+#define INACTIVITY_MIN_REPEAT_MS 1000
+static BaseType_t inactivity_has_fired = pdFALSE;
+static TickType_t inactivity_last_fired_tick = 0;
+
 static uint32_t tasksInactivePeriod = 0;
 // This is the number of ticks that must happen before 'inactivity' is declared.
 static TickType_t tasksInactiveTicks = 0;
@@ -190,7 +197,13 @@ void inactivity_IdleHook(void) {
     timeSinceActivity = now - idle_start_tick;
 
     if (!inactivity_triggered && (timeSinceActivity >= tasksInactiveTicks)) {
+    	if (inactivity_has_fired && ((now - inactivity_last_fired_tick) < pdMS_TO_TICKS(INACTIVITY_MIN_REPEAT_MS))) {
+    		// Too soon after the last callback. Try again the next time the idle task runs.
+    		return;
+    	}
         inactivity_triggered = pdTRUE;
+        inactivity_has_fired = pdTRUE;
+        inactivity_last_fired_tick = now;
 
         // Execute some code that will end up entering deep power down (DPD)
         if (inactivity_callback) {

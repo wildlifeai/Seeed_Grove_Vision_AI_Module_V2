@@ -29,8 +29,10 @@ Open. Plan and detail: [`CLAUDE_camera_error_handling_proposal.md`](CLAUDE_camer
 - **13 October: both variants tested.** RP3 captures work after a wake and after a cold boot
   (the first check of that since the #238 fix). One board with a hardware fault gave real
   failures, which the new code reported correctly.
-- **Still to do:** quieter inactivity, hard fault reset, a watchdog while awake, refusing
-  captures before the first DPD.
+- **13 October: quieter inactivity.** At least 1 s between inactivity events, and the image task
+  no longer reports them to the app as "unhandled".
+- **Still to do:** refusing captures before the first DPD, hard fault reset, a watchdog while
+  awake. Also open: `Sleep` is sent to the app while a capture is still running.
 
 ## Background
 

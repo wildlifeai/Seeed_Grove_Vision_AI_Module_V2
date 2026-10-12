@@ -8,7 +8,7 @@
 ## Summary
 
 Eight steps, each small enough to build and test alone. Step 4 has since been merged into
-step 2 (see "Agreed plan"). Steps 1, 2, 3 and 5 are done. Sources:
+step 2 (see "Agreed plan"). Steps 1, 2, 3, 5 and 6 are done. Sources:
 [`README.md`](README.md) in this folder, the
 [connector-pressure report](../2026-10-11_camera_connector_pressure/README.md) and its logs, and
 the code on `261012_cameraErrors`.
@@ -42,7 +42,8 @@ Charles reviewed the proposal and the discussion that followed. Agreed so far:
 | 2, with 4 | Done. Built by Charles, and seen to recover a real frame timeout |
 | 3 | Done. Built and tested by Charles, 13 October |
 | 5 | Done. Built and tested by Charles, 13 October (forced timeout on the HM0360, a real fault on the RP3) |
-| 6, 7, 8 | Not yet agreed |
+| 6 | Done. Built and tested by Charles, 13 October, on both variants |
+| 7, 8 | Not yet agreed |
 | Captures after a cold boot | Decided: refuse them. Not yet coded (step 9) |
 
 What changed from the first draft, and why:
@@ -364,18 +365,45 @@ second board with the same build and the 10 ms delay captures normally. So:
 
 ## Step 6: quieter repeated inactivity
 
-**Now.** `dpd` sets the inactivity period to 1 ms. The detector re-arms each time a task runs, so
-while the IF task is still sending, it fires again and again. Each time, the console prints
-`Inactive for 1ms`, and both tasks print "unhandled event" and send it to the app (`b2_1729`:
-24 times).
+**Status, 13 October 2026: done, built and tested by Charles.** The forced-failure test passed
+on the HM0360: after `Capture failed` there is no "unhandled event" message, and the board
+sleeps. The faulty RP3 board gave the expected sequence too: fault at 5 s, `giving up`,
+`Capture failed`, the trailing `0x011b` ignored in Save State, sleep.
 
-The repeats themselves are needed. The IF task can't act on the event while it is transmitting,
-and the next repeat is what gets it to sleep. So the events should not be inhibited.
+**Before.** The inactivity detector re-arms each time a task runs, and its own event makes the
+tasks run. So while a task is busy it fires again after each period. Two effects:
+- `dpd` sets the period to 1 ms, giving a flood (`b2_1729`: `Inactive for 1ms` 24 times).
+- The image task, in a state that can't act on the event, reported
+  `IMAGE task unhandled event 'Image Event Inactivity' in 'Uninitialised'` to the console and
+  the app. On 13 October this reached the app straight after `Capture failed`.
 
-**Change.**
-- Print `Inactive for N ms` once per period of activity, not on every repeat.
-- In states that can't act on the event (IF task in I2C TX State, image task in Uninitialised
-  and Save State), ignore it without a print or a message to the app.
+**What was already fixed.** The first draft listed the IF task in I2C TX State. That was fixed
+for issue #205: the IF task now defers the event and replays it when it is back in Idle.
+
+**The change.**
+- `inactivity.c`: at least 1 s between callbacks (`INACTIVITY_MIN_REPEAT_MS`). No normal period
+  is shorter than that, so normal operation is unchanged. After `dpd`, a repeat comes once a
+  second, not every few ms.
+- `image_task.c`: `flagUnexpectedEvent()` ignores the inactivity event silently. It covers
+  every state with no handler for it: Uninitialised, Save State, NN Processing, Updating NN.
+
+The repeats themselves are kept. The image task does not defer the event, so a later repeat is
+what lets it sleep once it is back in Init.
+
+**Considered and not done: sending `Sleep` only once.** On 13 October the IF task sent `Sleep` to
+the app three times while a capture was still running. Stopping the repeats looked easy, but
+the BLE processor uses `Sleep` to know the AI processor is asleep. If a command arrives after
+the first `Sleep`, a later `Sleep` is what tells it the AI processor has gone back to sleep.
+Without it the BLE processor would send its next command with no wake pulse. The real fault is
+that `Sleep` is sent while a capture is still running (finding C in the 3 September thread).
+That needs a capture to count as activity, and is left for a separate change.
+
+**What to test.**
+- The forced-failure test from step 5, or the faulty board: after `Capture failed` the app
+  should no longer get the "unhandled event" message.
+- `dpd` with no SD card, or while the IF task is busy: `Inactive for 1ms` should appear about
+  once a second, not in a burst, and the board should still sleep.
+- Normal sleep after a capture, on both variants, at the usual op 8.
 
 ## Step 7: hard fault handler resets the processor
 

@@ -1796,6 +1796,13 @@ static APP_MSG_DEST_T flagUnexpectedEvent(APP_MSG_T img_recv_msg) {
     	return send_msg;
     }
 
+    if (event == APP_MSG_IMAGETASK_INACTIVITY) {
+    	// The inactivity detector has fired in a state that can't act on it: for example Save State,
+    	// or Uninitialised when we are ready to sleep and waiting for the IF task.
+    	// It fires again later if we are still awake, so there is nothing to do, and nothing to tell the app.
+    	return send_msg;
+    }
+
     if (isFrameFaultEvent(event)) {
     	// Left over from a capture that has ended (frameFault() handles these in the Capturing state).
     	// Console only: the app can't do anything about it.

@@ -63,6 +63,11 @@ once. Nothing else.
 
 ## Step 1: names for datapath events
 
+**Status, 12 October 2026: coded, not yet built or tested.** `dpEventString()` is in
+`image_task.c` and names all 77 `APP_MSG_DPEVENT_*` events. The app message is now
+`IMAGE task unhandled event '<name>' (0x....) in '<state>'`. Not checked: whether the app parses
+that text. The app repo is not on this machine. No bench script in this repo depends on it.
+
 **Now.** The image task prints a name only for its own events (`0x0a00` up). Everything from the
 datapath prints as `'Unrecognised'` (`image_task.c:1877`), and `flagUnexpectedEvent()` sends a
 bare hex code to the app.

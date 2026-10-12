@@ -187,6 +187,9 @@ static APP_MSG_DEST_T handleEventForSaveState(APP_MSG_T img_recv_msg);
 // This is to process an unexpected event
 static APP_MSG_DEST_T flagUnexpectedEvent(APP_MSG_T rxMessage);
 
+// Name of a datapath event (APP_MSG_DPEVENT_xxx), for console and app messages
+static const char * dpEventString(APP_MSG_EVENT_E event);
+
 static bool configure_image_sensor(CAMERA_CONFIG_E operation);
 
 static void setupLEDFlash(void);
@@ -1532,6 +1535,98 @@ static APP_MSG_DEST_T handleEventForSaveState(APP_MSG_T img_recv_msg)
 
 
 /**
+ * Name of a datapath event, for console and app messages
+ *
+ * These are the APP_MSG_DPEVENT_xxx events in app_msg.h (0x0100 up), sent to the image task
+ * by os_app_dplib_cb(). The image task's own events are named by imageTaskEventString[].
+ *
+ * @param event the event
+ * @return a short name, or "Unrecognised" if this is not a datapath event
+ */
+static const char * dpEventString(APP_MSG_EVENT_E event) {
+	switch (event) {
+	case APP_MSG_DPEVENT_ERR_FS_HVSIZE: return "Parser frame start size error";
+	case APP_MSG_DPEVENT_ERR_FE_TOGGLE: return "Parser frame end toggle error";
+	case APP_MSG_DPEVENT_ERR_FD_TOGGLE: return "Parser frame data toggle error";
+	case APP_MSG_DPEVENT_ERR_FS_TOGGLE: return "Parser frame start toggle error";
+	case APP_MSG_DPEVENT_ERR_BLANK_ERR: return "Parser blanking error";
+	case APP_MSG_DPEVENT_ERR_CRC_ERR: return "Parser CRC error";
+	case APP_MSG_DPEVENT_ERR_FE_ERR: return "Parser frame end cycle error";
+	case APP_MSG_DPEVENT_ERR_HSIZE_ERR: return "Parser hsize error";
+	case APP_MSG_DPEVENT_ERR_FS_ERR: return "Parser frame start cycle error";
+	case APP_MSG_DPEVENT_VSYNC: return "EDM vsync error";
+	case APP_MSG_DPEVENT_HSYNC: return "EDM hsync error";
+	case APP_MSG_DPEVENT_OVERLAP_VH: return "EDM overlap VH error";
+	case APP_MSG_DPEVENT_OVERLAP_HD: return "EDM overlap HD error";
+	case APP_MSG_DPEVENT_OVERLAP_DF: return "EDM overlap DF error";
+	case APP_MSG_DPEVENT_HSYNC_FP: return "EDM hsync front porch error";
+	case APP_MSG_DPEVENT_HSYNC_BP: return "EDM hsync back porch error";
+	case APP_MSG_DPEVENT_FE: return "EDM frame end timing error";
+	case APP_MSG_DPEVENT_CON_VSYNC: return "EDM con vsync error";
+	case APP_MSG_DPEVENT_CON_HSYNC: return "EDM con hsync error";
+	case APP_MSG_DPEVENT_CH0_DE_LESS: return "EDM ch0 DE less error";
+	case APP_MSG_DPEVENT_CH0_DE_MORE: return "EDM ch0 DE more error";
+	case APP_MSG_DPEVENT_CH1_DE_LESS: return "EDM ch1 DE less error";
+	case APP_MSG_DPEVENT_CH1_DE_MORE: return "EDM ch1 DE more error";
+	case APP_MSG_DPEVENT_CH2_DE_LESS: return "EDM ch2 DE less error";
+	case APP_MSG_DPEVENT_CH2_DE_MORE: return "EDM ch2 DE more error";
+	case APP_MSG_DPEVENT_CONV_DE_LESS: return "EDM con DE less error";
+	case APP_MSG_DPEVENT_CONV_DE_MORE: return "EDM con DE more error";
+	case APP_MSG_DPEVENT_EDM_WDT3_TIMEOUT: return "EDM WDT3 timeout";
+	case APP_MSG_DPEVENT_EDM_WDT2_TIMEOUT: return "EDM WDT2 timeout";
+	case APP_MSG_DPEVENT_EDM_WDT1_TIMEOUT: return "EDM WDT1 timeout";
+	case APP_MSG_DPEVENT_SENSORCTRL_WDT_OUT: return "Sensor control timeout";
+	case APP_MSG_DPEVENT_CDM_FIFO_OVERFLOW: return "CDM FIFO overflow";
+	case APP_MSG_DPEVENT_CDM_FIFO_UNDERFLOW: return "CDM FIFO underflow";
+	case APP_MSG_DPEVENT_XDMA_WDMA1_ABNORMAL1: return "WDMA1 frame end count not reached";
+	case APP_MSG_DPEVENT_XDMA_WDMA1_ABNORMAL2: return "WDMA1 disabled before finish";
+	case APP_MSG_DPEVENT_XDMA_WDMA1_ABNORMAL3: return "WDMA1 FIFO ch1 mismatch";
+	case APP_MSG_DPEVENT_XDMA_WDMA1_ABNORMAL4: return "WDMA1 FIFO ch2 mismatch";
+	case APP_MSG_DPEVENT_XDMA_WDMA1_ABNORMAL5: return "WDMA1 FIFO ch3 mismatch";
+	case APP_MSG_DPEVENT_XDMA_WDMA1_ABNORMAL6: return "WDMA1 FIFO ch1 overflow";
+	case APP_MSG_DPEVENT_XDMA_WDMA1_ABNORMAL7: return "WDMA1 FIFO ch2 overflow";
+	case APP_MSG_DPEVENT_XDMA_WDMA1_ABNORMAL8: return "WDMA1 FIFO ch3 overflow";
+	case APP_MSG_DPEVENT_XDMA_WDMA1_ABNORMAL9: return "WDMA1 bus error";
+	case APP_MSG_DPEVENT_XDMA_WDMA2_ABNORMAL1: return "WDMA2 frame end count not reached";
+	case APP_MSG_DPEVENT_XDMA_WDMA2_ABNORMAL2: return "WDMA2 disabled before finish";
+	case APP_MSG_DPEVENT_XDMA_WDMA2_ABNORMAL3: return "WDMA2 FIFO mismatch";
+	case APP_MSG_DPEVENT_XDMA_WDMA2_ABNORMAL4: return "WDMA2 FIFO overflow";
+	case APP_MSG_DPEVENT_XDMA_WDMA2_ABNORMAL5: return "WDMA2 bus error";
+	case APP_MSG_DPEVENT_XDMA_WDMA2_ABNORMAL6: return "WDMA2 abnormal case 6";
+	case APP_MSG_DPEVENT_XDMA_WDMA2_ABNORMAL7: return "WDMA2 abnormal case 7";
+	case APP_MSG_DPEVENT_XDMA_WDMA3_ABNORMAL1: return "WDMA3 frame end count not reached";
+	case APP_MSG_DPEVENT_XDMA_WDMA3_ABNORMAL2: return "WDMA3 disabled before finish";
+	case APP_MSG_DPEVENT_XDMA_WDMA3_ABNORMAL3: return "WDMA3 FIFO ch1 mismatch";
+	case APP_MSG_DPEVENT_XDMA_WDMA3_ABNORMAL4: return "WDMA3 FIFO ch2 mismatch";
+	case APP_MSG_DPEVENT_XDMA_WDMA3_ABNORMAL5: return "WDMA3 FIFO ch3 mismatch";
+	case APP_MSG_DPEVENT_XDMA_WDMA3_ABNORMAL6: return "WDMA3 FIFO ch1 overflow";
+	case APP_MSG_DPEVENT_XDMA_WDMA3_ABNORMAL7: return "WDMA3 FIFO ch2 overflow";
+	case APP_MSG_DPEVENT_XDMA_WDMA3_ABNORMAL8: return "WDMA3 FIFO ch3 overflow";
+	case APP_MSG_DPEVENT_XDMA_WDMA3_ABNORMAL9: return "WDMA3 bus error";
+	case APP_MSG_DPEVENT_XDMA_RDMA_ABNORMAL1: return "RDMA disabled before finish";
+	case APP_MSG_DPEVENT_XDMA_RDMA_ABNORMAL2: return "RDMA bus error";
+	case APP_MSG_DPEVENT_XDMA_RDMA_ABNORMAL3: return "RDMA abnormal case 3";
+	case APP_MSG_DPEVENT_XDMA_RDMA_ABNORMAL4: return "RDMA abnormal case 4";
+	case APP_MSG_DPEVENT_XDMA_RDMA_ABNORMAL5: return "RDMA abnormal case 5";
+	case APP_MSG_DPEVENT_CDM_MOTION_DETECT: return "CDM motion detect";
+	case APP_MSG_DPEVENT_XDMA_WDMA1_FINISH: return "WDMA1 finish";
+	case APP_MSG_DPEVENT_XDMA_WDMA2_FINISH: return "WDMA2 finish";
+	case APP_MSG_DPEVENT_XDMA_WDMA3_FINISH: return "WDMA3 finish";
+	case APP_MSG_DPEVENT_XDMA_RDMA_FINISH: return "RDMA finish";
+	case APP_MSG_DPEVENT_XDMA_FRAME_READY: return "Datapath frame ready";
+	case APP_MSG_DPEVENT_TIMER_FIRE_APP_NOTREADY: return "Timer fired, app not ready";
+	case APP_MSG_DPEVENT_TIMER_FIRE_APP_READY: return "Timer fired, app ready";
+	case APP_MSG_DPEVENT_UNKOWN: return "Datapath unknown";
+	case APP_MSG_DPEVENT_STARTCAPTURE: return "Datapath start capture";
+	case APP_MSG_DPEVENT_STOPCAPTURE: return "Datapath stop capture";
+	case APP_MSG_DPEVENT_RECAPTURE: return "Datapath recapture";
+	case APP_MSG_DPEVENT_1BITPARSER_ERR: return "1-bit parser error";
+	case APP_MSG_DPEVENT_CHANGE_STATE: return "Datapath change state";
+	default: return "Unrecognised";
+	}
+}
+
+/**
  * For state machine: Print a red message to see if there are unhandled events we should manage
  *
  * TODO - what should we really do in this case?
@@ -1552,7 +1647,7 @@ static APP_MSG_DEST_T flagUnexpectedEvent(APP_MSG_T img_recv_msg) {
     }
     else  {
     	snprintf(msgToMaster, MSGTOMASTERLEN,
-    		"IMAGE task unhandled event 0x%04x in '%s'", event, imageTaskStateString[image_task_state]);
+    		"IMAGE task unhandled event '%s' (0x%04x) in '%s'", dpEventString(event), event, imageTaskStateString[image_task_state]);
     }
 
     // print to console
@@ -1874,7 +1969,8 @@ static void vImageTask(void *pvParameters) {
     			event_string = imageTaskEventString[event - APP_MSG_IMAGETASK_FIRST];
     		}
     		else   {
-    			event_string = "Unrecognised";
+    			// A datapath event, or "Unrecognised"
+    			event_string = dpEventString(event);
     		}
 
     		XP_LT_CYAN

@@ -16,6 +16,13 @@ Verified on the bench (details and serial evidence in
   **cold** boot (PMU wakeup registers read zero). A `setop 8` does not shorten an
   inactivity countdown already running, so after raising op 8 for a session, follow the
   reboot command with `dpd` or wait out the old period.
+* **A watchdog runs while the AI processor is awake** (13 Oct 2026, `watchdog.c`). If nothing
+  feeds it for 20 s the processor resets and cold-boots. Three things follow. A debugger that
+  halts the processor gets reset: type `wdt 0` first, or build without `AWAKE_WATCHDOG`. Code in
+  the CLI or IF task that runs for 20 s without blocking stops the feeds (the FreeRTOS timer
+  task is priority 2, below both). And the hardware resets at the **second** timeout, so a
+  period of N gives a reset at 2N. Flash writes suspend it (`disable_xip()`/`enable_xip()`).
+  `freeze` tests it.
 * **A fault on the AI processor now ends in a reset, not a hang** (13 Oct 2026). Every fault
   handler prints a report (`Entering HardFault interrupt!`, the status registers, the stacked
   `PC` and `LR`), then `>>> Reset by watchdog after fault`, and a cold boot follows about 1 s

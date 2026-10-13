@@ -26,6 +26,7 @@
 #include "boot_timing.h"
 
 #include "inactivity.h"
+#include "watchdog.h"
 #include "pinmux_cfg.h"
 #include "printf_x.h"
 #include "sleep_mode.h"
@@ -810,6 +811,9 @@ int app_main(void){
 	barrier_init(&startupBarrier, taskIndex, ifTask_allTasksReady);
 	// Also a barrier to entering DPD -
 	barrier_init(&shutdownBarrier, 2, image_sleepNow);
+
+	// From here a processor that stops is reset by the watchdog. The feed timer starts with the scheduler.
+	watchdog_start();
 
 	xprintf("FreeRTOS scheduler started.\n");
 	boot_timing_mark(BOOT_TIMING_SCHEDULER);	// from here the boot timing uses the tick count

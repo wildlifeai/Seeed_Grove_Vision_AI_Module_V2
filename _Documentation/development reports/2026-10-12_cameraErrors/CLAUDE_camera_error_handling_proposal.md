@@ -8,7 +8,8 @@
 ## Summary
 
 Eight steps, each small enough to build and test alone. Step 4 has since been merged into
-step 2 (see "Agreed plan"). Steps 1, 2, 3, 5, 6 and 9 are done. Step 7 is done. Step 8 is not started. Sources:
+step 2 (see "Agreed plan"). All the steps are coded and bench-tested (13 October 2026). The tests still to run are
+listed in the README. Sources:
 [`README.md`](README.md) in this folder, the
 [connector-pressure report](../2026-10-11_camera_connector_pressure/README.md) and its logs, and
 the code on `261012_cameraErrors`.
@@ -45,7 +46,7 @@ Charles reviewed the proposal and the discussion that followed. Agreed so far:
 | 5 | Done. Built and tested by Charles, 13 October (forced timeout on the HM0360, a real fault on the RP3) |
 | 6 | Done. Built and tested by Charles, 13 October, on both variants |
 | 7 | Done. Built and tested by Charles, 13 October (HM0360 or RP3 not recorded) |
-| 8 | Not yet agreed |
+| 8 | Experiment done. Real code built 13 October. Passed so far: normal use, `freeze`, awake for minutes, firmware update. Still to test: model load, file transfers, power, connector pressure |
 | 9 | Done. Built and tested by Charles, 13 October |
 
 What changed from the first draft, and why:
@@ -415,7 +416,7 @@ be started from inside a fault handler. The stacked `PC` (`0x10003cb8`) is two b
 stacked `LR`, which fits the forced instruction straight after the `xprintf()` call. One fix
 followed the test: the old line "Another secure bus error" was printed for any fault, and is
 now printed only for bus faults. `BFAR` and `MMFAR` are marked "(not valid)" when they hold no
-address. That fix is not yet built.
+address. That fix was built later the same day.
 
 **Before.** `HardFault_Handler()` printed and looped for ever. So did the NMI, MemManage,
 BusFault, SecureFault and UsageFault handlers. Nothing but RESET or a power cycle brought the
@@ -477,6 +478,141 @@ not catch one stuck task.
 - It must never run into DPD, and the power cost while awake needs a PPK2 check.
 - I don't know that a watchdog reset recovers these freezes. RESET did, once the pressure was
   off. A short experiment on a pressed board would tell us before the full change is written.
+
+**The experiment (13 October 2026).** Three temporary console commands, since replaced (see
+"The real code" below):
+- `wdt <seconds>`: start the watchdog, to reset after that time unless fed. 0 stops it.
+- `wdtfeed <seconds>`: feed it from a FreeRTOS timer at that interval. 0 stops feeding.
+- `freeze`: mask interrupts and loop for ever, like a dead processor.
+
+| Question | Test | Good result | Result |
+|---|---|---|---|
+| 1. Does a long period work? | `wdt 10`, then nothing | reset at 10 s | 13 Oct: yes, at twice the period. See the timings below |
+| 2. Does it fire when the processor is stuck? | `wdt 10`, `wdtfeed 2`, wait a minute, `freeze` | no reset while fed, reset about 10 s after `freeze` | 13 Oct: passed. Fed every 2 s there was no reset for 67 s. The reset came 19.4 s after `freeze` ([`logs/test2.log`](logs/test2.log)) |
+| 3. What happens across DPD? | `wdt 30`, `wdtfeed 2`, `dpd`, watch for 2 minutes, then wake | stays asleep, runs normally after the wake | 13 Oct: passed. Asleep 2 min 49 s with no reset (one was due at 60 s), then a normal BLE wake and a normal sleep ([`logs/test3.log`](logs/test3.log)) |
+| 4. Do long operations trip it? | fed: captures on both cameras, a firmware update, a model load, `setutc`, a file transfer | no reset | |
+| 5. Power | PPK2: awake with and without the watchdog, and DPD after it has been used | no measurable cost | |
+| 6. The real freeze | fed, then pressure on the HM0360 connector during a capture | reset, then a normal boot once the pressure is off | |
+
+Known already: the watchdog resets the processor from a fault handler with a 1 s period
+(step 7).
+
+**Timings, 13 October 2026 (Charles, from the terminal's timestamps).**
+
+| Log | Command | Reply to bootloader banner | Ratio |
+|---|---|---|---|
+| [`logs/wdt4.log`](logs/wdt4.log) | `wdt 4`, board idle | 8.0 s | 2.0 |
+| [`logs/wdt20.log`](logs/wdt20.log) | `wdt 20`, board idle | 39.8 s | 2.0 |
+| [`logs/wdt10.log`](logs/wdt10.log) | `wdt 10`, then `freeze` 3.4 s later | 19.9 s | 2.0 |
+
+- **The reset comes at twice the period,** every time. This is how the usual Arm watchdog works:
+  the first timeout raises an interrupt, and the reset comes at the second if nothing clears it.
+  (The first run, timed by hand, was thought to be 25 s. It will have been 20 s.)
+- **It counts at the same rate whether the processor is idle or running flat out.** So it does
+  not stop while the processor sleeps in idle.
+- **It resets a processor stuck with interrupts masked.**
+- **Feeding works.** `hx_drv_watchdog_update()` with the full period restarts the count
+  (`logs/test2.log`). The board stayed awake for the whole 67 s while it was being fed.
+- **DPD stops the watchdog.** A watchdog left running does not reset the board out of sleep
+  (`logs/test3.log`). Not yet shown: that it stays stopped if the board is then awake for longer
+  than the old period. In the test the board slept again 4 s after the wake.
+- **`dpd` still works while the watchdog is being fed.**
+
+**Design for the real code (13 October 2026, agreed by Charles and then coded, see below).**
+- A small module, `watchdog.c`: start, feed, stop.
+- Started when the tasks start, at every boot. A period of 10 s, so the reset comes 20 s after
+  the last feed.
+- Fed every 4 s from a FreeRTOS timer. The inactivity detector is changed to ignore the timer
+  task, so feeding does not keep the board awake.
+- Stopped just before DPD as well, although the test shows DPD stops it. The cost is one line.
+- **Suspended while the flash is being written.** A firmware update or model load turns off
+  execute-in-place for the flash, and it is not yet clear that the timer can run then. A reset
+  in the middle of a firmware write could leave the board unable to boot. So the watchdog is
+  stopped before those operations and restarted after. This is the main risk in step 8 and
+  needs the `xip_manager.c` code to be read with care first.
+- Behind a build flag at first, so it can be left out while it is being proved.
+
+**The real code, 13 October 2026: built and bench-tested by Charles (see "Bench" below).** Written as designed above,
+after reading `inactivity.c`, the FreeRTOS settings and `xip_manager.c`.
+
+- **`watchdog.c`, `watchdog.h`** (new): `watchdog_start()`, `watchdog_stop()`,
+  `watchdog_suspend()`, `watchdog_resume()`, `watchdog_isRunning()`. Period 10 s, so the reset
+  comes 20 s after the last feed. Fed every 4 s from a FreeRTOS timer. `#define AWAKE_WATCHDOG`
+  in `watchdog.h` is the build flag: comment it out and the functions do nothing.
+- **`ww500_md.c`**: `watchdog_start()` just before the scheduler starts, at every boot.
+- **`image_task.c`**: `watchdog_stop()` at the top of `image_sleepNow()`. That is before DPD, and
+  before the `reset` command's own use of the hardware watchdog.
+- **`inactivity.c`**: the detector no longer counts the FreeRTOS timer task as activity, so
+  feeding does not keep the board awake. A timer callback that starts real work sends a message
+  to one of our tasks, and that task still counts.
+- **`xip_manager.c`**: every flash erase and write goes through `disable_xip()` and
+  `enable_xip()`. The watchdog is suspended in the first and resumed in the second, on every
+  exit path.
+- **`CLI-commands.c`**: the three experiment commands are replaced by `wdt <0|1>` (stop or start
+  the watchdog until the next boot) and `freeze` (kept, as the test).
+
+**What reading the code showed.**
+- The FreeRTOS timer task runs at priority 2. The CLI task is 4 and the IF task 3. So code in
+  those two tasks that runs for more than 20 s without blocking will stop the feeds and cause a
+  reset. That is a hang the watchdog should catch, but any legitimate long operation there must
+  block now and then, or suspend the watchdog.
+- The image task is priority 1, below the timer task. A loop in the image task does not stop the
+  feeds and is not caught.
+- The application runs from RAM, not from the flash, so the feed timer could probably run during
+  a flash write. The watchdog is suspended anyway.
+- **A debugger that halts the processor will be reset after 20 s.** Use `wdt 0` first, or build
+  without `AWAKE_WATCHDOG`.
+
+**Bench, 13 October 2026 (Charles, first build).**
+- Test 1, normal use: passed. The board still sleeps by itself.
+- Test 2, `freeze`: reset about 20 s later.
+- Test 3, awake for several minutes: no reset.
+- Test 4, `wdt 0` then `freeze`: no reset, RESET needed.
+- **Test 5, firmware update from the app: the update succeeded, then the processor hung and the
+  watchdog reset it.** The image was erased, written, verified and the slot selector written.
+  The console stopped part way through sending the reply `Firmware update OK`, and after a
+  delay the board cold-booted, into the new image.
+
+**Cause of the hang: this change.** `watchdog_suspend()` and `watchdog_resume()` stopped and
+restarted the feed timer, and each of those puts a command in the FreeRTOS timer queue, which
+holds only 5 (`configTIMER_QUEUE_LENGTH`). A firmware update opens several flash windows in a
+row from the CLI task (priority 4). When it finished, the IF task (priority 3) ran before the
+timer task (priority 2) could empty the queue. The IF task's `xTimerChangePeriod()` for its
+"missing master" timer then failed, and the `configASSERT(0)` after it (in
+`i2ccomm_write_enable()`, `if_task.c`) hung the processor. That is exactly where the console
+stopped. The watchdog then did its job and reset the board 20 s later.
+
+**Fix, built and re-tested 13 October (Charles).** The feed timer is now started once and left
+running. Stopping, suspending and resuming the watchdog only set a flag and call the hardware
+driver, so they send no timer commands. The firmware update was repeated from the app: erase,
+write, verify, the reply sent in full, a normal sleep 3 s later, and no reset.
+
+**Still fragile, not changed.** The timer queue holds 5 commands, and that `configASSERT(0)` in
+the IF task turns one full queue into a hang. Step 5's frame timer also sends a command each
+time a frame is requested. Worth raising `configTIMER_QUEUE_LENGTH`, or replacing the assert
+with a retry.
+
+**What to test.**
+1. Normal use on both variants: boot, captures, sleep by inactivity at the usual op 8, wake.
+   The board must still go to sleep by itself. This checks the `inactivity.c` change.
+2. `freeze`: a reset about 20 s later, at most 20 s after the last feed.
+3. Awake for several minutes with no reset (raise op 8, or keep typing).
+4. `wdt 0`, then `freeze`: no reset (press RESET). Then `wdt 1` on a fresh boot restores it.
+5. A firmware update and a model load, with the flag on. The most important test.
+6. `reset`, `switchslot` and `hardfault` still work.
+7. A file transfer in each direction, and `setutc`.
+8. Later: power (PPK2, `wdt 0` against `wdt 1`), and pressure on a connector.
+
+**What it will and will not catch.** It catches a processor that has stopped: interrupts dead,
+the scheduler dead, or stuck in an interrupt handler. It does not catch one task stuck while the
+others run, because the timer task still feeds it. That needs each task to check in, and is a
+later change if wanted.
+
+**A design point found while writing the commands.** Each feed from a FreeRTOS timer runs the
+timer task, and the inactivity detector counts any task as activity. So while the feed interval
+is shorter than the inactivity period (op 8), the board will not go to sleep by itself. `dpd`
+still works. The real code must deal with this: feed from the idle hook, or have the detector
+ignore the timer task.
 
 The matching work on the BLE processor is
 [ww-hardware#69](https://github.com/wildlifeai/ww-hardware/issues/69).
@@ -594,17 +730,16 @@ it is still capturing, and `Captured` or `Capture failed` afterwards. The app sh
 **For the BLE processor developers.** The BLE processor passes these strings through, so no
 change is expected. Worth a check that nothing there looks for `Captured` to end a state.
 
-## Decisions for Charles
+## Decisions made
 
-1. Step 2: decided, see "Agreed plan".
-2. Step 3: decided, no automatic retry. The 1 s re-wake is removed.
-3. Captures after a cold boot: decided, refuse them (step 9).
-4. Which of the remaining steps to do, and in what order? I suggest 5, 3, 6, then 7, with 8 as
-   its own task after an experiment.
+1. Step 2: keep the retry, with one attempt, on the HM0360 only.
+2. Step 3: no automatic retry after a failed capture. The 1 s re-wake is removed.
+3. Step 9: captures before the first DPD are refused.
+4. Step 8: the awake watchdog, behind the `AWAKE_WATCHDOG` build flag, suspended during flash
+   writes.
+5. `image_task_state` is only set inside the `handleEventFor...()` functions.
 
-When the steps are agreed, the open ones should be linked to GitHub issues. Steps 4, 5, 7 and 8
-are already inside
-[#272](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/272).
+The open items and their GitHub issues are in the [README](README.md).
 
 ## Appendix A: the `WDTIMOUTFIX` evidence
 

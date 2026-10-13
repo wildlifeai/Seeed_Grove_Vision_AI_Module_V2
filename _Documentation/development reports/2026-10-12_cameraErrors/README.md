@@ -7,35 +7,68 @@
 
 ## Status
 
-Open. Plan and detail: [`CLAUDE_camera_error_handling_proposal.md`](CLAUDE_camera_error_handling_proposal.md).
+Open. The code for all the steps is written and bench-tested by Charles on 12 and 13 October.
+Some tests are still to run (see "Tests still to run"), and Victor is to test it.
 
-## Results so far (12 October 2026)
+- Plan, evidence and bench results: [`CLAUDE_camera_error_handling_proposal.md`](CLAUDE_camera_error_handling_proposal.md)
+- How the firmware behaves now: [`ww500_md/doc/camera_error_handling.md`](../../../EPII_CM55M_APP_S/app/ww_projects/ww500_md/doc/camera_error_handling.md)
+- What the app developers need to know: the proposal, "Implications for the app"
 
-- **Event names (step 1): done.** Datapath events print with a name, not `'Unrecognised'`.
-- **`WDTIMOUTFIX` (step 2): resolved.** The `#ifdef` is removed and the retry is kept, cut to one
-  attempt. Timeouts and the other datapath errors now share one "frame fault" path.
-- **The retry works.** On an undisturbed HM0360 board, the first frame after a cold boot
-  sometimes times out (`0x011c` then `0x011b`). One sensor restart recovered it.
-- **Decided: captures before the first DPD will be refused.** There is no need for them, and it
-  removes one variable. The ship-check tool will be changed to match. Not yet coded.
-- **13 October: a failed capture is reported and nothing more.** The app gets
+## Outcome
+
+- **Event names.** Datapath events print with a name, not `'Unrecognised'`.
+- **`WDTIMOUTFIX` resolved.** The `#ifdef` is gone. Timeouts and the other datapath errors share
+  one "frame fault" path. The HM0360 build restarts the sensor once, which recovered a real
+  missing first frame on 12 October. The RP builds do not retry: stopping an RP camera powers
+  it down, so the retry could never work there.
+- **A failed capture is reported and nothing more.** The app gets
   `Capture failed after N of M images: <reason>`. The 1 s re-wake that used to follow a failure
   is removed. It is for the app to retry.
-- **13 October: our own frame timeout** (the capture interval plus 7 s) catches the case where
-  no frame and no datapath event arrives. Coded and bench-tested with a forced timeout.
-- **13 October: no in-place retry on the RP3.** Stopping the sensor powers the RP camera down
-  and the restart does not bring it back, so the retry could never work there. The RP builds
-  now give up at the first fault. The HM0360 build keeps its one retry.
-- **13 October: both variants tested.** RP3 captures work after a wake and after a cold boot
-  (the first check of that since the #238 fix). One board with a hardware fault gave real
-  failures, which the new code reported correctly.
-- **13 October: quieter inactivity.** At least 1 s between inactivity events, and the image task
-  no longer reports them to the app as "unhandled".
-- **13 October: captures before the first DPD are refused.** `capture` and `light` reply
-  `Error: no captures until after the first sleep.` after a cold boot. The ship-check tool and
-  `live_view.py` need updating to match.
-- **What the app developers need to know** is in the proposal, "Implications for the app".
-- **Still to do:** hard fault reset, a watchdog while awake. Also open: `Sleep` is sent to the app while a capture is still running.
+- **Our own frame timeout** (the capture interval plus 7 s) catches the case where no frame and
+  no datapath event arrives.
+- **Quieter inactivity.** At least 1 s between inactivity events, and the image task no longer
+  reports them to the app as "unhandled".
+- **Captures before the first DPD are refused.** `capture` and `light` reply
+  `Error: no captures until after the first sleep.` after a cold boot.
+- **Faults end in a reset.** Every fault handler prints a report and resets the processor with
+  the watchdog. `hardfault` on the console forces one.
+- **A watchdog runs while awake** (`watchdog.c`). If the processor stops, it is reset after 20 s.
+  `freeze` on the console tests it. Not yet shown: that it rescues a real freeze caused by
+  pressure on a connector.
+
+## Tests still to run
+
+On both camera variants unless stated:
+
+1. A model load from the SD card to flash: completes, no reset.
+2. `reset` and `switchslot`: work as before.
+3. `hardfault`: the report, then a reset. No "secure bus error" line.
+4. `freeze`: a reset about 20 s later.
+5. A file transfer in each direction, and `setutc`: no reset.
+6. Power with the PPK2: `wdt 0` against `wdt 1`.
+7. Pressure on the HM0360 connector during `capture 300 1000`: if the processor freezes, a reset
+   within about 20 s. This is the only test of a real freeze.
+
+## Open items
+
+- [#272](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/272): the AI
+  processor does not recover from a camera datapath failure. Most of this work answers it.
+  To be closed or narrowed once test 7 is done.
+- [ww-hardware#69](https://github.com/wildlifeai/ww-hardware/issues/69): the BLE processor does
+  not notice a dead AI processor.
+- [ww-hardware#70](https://github.com/wildlifeai/ww-hardware/issues/70): the holder must not
+  press on the connector.
+
+Not yet filed as issues (Charles to file):
+
+- The app: the seven items in "Implications for the app".
+- `Sleep` is sent to the app while a capture is still running (finding C in the
+  `2026-09-03_capture_bench_findings` thread).
+- `_Tools/ww500_ship_check.py` and `_Tools/live_view.py` capture straight after a cold boot and
+  now get the error.
+- The FreeRTOS timer queue holds 5 commands, and a full queue hangs the IF task at a
+  `configASSERT(0)` (found 13 October, see step 8 in the proposal).
+- `CAMERA_CONFIG_RUN` reports success when the RP3 does not start.
 
 ## Background
 

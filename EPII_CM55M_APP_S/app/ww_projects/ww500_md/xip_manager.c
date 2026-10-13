@@ -50,6 +50,7 @@
 #include "image_task.h"
 #include "printf_x.h"
 #include "xip_manager.h"
+#include "watchdog.h"
 #include "camera_switch.h"
 
 /*************************************** Definitions *******************************************/
@@ -430,8 +431,13 @@ static bool disable_xip(void) {
         return false;
     }
 
+    // No watchdog reset while the flash is being erased or written: a reset part way through a
+    // firmware update could leave the board unable to boot. enable_xip() restarts the watchdog.
+    watchdog_suspend();
+
     if (hx_lib_spi_eeprom_enable_XIP(spi_inst, false, FLASH_QUAD, true) != 0) {
         xprintf("disable_xip: mode switch failed\n");
+        watchdog_resume();
         xSemaphoreGive(xSPIMutex);
         return false;
     }
@@ -455,10 +461,13 @@ static bool disable_xip(void) {
 static bool enable_xip(void) {
     if (hx_lib_spi_eeprom_enable_XIP(spi_inst, true, FLASH_QUAD, true) != 0) {
         xprintf("enable_xip: mode switch failed\n");
+        watchdog_resume();
         xSemaphoreGive(xSPIMutex);
         return false;
     }
 
+    // The flash operation is over: restart the watchdog that disable_xip() suspended
+    watchdog_resume();
     xSemaphoreGive(xSPIMutex);
     return true;
 }

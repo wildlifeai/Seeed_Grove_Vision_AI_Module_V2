@@ -236,7 +236,12 @@ void inactivity_on_task_switched_in(void) {
     	return;
     }
 
-    if (xTaskGetCurrentTaskHandle() != xTaskGetIdleTaskHandle()) {
+    TaskHandle_t current = xTaskGetCurrentTaskHandle();
+
+    // The FreeRTOS timer task does not count as activity. It runs timer callbacks, and one of those
+    // feeds the watchdog every few seconds (watchdog.c): if that counted, the board would never sleep.
+    // A timer callback that starts real work sends a message to one of our tasks, and that task counts.
+    if ((current != xTaskGetIdleTaskHandle()) && (current != xTimerGetTimerDaemonTaskHandle())) {
         idle_start_tick = 0;
         inactivity_triggered = pdFALSE;
     }

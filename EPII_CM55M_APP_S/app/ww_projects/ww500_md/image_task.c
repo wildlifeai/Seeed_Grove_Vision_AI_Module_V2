@@ -70,6 +70,7 @@
 #include "ledFlash.h"
 #include "pinmux_cfg.h"
 #include "barrier.h"
+#include "watchdog.h"
 
 #include "selfTest.h"
 
@@ -3010,6 +3011,10 @@ void image_sleepNow(void) {
     uint32_t timelapseDelay;
 	uint32_t aeCheckDelay = 0;	// seconds
     uint16_t mdInterval;
+
+    // We are about to enter DPD (or reset, which uses the hardware watchdog itself - see below).
+    // DPD stops the watchdog anyway (tested 13 Oct 2026), but stop it and its feed timer here to be sure.
+    watchdog_stop();
 
     // This wake is over - the next one starts fresh
     aeCheckOnlyWake = false;

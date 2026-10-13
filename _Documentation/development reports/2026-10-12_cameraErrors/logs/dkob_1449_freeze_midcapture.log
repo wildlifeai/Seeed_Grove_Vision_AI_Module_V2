@@ -1,0 +1,89 @@
+# DKOB, 13 Oct 14:49: 'freeze' typed mid-capture on the HM0360 build, reset by the awake watchdog 16.8 s later
+##### 14:49:15.500 listening; waiting for a photo so the board is awake
+[14:49:15.912] IMAGE Task received event 'Image Event Frame Ready' (0x0a04). Rx data = 0x00000000
+[14:49:15.912] DEBUG: ledFlashDisable()
+[14:49:15.912] Image capture 45/300 took 990ms
+[14:49:15.912] Skipping NN processing (no model loaded).
+[14:49:15.912] HM0360 AE regs:
+[14:49:15.912]   Integration time = 188 lines
+[14:49:15.912]   Analog gain = 0
+[14:49:15.912]   Digital gain = 95
+[14:49:15.912]   AE Mean = 84
+[14:49:15.912]   AEConverged?: Y
+[14:49:15.912] IF Task received event 'Message to Master' (0x070d). Rx data = 0
+##### 14:49:15.913 awake and capturing (boot not seen)
+##### 14:49:15.913 typing 'freeze'
+[14:49:15.958] x30012530
+[14:49:15.958] Assert inter-processor interrupt.
+[14:49:15.958] Sending 123 bytes: Header 4, payload 117, checksum 2 'HM0360 AE regs:
+[14:49:15.958]   Integration time = 188 lines
+[14:49:15.958]   Analog gain = 0
+[14:49:15.958]   Digital gain = 95
+[14:49:15.958]   AE Mean = 84
+[14:49:15.958]   AEConverged?: ^C
+[14:49:15.958] cmd> Y'
+[14:49:15.958] Negate inter-processor interrupt.
+[14:49:15.958] IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+[14:49:15.958] IF Task received event 'I2C Tx' (0x0701). Rx data = 0x0000b661
+[14:49:15.958] I2C transmission complete.
+[14:49:15.958] IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+[14:49:15.958] HM0360 motion in 0 blocks:
+[14:49:15.958] 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+[14:49:15.958] IF Task received event 'Message to Master' (0x070d). Rx data = 0x30012530
+[14:49:15.958] Assert inter-processor interrupt.
+[14:49:15.958] Sending 129 bytes: Header 4, payload 123, checksum 2 'HM0360 motion in 0 blocks:
+[14:49:15.958] 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 '
+[14:49:15.958] Negate inter-processor interrupt.
+[14:49:15.958] IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+[14:49:16.005] ................
+[14:49:16.005] ................
+[14:49:16.005] .........f.......
+[14:49:16.005] ................
+[14:49:16.005] ................
+[14:49:16.005] ................
+[14:49:16.005] ................
+[14:49:16.005] ................
+[14:49:16.005] ................
+[14:49:16.005] ................
+[14:49:16.005] ................
+[14:49:16.005] ................
+[14:49:16.005] ................
+[14:49:16.005] ................
+[14:49:16.005] ................
+[14:49:16.005] ................
+[14:49:16.005] Added 12 EXIF tags
+[14:49:16.005] Writing 14424 bytes (13912 + 512) to '59200C20.JPG' from jpeg buffer of 115860 bytes
+[14:49:16.005] IMAGE Task state changed from 'Capturing' (2) to 'NN Processing' (3)
+[14:49:16.005] FatFS Task received event 'Write image' (0x0901). Rx data = 0x30020fd0
+[14:49:16.005] Wrote 14422 byte image to SD: 59200C20.JPG at 0:1:6 1/1/2024
+[14:49:16.005] File write took 26ms
+[14:49:16.005] FatFS task sending event 0x0a06. Tx data = 0x00000000
+[14:49:16.005] IMAGE task sending event 0x0901. Rx data = 0x30020fd0
+[14:49:16.005] IMAGE Task received event 'Image Event Disk Write Complete' (0x0a06). Rx data = 0x00000000
+[14:49:16.005] sensor_type: 8
+[14:49:16.005] IMAGE Task state changed from 'NN Processing' (3) to 'Capturing' (2)
+[14:49:16.051] r
+[14:49:16.051] IF Task received event 'I2C Tx' (0x0701). Rx data = 0x0000b6c5
+[14:49:16.051] I2C transmission complete.
+[14:49:16.051] IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+[14:49:16.099] eeze
+[14:49:16.331] Freezing: interrupts masked, looping for ever. Watchdog is running.
+[14:49:33.030] \x001st BL Modem Build DATE=Jan 17 2025, Version: 2.12
+[14:49:33.062] Please input any key to enter X-Modem mode in 30 ms
+[14:49:33.062] waiting input key...
+[14:49:33.093] slot flash_offset 0x00000000
+[14:49:33.093] New MemDesp himax_sec_SB_image_process PASS
+[14:49:33.093] set_memory_s_ns
+[14:49:33.093] HX_DSP_FLAG 1
+[14:49:33.125] jump_addr=0x10000000
+[14:49:33.125] Compiler Version: ARM GNU, 14.3.1 20250623
+[14:49:33.125] **** WW500 MD. (WW500_C02) Built: 14:44:04 Oct 13 2026 ****
+[14:49:33.125] Git branch: 'nogit' nogit-dirty
+[14:49:33.125] Compiler Version: ARM GNU, 14.3.1 20250623
+[14:49:33.125] Wakeup_event = 0x0000, WakeupEvt1 = 0x0000 Cold boot
+[14:49:33.125] PCA9574 present at 0x20
+[14:49:33.125] DEBUG: ledFlashSelectLED(0)
+[14:49:33.125] Initialised LED Flash
+[14:49:33.125] ### Cold Boot ###
+[14:49:33.125] FreeRTOS tickless idle is enabled. configMAX_PRIORITIES = 5
+##### 14:49:33.125 freeze typed mid-capture: cold boot 17.2 s later

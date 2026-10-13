@@ -49,6 +49,47 @@ On both camera variants unless stated:
 7. Pressure on the HM0360 connector during `capture 300 1000`: if the processor freezes, a reset
    within about 20 s. This is the only test of a real freeze.
 
+## Victor's bench, 13 October
+
+Board 1 of the connector-pressure thread (WILD-DKOB), this branch at 187302ce built locally, the
+HM0360 build active, SD card in. Logs in `logs/dkob_*`, with a time on every line.
+
+**Tests 2, 3 and 4** (`dkob_1446_checks.log`, see its `##### CHECK` lines):
+
+| Test | HM0360 | RP3 |
+|---|---|---|
+| Capture straight after a cold boot | refused (line 124) | refused (544) |
+| 3, `hardfault` | report with PC and LR, reset 1.1 s later, no "secure bus error" (173-206) | the same (602-635) |
+| 4, `freeze` straight after a boot | reset after **9.5 s** (236-255) | reset after 19.5 s (684-703) |
+| 4, `freeze` mid-capture | reset after 16.8 s (`dkob_1449_freeze_midcapture.log`) | not run |
+| 2, `reset` and `switchslot` | work (405, 529, 844) | work |
+
+The 9.5 s reset is the only one well short of 20 s. That freeze came 0.4 s after the CLI prompt,
+before the first feed.
+
+**Test 7**, pressure during captures started by the timelapse wake (op5 300, op6 1000, op7 10,
+op8 5000), 30 s presses timed by `ribbon_bench.py --press 30` from the connector-pressure thread:
+
+| Result | Tries |
+|---|---|
+| Frame timeouts, each recovered by its one retry | 9 |
+| `Capture failed after N of 300 images: EDM WDT2 timeout`, then DPD 5 s later and a new capture at the next wake | 3 |
+| No effect | 5 |
+| Stuck, frozen or hard fault | 0 |
+
+- Every failure ended cleanly: the message reached the BLE processor (`nrf | BLE out: ...
+  'Capture failed ...'`), the board slept, and no RESET was needed
+  (`dkob_1506_press_capture_failed.log` lines 394-471, `dkob_1508_press_capture_failed_twice.log`
+  1028-1105 and 1340-1912).
+- Under sustained pressure each restart gives exactly one photo and the next times out 5 s later.
+  The capture fails when a restart gives none (`dkob_1508` 1340-1850).
+- `dkob_1452_press_recovers.log` 283-823: four timeouts in one press, all recovered.
+- No 0x012a/0x0131 and no freeze happened, against 4 stuck in 11 tries on the same board on 12
+  October. So the new handling of those events, and the watchdog on a real freeze (test 7), are
+  not yet shown on a real failure.
+
+Not run: tests 1, 5 and 6.
+
 ## Open items
 
 - [#272](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/272): the AI

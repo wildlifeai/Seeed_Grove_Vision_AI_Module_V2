@@ -15,22 +15,32 @@
 #include "xprintf.h"
 #include "hx_drv_watchdog.h"
 
+#include "FreeRTOS.h"
+#include "task.h"
+
 /*
  * What the fault handlers do (13 Oct 2026):
  *
  * Every handler here used to print a message and then loop for ever, which left the AI processor dead until
- * RESET or a power cycle. Now each one starts the watchdog, prints a report, and waits for the watchdog to reset
- * the processor. The reset is followed by a cold boot.
+ * RESET or a power cycle. Now each one starts the watchdog, prints a report, and resets the processor.
+ * The reset is followed by a cold boot.
  *
- * The watchdog is used because NVIC_SystemReset() does not work on this processor (see image_task.c, where the
- * 'reset' command uses the watchdog in the same way).
+ * The reset is a system reset request (SCB->AIRCR SYSRESETREQ), made straight after the report.
+ * This does work from a fault handler: seen on the bench on 13 Oct 2026, 0.5s after the report.
+ * (A comment in image_task.c says NVIC_SystemReset() does not work. That was tried from a task.)
  *
- * The 'hardfault' console command forces a hard fault to test this.
+ * The watchdog is the backup, in case printing the report faults again or the reset request fails.
+ * A system reset request does not stop the watchdog, so watchdog_init() stops it at the start of the next boot.
+ *
+ * A failed configASSERT() is handled in the same way - see vAssertCalled().
+ *
+ * The 'hardfault' console command forces a hard fault to test this, and 'assert' a failed assert.
  * See _Documentation/development reports/2026-10-12_cameraErrors
  */
 
 // The watchdog is started before the report is printed, in case printing the report faults again.
 // This is long enough for the report (about 20ms at 921600 baud).
+// The hardware resets at the second timeout, so the backup reset comes at twice this time.
 #define FAULT_RESET_DELAY_MS	1000
 
 /**
@@ -98,22 +108,56 @@ static void faultPrintStack(uint32_t *stacked_regs) {
 }
 
 /**
- * Waits for the watchdog to reset the processor. Does not return.
+ * Resets the processor. Does not return.
  */
 static void faultHalt(void) {
-	xprintf(">>> Reset by watchdog after fault\n\n");
+	xprintf(">>> Reset after fault\n\n");
 
-	// The watchdog should reset us within FAULT_RESET_DELAY_MS. This loop takes a few seconds.
-	for (volatile uint32_t i = 0; i < 20000000; i++) {
+	// Give the last characters time to leave the UART (about 10ms: 20,000,000 of these took 0.5s on the bench)
+	for (volatile uint32_t i = 0; i < 400000; i++) {
 	}
 
-	// Still here, so the watchdog did not work. Try a system reset request as a last resort.
+	// System reset request
 	SCB->AIRCR =
 			(SCB->AIRCR & ~SCB_AIRCR_VECTKEY_Msk) | (0x05FAUL << SCB_AIRCR_VECTKEY_Pos) | SCB_AIRCR_SYSRESETREQ_Msk;
 
+	// If we are still here the watchdog started by faultResetStart() resets us, 2 x FAULT_RESET_DELAY_MS after it
+	// was started
 	for (;;) {
 	}
 }
+
+#ifdef WW_ASSERT_RESETS
+/**
+ * Called when a configASSERT() fails - see FreeRTOSConfig.h
+ *
+ * This used to disable interrupts and loop for ever. Now it says which assert failed, then resets
+ * the processor in the same way as a fault. A cold boot follows.
+ *
+ * If a debugger is attached it stops at a breakpoint here instead, so the failure can be examined.
+ *
+ * The 'assert' console command forces one to test this.
+ *
+ * @param file the source file of the assert (name only, no path)
+ * @param line its line number
+ */
+void vAssertCalled(const char * file, int line) {
+	taskDISABLE_INTERRUPTS();
+
+	if (DCB->DHCSR & DCB_DHCSR_C_DEBUGEN_Msk) {
+		// A debugger is attached. Stop here: 'file' and 'line' say which assert failed.
+		__asm volatile ("bkpt #0 \n");
+	}
+
+	faultResetStart();
+
+	// There is no current task before the scheduler starts
+	xprintf("\r\nASSERT failed: %s:%d in task '%s'\r\n", file, line,
+			(xTaskGetSchedulerState() == taskSCHEDULER_NOT_STARTED) ? "(none)" : pcTaskGetName(NULL));
+
+	faultHalt();
+}
+#endif // WW_ASSERT_RESETS
 
 /**
  * Common code for the faults that have no decoding of their own

@@ -57,8 +57,17 @@ is running.
 ## Faults
 
 Every fault handler (`hardfault_handler.c`) prints a report, including the stacked `PC` and
-`LR`, then `>>> Reset by watchdog after fault`. The processor resets about 2 s later and
-cold-boots. The report is on the console only.
+`LR`, then `>>> Reset after fault`. The processor resets at once (a system reset request) and
+cold-boots. A watchdog started by the handler is the backup, 2 s later. The report is on the
+console only.
+
+A system reset request does not stop the hardware watchdog, so `watchdog_init()` stops it and
+clears its flag at the start of every boot.
+
+A failed `configASSERT()` is handled in the same way (`vAssertCalled()`, same file). It prints
+`ASSERT failed: <file>:<line> in task '<name>'` and resets. With a debugger attached it stops
+at a breakpoint instead. This is switched on by `WW_ASSERT_RESETS` in `ww500_md.mk`. Other apps
+in the SDK keep the old behaviour, which is to loop for ever.
 
 ## The awake watchdog
 
@@ -78,5 +87,6 @@ every 4 s. If the feeds stop for 20 s the processor resets and cold-boots.
 | Command | What it does |
 |---|---|
 | `hardfault` | Forces a hard fault. Expect the fault report, then a reset |
+| `assert` | Forces a failed `configASSERT()`. Expect `ASSERT failed`, then a reset |
 | `freeze` | Masks interrupts and loops for ever. Expect a watchdog reset about 20 s later |
 | `wdt 0`, `wdt 1` | Stops or starts the awake watchdog, until the next boot |

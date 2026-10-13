@@ -7,8 +7,9 @@
 
 ## Status
 
-Open. The code for all the steps is written and bench-tested by Charles on 12 and 13 October.
-Some tests are still to run (see "Tests still to run"), and Victor is to test it.
+Open. The code for all the steps is written, and bench-tested by Charles and Victor on 12 and
+13 October. A few tests are still to run (see "Tests still to run"), and the open items below
+need issues.
 
 - Plan, evidence and bench results: [`CLAUDE_camera_error_handling_proposal.md`](CLAUDE_camera_error_handling_proposal.md)
 - How the firmware behaves now: [`ww500_md/doc/camera_error_handling.md`](../../../EPII_CM55M_APP_S/app/ww_projects/ww500_md/doc/camera_error_handling.md)
@@ -35,19 +36,23 @@ Some tests are still to run (see "Tests still to run"), and Victor is to test it
 - **A watchdog runs while awake** (`watchdog.c`). If the processor stops, it is reset after 20 s.
   `freeze` on the console tests it. Not yet shown: that it rescues a real freeze caused by
   pressure on a connector.
+- **A failed `configASSERT()` reports and resets.** It prints the file, line and task, then
+  resets like a fault. Before, it looped for ever. `assert` on the console tests it.
 
 ## Tests still to run
 
-On both camera variants unless stated:
+Updated 13 October, evening. Done since the first list: `reset`, `switchslot`, `hardfault`,
+`freeze`, `assert` and a firmware update from the app, on both camera variants (Charles and
+Victor).
 
 1. A model load from the SD card to flash: completes, no reset.
-2. `reset` and `switchslot`: work as before.
-3. `hardfault`: the report, then a reset. No "secure bus error" line.
-4. `freeze`: a reset about 20 s later.
-5. A file transfer in each direction, and `setutc`: no reset.
-6. Power with the PPK2: `wdt 0` against `wdt 1`.
-7. Pressure on the HM0360 connector during `capture 300 1000`: if the processor freezes, a reset
-   within about 20 s. This is the only test of a real freeze.
+2. A file transfer in each direction, and `setutc`: no reset.
+3. `ww500_minimal` still builds. It shares the FreeRTOS config header that was changed.
+4. Power with the PPK2: `wdt 0` against `wdt 1`.
+5. A real freeze: pressure on the HM0360 connector until the processor stops, to see whether the
+   watchdog resets it. In Victor's 17 presses below, no freeze happened.
+6. Victor's check script again on the later build, which has the fix for the two timing faults
+   his first run found (see "Review of Victor's bench" in the proposal).
 
 ## Victor's bench, 13 October
 
@@ -107,8 +112,6 @@ Not yet filed as issues (Charles to file):
   `2026-09-03_capture_bench_findings` thread).
 - `_Tools/ww500_ship_check.py` and `_Tools/live_view.py` capture straight after a cold boot and
   now get the error.
-- The FreeRTOS timer queue holds 5 commands, and a full queue hangs the IF task at a
-  `configASSERT(0)` (found 13 October, see step 8 in the proposal).
 - `CAMERA_CONFIG_RUN` reports success when the RP3 does not start.
 
 ## Background

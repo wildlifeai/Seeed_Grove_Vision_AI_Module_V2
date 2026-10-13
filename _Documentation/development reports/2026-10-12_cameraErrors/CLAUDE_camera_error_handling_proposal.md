@@ -730,6 +730,119 @@ it is still capturing, and `Captured` or `Capture failed` afterwards. The app sh
 **For the BLE processor developers.** The BLE processor passes these strings through, so no
 change is expected. Worth a check that nothing there looks for `Captured` to end a state.
 
+## Review of Victor's bench, 13 October 2026
+
+Victor ran PR #275 (187302ce) on WILD-DKOB, board 1 of the connector-pressure thread. His
+results are in the [README](README.md) and `logs/dkob_*`. This is Claude's reading of the logs.
+
+**The capture error handling works on a real fault.** 17 presses of 30 s on the HM0360
+connector:
+
+| Result | Tries |
+|---|---|
+| Frame timeouts, each recovered by the one restart | 9 |
+| `Capture failed after N of 300 images: EDM WDT2 timeout`, then a normal sleep and a new capture at the next wake | 3 |
+| No effect | 5 |
+| Stuck, frozen or hard fault | 0 |
+
+A failure, from `dkob_1506_press_capture_failed.log`: `0x011c` at 5.09 s, restart, `0x011b`
+ignored, a second `0x011c` 5.0 s later, `giving up`, `Capture failed after 27 of 300 images`
+received by the BLE processor, Save State, the trailing `0x011b` ignored quietly, `Sleep` and
+DPD 5 s later (op 8), and the timelapse wake 9 s after that. No RESET was needed.
+
+**Not exercised.** No `0x012a` or `0x0131`, no hard fault and no freeze occurred. So the wider
+frame-fault list, and the watchdog on a real freeze, are still not shown on a real failure.
+
+**Two things the logs show that need a change.**
+
+1. **A fault reset is followed by a second, unintended reset, or by a short watchdog period.**
+   In `dkob_1446_checks.log`:
+   - `hardfault` on the RP3: reset 0.52 s after the report (line 617), then a second reset
+     1.42 s into the new boot (line 636).
+   - `hardfault` on the HM0360: reset 0.52 s after the report (188). The next `freeze` was then
+     reset 9.9 s after the watchdog was started in that boot, not 20 s (237).
+
+   Explanation, which fits all the timings: the reset at 0.52 s is not the watchdog. It is the
+   "last resort" system reset request in `faultHalt()`. Its wait loop was meant to take a few
+   seconds and takes half a second on this processor. A system reset request does not stop the
+   hardware watchdog, so the 1 s fault watchdog carries on into the new boot. It raises its first
+   timeout 1 s after the fault and resets at 2 s. On the RP3 that came during the 1.4 s RTC set,
+   before `watchdog_start()`. On the HM0360, `watchdog_start()` got in just first, but the
+   first-timeout flag was already set, so the awake watchdog reset at its first timeout (10 s).
+
+   So two facts are new: a system reset request does reset this processor (the comment in
+   `image_task.c` says it does not), and the watchdog and its first-timeout flag survive it.
+
+   Fix, built and tested by Charles on 13 October (one variant): `hardfault` gave the report,
+   `>>> Reset after fault` and one cold boot. `freeze` was reset after about 20 s. Boot, capture
+   and sleep work as before. The fix:
+   - `watchdog_init()` (new, in `watchdog.c`) stops the watchdog and clears its interrupt flag.
+     It is the first thing `app_main()` does after starting the boot timer, at every boot,
+     whether or not `AWAKE_WATCHDOG` is defined.
+   - `watchdog_start()` clears the flag too, so the reset is always at twice the period.
+   - `faultHalt()` now makes the system reset request straight after the report, with the
+     watchdog as the backup. The console line is now `>>> Reset after fault`.
+
+   What to test: `hardfault` on both variants gives one cold boot, not two. `freeze` typed soon
+   after that boot is reset at about 20 s, not 10.
+
+2. **Under sustained pressure every photo costs 5 s.** (Charles, 13 October: not a concern. A
+   300-photo sequence is only used for soak testing.) In `dkob_1508_press_capture_failed_twice.log`
+   there are 21 frame faults and 19 restarts. Each restart gives exactly one photo and the next
+   frame times out 5 s later. A 300-photo sequence with a fault that persists could keep the
+   board awake for 25 minutes. Suggested: give up after a small number of frame faults in one
+   capture sequence, for example 3.
+
+**Smaller points.**
+- After `Capture failed` the board stays awake for the inactivity period (5 s here) before it
+  sleeps. It could sleep at once.
+- `freeze` mid-capture was reset after 16.8 s, which is 20 s after the last feed. Correct.
+- The BLE processor logged `Failed to send` for `Capture failed` and `Sleep` only because no
+  phone was connected.
+
+## `configASSERT()` reports and resets
+
+**Status, 13 October 2026: built and tested by Charles.** `assert` gave
+`ASSERT failed: CLI-commands.c:851 in task 'CLI'`, `>>> Reset after fault` and one cold boot.
+The console command already existed, so none was added. Coded as proposed below, with the two
+related changes. A firmware update from the app then passed on the same build. The RP3 build passed too:
+capture, `hardfault` (one cold boot, where Victor had seen two), `freeze` (20 s), `assert`, and
+the cold-boot capture refusal. Still to test: that `ww500_minimal` builds.
+Asked for by Charles after the firmware-update hang. A clean build is needed, because the
+FreeRTOS kernel is compiled with the new definition. The existing console command `assert` forces a
+failed assert to test it.
+
+**Now.** `configASSERT(x)` is defined in `os/freertos_10_5_1/NTZ/config/FreeRTOSConfig.h` as
+"disable interrupts and loop for ever". It is used 55 times in `ww500_md`, and throughout
+the FreeRTOS kernel. `vApplicationStackOverflowHook()` ends in it too. Since step 8 the awake
+watchdog resets the processor up to 20 s later, but nothing on the console says which assert
+failed, or that one did.
+
+**Proposed.**
+1. In `FreeRTOSConfig.h`:
+   ```c
+   void vAssertCalled(const char * file, int line);
+   #define configASSERT( x )    if( ( x ) == 0 ) { vAssertCalled( __FILE_NAME__, __LINE__ ); }
+   ```
+   `__FILE_NAME__` is the file name without its path, so the strings are short.
+2. `vAssertCalled()` in `hardfault_handler.c`, using the code the fault handlers already have:
+   disable interrupts, start the backup watchdog, print
+   `ASSERT failed: <file>:<line> in task '<name>'`, then the same reset as a fault.
+3. That header is shared by the other apps in the SDK. So the new definition goes inside
+   `#ifdef WW_ASSERT_RESETS`, set in `ww500_md.mk`, and the other apps keep the old one.
+4. With a debugger attached a halt is more useful than a reset. `vAssertCalled()` can test for
+   one (`CoreDebug->DHCSR`, bit `C_DEBUGEN`) and execute a breakpoint instruction in that case.
+
+**Two related changes for the hang found on 13 October,** both small:
+- Raise `configTIMER_QUEUE_LENGTH` from 5 to 10 (same header).
+- In `i2ccomm_write_enable()` (`if_task.c`), give `xTimerChangePeriod()` a short wait
+  (for example 100 ms) for queue space, in place of 0. Today a full queue fails at once and the
+  next line is `configASSERT(0)`.
+
+**What to test.** `assert` on the console: expect `ASSERT failed: CLI-commands.c:<line> in task
+'CLI'`, then `>>> Reset after fault` and one cold boot. Then normal use, and a firmware update
+from the app. Both variants must build, and `ww500_minimal` must still build unchanged.
+
 ## Decisions made
 
 1. Step 2: keep the retry, with one attempt, on the HM0360 only.

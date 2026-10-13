@@ -74,7 +74,9 @@ extern uint32_t SystemCoreClock;
 /* Software timer definitions. */
 #define configUSE_TIMERS                      1
 #define configTIMER_TASK_PRIORITY             2
-#define configTIMER_QUEUE_LENGTH              5
+// Was 5. A full queue makes a timer call with no block time fail: on 13 Oct 2026 that hung ww500_md
+// during a firmware update (see _Documentation/development reports/2026-10-12_cameraErrors)
+#define configTIMER_QUEUE_LENGTH              10
 #define configTIMER_TASK_STACK_DEPTH          (configMINIMAL_STACK_SIZE * 2)
 
 /* Constants that build features in or out. */
@@ -100,7 +102,24 @@ extern uint32_t SystemCoreClock;
 /* Constants provided for debugging and optimisation assistance. */
 #define configCHECK_FOR_STACK_OVERFLOW        2
 #define configQUEUE_REGISTRY_SIZE             0
+#ifdef WW_ASSERT_RESETS
+// A failed assert prints the file and line and then resets the processor, in place of looping for ever.
+// WW_ASSERT_RESETS is set in the app's makefile (ww500_md.mk), and the app must provide vAssertCalled()
+// (ww500_md: hardfault_handler.c). Apps that do not define it keep the original behaviour below.
+#ifdef __cplusplus
+extern "C" {
+#endif
+extern void vAssertCalled( const char * file, int line );
+#ifdef __cplusplus
+}
+#endif
+#ifndef __FILE_NAME__
+#define __FILE_NAME__ __FILE__
+#endif
+#define configASSERT( x )                     if( ( x ) == 0 ) { vAssertCalled( __FILE_NAME__, __LINE__ ); }
+#else
 #define configASSERT( x )                     if( ( x ) == 0 ) { taskDISABLE_INTERRUPTS(); for( ;; ); }
+#endif // WW_ASSERT_RESETS
 
 /* Constants that define which hook (callback) functions should be used. */
 #define configUSE_IDLE_HOOK                   1

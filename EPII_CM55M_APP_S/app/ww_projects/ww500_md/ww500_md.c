@@ -583,6 +583,10 @@ int app_main(void){
 
 	boot_timing_start();	// Times the stages to the first frame (boot_timing.h, issue #249)
 
+	// A watchdog started before the reset can still be running. Stop it before anything slow happens
+	// (on a cold boot, setting the RTC below takes 1.4s).
+	watchdog_init();
+
 	initVersionString();
 	pinmux_init();
 	selfTest_init();

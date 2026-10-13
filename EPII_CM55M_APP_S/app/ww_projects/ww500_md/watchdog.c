@@ -19,6 +19,24 @@
 #include "watchdog.h"
 #include "xprintf.h"
 
+/**
+ * Stops the hardware watchdog and clears its interrupt flag.
+ *
+ * Call this first thing at every boot. It is needed whether or not AWAKE_WATCHDOG is defined.
+ *
+ * A system reset request (used by the fault handlers) does not reset the watchdog. Found 13 Oct 2026:
+ * the 1s watchdog started by a fault handler was still running in the next boot, and reset the processor
+ * a second time, 1.4s into that boot.
+ *
+ * The flag matters as well. The hardware resets at the second timeout: the first only sets this flag.
+ * If the flag is left set from before the reset, the next watchdog resets at its first timeout,
+ * in half the expected time.
+ */
+void watchdog_init(void) {
+	hx_drv_watchdog_stop(WATCHDOG_ID_0);
+	hx_drv_watchdog_irq_clear(WATCHDOG_ID_0);
+}
+
 #ifdef AWAKE_WATCHDOG
 
 /**************************************** Local Variables **************************************/
@@ -93,6 +111,9 @@ void watchdog_start(void) {
 	wdg_cfg.ctrl = WATCHDOG_CTRL_CPU;
 	wdg_cfg.state = WATCHDOG_STATE_DC;
 	wdg_cfg.type = WATCHDOG_RESET;
+
+	// Clear the first-timeout flag, so that the reset always comes at the second timeout from now
+	hx_drv_watchdog_irq_clear(WATCHDOG_ID_0);
 
 	// The feed timer is already running, so the first feed comes within WATCHDOG_FEED_INTERVAL_MS.
 	// 'running' is set after the hardware is started, so the callback never feeds a stopped watchdog.

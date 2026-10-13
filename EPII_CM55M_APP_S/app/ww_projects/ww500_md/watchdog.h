@@ -39,6 +39,10 @@
 // How often the watchdog is fed
 #define WATCHDOG_FEED_INTERVAL_MS	4000
 
+// Stop the hardware watchdog and clear its interrupt flag. Call this first thing at every boot:
+// a watchdog started before a reset can still be running after it. Not affected by AWAKE_WATCHDOG.
+void watchdog_init(void);
+
 // Start the watchdog and the timer that feeds it. Can be called before the scheduler starts.
 void watchdog_start(void);
 

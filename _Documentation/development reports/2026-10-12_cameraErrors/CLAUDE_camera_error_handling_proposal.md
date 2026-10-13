@@ -46,7 +46,7 @@ Charles reviewed the proposal and the discussion that followed. Agreed so far:
 | 5 | Done. Built and tested by Charles, 13 October (forced timeout on the HM0360, a real fault on the RP3) |
 | 6 | Done. Built and tested by Charles, 13 October, on both variants |
 | 7 | Done. Built and tested by Charles, 13 October (HM0360 or RP3 not recorded) |
-| 8 | Experiment done. Real code built 13 October. Passed so far: normal use, `freeze`, awake for minutes, firmware update. Still to test: model load, file transfers, power, connector pressure |
+| 8 | Done. Built and tested by Charles and Victor, 13 October, on both variants. DPD current unchanged. Still to test: model load, file transfers, a real freeze from connector pressure |
 | 9 | Done. Built and tested by Charles, 13 October |
 
 What changed from the first draft, and why:
@@ -491,7 +491,7 @@ not catch one stuck task.
 | 2. Does it fire when the processor is stuck? | `wdt 10`, `wdtfeed 2`, wait a minute, `freeze` | no reset while fed, reset about 10 s after `freeze` | 13 Oct: passed. Fed every 2 s there was no reset for 67 s. The reset came 19.4 s after `freeze` ([`logs/test2.log`](logs/test2.log)) |
 | 3. What happens across DPD? | `wdt 30`, `wdtfeed 2`, `dpd`, watch for 2 minutes, then wake | stays asleep, runs normally after the wake | 13 Oct: passed. Asleep 2 min 49 s with no reset (one was due at 60 s), then a normal BLE wake and a normal sleep ([`logs/test3.log`](logs/test3.log)) |
 | 4. Do long operations trip it? | fed: captures on both cameras, a firmware update, a model load, `setutc`, a file transfer | no reset | |
-| 5. Power | PPK2: awake with and without the watchdog, and DPD after it has been used | no measurable cost | |
+| 5. Power | PPK2: awake with and without the watchdog, and DPD after it has been used | no measurable cost | 13 Oct: DPD current is the same as on earlier builds (Charles). Awake current not measured: one register write every 4 s, expected to be far below what can be seen |
 | 6. The real freeze | fed, then pressure on the HM0360 connector during a capture | reset, then a normal boot once the pressure is off | |
 
 Known already: the watchdog resets the processor from a fault handler with a 1 s period

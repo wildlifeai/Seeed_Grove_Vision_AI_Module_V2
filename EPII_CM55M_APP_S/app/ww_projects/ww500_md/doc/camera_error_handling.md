@@ -81,6 +81,7 @@ every 4 s. If the feeds stop for 20 s the processor resets and cold-boots.
   loop in the image task, which has a lower priority than the timer task.
 - A debugger that halts the processor will be reset after 20 s. Type `wdt 0` first.
 - `#define AWAKE_WATCHDOG` in `watchdog.h` turns it off at build time.
+- DPD current is unchanged by it (measured 13 October 2026).
 
 ## Console commands for testing
 

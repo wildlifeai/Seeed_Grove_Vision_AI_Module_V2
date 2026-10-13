@@ -43,15 +43,14 @@ need issues.
 
 Updated 13 October, evening. Done since the first list: `reset`, `switchslot`, `hardfault`,
 `freeze`, `assert` and a firmware update from the app, on both camera variants (Charles and
-Victor).
+Victor). DPD current is the same on this build as on earlier ones (Charles, PPK2).
 
 1. A model load from the SD card to flash: completes, no reset.
 2. A file transfer in each direction, and `setutc`: no reset.
 3. `ww500_minimal` still builds. It shares the FreeRTOS config header that was changed.
-4. Power with the PPK2: `wdt 0` against `wdt 1`.
-5. A real freeze: pressure on the HM0360 connector until the processor stops, to see whether the
+4. A real freeze: pressure on the HM0360 connector until the processor stops, to see whether the
    watchdog resets it. In Victor's 17 presses below, no freeze happened.
-6. Victor's check script again on the later build, which has the fix for the two timing faults
+5. Victor's check script again on the later build, which has the fix for the two timing faults
    his first run found (see "Review of Victor's bench" in the proposal).
 
 ## Victor's bench, 13 October

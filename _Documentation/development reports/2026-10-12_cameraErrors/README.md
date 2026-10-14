@@ -14,6 +14,8 @@ need issues.
 - Plan, evidence and bench results: [`CLAUDE_camera_error_handling_proposal.md`](CLAUDE_camera_error_handling_proposal.md)
 - How the firmware behaves now: [`ww500_md/doc/camera_error_handling.md`](../../../EPII_CM55M_APP_S/app/ww_projects/ww500_md/doc/camera_error_handling.md)
 - What the app developers need to know: the proposal, "Implications for the app"
+- Each kind of error seen in the logs, what the firmware now does, and questions for Himax:
+  [`error_catalogue.md`](error_catalogue.md)
 
 ## Outcome
 

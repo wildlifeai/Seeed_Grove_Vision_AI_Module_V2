@@ -112,6 +112,7 @@ typedef enum
 
 // CGP add this:
 #define IMX708_POWERUP_DELAY		10	// ms. Was 100; 10 tested in ww500_minimal with the RP3 (issue #249, 30 Sep 2026)
+
 #define CIS_POWERUP_DELAY			IMX708_POWERUP_DELAY
 
 /*

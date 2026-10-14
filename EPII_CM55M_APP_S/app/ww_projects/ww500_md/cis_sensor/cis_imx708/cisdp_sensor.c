@@ -320,7 +320,8 @@ void set_mipi_csirx_disable()
 
 int cisdp_sensor_init(bool sensor_init) {
     // Kept (DBG_MORE_INFO) as the start marker for timing the camera start-up (issue #249)
-    dbg_printf(DBG_MORE_INFO, "Initialising IMX708 at 0x%02x (p.u. delay %dms)\r\n", CIS_I2C_ID, CIS_POWERUP_DELAY);
+    dbg_printf(DBG_MORE_INFO, "Initialising IMX708 at 0x%02x (p.u. delay %dms)\r\n",
+    		CIS_I2C_ID, CIS_POWERUP_DELAY);
     dbg_printf(DBG_LESS_INFO, "Memory allocated: %ld for raw buffer, %d for JPEG, %d for JPEG header\n",
             			sizeof(demosbuf), sizeof(jpegbuf), sizeof(jpegfilesizebuf));
 

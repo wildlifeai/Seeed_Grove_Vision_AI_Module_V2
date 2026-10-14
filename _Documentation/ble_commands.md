@@ -161,7 +161,7 @@ The "Reqd?" column indicates whether the command should be implemented by the ap
 | AI status      |               | Reports whether the camera is enabled         | Y     |
 | AI getop       | n             | Requests the value of Operational Parameter n | Y, 1  |
 | AI setop       | n m           | Sets the value of Operational Parameter n to m | Y, 1   |
-| AI capture     | n m           | Trigger capture of n images at m millisecond intervals  | Y     |
+| AI capture     | n m           | Trigger capture of n images at m millisecond intervals  | Y, 7  |
 | AI txfile      | filename, or '.' | File contents returned in several chunks   | Y, 2  |
 | AI camreg      | addr [val]    | Read or write a camera sensor register (hex). Writes are saved to the SD card and re-applied at every sensor init. Also `AI camreg list` and `AI camreg clear` | 3 |
 | AI vcm         | pos           | Set focus lens position 0-1023 (RP3 camera only). `AI vcm probe` checks the actuator is present | 3 |
@@ -225,6 +225,11 @@ __Other AI Processor Commands__
 If you type "help" at the console of the AI processor you will see all of the commands that the AI processor has.
 Only some have been documented in the table above. All of them can be issued via the app by prefixing "AI ".
 Some might be useful in due course, such as those for navigating the file system.
+7. **No captures between a cold boot and the first sleep (13 October 2026).** `AI capture` and
+   `AI light` reply `Error: no captures until after the first sleep.` if the AI processor has
+   cold-booted and not yet been through DPD. A cold boot follows power-on, RESET, `AI reset`,
+   `AI switchslot` and a firmware update. The AI processor sleeps by itself after the inactivity
+   period (op 8), and the next command wakes it.
 
 ## Asynchronous Messages
 
@@ -246,6 +251,7 @@ Some of these messages are documented un the table below.
 | NN+       |                               | ```NN+``` | Sent by AI processor when the NN detects its target. |
 | NN+       |                               | ```NN-``` | Sent by AI processor when the NN does not detect its target. |
 | Captured  |                               | ```Captured 3 images. Last is MD000708.JPG``` | Sent by AI processor when a sequence of image captures completes. |
+| Capture failed |                          | ```Capture failed after 1 of 3 images: EDM WDT2 timeout``` | Sent by AI processor when a sequence of image captures is abandoned. `Captured` is not sent. The text after the colon is the reason. |
 | HM0360 AE regs | multi-line               | ```HM0360 AE regs:```<br>```  Integration time = 376 lines```<br>```  Analog gain = 4```<br>```  Digital gain = 192```<br>```  AE Mean = 12```<br>```  AEConverged?: N``` | Raw auto-exposure registers, sent after each capture and after each light check. The app already parses these. |
 | AE light check |                          | ```AE light check: AGain = 2, conv=Y -> BRIGHT (change)``` | The **decision** and its inputs, in one line. Sent after every light check: always for `AI light` and the op24 timer wake, and after a capture only when something consumes the decision (op13 selects a LED, or op26 = 1). Otherwise a capture sends the regs block and no decision line. Two wordings depending on the build; see the note below. |
 

@@ -20,4 +20,6 @@ Also, as an experiment, I will start naming branches with the date I create them
 | 3 Oct 2026   | 261003_victorsPriorities  | Address some outstanding issues selected by Victor |
 | 6 Oct 2026   | 261006_speedImageTx  | Some measures to increase the speed of the transfer of image files to the app. |
 | 11 Oct 2026  | 261011_shipCheckPhotoButtons | Ship check tool: buttons for a black and white (HM0360) or colour (RP3) photo without flashing |
+| 11 Oct 2026  | 261011_cameraConnectorPressure | Bench findings: pressure on the HM0360 connector stops the boot or kills a running capture |
+| 12 Oct 2026  | 261012_cameraErrors | Better handling of unexpected camera error messages |
 |              |                     |   | 

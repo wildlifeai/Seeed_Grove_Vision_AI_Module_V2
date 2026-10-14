@@ -19,6 +19,7 @@
 #include "xprintf.h"
 
 #include "pinmux_cfg.h"
+#include "ww500_minimal.h"
 
 /*********************************************** Local Defines ***********************************************/
 
@@ -31,11 +32,12 @@ static void initGpioOutputs(void);
 /**************************************** Local Function Definitions *****************************************/
 
 /**
- * @brief Sets the GPIO output pins: both LEDs off and SENSOR_ENABLE low.
+ * @brief Sets the GPIO output pins: the LEDs off and SENSOR_ENABLE low.
  *
  * PB7 is set low whatever camera is fitted. SCU_PB7_PINMUX_GPIO1_1 is the value ww500_md uses for
  * SENSOR_ENABLE in its RP camera builds, where it is known to work as an output. SCU_PB11_PINMUX_GPIO2 is the
- * only GPIO2 value for PB11, and the one the Himax SDK examples use.
+ * only GPIO2 value for PB11, and the one the Himax SDK examples use. PB11 is only set up if BLUELED is defined
+ * (see ww500_minimal.h); otherwise it is left as it was, as it is /IP_INT.
  */
 static void initGpioOutputs(void) {
 	// PB7 = SENSOR_ENABLE, GPIO1, low
@@ -43,10 +45,12 @@ static void initGpioOutputs(void) {
 	hx_drv_scu_set_PB7_pinmux(SCU_PB7_PINMUX_GPIO1_1, 1);
 	hx_drv_gpio_set_out_value(GPIO1, GPIO_OUT_LOW);
 
+#ifdef BLUELED
 	// PB11 = blue LED (LED2), GPIO2, active high, off
 	hx_drv_gpio_set_output(GPIO2, GPIO_OUT_LOW);
 	hx_drv_scu_set_PB11_pinmux(SCU_PB11_PINMUX_GPIO2, 1);
 	hx_drv_gpio_set_out_value(GPIO2, GPIO_OUT_LOW);
+#endif // BLUELED
 
 	// PB9 = red LED (LED1), GPIO0, active high, off
 	hx_drv_gpio_set_output(GPIO0, GPIO_OUT_LOW);
@@ -61,8 +65,8 @@ static void initGpioOutputs(void) {
  *
  * The console UART (PB0, PB1) and the SPI master for the SD card (PB2 data out, PB3 data in, PB4 clock,
  * PB5 chip select) are set together, with PB8 set to SWDIO and PB10 set to an input (so that GPIO2 and GPIO1
- * appear only on PB11 and PB7), then the GPIO outputs (PB7, PB9, PB11). Every other pin is left as it was, so
- * that it draws no current.
+ * appear only on PB11 and PB7), then the GPIO outputs (PB7, PB9, and PB11 if BLUELED is defined). Every other
+ * pin is left as it was, so that it draws no current.
  *
  * NOTE: there is a weak version of pinmux_init() in board/epii_evb/pinmux_init.c that just
  * initialises PB0 and PB1 for UART.

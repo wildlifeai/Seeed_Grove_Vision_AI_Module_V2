@@ -59,6 +59,13 @@
 // The size of the buffer for CLI output. FreeRTOS_CLI.c uses this name.
 #define configCOMMAND_INT_MAX_OUTPUT_SIZE		512
 
+// Define BLUELED to drive the blue LED (LED2) from PB11 as GPIO2. PB11 is /IP_INT, the interrupt to the BLE
+// processor, so leave this undefined on any board where that signal is in use. PB11 is then not touched and
+// ww500_minimal_ledBlue() does nothing.
+// When the is a wish to run ww500_md on the WW500_C00 test board, the wire link (R20 to U2 pin 22)
+// Should be removed as otherwise the PB11 p.u. resistor will drive the blue LED.
+//#define BLUELED
+
 // Ticks to wait when sending to a queue
 #define WW500_MINIMAL_QUEUE_SEND_TICKS			pdMS_TO_TICKS(1000)
 
@@ -114,7 +121,7 @@ int app_main(void);
 void ww500_minimal_ledRed(bool on);
 
 /**
- * @brief Drives the blue LED (LED2, PB11, active high).
+ * @brief Drives the blue LED (LED2, PB11, active high). Does nothing unless BLUELED is defined.
  */
 void ww500_minimal_ledBlue(bool on);
 

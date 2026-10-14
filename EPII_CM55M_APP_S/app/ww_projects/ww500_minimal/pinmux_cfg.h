@@ -14,11 +14,12 @@
  *   - PB8:  SWDIO (its function after reset). Not used for the LED because it has a pull-up
  *   - PB9:  red LED (LED1), GPIO0, active high, off
  *   - PB10: function 0, an input (was the blue LED)
- *   - PB11: blue LED (LED2), GPIO2, active high, off
+ *   - PB11: not touched (it is /IP_INT). If BLUELED is defined: blue LED (LED2), GPIO2, active high, off
  *
  *  GPIO0, GPIO1 and GPIO2 can each appear on two pins (PB6/PB9, PB7/PB10, PB8/PB11: HX6538 datasheet section
  *  4.5, note 3). They are one signal each, not two, so PB8 and PB10 must not also be set to GPIO2 or GPIO1.
- *  The blue LED was on PB10 as GPIO1, which tied it to SENSOR_ENABLE on PB7; it is now on PB11 as GPIO2.
+ *  The blue LED was on PB10 as GPIO1, which tied it to SENSOR_ENABLE on PB7; it then moved to PB11 as GPIO2,
+ *  and is now compiled out unless BLUELED is defined.
  *
  *  PB7 and PB8 are also the SWD pins (SWCLK, SWDIO), which the bootloader sets up. PB8 is left as SWDIO but
  *  PB7 becomes a GPIO once pinmux_cfg_init() has run, so SWD can only connect in the short time between the

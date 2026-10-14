@@ -70,13 +70,21 @@ As with the `ww500_md` pattern, I expect there will be files:
 I will add wire links etc as follows. These connect the HX6538 pins to LEDs and switch normally connected to the 
 BLE processor module, which normally drives the LEDs and listens for the switch SW1. 
 
-1. **Red LED** Make use of the Red LED components LED1 & R22. Wire link from U1 pin 21 to HX6538 PB9
-at U2 pin 4 (PB9 = PDM_CLK).
-2. **Blue LED** Make use of the Blue LED components LED2 & R20. Wire link from U1 pin 23 to HX6538 PB11
+1. **Red LED** Make use of the Red LED components LED1 & R22. Wire link from U1 pin 21 (LD1) to HX6538 PB9 (PDM_CLK)
+at U2 pin 4.
+2. **Blue LED** (can be used or omitted - see below) Make use of the Blue LED components LED2 & R20. 
+Wire link from U1 pin 22 (/IP_INT) to R20. Note that /IP_INT is HX6538 PB11.
 at U2 pin 22
 3. **Green LED** (possible future addition) Make use of the Green LED components LED3 & R40. Wire link from U1 pin 10 to HX6538 (t.b.d.)
 4. **WAKE Switch** Fit SW1 and use it instead of /BLE_WAKE to HX6538 pin PA0. Wire link from U1 pin 12 to pin 24.
 
+__Disabling Blue LED__
+If testing power consumption with a `ww500_md` image the p.u. resistor in /IP_INT will partly drive the blue LED
+and so confuse power measurements. Lift the wire link from U1 pin 22 to R20. Also, the blue LED code can be 
+disabled by commenting out this line in `ww500_minimal.h`:
+```
+#define BLUELED
+```
 
 ## Tasks for Claude
 

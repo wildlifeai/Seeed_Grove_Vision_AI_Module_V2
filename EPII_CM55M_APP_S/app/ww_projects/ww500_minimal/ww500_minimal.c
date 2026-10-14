@@ -189,10 +189,16 @@ void ww500_minimal_ledRed(bool on) {
 /**
  * @brief Drives the blue LED (LED2, PB11, GPIO2, active high).
  *
+ * Does nothing unless BLUELED is defined (see ww500_minimal.h), as PB11 is /IP_INT.
+ *
  * @param on True to switch the LED on.
  */
 void ww500_minimal_ledBlue(bool on) {
+#ifdef BLUELED
 	hx_drv_gpio_set_out_value(GPIO2, on ? GPIO_OUT_HIGH : GPIO_OUT_LOW);
+#else
+	(void) on;
+#endif // BLUELED
 }
 
 /**

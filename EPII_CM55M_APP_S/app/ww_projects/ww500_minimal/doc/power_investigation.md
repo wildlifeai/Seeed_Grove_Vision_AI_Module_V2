@@ -63,6 +63,24 @@ make no difference to the DPD current._
 | **DPD** (deep power down, `dpd`), bare board | **259 uA** Jumps to >1mA every 2s or so. | Mode 2 |
 | Awake and idle as it was (400 MHz, tickless idle sleeping) | **17.9 mA** |  |
 
+__NOTE__ The above measurements were made befoe I had the PPK2, I think. The following PPK2 screen shot shows
+the power waveform:
+
+* [HM0360 Sleep Current](HM0360_Sleep_Current.png)
+
+The summary table at the bottom shows precisely this 259uA and the 2s spike (to 7mA average) shown here:
+
+* [HM0360 Spike Current](HM0360_Spike_Current.png)
+
+**Power measurements with WW500_MD firmware**
+
+On 14/10/26 I placed a `ww500_md` firmware image () on the WW500_C00 depoplated board, for comparision.
+The sleep current was very similar (30uA higher) - see the two waveforms below:
+
+* [WW500_MD Sleep Current](WW500_MD_Sleep_Current.png) - c. 32uA higher (why?)
+* [WW500_MD Spike Current](WW500_MD_Spike_Current.png) - 4.5mA average and a shorter pulse.
+
+The reasons are not clear to me. 
 
 ## Where is the HM0360 power going?
 

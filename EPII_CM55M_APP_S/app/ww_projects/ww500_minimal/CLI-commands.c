@@ -569,7 +569,12 @@ static BaseType_t prvLed(char *pcWriteBuffer, size_t xWriteBufferLen, const char
 		red = true;
 	}
 	else if ((lParameterStringLength == 4) && (strncmp(pcParameter, "blue", 4) == 0)) {
+#ifdef BLUELED
 		red = false;
+#else
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "No blue LED: BLUELED is not defined in this build");
+		return pdFALSE;
+#endif // BLUELED
 	}
 	else {
 		cli_append(&pcWriteBuffer, &xWriteBufferLen, "Expected red or blue, then 0 or 1");
@@ -1401,7 +1406,11 @@ static void registerCommands(void) {
 		{ "awake", "awake <seconds>:\r\n Sets how long the blinking runs before it stops (reverts after DPD)\r\n", prvAwake, 1 },
 		{ "blink", "blink <ms|off>:\r\n Starts blinking with a period in ms, or stops it. Once stopped DPD follows\r\n", prvBlink, 1 },
 		{ "timeprint", "timeprint <seconds>:\r\n Prints the time this often while blinking. 0 = off\r\n", prvTimePrint, 1 },
+#ifdef BLUELED
 		{ "led", "led <red|blue> <0|1>:\r\n Sets the red (PB9) or blue (PB11) LED (use 'blink off' first)\r\n", prvLed, 2 },
+#else
+		{ "led", "led red <0|1>:\r\n Sets the red (PB9) LED (use 'blink off' first)\r\n", prvLed, 2 },
+#endif // BLUELED
 		{ "inactivity", "inactivity <seconds>:\r\n Sets how long to stay awake once the tasks are idle\r\n", prvInactivity, 1 },
 		{ "idle", "idle:\r\n Measures the idle loop for 2 s to show whether tickless idle is sleeping the CPU (use after blink off)\r\n", prvIdle, 0 },
 		{ "clocks", "clocks:\r\n Prints the clock frequencies and which clock enables are set\r\n", prvClocks, 0 },

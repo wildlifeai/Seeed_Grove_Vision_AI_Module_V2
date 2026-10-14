@@ -74,7 +74,7 @@ The summary table at the bottom shows precisely this 259uA and the 2s spike (to 
 
 **Power measurements with WW500_MD firmware**
 
-On 14/10/26 I placed a `ww500_md` firmware image () on the WW500_C00 depoplated board, for comparision.
+On 14/10/26 I placed a `ww500_md` firmware image ('261009_powerMeasurements' 6fa152f9-dirty) on the WW500_C00 depoplated board, for comparision.
 The sleep current was very similar (30uA higher) - see the two waveforms below:
 
 * [WW500_MD Sleep Current](WW500_MD_Sleep_Current.png) - c. 32uA higher (why?)

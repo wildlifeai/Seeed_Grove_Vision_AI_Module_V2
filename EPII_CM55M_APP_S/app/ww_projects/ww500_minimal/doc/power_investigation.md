@@ -75,12 +75,25 @@ The summary table at the bottom shows precisely this 259uA and the 2s spike (to 
 **Power measurements with WW500_MD firmware**
 
 On 14/10/26 I placed a `ww500_md` firmware image ('261009_powerMeasurements' 6fa152f9-dirty) on the WW500_C00 depoplated board, for comparision.
-The sleep current was very similar (30uA higher) - see the two waveforms below:
+The sleep current was very similar (290uA = 30uA higher) - see the two waveforms below:
 
 * [WW500_MD Sleep Current](WW500_MD_Sleep_Current.png) - c. 32uA higher (why?)
 * [WW500_MD Spike Current](WW500_MD_Spike_Current.png) - 4.5mA average and a shorter pulse.
-
+ 
+And this same 
+ 
 The reasons are not clear to me. 
+
+A later branch `'261012_cameraErrors' 5d1f56b5-dirty` gives esentially the same results on the WW500_C00 board.
+But thsi branch gives a __much higher__ sleep current on a WW500_C02 (fully populated) board. About 940uA with a 
+high-frequency pulse super-imposed. 
+
+It turns out this is someone related to the new code that inhibits LoRaWAN comms - sleep current -> 350uA!
+
+* [WW500.C02 LoRaWAN inhibited](WW500_C02_Sleep_Current_no_LoRa.png) - sleep current 941uA
+* [WW500.C02 LoRaWAN runs](WW500_C02_Sleep_Current_with_LoRa.png) - sleep current 348uA
+
+These currents are all higher than one would hope, but it suggests that further work can reduce the currents.
 
 ## Where is the HM0360 power going?
 

@@ -70,6 +70,7 @@
 #include "ledFlash.h"
 #include "pinmux_cfg.h"
 #include "barrier.h"
+#include "watchdog.h"
 
 #include "selfTest.h"
 
@@ -92,9 +93,6 @@
 #ifdef USE_PERCENTAGE
 #define ENABLE_EXIF_CONFIDENCE
 #endif // USE_PERCENTAGE
-
-// Code proposed by Claude - I don't think it works. Consider deleting it
-#define WDTIMOUTFIX
 
 /* Experiment in controlling multiple images captures and LED flash for the HM0360
  * using 2 compiler switches:
@@ -127,7 +125,7 @@
  * Probably best to use option 1? Less chance that LED is stuck on.
  *
  * Known problems: sometimes there is a WDT event as 'Image Event Frame Ready' event is missing.
- * This can be detected: use g_wdt_event to force a retry
+ * This is handled by frameFault(), which restarts the sensor once.
  */
 
 #ifdef USE_HM0360
@@ -187,6 +185,20 @@ static APP_MSG_DEST_T handleEventForSaveState(APP_MSG_T img_recv_msg);
 // This is to process an unexpected event
 static APP_MSG_DEST_T flagUnexpectedEvent(APP_MSG_T rxMessage);
 
+// Name of a datapath event (APP_MSG_DPEVENT_xxx), for console and app messages
+static const char * dpEventString(APP_MSG_EVENT_E event);
+
+// Datapath faults that arrive when a frame is expected
+static bool isFrameFaultEvent(APP_MSG_EVENT_E event);
+static bool frameFault(APP_MSG_EVENT_E event, const char * name);
+
+// Our own timeout on each frame
+static void frameTimerStart(void);
+static void frameTimerStop(void);
+
+// Abandon the capture sequence: tell the app and stop the sensor
+static void captureFailed(const char * reason);
+
 static bool configure_image_sensor(CAMERA_CONFIG_E operation);
 
 static void setupLEDFlash(void);
@@ -244,18 +256,29 @@ static uint32_t g_captures_to_take;
 // TODO perhaps it should be reset at the start of each day? It is only used in filenames
 static uint32_t g_frames_total;
 static uint32_t g_timer_period; // Interval between pictures in ms
-static bool g_wdt_event; 		// A watchdog timer event occurred while waiting for FRAME_READY
 
-#ifdef WDTIMOUTFIX
+// A frame fault is a datapath event that arrives when a frame is expected: an EDM watchdog
+// timeout or another datapath error - see isFrameFaultEvent() and frameFault().
+// Rather than give up at the first fault (which loses the rest of the capture sequence),
+// restart the sensor in place and try again.
+// Only the first retry has ever been seen to work: see
+// _Documentation/development reports/2026-10-12_cameraErrors
+#if defined(USE_RP2) || defined(USE_RP3)
+// No in-place retry for the RP cameras: CAMERA_CONFIG_STOP takes SENSOR_ENABLE low, which powers the
+// sensor down, and CAMERA_CONFIG_RUN does not re-initialise it. So give up at the first fault.
+#define MAX_CAPTURE_RETRIES 0
+#else
+#define MAX_CAPTURE_RETRIES 1
+#endif // USE_RP2 || USE_RP3
+// Time with the sensor stopped, before it is restarted
+#define CAPTURE_RETRY_DELAY_MS 100
+// One fault usually sends two events (0x011c then 0x011b). Frame fault events within
+// this time of the first are part of the same fault and are ignored.
+#define FRAME_FAULT_FOLLOWER_MS 500
 
-// The first frame after a fresh sensor start sometimes never arrives (a WDT
-// timeout instead of FRAME_READY - see the "Known problems" note above). Rather
-// than tear the camera down and give up (which loses the capture request and,
-// for a console 'capture', leaves the image task Uninitialised so every later
-// capture is dropped), restart the sensor in place and try again a few times.
-#define MAX_CAPTURE_RETRIES 5
-static uint8_t g_capture_retries;	// in-place retries used for the current capture
-#endif // WDTIMOUTFIX
+static uint8_t g_capture_retries;		// in-place retries used for the current frame
+static bool g_frame_fault_seen;			// a frame fault has been handled in this capture sequence
+static TickType_t g_frame_fault_tick;	// when the most recent frame fault was handled
 
 // True when this wake exists only to sample the light level (AE registers) for
 // the flash decision: capture one frame, read the AE registers, save nothing.
@@ -280,6 +303,16 @@ static bool aeCheckCliTriggered = false;
 static uint8_t lastCaptureFlashState = 0;
 
 static TimerHandle_t captureTimer;
+
+// Our own timeout on each frame, for when neither APP_MSG_IMAGETASK_FRAME_READY nor a datapath event arrives.
+// The EDM watchdog (5s) is expected to fire first, so this is the frame interval plus this margin.
+#define FRAME_TIMEOUT_MARGIN_MS 7000
+// Set to 10 to force timeout for testing
+//#define FRAME_TIMEOUT_MARGIN_MS 10
+static TimerHandle_t frameTimer;
+// Changes each time frameTimer is started or stopped. An APP_MSG_IMAGETASK_FRAME_TIMEOUT event
+// carries the value from when the timer expired, so an event from an earlier frame can be ignored.
+static uint32_t g_frame_timer_id;
 
 static fileOperation_t fileOp;
 
@@ -321,7 +354,8 @@ const char *imageTaskEventString[APP_MSG_IMAGETASK_LAST - APP_MSG_IMAGETASK_FIRS
     "Image Event NN Erase Model",
     "Image Event NN Model Erased",
     "Image Event Flash Off",
-    "Image Event Error"
+    "Image Event Error",
+    "Image Event Frame Timeout"
 };
 
 // There is only one file name for images - this can be declared here - does not need malloc
@@ -425,6 +459,50 @@ static void capture_timer_callback(TimerHandle_t xTimer) {
     if (xQueueSend(xImageTaskQueue, (void *)&send_msg, __QueueSendTicksToWait) != pdTRUE) {
         xprintf("send_msg=0x%x fail\r\n", send_msg.msg_event);
     }
+}
+
+/**
+ * This is the local callback that executes when the frameTimer expires
+ *
+ * This sends a APP_MSG_IMAGETASK_FRAME_TIMEOUT event
+ */
+static void frame_timer_callback(TimerHandle_t xTimer) {
+    APP_MSG_T send_msg;
+
+    // Send back to our own queue
+    send_msg.msg_data = g_frame_timer_id;
+    send_msg.msg_parameter = 0;
+    send_msg.msg_event = APP_MSG_IMAGETASK_FRAME_TIMEOUT;
+
+    // Timer callbacks run in the context of a task, so the non ISR version can be used
+    if (xQueueSend(xImageTaskQueue, (void *)&send_msg, __QueueSendTicksToWait) != pdTRUE) {
+        xprintf("send_msg=0x%x fail\r\n", send_msg.msg_event);
+    }
+}
+
+/**
+ * Starts (or restarts) the timeout for the frame we are now waiting for
+ *
+ * Call this each time a frame is requested.
+ */
+static void frameTimerStart(void) {
+	g_frame_timer_id++;
+	if (frameTimer != NULL) {
+		// Changing the period also starts the timer
+		xTimerChangePeriod(frameTimer, pdMS_TO_TICKS(g_timer_period + FRAME_TIMEOUT_MARGIN_MS), 0);
+	}
+}
+
+/**
+ * Stops the frame timeout
+ *
+ * Call this when the frame arrives or the capture is abandoned.
+ */
+static void frameTimerStop(void) {
+	g_frame_timer_id++;
+	if (frameTimer != NULL) {
+		xTimerStop(frameTimer, 0);
+	}
 }
 
 /*
@@ -676,9 +754,8 @@ static APP_MSG_DEST_T handleEventForInit(APP_MSG_T img_recv_msg) {
             }
             g_captures_to_take = requested_captures;
             g_timer_period = requested_period;
-#ifdef WDTIMOUTFIX
             g_capture_retries = 0;	// fresh capture sequence
-#endif // WDTIMOUTFIX
+            g_frame_fault_seen = false;
             XP_LT_GREEN
 			xprintf("Images to capture: %d\n", g_captures_to_take);
             xprintf("Interval: %dms\n", g_timer_period);
@@ -709,6 +786,7 @@ static APP_MSG_DEST_T handleEventForInit(APP_MSG_T img_recv_msg) {
             boot_timing_mark(BOOT_TIMING_CAPTURE_START);
             // Record image capture start time.
             startTime = xTaskGetTickCount();
+            frameTimerStart();
 
             // The next thing we expect is a frame ready message: APP_MSG_IMAGETASK_FRAME_READY
             image_task_state = APP_IMAGE_TASK_STATE_CAPTURING;
@@ -804,6 +882,7 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
     TfLiteStatus ret;
     bool setEnabled;
     bool skip_nn = false;
+    bool abandoned = false;	// set if a frame fault ends the capture sequence
     // Signed integers
     // Can we use a pointer to the output tensor instead?
     uint8_t classCount;
@@ -816,9 +895,8 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
 
     case APP_MSG_IMAGETASK_FRAME_READY:
         // Here when the image sub-system has captured an image - via os_app_dplib_cb() callback.
-#ifdef WDTIMOUTFIX
         g_capture_retries = 0;	// a frame arrived: clear the in-place retry counter
-#endif // WDTIMOUTFIX
+        frameTimerStop();
         g_cur_jpegenc_frame++; // The number in this sequence
         g_frames_total++;      // The number since the start of time.
 
@@ -1150,95 +1228,42 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
     	XP_WHITE;
     	break;
 
-    case APP_MSG_DPEVENT_EDM_WDT1_TIMEOUT:   // 0x011d
-    case APP_MSG_DPEVENT_EDM_WDT2_TIMEOUT:   // 0x011c
-    case APP_MSG_DPEVENT_EDM_WDT3_TIMEOUT:   // 0x011b
-    case APP_MSG_DPEVENT_SENSORCTRL_WDT_OUT: // 0x011e
-        // Unfortunately I see this sometimes: APP_MSG_DPEVENT_EDM_WDT2_TIMEOUT (0x011c) followed by APP_MSG_DPEVENT_EDM_WDT3_TIMEOUT (0x011b)
-        // APP_MSG_IMAGETASK_FRAME_READY does not arrive. timeout WDT_TIMEOUT_PERIOD seems to be 5s
-    	XP_RED;
-        dbg_printf(DBG_LESS_INFO, ">>>> Received a timeout event 0x%04x after %dms <<<<\n",
-        		event, app_getElapsedMs(startTime));
-        XP_WHITE;
-
-#ifdef WDTIMOUTFIX
-        // A single frame timeout fires two events in quick succession (WDT2 then
-        // WDT3). After a retry restart resets startTime, the trailing event
-        // arrives with a tiny elapsed time - ignore it so it does not consume a
-        // retry or restart the just-started sensor. A real timeout is ~5s.
-        if (app_getElapsedMs(startTime) < 1000) {
-            break;
-        }
-
-        // The first frame after a fresh sensor start sometimes never arrives.
-        // Restart the sensor in place and retry, up to MAX_CAPTURE_RETRIES,
-        // before giving up. This keeps the current capture request alive
-        // (important for console 'capture' and for not dropping a field capture
-        // on a transient MIPI hiccup) instead of tearing the camera down.
-        if (g_capture_retries < MAX_CAPTURE_RETRIES) {
-            g_capture_retries++;
-            XP_YELLOW;
-            xprintf(">>>> Frame timed out - restarting sensor, retry %d/%d\n",
-            		g_capture_retries, MAX_CAPTURE_RETRIES);
-            XP_WHITE;
-
-            // Stop then restart the datapath/sensor to re-arm the capture.
-            // Dwell progressively longer with the sensor powered down before
-            // each restart: the MIPI bring-up is timing-marginal and
-            // back-to-back restarts can fail identically (bench 10-11 Jul:
-            // 15 instant retries failed where a later boot succeeded first
-            // try). Varying the dwell samples different phase alignments.
-            configure_image_sensor(CAMERA_CONFIG_STOP);
-            vTaskDelay(pdMS_TO_TICKS(100u * g_capture_retries));
-            if (configure_image_sensor(CAMERA_CONFIG_RUN)) {
-                // Restart the timeout clock and keep waiting for FRAME_READY
-                startTime = xTaskGetTickCount();
-                // stay in APP_IMAGE_TASK_STATE_CAPTURING
-                break;
-            }
-            // If the restart itself failed, fall through to the give-up path
-            XP_RED;
-            xprintf(">>>> Sensor restart failed - giving up on this capture\n");
-            XP_WHITE;
-        }
-        else {
-            XP_RED;
-            xprintf(">>>> Frame timed out after %d retries - giving up\n", MAX_CAPTURE_RETRIES);
-            XP_WHITE;
-        }
-
-        // Retries exhausted (or restart failed). Prepare to enter DPD.
-        // g_wdt_event asks the DPD path to schedule a quick 1s re-wake as a
-        // last-resort retry (see the g_wdt_event handling before sleep).
-    	g_wdt_event = true;
-    	g_capture_retries = 0;
-#else
-    	// Fault detected. Prepare to enter DPD
-        dbg_printf(DBG_LESS_INFO, ">>>> TODO - re-initialise camera? <<<<\n", event);
-        g_wdt_event = true;
-#endif	// WDTIMOUTFIX
-
-        configure_image_sensor(CAMERA_CONFIG_STOP); // run some sensordplib_stop functions then run HM0360_stream_off commands to the HM0360
-
-        if (fatfs_mounted())  {
-            // TODO - can we call this without the if() and expect fatfs_task to handle it?
-            // Ask the FatFS task to save state onto the SD card
-            send_msg.destination = xFatTaskQueue;
-            send_msg.message.msg_event = APP_MSG_FATFSTASK_SAVE_STATE;
-            send_msg.message.msg_data = 0;
-            image_task_state = APP_IMAGE_TASK_STATE_SAVE_STATE;
-        }
-        else  {
-        	// No SD card therefore can't save state
-        	// Wait till the IF Task is also ready, then sleep
-        	sleepWhenPossible(); // does not return
-            image_task_state = APP_IMAGE_TASK_STATE_UNINIT;
-        }
-        break;
+    case APP_MSG_IMAGETASK_FRAME_TIMEOUT:
+    	// Here when the frameTimer expires: no frame and no datapath event.
+    	// msg_data says which frame the timer was for. Ignore one that is left over from an earlier frame.
+    	if (img_recv_msg.msg_data == g_frame_timer_id) {
+    		abandoned = frameFault(event, "No frame");
+    	}
+    	break;
 
     default:
-    	flagUnexpectedEvent(img_recv_msg);
+    	if (isFrameFaultEvent(event)) {
+    		// A timeout or other datapath error instead of APP_MSG_IMAGETASK_FRAME_READY
+    		abandoned = frameFault(event, dpEventString(event));
+    	}
+    	else {
+    		flagUnexpectedEvent(img_recv_msg);
+    	}
+    	break;
     }
+
+    if (abandoned) {
+    	// A frame fault has ended the capture sequence. Prepare to enter DPD, saving state if possible.
+    	if (fatfs_mounted())  {
+    		// Ask the FatFS task to save state onto the SD card
+    		send_msg.destination = xFatTaskQueue;
+    		send_msg.message.msg_event = APP_MSG_FATFSTASK_SAVE_STATE;
+    		send_msg.message.msg_data = 0;
+    		image_task_state = APP_IMAGE_TASK_STATE_SAVE_STATE;
+    	}
+    	else  {
+    		// No SD card therefore can't save state
+    		// Wait till the IF Task is also ready, then sleep
+    		sleepWhenPossible(); // does not return
+    		image_task_state = APP_IMAGE_TASK_STATE_UNINIT;
+    	}
+    }
+    // else stay in APP_IMAGE_TASK_STATE_CAPTURING, or the state set above
 
     return send_msg;
 }
@@ -1300,6 +1325,7 @@ static APP_MSG_DEST_T handleEventForNNProcessing(APP_MSG_T img_recv_msg) {
         	// The HM0360 uses an internal timer to determine the time for the next image
         	// Re-start the image sensor.
         	configure_image_sensor(CAMERA_CONFIG_CONTINUE);
+        	frameTimerStart();
         	// Expect another frame ready event
         	image_task_state = APP_IMAGE_TASK_STATE_CAPTURING;
 #else
@@ -1433,6 +1459,7 @@ static APP_MSG_DEST_T handleEventForWaitForTimer(APP_MSG_T img_recv_msg) {
 
     	// Record image capture start time
     	startTime = xTaskGetTickCount();
+    	frameTimerStart();
 
         image_task_state = APP_IMAGE_TASK_STATE_CAPTURING;
         break;
@@ -1532,6 +1559,225 @@ static APP_MSG_DEST_T handleEventForSaveState(APP_MSG_T img_recv_msg)
 
 
 /**
+ * Name of a datapath event, for console and app messages
+ *
+ * These are the APP_MSG_DPEVENT_xxx events in app_msg.h (0x0100 up), sent to the image task
+ * by os_app_dplib_cb(). The image task's own events are named by imageTaskEventString[].
+ *
+ * @param event the event
+ * @return a short name, or "Unrecognised" if this is not a datapath event
+ */
+static const char * dpEventString(APP_MSG_EVENT_E event) {
+	switch (event) {
+	case APP_MSG_DPEVENT_ERR_FS_HVSIZE: return "Parser frame start size error";
+	case APP_MSG_DPEVENT_ERR_FE_TOGGLE: return "Parser frame end toggle error";
+	case APP_MSG_DPEVENT_ERR_FD_TOGGLE: return "Parser frame data toggle error";
+	case APP_MSG_DPEVENT_ERR_FS_TOGGLE: return "Parser frame start toggle error";
+	case APP_MSG_DPEVENT_ERR_BLANK_ERR: return "Parser blanking error";
+	case APP_MSG_DPEVENT_ERR_CRC_ERR: return "Parser CRC error";
+	case APP_MSG_DPEVENT_ERR_FE_ERR: return "Parser frame end cycle error";
+	case APP_MSG_DPEVENT_ERR_HSIZE_ERR: return "Parser hsize error";
+	case APP_MSG_DPEVENT_ERR_FS_ERR: return "Parser frame start cycle error";
+	case APP_MSG_DPEVENT_VSYNC: return "EDM vsync error";
+	case APP_MSG_DPEVENT_HSYNC: return "EDM hsync error";
+	case APP_MSG_DPEVENT_OVERLAP_VH: return "EDM overlap VH error";
+	case APP_MSG_DPEVENT_OVERLAP_HD: return "EDM overlap HD error";
+	case APP_MSG_DPEVENT_OVERLAP_DF: return "EDM overlap DF error";
+	case APP_MSG_DPEVENT_HSYNC_FP: return "EDM hsync front porch error";
+	case APP_MSG_DPEVENT_HSYNC_BP: return "EDM hsync back porch error";
+	case APP_MSG_DPEVENT_FE: return "EDM frame end timing error";
+	case APP_MSG_DPEVENT_CON_VSYNC: return "EDM con vsync error";
+	case APP_MSG_DPEVENT_CON_HSYNC: return "EDM con hsync error";
+	case APP_MSG_DPEVENT_CH0_DE_LESS: return "EDM ch0 DE less error";
+	case APP_MSG_DPEVENT_CH0_DE_MORE: return "EDM ch0 DE more error";
+	case APP_MSG_DPEVENT_CH1_DE_LESS: return "EDM ch1 DE less error";
+	case APP_MSG_DPEVENT_CH1_DE_MORE: return "EDM ch1 DE more error";
+	case APP_MSG_DPEVENT_CH2_DE_LESS: return "EDM ch2 DE less error";
+	case APP_MSG_DPEVENT_CH2_DE_MORE: return "EDM ch2 DE more error";
+	case APP_MSG_DPEVENT_CONV_DE_LESS: return "EDM con DE less error";
+	case APP_MSG_DPEVENT_CONV_DE_MORE: return "EDM con DE more error";
+	case APP_MSG_DPEVENT_EDM_WDT3_TIMEOUT: return "EDM WDT3 timeout";
+	case APP_MSG_DPEVENT_EDM_WDT2_TIMEOUT: return "EDM WDT2 timeout";
+	case APP_MSG_DPEVENT_EDM_WDT1_TIMEOUT: return "EDM WDT1 timeout";
+	case APP_MSG_DPEVENT_SENSORCTRL_WDT_OUT: return "Sensor control timeout";
+	case APP_MSG_DPEVENT_CDM_FIFO_OVERFLOW: return "CDM FIFO overflow";
+	case APP_MSG_DPEVENT_CDM_FIFO_UNDERFLOW: return "CDM FIFO underflow";
+	case APP_MSG_DPEVENT_XDMA_WDMA1_ABNORMAL1: return "WDMA1 frame end count not reached";
+	case APP_MSG_DPEVENT_XDMA_WDMA1_ABNORMAL2: return "WDMA1 disabled before finish";
+	case APP_MSG_DPEVENT_XDMA_WDMA1_ABNORMAL3: return "WDMA1 FIFO ch1 mismatch";
+	case APP_MSG_DPEVENT_XDMA_WDMA1_ABNORMAL4: return "WDMA1 FIFO ch2 mismatch";
+	case APP_MSG_DPEVENT_XDMA_WDMA1_ABNORMAL5: return "WDMA1 FIFO ch3 mismatch";
+	case APP_MSG_DPEVENT_XDMA_WDMA1_ABNORMAL6: return "WDMA1 FIFO ch1 overflow";
+	case APP_MSG_DPEVENT_XDMA_WDMA1_ABNORMAL7: return "WDMA1 FIFO ch2 overflow";
+	case APP_MSG_DPEVENT_XDMA_WDMA1_ABNORMAL8: return "WDMA1 FIFO ch3 overflow";
+	case APP_MSG_DPEVENT_XDMA_WDMA1_ABNORMAL9: return "WDMA1 bus error";
+	case APP_MSG_DPEVENT_XDMA_WDMA2_ABNORMAL1: return "WDMA2 frame end count not reached";
+	case APP_MSG_DPEVENT_XDMA_WDMA2_ABNORMAL2: return "WDMA2 disabled before finish";
+	case APP_MSG_DPEVENT_XDMA_WDMA2_ABNORMAL3: return "WDMA2 FIFO mismatch";
+	case APP_MSG_DPEVENT_XDMA_WDMA2_ABNORMAL4: return "WDMA2 FIFO overflow";
+	case APP_MSG_DPEVENT_XDMA_WDMA2_ABNORMAL5: return "WDMA2 bus error";
+	case APP_MSG_DPEVENT_XDMA_WDMA2_ABNORMAL6: return "WDMA2 abnormal case 6";
+	case APP_MSG_DPEVENT_XDMA_WDMA2_ABNORMAL7: return "WDMA2 abnormal case 7";
+	case APP_MSG_DPEVENT_XDMA_WDMA3_ABNORMAL1: return "WDMA3 frame end count not reached";
+	case APP_MSG_DPEVENT_XDMA_WDMA3_ABNORMAL2: return "WDMA3 disabled before finish";
+	case APP_MSG_DPEVENT_XDMA_WDMA3_ABNORMAL3: return "WDMA3 FIFO ch1 mismatch";
+	case APP_MSG_DPEVENT_XDMA_WDMA3_ABNORMAL4: return "WDMA3 FIFO ch2 mismatch";
+	case APP_MSG_DPEVENT_XDMA_WDMA3_ABNORMAL5: return "WDMA3 FIFO ch3 mismatch";
+	case APP_MSG_DPEVENT_XDMA_WDMA3_ABNORMAL6: return "WDMA3 FIFO ch1 overflow";
+	case APP_MSG_DPEVENT_XDMA_WDMA3_ABNORMAL7: return "WDMA3 FIFO ch2 overflow";
+	case APP_MSG_DPEVENT_XDMA_WDMA3_ABNORMAL8: return "WDMA3 FIFO ch3 overflow";
+	case APP_MSG_DPEVENT_XDMA_WDMA3_ABNORMAL9: return "WDMA3 bus error";
+	case APP_MSG_DPEVENT_XDMA_RDMA_ABNORMAL1: return "RDMA disabled before finish";
+	case APP_MSG_DPEVENT_XDMA_RDMA_ABNORMAL2: return "RDMA bus error";
+	case APP_MSG_DPEVENT_XDMA_RDMA_ABNORMAL3: return "RDMA abnormal case 3";
+	case APP_MSG_DPEVENT_XDMA_RDMA_ABNORMAL4: return "RDMA abnormal case 4";
+	case APP_MSG_DPEVENT_XDMA_RDMA_ABNORMAL5: return "RDMA abnormal case 5";
+	case APP_MSG_DPEVENT_CDM_MOTION_DETECT: return "CDM motion detect";
+	case APP_MSG_DPEVENT_XDMA_WDMA1_FINISH: return "WDMA1 finish";
+	case APP_MSG_DPEVENT_XDMA_WDMA2_FINISH: return "WDMA2 finish";
+	case APP_MSG_DPEVENT_XDMA_WDMA3_FINISH: return "WDMA3 finish";
+	case APP_MSG_DPEVENT_XDMA_RDMA_FINISH: return "RDMA finish";
+	case APP_MSG_DPEVENT_XDMA_FRAME_READY: return "Datapath frame ready";
+	case APP_MSG_DPEVENT_TIMER_FIRE_APP_NOTREADY: return "Timer fired, app not ready";
+	case APP_MSG_DPEVENT_TIMER_FIRE_APP_READY: return "Timer fired, app ready";
+	case APP_MSG_DPEVENT_UNKOWN: return "Datapath unknown";
+	case APP_MSG_DPEVENT_STARTCAPTURE: return "Datapath start capture";
+	case APP_MSG_DPEVENT_STOPCAPTURE: return "Datapath stop capture";
+	case APP_MSG_DPEVENT_RECAPTURE: return "Datapath recapture";
+	case APP_MSG_DPEVENT_1BITPARSER_ERR: return "1-bit parser error";
+	case APP_MSG_DPEVENT_CHANGE_STATE: return "Datapath change state";
+	default: return "Unrecognised";
+	}
+}
+
+/**
+ * Is this a datapath event that means a frame has been lost?
+ *
+ * These are the error events that os_app_dplib_cb() can send: the EDM watchdog timeouts,
+ * the CDM FIFO errors, the WDMA and RDMA errors and the parser error.
+ *
+ * @param event the event
+ * @return true if it is a frame fault
+ */
+static bool isFrameFaultEvent(APP_MSG_EVENT_E event) {
+	// 0x011b to 0x013e: timeouts, CDM FIFO errors, WDMA and RDMA errors
+	if ((event >= APP_MSG_DPEVENT_EDM_WDT3_TIMEOUT) && (event <= APP_MSG_DPEVENT_XDMA_RDMA_ABNORMAL5)) {
+		return true;
+	}
+	return (event == APP_MSG_DPEVENT_1BITPARSER_ERR);
+}
+
+/**
+ * Handles a frame fault in APP_IMAGE_TASK_STATE_CAPTURING
+ *
+ * Here when a timeout or other datapath error arrives and not APP_MSG_IMAGETASK_FRAME_READY,
+ * or when our own frameTimer expires because nothing arrived at all.
+ * I see this sometimes: APP_MSG_DPEVENT_EDM_WDT2_TIMEOUT (0x011c) followed by
+ * APP_MSG_DPEVENT_EDM_WDT3_TIMEOUT (0x011b), 5s after the frame was requested (WDT_TIMEOUT_PERIOD).
+ *
+ * The first event of a fault is acted on. Frame fault events within FRAME_FAULT_FOLLOWER_MS
+ * of that are part of the same fault and are ignored.
+ *
+ * The sensor is restarted in place, up to MAX_CAPTURE_RETRIES times for each frame
+ * (HM0360 only: there is no in-place retry for the RP cameras).
+ * After that the capture sequence is abandoned - see captureFailed().
+ *
+ * This does not change image_task_state: the caller does that if the capture is abandoned.
+ *
+ * @param event the frame fault event
+ * @param name its name, for the console and the app
+ * @return true if the capture sequence has been abandoned, false if we are still waiting for a frame
+ */
+static bool frameFault(APP_MSG_EVENT_E event, const char * name) {
+
+    // Our own frame timeout is never a follower: the frameTimer is restarted with the sensor,
+    // so if it expires again the restart has not produced a frame.
+    if ((event != APP_MSG_IMAGETASK_FRAME_TIMEOUT)
+    		&& g_frame_fault_seen && (app_getElapsedMs(g_frame_fault_tick) < FRAME_FAULT_FOLLOWER_MS)) {
+    	// Part of the fault we have just handled. It must not use a retry or restart the just-started sensor.
+    	xprintf(">>>> '%s' (0x%04x) follows the frame fault - ignored\n", name, event);
+    	return false;
+    }
+
+    XP_RED;
+    xprintf(">>>> Frame fault '%s' (0x%04x) after %dms <<<<\n",
+    		name, event, app_getElapsedMs(startTime));
+    XP_WHITE;
+
+#if (MAX_CAPTURE_RETRIES > 0)
+    if (g_capture_retries < MAX_CAPTURE_RETRIES) {
+    	g_capture_retries++;
+    	XP_YELLOW;
+    	xprintf(">>>> Frame fault - restarting sensor, retry %d/%d\n", g_capture_retries, MAX_CAPTURE_RETRIES);
+    	XP_WHITE;
+
+    	// Stop then restart the datapath/sensor to re-arm the capture.
+    	configure_image_sensor(CAMERA_CONFIG_STOP);
+    	vTaskDelay(pdMS_TO_TICKS(CAPTURE_RETRY_DELAY_MS));
+    	if (configure_image_sensor(CAMERA_CONFIG_RUN)) {
+    		// Restart the capture clock and keep waiting for APP_MSG_IMAGETASK_FRAME_READY
+    		startTime = xTaskGetTickCount();
+    		frameTimerStart();
+    		g_frame_fault_tick = startTime;
+    		g_frame_fault_seen = true;
+    		// stay in APP_IMAGE_TASK_STATE_CAPTURING
+    		return false;
+    	}
+    	// The restart itself failed
+    	XP_RED;
+    	xprintf(">>>> Sensor restart failed - giving up on this capture\n");
+    	XP_WHITE;
+    }
+    else {
+    	XP_RED;
+    	xprintf(">>>> Frame fault after %d retries - giving up\n", MAX_CAPTURE_RETRIES);
+    	XP_WHITE;
+    }
+#else
+    // No in-place retry for this camera
+    XP_RED;
+    xprintf(">>>> Frame fault - giving up\n");
+    XP_WHITE;
+#endif // MAX_CAPTURE_RETRIES > 0
+
+    // Retries exhausted (or restart failed, or no retry for this camera).
+    g_capture_retries = 0;
+    captureFailed(name);
+
+    // Events that follow this fault arrive in the next state
+    g_frame_fault_tick = xTaskGetTickCount();
+    g_frame_fault_seen = true;
+
+    return true;
+}
+
+/**
+ * Abandons the capture sequence
+ *
+ * Called when a frame can't be captured. It tells the console and the app, and stops the sensor.
+ *
+ * This does not change image_task_state: the caller must then prepare to enter DPD.
+ *
+ * There is no automatic retry: it is for the app to ask again if it wants to.
+ *
+ * @param reason short text for the console and the app
+ */
+static void captureFailed(const char * reason) {
+
+    // g_cur_jpegenc_frame counts the frames that arrived
+    snprintf(msgToMaster, MSGTOMASTERLEN, "Capture failed after %d of %d images: %s",
+    		(int) g_cur_jpegenc_frame, (int) g_captures_to_take, reason);
+    // Send to console:
+    XP_RED; xprintf("%s\n", msgToMaster); XP_WHITE;
+    // and to app
+    sendMsgToMaster(msgToMaster);
+
+    frameTimerStop();
+
+    configure_image_sensor(CAMERA_CONFIG_STOP); // run some sensordplib_stop functions then run HM0360_stream_off commands to the HM0360
+}
+
+/**
  * For state machine: Print a red message to see if there are unhandled events we should manage
  *
  * TODO - what should we really do in this case?
@@ -1546,13 +1792,33 @@ static APP_MSG_DEST_T flagUnexpectedEvent(APP_MSG_T img_recv_msg) {
     event = img_recv_msg.msg_event;
     send_msg.destination = NULL;
 
+    if (event == APP_MSG_IMAGETASK_FRAME_TIMEOUT) {
+    	// Left over from a frame that has since arrived. Nothing to do.
+    	return send_msg;
+    }
+
+    if (event == APP_MSG_IMAGETASK_INACTIVITY) {
+    	// The inactivity detector has fired in a state that can't act on it: for example Save State,
+    	// or Uninitialised when we are ready to sleep and waiting for the IF task.
+    	// It fires again later if we are still awake, so there is nothing to do, and nothing to tell the app.
+    	return send_msg;
+    }
+
+    if (isFrameFaultEvent(event)) {
+    	// Left over from a capture that has ended (frameFault() handles these in the Capturing state).
+    	// Console only: the app can't do anything about it.
+    	xprintf("IMAGE task ignored datapath event '%s' (0x%04x) in '%s'\n",
+    			dpEventString(event), event, imageTaskStateString[image_task_state]);
+    	return send_msg;
+    }
+
     if ((event >= APP_MSG_IMAGETASK_FIRST) && (event < APP_MSG_IMAGETASK_LAST)) {
     	snprintf(msgToMaster, MSGTOMASTERLEN,
     		"IMAGE task unhandled event '%s' in '%s'", imageTaskEventString[event - APP_MSG_IMAGETASK_FIRST], imageTaskStateString[image_task_state]);
     }
     else  {
     	snprintf(msgToMaster, MSGTOMASTERLEN,
-    		"IMAGE task unhandled event 0x%04x in '%s'", event, imageTaskStateString[image_task_state]);
+    		"IMAGE task unhandled event '%s' (0x%04x) in '%s'", dpEventString(event), event, imageTaskStateString[image_task_state]);
     }
 
     // print to console
@@ -1649,7 +1915,6 @@ static void vImageTask(void *pvParameters) {
     #error "Unsupported JPEG quality setting"
 #endif
 
-    g_wdt_event = false;
 
     int  nnStatus = -1;	// -1 means disabled
     uint16_t interval;
@@ -1874,7 +2139,8 @@ static void vImageTask(void *pvParameters) {
     			event_string = imageTaskEventString[event - APP_MSG_IMAGETASK_FIRST];
     		}
     		else   {
-    			event_string = "Unrecognised";
+    			// A datapath event, or "Unrecognised"
+    			event_string = dpEventString(event);
     		}
 
     		XP_LT_CYAN
@@ -2658,6 +2924,17 @@ TaskHandle_t image_createTask(int8_t priority, APP_WAKE_REASON_E wakeReason) {
         configASSERT(0); // TODO add debug messages?
     }
 
+    frameTimer = xTimerCreate("FrameTimer",
+                                pdMS_TO_TICKS(FRAME_TIMEOUT_MARGIN_MS), // initial dummy period
+                                pdFALSE,             // one-shot timer
+                                NULL,                // timer ID (optional)
+                                frame_timer_callback);
+
+    if (frameTimer == NULL) {
+        xprintf("Failed to create frameTimer\n");
+        configASSERT(0);
+    }
+
     if (xTaskCreate(vImageTask, /*(const char *)*/ "IMAGE",
                     3 * configMINIMAL_STACK_SIZE,
                     NULL, priority,
@@ -2735,6 +3012,10 @@ void image_sleepNow(void) {
 	uint32_t aeCheckDelay = 0;	// seconds
     uint16_t mdInterval;
 
+    // We are about to enter DPD (or reset, which uses the hardware watchdog itself - see below).
+    // DPD stops the watchdog anyway (tested 13 Oct 2026), but stop it and its feed timer here to be sure.
+    watchdog_stop();
+
     // This wake is over - the next one starts fresh
     aeCheckOnlyWake = false;
 
@@ -2779,16 +3060,7 @@ void image_sleepNow(void) {
     }
 #endif // USE_HM0360
 
-    // TODO - We could retry if we had a timeout?
-    if (g_wdt_event) {
-    	XP_YELLOW;
-    	xprintf(">>> RETRY due to WDT event\n\a");
-    	XP_WHITE;
-    	timelapseDelay = 1;	// 1 second delay
-    }
-    else {
-    	timelapseDelay = fatfs_getOperationalParameter(OP_PARAMETER_TIMELAPSE_INTERVAL);
-    }
+    timelapseDelay = fatfs_getOperationalParameter(OP_PARAMETER_TIMELAPSE_INTERVAL);
 
 	// CLI command might have requested this after firmware update
 	if (app_getResetRequest()) {

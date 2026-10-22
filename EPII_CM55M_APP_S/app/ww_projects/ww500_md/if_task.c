@@ -861,8 +861,10 @@ static void i2ccomm_write_enable(uint8_t * message, aiProcessor_msg_type_t messa
 	// Start a timer in case the master does not read our data. The first message after a boot gets the short
 	// BLE_PROBE_TIME, to find out quickly whether there is a BLE processor. xTimerChangePeriod() also starts
 	// (or restarts) the timer.
+	// Wait a short time for space in the timer command queue. With no wait, a queue that was full for a moment
+	// made this fail at once, and the assert below then hung the processor (13 Oct 2026, during a firmware update).
 	if (xTimerChangePeriod(timerHndlMissingMaster,
-			pdMS_TO_TICKS(bleProbePending ? BLE_PROBE_TIME : MISSINGMASTERTIME), 0) != pdPASS) {
+			pdMS_TO_TICKS(bleProbePending ? BLE_PROBE_TIME : MISSINGMASTERTIME), pdMS_TO_TICKS(100)) != pdPASS) {
 		configASSERT(0);	// TODO add debug messages?
 	}
 }

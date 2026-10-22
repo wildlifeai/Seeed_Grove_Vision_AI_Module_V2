@@ -137,6 +137,7 @@
 #include "preview.h"
 
 #include "inactivity.h"
+#include "watchdog.h"
 
 #include "ledFlash.h"
 
@@ -189,6 +190,9 @@ extern Barrier_t startupBarrier;  // Object that calls a function when all tasks
 
 TaskHandle_t cli_task_id;
 QueueHandle_t xCliTaskQueue;
+
+// Why we are awake. Used to refuse captures after a cold boot - see captureRefused()
+static APP_WAKE_REASON_E woken;
 
 // Strings for expected messages. Values must match Messages directed to Task 2 in app_msg.h
 const char *cliTaskEventString[APP_MSG_CLITASK_LAST - APP_MSG_CLITASK_FIRST] = {
@@ -256,6 +260,9 @@ static BaseType_t prvReset(char *pcWriteBuffer, size_t xWriteBufferLen, const ch
 
 // Enter Deep Power Down
 static BaseType_t prvDpd(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
+static BaseType_t prvHardFault(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
+static BaseType_t prvWdt(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
+static BaseType_t prvFreeze(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 
 // Report of some status
 static BaseType_t prvStatus(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
@@ -365,6 +372,30 @@ static const CLI_Command_Definition_t xDpd = {
 	"dpd", /* The command string to type. */
 	"dpd:\r\n Enter Deep Power Down\r\n",
 	prvDpd, /* The function to run. */
+	0		  /* No parameters are expected. */
+};
+
+/* Structure that defines the "wdt" command line command. */
+static const CLI_Command_Definition_t xWdt = {
+	"wdt", /* The command string to type. */
+	"wdt <0|1>:\r\n Stop (0) or start (1) the awake watchdog, until the next boot. For testing\r\n",
+	prvWdt, /* The function to run. */
+	1		  /* One parameter expected */
+};
+
+/* Structure that defines the "freeze" command line command. */
+static const CLI_Command_Definition_t xFreeze = {
+	"freeze", /* The command string to type. */
+	"freeze:\r\n Mask interrupts and loop for ever, to test the awake watchdog (the processor resets)\r\n",
+	prvFreeze, /* The function to run. */
+	0		  /* No parameters are expected. */
+};
+
+/* Structure that defines the "hardfault" command line command. */
+static const CLI_Command_Definition_t xHardFault = {
+	"hardfault", /* The command string to type. */
+	"hardfault:\r\n Forces a hard fault, to test the fault handler (the processor resets)\r\n",
+	prvHardFault, /* The function to run. */
 	0		  /* No parameters are expected. */
 };
 
@@ -851,6 +882,86 @@ static BaseType_t prvDpd(char *pcWriteBuffer, size_t xWriteBufferLen, const char
 	return pdFALSE;
 }
 
+/**
+ * Forces a hard fault, to test the fault handler
+ *
+ * HardFault_Handler() in hardfault_handler.c should print a report and then reset the processor
+ * with the watchdog. Expect a cold boot about a second later.
+ *
+ * There is no reply, as the processor resets before one can be sent.
+ */
+static BaseType_t prvHardFault(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) {
+	(void)pcCommandString;
+	(void)xWriteBufferLen;
+	configASSERT(pcWriteBuffer);
+
+	xprintf("Forcing a hard fault. Expect a fault report, then a reset.\n");
+
+	// An undefined instruction gives a usage fault. With interrupts masked the usage fault can't be taken,
+	// so it becomes a hard fault (as happens when a fault occurs inside an interrupt handler).
+	__asm volatile (
+			"cpsid i    \n"
+			"udf   #255 \n"
+	);
+
+	// Not reached
+	return pdFALSE;
+}
+
+/**
+ * Stops or starts the awake watchdog (watchdog.c), for testing
+ *
+ * Parameter: 0 to stop it, 1 to start it.
+ *
+ * The watchdog is started at every boot, so stopping it only lasts until the next boot.
+ * Use this to compare power consumption with and without it.
+ */
+static BaseType_t prvWdt(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) {
+	const char *pcParameter;
+	BaseType_t xParameterStringLength;
+
+	pcParameter = FreeRTOS_CLIGetParameter(pcCommandString, 1, &xParameterStringLength);
+	if ((pcParameter == NULL) || ((pcParameter[0] != '0') && (pcParameter[0] != '1'))) {
+		snprintf(pcWriteBuffer, xWriteBufferLen, "Error: 0 (stop) or 1 (start) required.");
+		return pdFALSE;
+	}
+
+	if (pcParameter[0] == '0') {
+		watchdog_stop();
+	}
+	else {
+		watchdog_start();
+	}
+
+	snprintf(pcWriteBuffer, xWriteBufferLen, "Watchdog %s.", watchdog_isRunning() ? "running" : "stopped");
+	return pdFALSE;
+}
+
+/**
+ * Masks interrupts and loops for ever, to test the awake watchdog
+ *
+ * This imitates a dead processor: no task runs and nothing feeds the watchdog.
+ * The watchdog should reset the processor within about 20s (twice WATCHDOG_PERIOD_MS).
+ * If the watchdog is not running, press RESET.
+ *
+ * There is no reply, as the processor never returns from this.
+ */
+static BaseType_t prvFreeze(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) {
+	(void)pcCommandString;
+	(void)xWriteBufferLen;
+	configASSERT(pcWriteBuffer);
+
+	xprintf("Freezing: interrupts masked, looping for ever. Watchdog is %s.\n",
+			watchdog_isRunning() ? "running" : "stopped");
+
+	__asm volatile ("cpsid i \n");
+	for (;;) {
+	}
+
+	// Not reached
+	return pdFALSE;
+}
+
 // Reports on some status
 static BaseType_t prvStatus(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) {
 	(void)pcCommandString;
@@ -919,6 +1030,28 @@ static BaseType_t prvCamera(char *pcWriteBuffer, size_t xWriteBufferLen, const c
 }
 
 /**
+ * Refuses a capture if this is the time between a cold boot and the first DPD
+ *
+ * A cold boot is meant to set things up and then enter DPD quickly. Captures are only expected
+ * after a wake from DPD, so one requested before that is refused. This removes one variable:
+ * the first frame after a cold boot has sometimes not arrived.
+ * See _Documentation/development reports/2026-10-12_cameraErrors
+ *
+ * Note that the 'reset' and 'switchslot' commands and a firmware update all end in a cold boot.
+ *
+ * @param pcWriteBuffer - the error message is written here if the capture is refused
+ * @param xWriteBufferLen - size of that buffer
+ * @return true if the capture is refused
+ */
+static bool captureRefused(char *pcWriteBuffer, size_t xWriteBufferLen) {
+	if (woken != APP_WAKE_REASON_COLD) {
+		return false;
+	}
+	snprintf(pcWriteBuffer, xWriteBufferLen, "Error: no captures until after the first sleep.");
+	return true;
+}
+
+/**
  * Implements "light" command.
  *
  * Triggers a fresh light-sensor reading on demand (ignoring whether the AE
@@ -954,6 +1087,11 @@ static BaseType_t prvLight(char *pcWriteBuffer, size_t xWriteBufferLen, const ch
 
 	(void)pcCommandString;
 	configASSERT(pcWriteBuffer);
+
+	// A light check takes one frame, so it is a capture
+	if (captureRefused(pcWriteBuffer, xWriteBufferLen)) {
+		return pdFALSE;
+	}
 
 	send_msg.msg_data = 0;	// 0 = light-check only, see handleEventForInit()
 	send_msg.msg_parameter = 0;
@@ -1927,6 +2065,10 @@ static BaseType_t prvCapture(char *pcWriteBuffer, size_t xWriteBufferLen, const 
 
 	// Parameters are valid
 
+	if (captureRefused(pcWriteBuffer, xWriteBufferLen)) {
+		return pdFALSE;
+	}
+
 	if (captures == 1) {
 		cli_append(&pcWriteBuffer, &xWriteBufferLen, "About to capture 1 image with an interval of '%u' milliseconds", timerInterval);
 	}
@@ -2849,6 +2991,9 @@ static void vRegisterCLICommands(void)
 	FreeRTOS_CLIRegisterCommand(&xAssert);
 	FreeRTOS_CLIRegisterCommand(&xReset);
 	FreeRTOS_CLIRegisterCommand(&xDpd);
+	FreeRTOS_CLIRegisterCommand(&xHardFault);
+	FreeRTOS_CLIRegisterCommand(&xWdt);
+	FreeRTOS_CLIRegisterCommand(&xFreeze);
 
 	FreeRTOS_CLIRegisterCommand(&xStatus);
 	FreeRTOS_CLIRegisterCommand(&xBle);			// BLE processor unresponsive flag
@@ -2913,6 +3058,8 @@ static void vRegisterCLICommands(void)
  * Not sure how bug the stack needs to be...
  */
 TaskHandle_t cli_createTask(int8_t priority, APP_WAKE_REASON_E wakeReason) {
+
+	woken = wakeReason;
 
 	if (priority < 0)
 	{

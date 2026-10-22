@@ -61,7 +61,9 @@ website and backend consume this firmware's EXIF fields, op-parameters and BLE c
 3. **A dropped or refused request is often silent.** The firmware logs to its console and
    returns, so the app waits on something that will never arrive. If you add a failure path,
    make it tell the app.
-4. **The inactivity detector counts a waiting capture as idle**, so a stalled operation puts
-   the device into deep power down rather than reporting an error.
+4. **The inactivity detector counts a waiting capture as idle**, so `Sleep` can reach the app
+   while a capture is still running. A capture that stalls is now reported
+   (`Capture failed ...`, 13 Oct 2026), but other stalled operations still end in deep power
+   down with no error.
 5. **Say which firmware you tested.** `AI ver` names the build; a claim without it is not
    evidence.

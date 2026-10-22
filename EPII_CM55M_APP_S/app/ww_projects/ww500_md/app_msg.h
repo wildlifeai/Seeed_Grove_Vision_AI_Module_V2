@@ -227,7 +227,8 @@ typedef enum {
 	APP_MSG_IMAGETASK_NN_MODEL_ERASED      		=0x0A0C, //
 	APP_MSG_IMAGETASK_FLASH_OFF      			=0x0A0D, // Timer asks to turn off the flash LED
 	APP_MSG_IMAGETASK_ERROR 					=0x0A0E, //
-	APP_MSG_IMAGETASK_LAST 						=0x0A0F,
+	APP_MSG_IMAGETASK_FRAME_TIMEOUT				=0x0A0F, // frame timer callback: no frame and no datapath event
+	APP_MSG_IMAGETASK_LAST 						=0x0A10,
 
 } APP_MSG_EVENT_E;
 

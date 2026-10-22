@@ -24,8 +24,9 @@ typedef enum {
     SELF_TEST_LOW_BATTERY, 		// 0 = low battery,
     SELF_TEST_AI_PROC,			// 1 = AI processor not responding
     SELF_TEST_LORAWAN_ERROR,	// 2 = LoRaWAN error
-    SELF_TEST_WATCHDOG_RESET,	// 3 = LoRaWAN error
-    SELF_TEST_BROWNOUT_RESET,	// 4 = LoRaWAN error
+    SELF_TEST_WATCHDOG_RESET,	// 3 = BLE processor was reset by its watchdog (set in fault_bootCheck())
+    SELF_TEST_BROWNOUT_RESET,	// 4 = brown-out reset. Never set: the nRF52832 reports a brown-out as a power-on reset
+    SELF_TEST_FAULT_RESET,		// 5 = BLE processor reset itself after a fault, and has its record: the "fault" command gives it (set in fault_bootCheck())
 	// Bits 8-15 are AI processor errors
     SELF_TEST_AI_NO_CAM	= 8,	// 8 = main camera error
     SELF_TEST_AI_NO_MD,			// 9 = HM0360 error

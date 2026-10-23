@@ -53,6 +53,10 @@
 static volatile PREVIEW_MODE_E previewMode = PREVIEW_OFF;
 static uint32_t frameCount = 0;
 
+// True while preview_sendFrame() is writing a frame line. Other tasks check it
+// (via preview_isSending()) to hold back console prints that would split the line.
+static volatile bool frameSending = false;
+
 static const char BASE64_CHARS[] =
 		"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
@@ -151,6 +155,19 @@ bool preview_skipsFileSave(void) {
 }
 
 /**
+ * @brief True while a frame line is being written to the console UART.
+ *
+ * A print from another task during this time lands inside the frame line and
+ * corrupts it, so tasks with chatty console output (e.g. the IF task) check
+ * this and stay quiet.
+ *
+ * @return true if preview_sendFrame() is writing a frame.
+ */
+bool preview_isSending(void) {
+	return frameSending;
+}
+
+/**
  * @brief Emit the JPEG of the capture just completed as one JSON line on the
  * console UART.
  *
@@ -184,6 +201,7 @@ void preview_sendFrame(void) {
 	SCB_InvalidateDCache_by_Addr((void *)jpegBuffer, jpegLength);
 
 	frameCount++;
+	frameSending = true;
 
 	xprintf("\r{\"type\": 1, \"name\": \"INVOKE\", \"code\": 0, \"data\": {\"count\": %d, "
 			"\"resolution\": [%d, %d], \"boxes\": [], \"image\": \"",
@@ -193,4 +211,6 @@ void preview_sendFrame(void) {
 	sendBase64((const uint8_t *)jpegBuffer, jpegLength);
 
 	xprintf("\"}}\n");
+
+	frameSending = false;
 }

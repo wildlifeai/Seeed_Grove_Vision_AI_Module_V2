@@ -50,6 +50,7 @@
 #include "exif_utc.h"
 #include "barrier.h"
 #include "selfTest.h"
+#include "preview.h"
 
 /*************************************** Definitions *******************************************/
 
@@ -339,11 +340,12 @@ static bool dlTxDoneValid = false;		// dlTxDoneTick belongs to this download
 /*********************************** I2C Local Function Definitions ************************************************/
 
 /**
- * True when the per-packet console output should be suppressed: during an upload (g_fileRxActive) or
- * a download (binaryTxActive)
+ * True when the per-packet console output should be suppressed: during an upload (g_fileRxActive),
+ * a download (binaryTxActive) or while a live preview frame is on the console UART
+ * (preview_isSending(): a print there splits the frame line and the viewer drops the frame)
  */
 static bool consoleQuiet(void) {
-	return (g_fileRxActive || binaryTxActive);
+	return (g_fileRxActive || binaryTxActive || preview_isSending());
 }
 
 /**

@@ -65,6 +65,17 @@ bool preview_isActive(void);
 bool preview_skipsFileSave(void);
 
 /**
+ * @brief True while a frame line is being written to the console UART.
+ *
+ * A print from another task during this time lands inside the frame line and
+ * corrupts it, so tasks with chatty console output (e.g. the IF task) check
+ * this and stay quiet.
+ *
+ * @return true if preview_sendFrame() is writing a frame.
+ */
+bool preview_isSending(void);
+
+/**
  * @brief Emit the JPEG of the capture just completed as one JSON line on the
  * console UART.
  *

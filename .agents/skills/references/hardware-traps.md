@@ -16,6 +16,16 @@ Verified on the bench (details and serial evidence in
   **cold** boot (PMU wakeup registers read zero). A `setop 8` does not shorten an
   inactivity countdown already running, so after raising op 8 for a session, follow the
   reboot command with `dpd` or wait out the old period.
+* **Any character typed on the console keeps the AI processor awake for 60 s**, whatever
+  op8 says (`CLI-commands.c`, every RX char sets `INACTIVITYTIMEOUTCLI`). So a tool that
+  types at the device (e.g. `live_view.py`) holds it awake, and `setop 8` cannot make it
+  sleep sooner; send `dpd`. Combined with the cold-boot capture refusal (`Error: no captures
+  until after the first sleep.`), this left the live viewer stuck awake after a cold boot
+  (23 Oct 2026, `2026-10-23_mdEnhancements`).
+* **A print from another task inside a live-preview frame line corrupts that frame.** On the
+  HM0360 build it hit every frame: the IF task logs the I2C send of the motion/AE message to
+  the BLE processor, which completes mid-frame. `consoleQuiet()` in `if_task.c` now also holds
+  while `preview_isSending()`. Other tasks are not held (23 Oct 2026).
 * **A watchdog runs while the AI processor is awake** (13 Oct 2026, `watchdog.c`). If nothing
   feeds it for 20 s the processor resets and cold-boots. Three things follow. A debugger that
   halts the processor gets reset: type `wdt 0` first, or build without `AWAKE_WATCHDOG`. Code in

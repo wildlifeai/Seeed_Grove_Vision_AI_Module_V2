@@ -15,18 +15,35 @@ so camera settings can be adjusted while watching the picture change, e.g.:
     vcm 512                    focus position (RP3 only)
     camreg w 0x0202 0x03e8     sensor register write (staged - see camreg help)
 
-It also handles the WW500's sleep habits by itself: on connect it probes the
-device with 'ver'; if there is no answer it waits for a boot banner (power-
-cycle the device, or wave at the lens if MD is armed), then immediately types
-the keep-awake (the device DPDs ~4 s after an idle cold boot), turns preview
-on and starts a capture burst - every step echo-verified with retries.
+Two capture modes:
+  Free run    - short capture bursts, re-armed each time a burst ends, so Stop
+                takes effect within one burst (the firmware cannot cancel one).
+  One image   - stops free run and takes a single frame.
+
+It also handles the WW500's sleep habits by itself. On connect it probes the
+device with 'ver' and arms. If the device is asleep it waits for a boot banner:
+ - '### Warm Boot ###' (a wake from DPD): it types the keep-awake at once, then
+   turns preview on and starts capturing - every step echo-verified with retries.
+ - '### Cold Boot ###' (power-up, reset, slot switch): the firmware refuses
+   captures until it has slept once ("Error: no captures until after the first
+   sleep."), so the viewer lets it sleep. Something then has to wake it: motion
+   (op11 > 0), the app, or a timelapse. With --wake N the viewer types
+   'setop 7 N' at the cold boot, then 'dpd' once camera init is done, so the
+   device wakes N s later; 'setop 7 0' on close. ('dpd' is needed because any
+   character typed on the console keeps the device awake for 60 s.)
 
 Usage:
     py live_view.py                    # defaults: COM14, 921600
     py live_view.py --port COM13
+    py live_view.py --wake 10          # timelapse wake after a cold boot
+    py live_view.py --save-dir D:/pics # where 'Save frame' writes (default
+                                       # _Tools/live_frames, git-ignored)
 
 NOTES
  - Close TeraTerm first: Windows COM ports are exclusive.
+ - A print from another firmware task inside a frame line corrupts that frame.
+   The firmware keeps the IF task quiet while a frame is sent
+   (preview_isSending()); other dropped frames are counted as 'dropped'.
  - The console UART receive path has a 1-character buffer re-armed by the CLI
    task, so commands are sent one character at a time, preferably in the quiet
    gap right after a frame arrives.
@@ -41,6 +58,7 @@ import argparse
 import base64
 import io
 import json
+import os
 import queue
 import re
 import sys
@@ -57,33 +75,56 @@ from PIL import Image, ImageTk
 ANSI_RE = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
 
 FRAME_MARKER = '"name": "INVOKE"'
-FRAME_OK = "\x00FRAME"         # sentinel: step is confirmed by a decoded frame
 MAX_LINE = 512 * 1024          # a VGA frame line is ~35-70 KB; anything huge is junk
 CHAR_DELAY = 0.03              # per-character send delay (see module docstring)
 # NB: interval 0 wedges the IMX708 datapath (frame timeouts + endless sensor
 # restarts). 500 ms is reliable and still gives ~1 fps once capture,
 # WB-correct and UART streaming time are included.
-CAPTURE_CMD = "capture 1000 500"
-REARM_QUIET_S = 8.0            # re-send capture when streaming and no frame this long
+# Free run uses short bursts: the firmware cannot cancel a burst, so Stop and
+# One image wait for the current one to end (BURST_FRAMES at ~1 fps).
+BURST_FRAMES = 10
+CAPTURE_CMD = f"capture {BURST_FRAMES} 500"
+SINGLE_CMD = "capture 1 500"
+CAPTURE_OK = "About to capture"  # the CLI's reply to an accepted capture
+REARM_QUIET_S = 20.0           # fallback re-arm if a burst-end line was missed
 DISPLAY_MAX = (800, 600)
+# "Save frame" default: beside this script, git-ignored (see .gitignore)
+SAVE_DIR_DEFAULT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "live_frames")
 SEND_RETRY_S = 3.0             # resend an unconfirmed sequence step this often
 SEND_TRIES = 8
 
 CLI_UP_RE = re.compile(r"Starting CLI Task|Enter 'help' to view")
+COLD_BOOT_RE = re.compile(r"### Cold Boot ###")
+WARM_BOOT_RE = re.compile(r"### Warm Boot ###")
 # Camera/datapath init is complete only here - sending a capture before this
 # collides with the init and every frame times out until the next power-cycle.
 BOOT_DONE_RE = re.compile(r"Image sensor and data path initialised")
 BOOT_SETTLE_S = 4.0            # boot-done -> arm delay (lets the boot capture finish)
+WARM_ARM_FALLBACK_S = 10.0     # arm anyway if boot-done is not seen after a warm boot
+BURST_END_RE = re.compile(r"Current captures completed:|Capture failed after")
+# The image task starting a burst, ours or its own (a motion or timelapse wake
+# captures op5 images by itself)
+BURST_START_RE = re.compile(r"Images to capture: \d+")
+# Firmware refuses captures between a cold boot and the first DPD (captureRefused()
+# in CLI-commands.c)
+REFUSED_RE = re.compile(r"no captures until after the first sleep")
 
 KEEPAWAKE_STEP = ("setop 8 60000", "Set OpParam 8 = 60000")
+# Every character typed on the console stretches the inactivity period to 60 s
+# (INACTIVITYTIMEOUTCLI), whatever op8 says. So once the viewer has typed
+# anything after a cold boot, it must send 'dpd' or the device stays awake 60 s.
+DPD_STEP = ("dpd", "Forcing DPD")
+PREVIEW_STEP = ("preview 1", "Preview mode 1")
 
-# The arm sequence: preview mode 1 (stream, skip SD saves), then a long
-# capture burst. Each step is resent until its confirmation string appears.
-# The keep-awake goes out earlier, at CLI-up (safe before the camera init).
-ARM_SEQUENCE = [
-    ("preview 1", "Preview mode 1"),
-    (CAPTURE_CMD, FRAME_OK),
-]
+# Each step is resent until its confirmation string appears. The keep-awake
+# goes out earlier, at CLI-up (safe before the camera init).
+ARM_SEQUENCE = [PREVIEW_STEP, (CAPTURE_CMD, CAPTURE_OK)]
+SINGLE_SEQUENCE = [PREVIEW_STEP, (SINGLE_CMD, CAPTURE_OK)]
+
+COLD_BOOT_HINT = ("[viewer] cold boot: the firmware refuses captures until it has slept once, "
+                  "so letting it sleep. It needs something to wake it: run the viewer with "
+                  "--wake 10 (timelapse wake 10 s after it sleeps), or wave at the lens if MD "
+                  "is on (op11 > 0).")
 
 
 class SerialWorker(threading.Thread):
@@ -91,21 +132,35 @@ class SerialWorker(threading.Thread):
 
     Outgoing commands go through a verified-send queue: each (cmd, expect)
     step is typed one character at a time and resent until `expect` shows up
-    in the console output (or a frame arrives, for the FRAME_OK sentinel).
-    Steps with expect=None are fire-once (used for manual commands).
+    in the console output. Steps with expect=None are fire-once (used for
+    manual commands).
+
+    The capture state lives here because the receive path drives it:
+    free_run re-arms a burst each time one ends; single_pending takes one
+    frame once the current burst ends; cold_boot means the firmware will
+    refuse captures until it has slept.
     """
 
-    def __init__(self, port, baud, frame_q, log_q):
+    def __init__(self, port, baud, frame_q, log_q, wake_s=0):
         super().__init__(daemon=True)
         self.frame_q = frame_q
         self.log_q = log_q
+        self.wake_s = wake_s        # timelapse wake (op7) to set at a cold boot, 0 = off
+        self.wake_set = False       # op7 was set by us, so clear it on close
         self.seq = deque()          # entries: [cmd, expect, tries_left]
         self.seq_last_send = 0.0
         self.dropped = 0
         self.last_frame_ts = 0.0
         self.last_cli_up = 0.0
         self.arm_at = None          # deferred arm time after boot-done
+        self.sleep_at = None        # deferred 'dpd' after a cold boot (--wake)
         self.autoarm_enabled = True
+        self.boot_kind = None       # "cold" or "warm", from the last boot banner
+        self.cold_boot = False      # captures refused until the device has slept
+        self.capture_busy = False   # a capture burst is running on the device
+        self.busy_ts = 0.0          # when the last capture was accepted
+        self.free_run = True        # auto-armed on connect
+        self.single_pending = False
         self.running = True
         self.ser = serial.Serial(port, baud, timeout=0.05)
 
@@ -119,11 +174,39 @@ class SerialWorker(threading.Thread):
         for cmd, expect in steps:
             self.seq.append([cmd, expect, SEND_TRIES])
 
-    def arm(self, reason):
-        if any(step[1] == FRAME_OK for step in self.seq):
-            return  # an arm sequence is already pending
-        self.log_q.put(f"[viewer] {reason} - arming preview stream")
-        self.enqueue_verified(ARM_SEQUENCE)
+    def _capture_queued(self):
+        return any(step[1] == CAPTURE_OK for step in self.seq)
+
+    def arm(self, reason, single=False, with_preview=True):
+        """Queue a capture: a free-run burst, or one frame if single.
+        with_preview=False skips 'preview 1' (re-arming between bursts)."""
+        if self.cold_boot:
+            self.log_q.put(f"[viewer] {reason}: not sent, the device is in its cold-boot "
+                           f"period (captures refused until it has slept and woken)")
+            return
+        if self._capture_queued():
+            return  # a capture is already on its way
+        if (self.capture_busy and time.monotonic()
+                - max(self.last_frame_ts, self.busy_ts) > REARM_QUIET_S):
+            self.capture_busy = False  # nothing for a while: the burst is over
+        if self.capture_busy:
+            if single:
+                self.single_pending = True
+                self.log_q.put("[viewer] one image will be taken when the current burst ends")
+            return
+        self.log_q.put(f"[viewer] {reason} - " + ("one image" if single else "arming preview stream"))
+        steps = SINGLE_SEQUENCE if single else ARM_SEQUENCE
+        if not with_preview:
+            steps = steps[1:]
+        self.enqueue_verified(steps)
+
+    def _burst_ended(self):
+        self.capture_busy = False
+        if self.single_pending:
+            self.single_pending = False
+            self.arm("burst finished", single=True, with_preview=False)
+        elif self.free_run:
+            self.arm("burst finished", with_preview=False)
 
     def _write_now(self, cmd):
         self.log_q.put(f"> {cmd}")
@@ -149,7 +232,7 @@ class SerialWorker(threading.Thread):
             return
         if tries <= 0:
             self.log_q.put(f"[viewer] no confirmation for '{cmd}' - giving up "
-                           f"(power-cycle the device and it will re-arm)")
+                           f"(the viewer re-arms when the device next wakes)")
             self.seq.popleft()
             return
         self.seq[0][2] = tries - 1
@@ -159,15 +242,10 @@ class SerialWorker(threading.Thread):
     def _confirm(self, line):
         if self.seq:
             cmd, expect, _tries = self.seq[0]
-            if expect and expect != FRAME_OK and expect in line:
+            if expect and expect in line:
                 self.log_q.put(f"[viewer] confirmed: {cmd}")
                 self.seq.popleft()
                 self.seq_last_send = 0.0  # next step goes out immediately
-
-    def _confirm_frame(self):
-        if self.seq and self.seq[0][1] == FRAME_OK:
-            self.log_q.put(f"[viewer] confirmed: {self.seq[0][0]} (frames flowing)")
-            self.seq.popleft()
 
     # ---- receive path ----------------------------------------------------
 
@@ -183,10 +261,10 @@ class SerialWorker(threading.Thread):
                     data = msg["data"]
                     jpeg = base64.b64decode(data["image"], validate=True)
                     self.last_frame_ts = time.monotonic()
+                    self.capture_busy = True
                     count = data.get("count", 0)
                     if count <= 3 or count % 20 == 0:
                         self.log_q.put(f"[frame] #{count} {len(jpeg)} bytes")
-                    self._confirm_frame()
                     self.frame_q.put((data.get("count", 0),
                                       data.get("resolution", [0, 0]), jpeg))
                     # frame boundary = the quiet window: send any pending step
@@ -199,21 +277,84 @@ class SerialWorker(threading.Thread):
                     return
         self._confirm(line)
         now = time.monotonic()
+        if CAPTURE_OK in line or BURST_START_RE.search(line):
+            # A capture is running, so the cold-boot period is evidently over
+            self.capture_busy = True
+            self.busy_ts = now
+            self.cold_boot = False
+        if BURST_END_RE.search(line):
+            self._burst_ended()
+        if REFUSED_RE.search(line):
+            # Cold-boot period (e.g. connected to a device that had just been
+            # power-cycled): stop resending, the device must sleep first
+            self.cold_boot = True
+            self.seq = deque(s for s in self.seq if s[1] != CAPTURE_OK)
+            self.log_q.put(line)
+            if not self.wake_s:
+                self.log_q.put(COLD_BOOT_HINT)
+            # We have typed at it, so it would stay awake 60 s: send it to sleep
+            self._sleep_now()
+            return
+        if COLD_BOOT_RE.search(line) or WARM_BOOT_RE.search(line):
+            self.boot_kind = "cold" if COLD_BOOT_RE.search(line) else "warm"
+            self.cold_boot = (self.boot_kind == "cold")
+            self.capture_busy = False
+            self.single_pending = False
+            self.sleep_at = None
         if (self.autoarm_enabled and CLI_UP_RE.search(line)
                 and now - self.last_frame_ts > 10 and now - self.last_cli_up > 10):
-            # Fresh boot: drop any stale queued steps, keep the device awake
-            # right away, and defer preview/capture until the camera init is
-            # done (see BOOT_DONE_RE).
+            # Fresh boot: drop any stale queued steps
             self.last_cli_up = now
             self.arm_at = None
             self.seq.clear()
-            self.log_q.put("[viewer] boot detected - keeping device awake, "
-                           "waiting for camera init before arming")
-            self.enqueue_verified([KEEPAWAKE_STEP])
+            if self.cold_boot:
+                # No keep-awake and no capture: the device has to sleep before
+                # it will capture. Without --wake, type nothing so it sleeps
+                # after its own short idle. With --wake, set the timelapse now
+                # (it is certainly awake) and send 'dpd' once the cold boot's
+                # camera init is done, or after a fallback delay.
+                if self.wake_s:
+                    self.log_q.put(f"[viewer] cold boot: captures refused until the device "
+                                   f"has slept, so setting a {self.wake_s} s timelapse wake "
+                                   f"(op7) and sending it to sleep after camera init")
+                    self._set_wake()
+                    self.sleep_at = now + WARM_ARM_FALLBACK_S
+                else:
+                    self.log_q.put(COLD_BOOT_HINT)
+            else:
+                # Woken from DPD (or unknown): keep the device awake and turn
+                # preview on right away (a RAM flag, cleared by every DPD), so
+                # the wake's own burst is streamed instead of saved to SD.
+                # The capture waits for the camera init (see BOOT_DONE_RE),
+                # with a fallback if that line is missed.
+                self.log_q.put("[viewer] wake detected - keeping device awake, preview on, "
+                               "waiting for camera init before capturing")
+                self.enqueue_verified([KEEPAWAKE_STEP, PREVIEW_STEP])
+                self.arm_at = now + WARM_ARM_FALLBACK_S
         if self.autoarm_enabled and BOOT_DONE_RE.search(line):
-            self.arm_at = now + BOOT_SETTLE_S
-            self.log_q.put(f"[viewer] camera init done - arming in {BOOT_SETTLE_S:.0f} s")
+            if not self.cold_boot:
+                self.arm_at = now + BOOT_SETTLE_S
+                self.log_q.put(f"[viewer] camera init done - arming in {BOOT_SETTLE_S:.0f} s")
+            elif self.sleep_at is not None:
+                self.sleep_at = now + BOOT_SETTLE_S
+                self.log_q.put(f"[viewer] camera init done - sending to sleep in "
+                               f"{BOOT_SETTLE_S:.0f} s")
         self.log_q.put(line)
+
+    def _set_wake(self):
+        """Queue the --wake timelapse (op7), once per session."""
+        if self.wake_s and not self.wake_set:
+            self.enqueue_verified([(f"setop 7 {self.wake_s}",
+                                    f"Set OpParam 7 = {self.wake_s}")])
+            self.wake_set = True
+
+    def _sleep_now(self):
+        """Cold-boot period: set the --wake timelapse if asked, then 'dpd'."""
+        self.sleep_at = None
+        self._set_wake()
+        self.log_q.put("[viewer] sending the device to sleep (dpd)" +
+                       (f", it wakes in {self.wake_s} s" if self.wake_s else ""))
+        self.enqueue_verified([DPD_STEP])
 
     def run(self):
         # Probe: if the device is already awake this confirms and arms;
@@ -240,29 +381,33 @@ class SerialWorker(threading.Thread):
                 if len(buf) > MAX_LINE:
                     buf.clear()
                     self.dropped += 1
+            # deferred 'dpd' once a cold boot has settled
+            if self.sleep_at is not None and time.monotonic() >= self.sleep_at:
+                self._sleep_now()
             # deferred arm once the boot has settled
             if self.arm_at is not None and time.monotonic() >= self.arm_at:
                 self.arm_at = None
-                self.arm("boot settled")
+                if self.free_run or self.single_pending:
+                    single = self.single_pending
+                    self.single_pending = False
+                    self.arm("boot settled", single=single)
             # device quiet (asleep, booting, or between frames): safe to send
             if time.monotonic() - self.last_frame_ts > 3.0:
                 self._pump_seq()
-        try:
-            self.ser.close()
-        except serial.SerialException:
-            pass
+        # The port is closed by the owner (Viewer.close), which may still
+        # need to send the closing commands
 
     def stop(self):
         self.running = False
 
 
 class Viewer:
-    def __init__(self, root, worker):
+    def __init__(self, root, worker, save_dir=SAVE_DIR_DEFAULT):
         self.root = root
         self.worker = worker
+        self.save_dir = save_dir
         self.frame_q = worker.frame_q
         self.log_q = worker.log_q
-        self.streaming = True   # auto-armed on connect
         self.last_jpeg = None
         self.last_rearm = time.monotonic()
         self.frame_times = deque(maxlen=10)
@@ -287,8 +432,9 @@ class Viewer:
         self.status.pack(fill=tk.X, pady=(0, 8))
         self._set_status(None)
 
-        tk.Button(side, text="Start stream", command=self.start_stream).pack(fill=tk.X)
-        tk.Button(side, text="Stop stream", command=self.stop_stream).pack(fill=tk.X, pady=(4, 0))
+        tk.Button(side, text="Free run", command=self.start_stream).pack(fill=tk.X)
+        tk.Button(side, text="Stop", command=self.stop_stream).pack(fill=tk.X, pady=(4, 0))
+        tk.Button(side, text="One image", command=self.one_image).pack(fill=tk.X, pady=(4, 0))
         tk.Button(side, text="Save frame", command=self.save_frame).pack(fill=tk.X, pady=(4, 12))
 
         tk.Label(side, text="Command:").pack(anchor="w")
@@ -313,24 +459,52 @@ class Viewer:
         root.protocol("WM_DELETE_WINDOW", self.close)
         root.after(30, self.poll)
 
+    def _mode_text(self):
+        w = self.worker
+        if w.cold_boot:
+            return "cold boot"
+        if w.single_pending:
+            return "one image"
+        if w.free_run:
+            return "free run"
+        return "busy" if w.capture_busy else "stopped"
+
     def _set_status(self, info):
+        if info is not None:
+            self.last_info = info
+        info = getattr(self, "last_info", None)
+        mode = self._mode_text()
         if info is None:
-            self.status.config(text="frames    -\nsize      -\nfps       -\ndropped   0")
+            self.status.config(text=(f"mode      {mode}\nframes    -\nsize      -\n"
+                                     f"fps       -\ndropped   {self.worker.dropped}"))
             return
         count, res, kbytes, fps = info
-        self.status.config(text=(f"frames    {count}\n"
+        self.status.config(text=(f"mode      {mode}\n"
+                                 f"frames    {count}\n"
                                  f"size      {kbytes:.1f} KB  {res[0]}x{res[1]}\n"
                                  f"fps       {fps:.2f}\n"
                                  f"dropped   {self.worker.dropped}"))
 
     def start_stream(self):
-        self.streaming = True
+        self.worker.free_run = True
+        self.worker.single_pending = False
         self.last_rearm = time.monotonic()
-        self.worker.arm("start requested")
+        self.worker.arm("free run requested")
 
     def stop_stream(self):
-        self.streaming = False
-        self.worker.send("preview 0")
+        # The firmware cannot cancel a burst: stop re-arming and let the
+        # current one (up to BURST_FRAMES) finish. Preview stays on so those
+        # frames are streamed, not saved to SD.
+        self.worker.free_run = False
+        self.worker.single_pending = False
+        if self.worker.capture_busy:
+            self._append_log(f"[viewer] stopping after the current burst "
+                             f"(up to {BURST_FRAMES} frames)")
+
+    def one_image(self):
+        self.worker.free_run = False
+        self.last_rearm = time.monotonic()
+        self.worker.arm("one image requested", single=True)
 
     def send_command(self, _event=None):
         cmd = self.cmd_entry.get().strip()
@@ -343,9 +517,15 @@ class Viewer:
             self._append_log("[viewer] no frame to save yet")
             return
         name = datetime.now().strftime("live_%Y%m%d_%H%M%S.jpg")
-        with open(name, "wb") as f:
-            f.write(self.last_jpeg)
-        self._append_log(f"[viewer] saved {name} ({len(self.last_jpeg)} bytes)")
+        try:
+            os.makedirs(self.save_dir, exist_ok=True)
+            path = os.path.join(self.save_dir, name)
+            with open(path, "wb") as f:
+                f.write(self.last_jpeg)
+        except OSError as e:
+            self._append_log(f"[viewer] could not save frame: {e}")
+            return
+        self._append_log(f"[viewer] saved {path} ({len(self.last_jpeg)} bytes)")
 
     def _append_log(self, line):
         print(line, flush=True)  # tee to stdout so a supervising session can watch
@@ -394,25 +574,42 @@ class Viewer:
         if frame:
             self._show_frame(*frame)
 
-        # burst of 1000 captures ran out? start another while streaming
+        # Fallback: bursts are normally re-armed on the burst-end line
+        # (SerialWorker._burst_ended). If that line was missed, re-arm once
+        # the stream has been quiet for a while.
         now = time.monotonic()
-        if (self.streaming and self.worker.last_frame_ts > 0
-                and now - self.worker.last_frame_ts > REARM_QUIET_S
+        w = self.worker
+        if (w.free_run and not w.cold_boot and w.last_frame_ts > 0
+                and now - w.last_frame_ts > REARM_QUIET_S
                 and now - self.last_rearm > REARM_QUIET_S
-                and not self.worker.seq):
+                and not w.seq):
             self._append_log("[viewer] stream quiet - re-arming capture")
-            self.worker.enqueue_verified([(CAPTURE_CMD, FRAME_OK)])
+            w.capture_busy = False
+            w.arm("stream quiet", with_preview=False)
             self.last_rearm = now
 
+        self._set_status(None)
         self.root.after(30, self.poll)
 
     def close(self):
+        w = self.worker
         try:
-            if self.streaming:
-                self.worker.send("preview 0")
-                time.sleep(1.5)  # give the command a chance to go out
+            # Stop the reader, then type the closing commands directly: the
+            # send queue only paces one command per SEND_RETRY_S
+            w.free_run = False
+            w.stop()
+            w.join(timeout=1.0)
+            w._write_now("preview 0")
+            if w.wake_set:
+                time.sleep(0.3)
+                w._write_now("setop 7 0")  # undo the --wake timelapse
+        except serial.SerialException:
+            pass
         finally:
-            self.worker.stop()
+            try:
+                w.ser.close()
+            except serial.SerialException:
+                pass
             self.root.destroy()
 
 
@@ -421,12 +618,17 @@ def main():
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--port", default="COM14")
     ap.add_argument("--baud", type=int, default=921600)
+    ap.add_argument("--save-dir", default=SAVE_DIR_DEFAULT, metavar="DIR",
+                    help="folder for 'Save frame' (default: live_frames beside this script)")
+    ap.add_argument("--wake", type=int, default=0, metavar="SECONDS",
+                    help="after a cold boot, set a timelapse wake (op7) of this many "
+                         "seconds so the device wakes and can capture; cleared on close")
     args = ap.parse_args()
 
     frame_q = queue.Queue()
     log_q = queue.Queue()
     try:
-        worker = SerialWorker(args.port, args.baud, frame_q, log_q)
+        worker = SerialWorker(args.port, args.baud, frame_q, log_q, wake_s=args.wake)
     except serial.SerialException as e:
         print(f"Cannot open {args.port}: {e}", file=sys.stderr)
         print("Is TeraTerm (or another terminal) still holding the port?", file=sys.stderr)
@@ -434,7 +636,7 @@ def main():
     worker.start()
 
     root = tk.Tk()
-    Viewer(root, worker)
+    Viewer(root, worker, save_dir=os.path.abspath(args.save_dir))
     root.mainloop()
     return 0
 

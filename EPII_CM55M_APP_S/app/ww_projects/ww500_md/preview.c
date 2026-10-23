@@ -7,7 +7,10 @@
  * Frame line format (one line per frame, CR ... LF):
  *
  *   {"type": 1, "name": "INVOKE", "code": 0, "data": {"count": N,
- *    "resolution": [W, H], "boxes": [], "image": "<base64 JPEG>"}}
+ *    "resolution": [W, H], "boxes": [], "md": "<64 hex>", "image": "<base64 JPEG>"}}
+ *
+ * "md" (the HM0360's 32 ROI_OUT motion bytes for this capture) is present
+ * only when the image task supplied them - see preview_setMdBits().
  *
  * This is the same framing the Himax/SSCMA scenario apps use (see
  * app/scenario_app/tflm_fd_fm/send_result.cpp), so as well as
@@ -27,6 +30,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <stddef.h>
 
 #include "WE2_core.h"		// SCB_InvalidateDCache_by_Addr
 #include "xprintf.h"
@@ -45,6 +49,9 @@
 // occur at the very end of the frame.
 #define PREVIEW_CHUNK_IN	510
 
+// HM0360 motion detection output: 32 ROI_OUT registers, one bit per cell
+#define PREVIEW_MD_BYTES	32
+
 /*********************************************** Local Types ************************************************/
 
 
@@ -56,6 +63,11 @@ static uint32_t frameCount = 0;
 // True while preview_sendFrame() is writing a frame line. Other tasks check it
 // (via preview_isSending()) to hold back console prints that would split the line.
 static volatile bool frameSending = false;
+
+// HM0360 MD bits read for the frame about to be sent (preview_setMdBits()).
+// Sent once as the frame's "md" field, then invalidated.
+static uint8_t mdBits[PREVIEW_MD_BYTES];
+static bool mdValid = false;
 
 static const char BASE64_CHARS[] =
 		"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
@@ -124,6 +136,7 @@ void preview_setMode(PREVIEW_MODE_E mode) {
 	previewMode = mode;
 	if (mode == PREVIEW_OFF) {
 		frameCount = 0;
+		mdValid = false;
 	}
 }
 
@@ -168,6 +181,27 @@ bool preview_isSending(void) {
 }
 
 /**
+ * @brief Record the HM0360 motion detection bits for the next frame.
+ *
+ * The image task reads the 32 ROI_OUT registers once per capture; passing
+ * them here adds them to that frame's line as "md" (64 hex characters), so
+ * the viewer can draw them over the image. Ignored unless preview is on.
+ *
+ * @param roiOut the ROI_OUT register values, ROI_OUT_0 first.
+ * @param length number of bytes in roiOut (must be 32).
+ */
+void preview_setMdBits(const uint8_t *roiOut, uint8_t length) {
+	if ((previewMode == PREVIEW_OFF) || (roiOut == NULL) || (length != PREVIEW_MD_BYTES)) {
+		return;
+	}
+
+	for (uint8_t i = 0; i < PREVIEW_MD_BYTES; i++) {
+		mdBits[i] = roiOut[i];
+	}
+	mdValid = true;
+}
+
+/**
  * @brief Emit the JPEG of the capture just completed as one JSON line on the
  * console UART.
  *
@@ -204,9 +238,20 @@ void preview_sendFrame(void) {
 	frameSending = true;
 
 	xprintf("\r{\"type\": 1, \"name\": \"INVOKE\", \"code\": 0, \"data\": {\"count\": %d, "
-			"\"resolution\": [%d, %d], \"boxes\": [], \"image\": \"",
+			"\"resolution\": [%d, %d], \"boxes\": [], ",
 			(int)frameCount,
 			(int)app_get_raw_width(), (int)app_get_raw_height());
+
+	if (mdValid) {
+		xprintf("\"md\": \"");
+		for (uint8_t i = 0; i < PREVIEW_MD_BYTES; i++) {
+			xprintf("%02x", mdBits[i]);
+		}
+		xprintf("\", ");
+		mdValid = false;	// these bits belong to this frame only
+	}
+
+	xprintf("\"image\": \"");
 
 	sendBase64((const uint8_t *)jpegBuffer, jpegLength);
 

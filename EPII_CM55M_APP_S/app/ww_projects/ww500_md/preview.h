@@ -76,6 +76,18 @@ bool preview_skipsFileSave(void);
 bool preview_isSending(void);
 
 /**
+ * @brief Record the HM0360 motion detection bits for the next frame.
+ *
+ * The image task reads the 32 ROI_OUT registers once per capture; passing
+ * them here adds them to that frame's line as "md" (64 hex characters), so
+ * the viewer can draw them over the image. Ignored unless preview is on.
+ *
+ * @param roiOut the ROI_OUT register values, ROI_OUT_0 first.
+ * @param length number of bytes in roiOut (must be 32).
+ */
+void preview_setMdBits(const uint8_t *roiOut, uint8_t length);
+
+/**
  * @brief Emit the JPEG of the capture just completed as one JSON line on the
  * console UART.
  *

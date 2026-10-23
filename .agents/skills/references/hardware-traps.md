@@ -30,6 +30,11 @@ Verified on the bench (details and serial evidence in
   session's values go to the field with the card. After live-view sessions on 23 Oct 2026 the
   card held op7 = 10 (a wake every 10 s) and op8 = 60000. `live_view.py` now sets lab-safe
   values on close; after any other bench work, check `getop 7`, `getop 8` and `getop 11`.
+* **`capture N 0` (N > 1) resets the AI processor.** `MIN_IMAGE_INTERVAL` is 0, but the interval
+  goes to `xTimerChangePeriod()`, and FreeRTOS asserts on a zero period (`timers.c`), so it
+  reaches `configASSERT()` and a reset (a hang before 13 Oct 2026). The old "interval 0 wedges
+  the IMX708" note is probably this. Use 1 ms or more (found from code 23 Oct 2026, not yet
+  reproduced on the bench).
 * **A watchdog runs while the AI processor is awake** (13 Oct 2026, `watchdog.c`). If nothing
   feeds it for 20 s the processor resets and cold-boots. Three things follow. A debugger that
   halts the processor gets reset: type `wdt 0` first, or build without `AWAKE_WATCHDOG`. Code in

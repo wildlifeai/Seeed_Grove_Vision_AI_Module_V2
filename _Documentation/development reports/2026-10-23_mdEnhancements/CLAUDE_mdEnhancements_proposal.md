@@ -247,3 +247,42 @@ card after viewer sessions (setop values are saved to CONFIG.TXT straight away).
 Charles: the viewer is a lab tool, so on close it sets lab-safe values rather than restoring
 earlier ones. These are `preview 0`, `setop 7 0`, `setop 11 0` and `setop 8 1000`. Each is
 confirmed; if the device is asleep, the viewer lists what wasn't confirmed.
+
+## Step 4 coded (23 October 2026, not yet built or benched)
+
+- **Firmware:** the image task passes the 32 ROI_OUT bytes it already reads each capture to
+  `preview_setMdBits()`, but only when an HM0360 is present and not on AE-check frames.
+  `preview_sendFrame()` adds them to that frame's line as `"md"`.
+- **Viewer:** draws the grid over the frame, with blue cell lines and a red outline on cells
+  with motion. Controls: Show, 15 or 16 rows, Mirror, Flip. The status panel counts cells
+  with motion.
+- **Assumption, per Charles ("make an assumption and we can test"):** 16 columns x 15 rows,
+  from `ROI_H = 0xf0` and `ROI_V = 0xe0` in both contexts, and the 16th row of bits always
+  empty in logs so far. Bit order is the console grid's (`hm0360_md_printGrid()`), checked
+  against both bench logs (row 10 column 2, and row 13 column 1). Orientation against the
+  image is not verified, hence Mirror and Flip.
+- Still open: whether the bits mean anything during captures (`Inhibiting MD`), and the
+  different field of view on RP3 builds.
+
+**Step 4, first bench result (23 Oct, HM0360 build).** Charles saw the overlay working, but
+the red cells were diagonally opposite the motion. So the console-grid bit order is rotated
+180 degrees relative to the JPEG; `IMG_ORIENTATION` (0x0101) is not written by the init
+table. Charles wanted the JPEG left alone, so the fix is in `live_view.py` only: `md_cells()`
+rotates the grid, and Mirror and Flip are now corrections on top of that. Placement was "not
+perfect" even when rotated. Still to compare: 15 rows (32 px) against 16 rows (30 px), and
+lag from the sensor's IIR smoothing.
+
+**Frame rate and the pause every 10 frames (23 Oct, Python only, not yet benched).**
+- **Pause** (not an error; the stream resumed every time): at the end of each burst, the viewer waited for 3 s of quiet before typing the
+  next `capture`; that rule exists so it never types during a frame line. A burst end is a
+  quiet point, so the viewer now types the re-arm straight away.
+- **Interval:** the viewer asks `camera` and defaults to 20 ms on the HM0360 and 100 ms on
+  the RP3, instead of 500. These are new and untested values. `--interval MS` and an Interval
+  box in the window override them.
+- **Found while doing this:** `capture N 0` with N > 1 can never work. FreeRTOS asserts on a
+  zero timer period (`timers.c`), so the AI processor resets (it hung before 13 Oct). That
+  is probably the July "wedges the IMX708" note. The firmware should reject 0; that needs an
+  issue, and a C change for a later round.
+- Expected effect: the RP3 at about 0.6 s per frame (was about 1.0 s). On the HM0360, about
+  1.3 s, because its 1 s sleep/wake per frame remains; fixing that needs firmware (keep the
+  sensor streaming during preview).

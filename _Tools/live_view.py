@@ -73,20 +73,23 @@ from datetime import datetime
 import serial
 import tkinter as tk
 from tkinter import scrolledtext
-from PIL import Image, ImageTk
+from PIL import Image, ImageDraw, ImageTk
 
 ANSI_RE = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
 
 FRAME_MARKER = '"name": "INVOKE"'
 MAX_LINE = 512 * 1024          # a VGA frame line is ~35-70 KB; anything huge is junk
 CHAR_DELAY = 0.03              # per-character send delay (see module docstring)
-# NB: interval 0 wedges the IMX708 datapath (frame timeouts + endless sensor
-# restarts). 500 ms is reliable and still gives ~1 fps once capture,
-# WB-correct and UART streaming time are included.
 # Free run uses short bursts: the firmware cannot cancel a burst, so Stop and
-# One image wait for the current one to end (BURST_FRAMES at ~1 fps).
-BURST_FRAMES = 10
-CAPTURE_CMD = f"capture {BURST_FRAMES} 500"
+# One image wait for the current one to end (up to BURST_FRAMES frames).
+BURST_FRAMES = 30             # 30 from 23 Oct 2026 (was 10): fewer gaps, slower Stop
+# Interval between frames in a burst. Never 0: the firmware passes it to
+# xTimerChangePeriod(), and FreeRTOS asserts on a zero period (timers.c), which
+# resets the AI processor. That is the likely cause of the old note that
+# 'capture N 0' wedges the IMX708. 1 ms is the minimum (1 tick).
+INTERVAL_MIN_MS = 1
+INTERVAL_FALLBACK_MS = 500     # until the camera type is known
+INTERVAL_DEFAULT_MS = {"HM0360": 20, "RP3": 100, "RP2": 100}
 SINGLE_CMD = "capture 1 500"
 CAPTURE_OK = "About to capture"  # the CLI's reply to an accepted capture
 REARM_QUIET_S = 20.0           # fallback re-arm if a burst-end line was missed
@@ -108,6 +111,8 @@ BURST_END_RE = re.compile(r"Current captures completed:|Capture failed after")
 # The image task starting a burst, ours or its own (a motion or timelapse wake
 # captures op5 images by itself)
 BURST_START_RE = re.compile(r"Images to capture: \d+")
+# Camera type: the reply to 'camera', or the end of the boot's camera init
+CAMERA_RE = re.compile(r"^(?:cmd> )?(HM0360|RP3|RP2)$|initialised for camera (HM0360|RP3|RP2)")
 # Firmware refuses captures between a cold boot and the first DPD (captureRefused()
 # in CLI-commands.c)
 REFUSED_RE = re.compile(r"no captures until after the first sleep")
@@ -121,8 +126,77 @@ PREVIEW_STEP = ("preview 1", "Preview mode 1")
 
 # Each step is resent until its confirmation string appears. The keep-awake
 # goes out earlier, at CLI-up (safe before the camera init).
-ARM_SEQUENCE = [PREVIEW_STEP, (CAPTURE_CMD, CAPTURE_OK)]
 SINGLE_SEQUENCE = [PREVIEW_STEP, (SINGLE_CMD, CAPTURE_OK)]
+
+# HM0360 motion detection grid. Both contexts set ROI_H = 0xf0 (columns 0-15)
+# and ROI_V = 0xe0 (rows 0-14), so on a 640x480 frame the grid is 16 x 15 cells
+# of 40 x 32 pixels, and the 16th row of bits stays empty. The viewer can switch
+# to 16 rows to test that assumption.
+MD_COLS = 16
+MD_ROWS_DEFAULT = 15
+GRID_COLOUR = (0, 170, 255)      # cell lines
+MOTION_COLOUR = (255, 40, 40)    # outline of a cell whose MD bit is set
+
+
+def cmd_text(cmd):
+    """A queued command is a string, or a function that builds it when sent."""
+    return cmd() if callable(cmd) else cmd
+
+
+def md_cells(md, rows, mirror=False, flip=False):
+    """Decode the 32 ROI_OUT bytes into the cells that report motion.
+
+    Bit b (0-255) is byte b // 8, bit b % 8 (LSB first), and belongs to MD
+    cell row b // 16, column b % 16: the order hm0360_md_printGrid() uses for
+    the console grid. On the bench (23 Oct 2026, HM0360 build) that order is
+    rotated 180 degrees relative to the JPEG: the console grid's row 0,
+    column 0 is the image's bottom-right cell. So it is rotated here, and
+    mirror (left-right) and flip (top-bottom) are extra corrections on top.
+
+    Returns (cells, outside): the set of (row, col) with motion in image
+    coordinates (row 0 at the top), and how many set bits fall in rows
+    beyond `rows`.
+    """
+    cells = set()
+    outside = 0
+    for b in range(len(md) * 8):
+        if md[b >> 3] & (1 << (b & 7)):
+            row, col = divmod(b, MD_COLS)
+            if row >= rows:
+                outside += 1
+                continue
+            # rotate 180 degrees into image coordinates
+            row = rows - 1 - row
+            col = MD_COLS - 1 - col
+            if mirror:
+                col = MD_COLS - 1 - col
+            if flip:
+                row = rows - 1 - row
+            cells.add((row, col))
+    return cells, outside
+
+
+def draw_md_grid(img, md, rows, mirror=False, flip=False):
+    """Draw the MD grid over a copy of img: thin lines between cells, and a
+    red outline on each cell with motion. md may be None (lines only).
+
+    Returns (image, cells with motion, set bits beyond `rows`).
+    """
+    img = img.convert("RGB")
+    draw = ImageDraw.Draw(img)
+    w, h = img.size
+    xs = [round(c * w / MD_COLS) for c in range(MD_COLS + 1)]
+    ys = [round(r * h / rows) for r in range(rows + 1)]
+    for x in xs[1:-1]:
+        draw.line([(x, 0), (x, h - 1)], fill=GRID_COLOUR)
+    for y in ys[1:-1]:
+        draw.line([(0, y), (w - 1, y)], fill=GRID_COLOUR)
+    cells, outside = md_cells(md or b"", rows, mirror, flip)
+    for row, col in cells:
+        draw.rectangle([xs[col], ys[row], xs[col + 1] - 1, ys[row + 1] - 1],
+                       outline=MOTION_COLOUR, width=2)
+    return img, len(cells), outside
+
 
 # Sent on close, each confirmed. The viewer is a lab tool, so it leaves the
 # device quiet rather than restoring earlier values: no timelapse (op7), no
@@ -156,12 +230,15 @@ class SerialWorker(threading.Thread):
     refuse captures until it has slept.
     """
 
-    def __init__(self, port, baud, frame_q, log_q, wake_s=0):
+    def __init__(self, port, baud, frame_q, log_q, wake_s=0, interval_ms=None):
         super().__init__(daemon=True)
         self.frame_q = frame_q
         self.log_q = log_q
         self.wake_s = wake_s        # timelapse wake (op7) to set at a cold boot, 0 = off
         self.wake_set = False       # op7 was set by us, so clear it on close
+        self.camera = None          # "HM0360", "RP3", ... once reported
+        self.interval_fixed = interval_ms is not None   # --interval given
+        self.interval_ms = interval_ms if interval_ms is not None else INTERVAL_FALLBACK_MS
         self.seq = deque()          # entries: [cmd, expect, tries_left]
         self.seq_last_send = 0.0
         self.dropped = 0
@@ -210,10 +287,15 @@ class SerialWorker(threading.Thread):
                 self.log_q.put("[viewer] one image will be taken when the current burst ends")
             return
         self.log_q.put(f"[viewer] {reason} - " + ("one image" if single else "arming preview stream"))
-        steps = SINGLE_SEQUENCE if single else ARM_SEQUENCE
+        # self.capture_cmd, not its result: the interval is read when the
+        # command is typed, so a 'camera' reply that arrives meanwhile counts
+        steps = SINGLE_SEQUENCE if single else [PREVIEW_STEP, (self.capture_cmd, CAPTURE_OK)]
         if not with_preview:
             steps = steps[1:]
         self.enqueue_verified(steps)
+
+    def capture_cmd(self):
+        return f"capture {BURST_FRAMES} {max(INTERVAL_MIN_MS, int(self.interval_ms))}"
 
     def _burst_ended(self):
         self.capture_busy = False
@@ -222,6 +304,10 @@ class SerialWorker(threading.Thread):
             self.arm("burst finished", single=True, with_preview=False)
         elif self.free_run:
             self.arm("burst finished", with_preview=False)
+        # The device is idle between bursts, so type the re-arm now rather
+        # than waiting out the 3 s quiet rule (that wait was the pause after every
+        # BURST_FRAMES frames)
+        self._pump_seq(force=True)
 
     def _write_now(self, cmd):
         self.log_q.put(f"> {cmd}")
@@ -240,6 +326,7 @@ class SerialWorker(threading.Thread):
         if not force and (now - self.seq_last_send) < SEND_RETRY_S:
             return
         cmd, expect, tries = self.seq[0]
+        cmd = cmd_text(cmd)
         if expect is None:
             self.seq.popleft()
             self._write_now(cmd)
@@ -258,7 +345,7 @@ class SerialWorker(threading.Thread):
         if self.seq:
             cmd, expect, _tries = self.seq[0]
             if expect and expect in line:
-                self.log_q.put(f"[viewer] confirmed: {cmd}")
+                self.log_q.put(f"[viewer] confirmed: {cmd_text(cmd)}")
                 self.seq.popleft()
                 self.seq_last_send = 0.0  # next step goes out immediately
 
@@ -280,8 +367,13 @@ class SerialWorker(threading.Thread):
                     count = data.get("count", 0)
                     if count <= 3 or count % 20 == 0:
                         self.log_q.put(f"[frame] #{count} {len(jpeg)} bytes")
+                    md = data.get("md")     # 64 hex chars, absent without an HM0360
+                    try:
+                        md = bytes.fromhex(md) if isinstance(md, str) and len(md) == 64 else None
+                    except ValueError:
+                        md = None
                     self.frame_q.put((data.get("count", 0),
-                                      data.get("resolution", [0, 0]), jpeg))
+                                      data.get("resolution", [0, 0]), jpeg, md))
                     # frame boundary = the quiet window: send any pending step
                     self._pump_seq(force=True)
                     return
@@ -292,6 +384,14 @@ class SerialWorker(threading.Thread):
                     return
         self._confirm(line)
         now = time.monotonic()
+        m = CAMERA_RE.search(line)
+        if m:
+            camera = m.group(1) or m.group(2)
+            if camera != self.camera:
+                self.camera = camera
+                if not self.interval_fixed:
+                    self.interval_ms = INTERVAL_DEFAULT_MS.get(camera, INTERVAL_FALLBACK_MS)
+                self.log_q.put(f"[viewer] camera {camera}: frame interval {self.interval_ms} ms")
         if CAPTURE_OK in line or BURST_START_RE.search(line):
             # A capture is running, so the cold-boot period is evidently over
             self.capture_busy = True
@@ -375,6 +475,7 @@ class SerialWorker(threading.Thread):
         # Probe: if the device is already awake this confirms and arms;
         # if it is asleep the probe goes nowhere and the boot catcher arms.
         self.enqueue_verified([("ver", "WW500"), KEEPAWAKE_STEP])
+        self.send("camera")         # sets the default frame interval (CAMERA_RE)
         self.arm("connected")
 
         buf = bytearray()
@@ -425,6 +526,10 @@ class Viewer:
         self.log_q = worker.log_q
         self.closing_deadline = None   # set by close()
         self.last_jpeg = None
+        self.last_img = None           # decoded frame, before the MD overlay
+        self.last_md = None            # its 32 ROI_OUT bytes, or None
+        self.md_text = "-"
+        self.md_row16_warned = False
         self.last_rearm = time.monotonic()
         self.frame_times = deque(maxlen=10)
         self.photo = None  # keep a reference or tkinter drops the image
@@ -451,7 +556,37 @@ class Viewer:
         tk.Button(side, text="Free run", command=self.start_stream).pack(fill=tk.X)
         tk.Button(side, text="Stop", command=self.stop_stream).pack(fill=tk.X, pady=(4, 0))
         tk.Button(side, text="One image", command=self.one_image).pack(fill=tk.X, pady=(4, 0))
-        tk.Button(side, text="Save frame", command=self.save_frame).pack(fill=tk.X, pady=(4, 12))
+        tk.Button(side, text="Save frame", command=self.save_frame).pack(fill=tk.X, pady=(4, 8))
+
+        # MD grid overlay (HM0360 motion bits sent with each frame)
+        self.show_md = tk.BooleanVar(value=True)
+        self.md_rows = tk.IntVar(value=MD_ROWS_DEFAULT)
+        self.md_mirror = tk.BooleanVar(value=False)
+        self.md_flip = tk.BooleanVar(value=False)
+        tk.Label(side, text="MD grid:").pack(anchor="w")
+        md_box = tk.Frame(side)
+        md_box.pack(fill=tk.X, pady=(0, 12))
+        tk.Checkbutton(md_box, text="Show", variable=self.show_md,
+                       command=self._render).grid(row=0, column=0, sticky="w")
+        tk.Radiobutton(md_box, text="15 rows", variable=self.md_rows, value=15,
+                       command=self._render).grid(row=0, column=1, sticky="w")
+        tk.Radiobutton(md_box, text="16 rows", variable=self.md_rows, value=16,
+                       command=self._render).grid(row=0, column=2, sticky="w")
+        tk.Checkbutton(md_box, text="Mirror", variable=self.md_mirror,
+                       command=self._render).grid(row=1, column=0, sticky="w")
+        tk.Checkbutton(md_box, text="Flip", variable=self.md_flip,
+                       command=self._render).grid(row=1, column=1, sticky="w")
+
+        # Frame interval for free run: set from the camera type, or by hand.
+        # Takes effect from the next burst.
+        tk.Label(side, text="Interval (ms):").pack(anchor="w")
+        self.interval_var = tk.StringVar(value=str(worker.interval_ms))
+        self.interval_shown = worker.interval_ms
+        spin = tk.Spinbox(side, from_=INTERVAL_MIN_MS, to=5000, increment=10, width=8,
+                          textvariable=self.interval_var, command=self._interval_changed)
+        spin.pack(anchor="w", pady=(0, 12))
+        spin.bind("<Return>", self._interval_changed)
+        spin.bind("<FocusOut>", self._interval_changed)
 
         tk.Label(side, text="Command:").pack(anchor="w")
         self.cmd_entry = tk.Entry(side, width=28, font=("Consolas", 10))
@@ -492,14 +627,16 @@ class Viewer:
         mode = self._mode_text()
         if info is None:
             self.status.config(text=(f"mode      {mode}\nframes    -\nsize      -\n"
-                                     f"fps       -\ndropped   {self.worker.dropped}"))
+                                     f"fps       -\ndropped   {self.worker.dropped}\n"
+                                     f"motion    -"))
             return
         count, res, kbytes, fps = info
         self.status.config(text=(f"mode      {mode}\n"
                                  f"frames    {count}\n"
                                  f"size      {kbytes:.1f} KB  {res[0]}x{res[1]}\n"
                                  f"fps       {fps:.2f}\n"
-                                 f"dropped   {self.worker.dropped}"))
+                                 f"dropped   {self.worker.dropped}\n"
+                                 f"motion    {self.md_text}"))
 
     def start_stream(self):
         self.worker.free_run = True
@@ -516,6 +653,18 @@ class Viewer:
         if self.worker.capture_busy:
             self._append_log(f"[viewer] stopping after the current burst "
                              f"(up to {BURST_FRAMES} frames)")
+
+    def _interval_changed(self, _event=None):
+        try:
+            ms = max(INTERVAL_MIN_MS, int(self.interval_var.get()))
+        except ValueError:
+            ms = self.worker.interval_ms
+        self.interval_var.set(str(ms))
+        if ms != self.worker.interval_ms:
+            self.worker.interval_ms = ms
+            self.worker.interval_fixed = True   # a camera reply no longer overrides it
+            self._append_log(f"[viewer] frame interval {ms} ms (from the next burst)")
+        self.interval_shown = ms
 
     def one_image(self):
         self.worker.free_run = False
@@ -553,7 +702,7 @@ class Viewer:
         self.log.see(tk.END)
         self.log.config(state=tk.DISABLED)
 
-    def _show_frame(self, count, res, jpeg):
+    def _show_frame(self, count, res, jpeg, md=None):
         self.last_jpeg = jpeg
         now = time.monotonic()
         self.frame_times.append(now)
@@ -569,11 +718,36 @@ class Viewer:
             self.worker.dropped += 1
             self._append_log(f"[viewer] undecodable JPEG ({e})")
             return
+        self.last_img = img
+        self.last_md = md
+        self._render()
+        self._set_status((count, res, len(jpeg) / 1024.0, fps))
+
+    def _render(self):
+        """Display the last frame, with the MD grid if enabled. Also called
+        when an MD grid control changes, to redraw the same frame."""
+        if self.last_img is None:
+            return
+        img = self.last_img
+        if self.show_md.get():
+            rows = self.md_rows.get()
+            img, n, outside = draw_md_grid(img, self.last_md, rows,
+                                           self.md_mirror.get(), self.md_flip.get())
+            if self.last_md is None:
+                self.md_text = "no data"
+            else:
+                self.md_text = f"{n} cells" + (f" (+{outside} beyond row {rows})" if outside else "")
+                if outside and not self.md_row16_warned:
+                    self.md_row16_warned = True
+                    self._append_log(f"[viewer] MD bits set beyond row {rows}: "
+                                     f"the grid may have 16 rows, try '16 rows'")
+        else:
+            self.md_text = "hidden"
         if img.width > DISPLAY_MAX[0] or img.height > DISPLAY_MAX[1]:
+            img = img.copy()
             img.thumbnail(DISPLAY_MAX)
         self.photo = ImageTk.PhotoImage(img)
         self.image_label.config(image=self.photo, text="", width=img.width, height=img.height)
-        self._set_status((count, res, len(jpeg) / 1024.0, fps))
 
     def poll(self):
         try:
@@ -603,6 +777,11 @@ class Viewer:
             w.capture_busy = False
             w.arm("stream quiet", with_preview=False)
             self.last_rearm = now
+
+        # show an interval chosen by the worker (from the camera type)
+        if w.interval_ms != self.interval_shown:
+            self.interval_shown = w.interval_ms
+            self.interval_var.set(str(w.interval_ms))
 
         self._set_status(None)
         self.root.after(30, self.poll)
@@ -640,7 +819,7 @@ class Viewer:
             self.root.after(100, self._finish_close)
             return
         if w.seq:
-            left = ", ".join(step[0] for step in w.seq)
+            left = ", ".join(cmd_text(step[0]) for step in w.seq)
             print(f"[viewer] WARNING: not confirmed, the device may be asleep: {left}. "
                   f"Type these at the console when it is awake.", flush=True)
         else:
@@ -664,12 +843,18 @@ def main():
     ap.add_argument("--wake", type=int, default=0, metavar="SECONDS",
                     help="after a cold boot, set a timelapse wake (op7) of this many "
                          "seconds so the device wakes and can capture (op7 is set to 0 on close)")
+    ap.add_argument("--interval", type=int, default=None, metavar="MS",
+                    help="free-run frame interval in ms (default by camera: "
+                         + ", ".join(f"{k} {v}" for k, v in INTERVAL_DEFAULT_MS.items())
+                         + f"; minimum {INTERVAL_MIN_MS})")
     args = ap.parse_args()
 
     frame_q = queue.Queue()
     log_q = queue.Queue()
     try:
-        worker = SerialWorker(args.port, args.baud, frame_q, log_q, wake_s=args.wake)
+        worker = SerialWorker(args.port, args.baud, frame_q, log_q, wake_s=args.wake,
+                              interval_ms=(None if args.interval is None
+                                           else max(INTERVAL_MIN_MS, args.interval)))
     except serial.SerialException as e:
         print(f"Cannot open {args.port}: {e}", file=sys.stderr)
         print("Is TeraTerm (or another terminal) still holding the port?", file=sys.stderr)

@@ -32,10 +32,11 @@ coming. The default port is COM14 if you leave out `--port`.
 
 | Button | What it does |
 |---|---|
-| Free run | Continuous frames, about 1 per second (RP3) or 1 per 2 seconds (HM0360) |
-| Stop | Stops after the current burst (up to 10 more frames) |
+| Free run | Continuous frames, in bursts of 30 with a short gap (about 0.5 s) between bursts |
+| Stop | Stops after the current burst (up to 30 more frames) |
 | One image | Takes a single frame |
-| Save frame | Saves the last frame to `_Tools/live_frames/` |
+| Save frame | Saves the last frame to `_Tools/live_frames/` (without the grid) |
+| MD grid | Draws the HM0360 motion grid over the image: blue lines between cells, red outline on cells with motion. See [Motion grid overlay](#motion-grid-overlay) |
 
 Type any console command (`setop`, `getop`, `camreg`, `vcm` ...) in the Command box.
 
@@ -84,8 +85,11 @@ streams Himax's own sensor init instead.
 
 ```
 {"type": 1, "name": "INVOKE", "code": 0, "data": {"count": 12,
- "resolution": [640, 480], "boxes": [], "image": "<base64 JPEG>"}}
+ "resolution": [640, 480], "boxes": [], "md": "<64 hex>", "image": "<base64 JPEG>"}}
 ```
+
+* `md` (added 23 Oct 2026) is the HM0360's 32 ROI_OUT motion bytes read for this capture
+  (`preview_setMdBits()`). It is missing when there is no HM0360.
 
 * AE-light-check wakes are not streamed.
 * Throughput at 921600 baud is about 92 KB/s. Measured 23 Oct 2026, one free-run
@@ -102,15 +106,20 @@ py _Tools\live_view.py --port COM4 --wake 10
 ```
 
 Options: `--port` (default COM14), `--baud` (default 921600), `--wake SECONDS` (timelapse
-wake after a cold boot), `--save-dir DIR` (where Save frame writes).
+wake after a cold boot), `--save-dir DIR` (where Save frame writes), `--interval MS`
+(free-run frame interval; by default 20 ms on the HM0360 and 100 ms on the RP3, from the
+device's `camera` reply). The **Interval (ms)** box in the window changes it from the next
+burst.
 
 Shows the live image plus a console log pane, a command box and quick-command
 buttons, so `setop 27 ...`, `setop 28 ...`, `vcm ...`, `camreg ...` can be
 sent **while watching**.
 
-* **Free run** sends `preview 1` + `capture 10 500` and re-arms a new burst each
-  time one ends (`Current captures completed` or `Capture failed`).
-* **Stop** stops re-arming. The firmware cannot cancel a burst, so up to 10 more
+* **Free run** sends `preview 1` + `capture 30 <interval>` and re-arms a new burst the
+  moment one ends (`Current captures completed` or `Capture failed`). Until 23 Oct 2026 the
+  re-arm waited 3 s, so there was a pause of several seconds after every 10 frames (not an
+  error: the viewer was waiting before typing the next `capture`).
+* **Stop** stops re-arming. The firmware cannot cancel a burst, so up to 30 more
   frames arrive. Preview stays on, so they are not saved to SD.
 * **One image** stops free run and takes a single frame (after the current
   burst, if one is running).
@@ -126,6 +135,34 @@ sent **while watching**.
 The status panel shows the mode: free run, stopped, busy, one image or cold boot.
 
 Close TeraTerm first - Windows COM ports are exclusive.
+
+## Motion grid overlay
+
+Added 23 Oct 2026, **not yet checked against real motion.**
+
+* The HM0360 reports motion as one bit per cell. Both contexts set `ROI_H = 0xf0`
+  (columns 0 to 15) and `ROI_V = 0xe0` (rows 0 to 14), so the viewer assumes **16 columns x
+  15 rows**: cells of 40 x 32 pixels on a 640 x 480 frame. The 16th row of bits has always
+  been empty in logs so far. If a bit is ever set there, the status line shows it and the
+  log suggests the **16 rows** option.
+* Bit order follows the firmware's console grid (`hm0360_md_printGrid()`): bit `b` is byte
+  `b / 8`, bit `b % 8` (LSB first), MD cell row `b / 16`, column `b % 16`. **That grid is
+  rotated 180 degrees relative to the JPEG** (bench, 23 Oct 2026: the red cells appeared
+  diagonally opposite the motion). So the viewer rotates it: the console grid's row 0,
+  column 0 is drawn in the image's bottom-right cell. The console printout itself is
+  unchanged, so read it upside down.
+* **Mirror** (left-right) and **Flip** (top-bottom) are further corrections on top of that;
+  both ticked gives the unrotated placement.
+* **To check it:** hold a hand still in one corner for three or four frames (the sensor
+  smooths motion over several frames, `MD_IIR_PARAM` 0x209A). The red cells should be
+  under it. Compare **15 rows** (cells 32 px high, filling the frame) with **16 rows**
+  (cells 30 px high, with the always-empty row now along the top).
+* **What the bits mean during a capture is still an open question.** Each capture switches
+  MD interrupts off (`Inhibiting MD` in the log), and in field use MD runs in context B while
+  the device sleeps, not during captures.
+* **On an RP3 build** the bits come from the HM0360, which has a different lens and
+  position, so the grid is only a rough guide on the RP3 image.
+* The status panel's `motion` line shows how many cells reported motion.
 
 ## Bench session recipe
 
@@ -164,9 +201,11 @@ Notes:
     connecting), it finishes with `dpd`, otherwise the device sits awake for a
     minute before it can sleep and wake.
   * **A power cycle is a cold boot**, so it no longer starts the stream by itself.
-* **Do not use a 0 ms capture interval with the RP3** - `capture N 0` wedges
-  the IMX708 datapath (endless frame timeouts / sensor restarts). 500 ms is
-  reliable; the viewer uses `capture 1000 500` (~1 fps net).
+* **Never use a 0 ms capture interval** (`capture N 0` with N > 1), on either camera. The
+  firmware passes it to `xTimerChangePeriod()`, and FreeRTOS asserts on a zero period
+  (`timers.c`), which now resets the AI processor and used to hang it. This is the likely
+  cause of the July note that it "wedges the IMX708". The viewer never sends less than 1 ms.
+  Found 23 Oct 2026; the firmware should reject 0 (`MIN_IMAGE_INTERVAL` is 0).
 * Captures after a cold boot used to frame-time-out often. That is why the
   firmware now refuses them until the first sleep (see above).
 * The console UART receive path has a 1-character buffer, so the viewer sends

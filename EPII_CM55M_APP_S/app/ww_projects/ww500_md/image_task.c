@@ -1061,6 +1061,13 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
 
 		mdBlocks = hm0360_md_getMDOutput(roiOut, ROIOUTENTRIES);
 
+		if (hm0360_md_isHM0360Present() && !aeCheckOnlyWake) {
+			// Live preview: send these bits with this frame (see preview.c).
+			// Without an HM0360, roiOut was not filled in; AE-check frames
+			// are not streamed, so their bits must not reach the next frame.
+			preview_setMdBits(roiOut, ROIOUTENTRIES);
+		}
+
 		offset += snprintf(msgToMaster + offset,
 		                   MSGTOMASTERLEN - offset,
 		                   "HM0360 motion in %d blocks:\n",

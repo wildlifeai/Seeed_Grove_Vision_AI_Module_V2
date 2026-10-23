@@ -26,6 +26,10 @@ Verified on the bench (details and serial evidence in
   HM0360 build it hit every frame: the IF task logs the I2C send of the motion/AE message to
   the BLE processor, which completes mid-frame. `consoleQuiet()` in `if_task.c` now also holds
   while `preview_isSending()`. Other tasks are not held (23 Oct 2026).
+* **`setop` saves to CONFIG.TXT at once** (`APP_MSG_FATFSTASK_SAVE_CONFIG`), so a bench
+  session's values go to the field with the card. After live-view sessions on 23 Oct 2026 the
+  card held op7 = 10 (a wake every 10 s) and op8 = 60000. `live_view.py` now sets lab-safe
+  values on close; after any other bench work, check `getop 7`, `getop 8` and `getop 11`.
 * **A watchdog runs while the AI processor is awake** (13 Oct 2026, `watchdog.c`). If nothing
   feeds it for 20 s the processor resets and cold-boots. Three things follow. A debugger that
   halts the processor gets reset: type `wdt 0` first, or build without `AWAKE_WATCHDOG`. Code in

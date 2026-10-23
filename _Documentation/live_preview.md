@@ -1,5 +1,62 @@
-# Live Preview - streaming WW500 images to a PC for camera tuning
-#### Claude - 10 July 2026 (branch `feat/uart-live-preview`), updated 23 October 2026 (HM0360 use, viewer modes)
+# Live Preview: live video from the WW500 on a PC
+
+#### File: `live_preview.md`
+#### Author: Claude, first written 10 July 2026; quick start added 23 October 2026
+#### Date: 23 October 2026
+
+`_Tools/live_view.py` is a Python script that shows live video from the WW500 camera on your
+PC, over the console serial cable. It also gives you a command box, so you can change camera
+settings and see the effect on the next frame. It works with both camera builds (RP3 and
+HM0360).
+
+## Quick start
+
+Close TeraTerm or any other terminal first: only one program can use the COM port.
+
+The first time only, install the two Python packages it needs:
+
+```
+py -m pip install pyserial pillow
+```
+
+Then, in a Windows command prompt (`py -m serial.tools.list_ports` lists the COM ports if you
+don't know yours):
+
+```
+cd D:\Development\wildlife.ai\Seeed_Grove_Vision_AI_Module_V2\_Tools
+py live_view.py --port COM4 --wake 10
+```
+
+Then reset or power-cycle the WW500. After about 20 seconds frames start to appear and keep
+coming. The default port is COM14 if you leave out `--port`.
+
+| Button | What it does |
+|---|---|
+| Free run | Continuous frames, about 1 per second (RP3) or 1 per 2 seconds (HM0360) |
+| Stop | Stops after the current burst (up to 10 more frames) |
+| One image | Takes a single frame |
+| Save frame | Saves the last frame to `_Tools/live_frames/` |
+
+Type any console command (`setop`, `getop`, `camreg`, `vcm` ...) in the Command box.
+
+**When you finish, close the window with its close button.** That leaves the device in a quiet
+lab state: no timelapse, no motion detection, short inactivity (`setop 7 0`, `setop 11 0`,
+`setop 8 1000`). These are saved to the SD card, so set up the field values again before a
+deployment.
+
+**Why `--wake 10`?** After a reset the firmware takes no pictures until it has slept once.
+`--wake 10` makes it sleep at once and wake itself 10 s later. Without it, wake the device
+yourself: from the app, or with motion if motion detection is on.
+
+| If you see | Do this |
+|---|---|
+| `Cannot open COM4` | Close TeraTerm, or check the port number |
+| "waiting for frames..." for more than a minute | Reset the device, or use `--wake 10` |
+| `dropped` count climbing | Old firmware: needs the 23 Oct 2026 `if_task.c` fix |
+
+The rest of this document is the detail.
+
+## Background
 
 Answers the problem statement in `Sensecraft.md`: a live stream of video from
 the WW500 onto a laptop so image quality (RP3 white balance, auto-exposure,
@@ -31,15 +88,21 @@ streams Himax's own sensor init instead.
 ```
 
 * AE-light-check wakes are not streamed.
-* Throughput at 921600 baud (~92 KB/s): a VGA JPEG of 25-50 KB costs
-  ~0.4-0.7 s plus capture/NN time, so expect **~1.5-2.5 fps**. Setting the
-  FTDI latency timer to 1 ms helps a little (see `FTDI_Cable_Speed.md`).
+* Throughput at 921600 baud is about 92 KB/s. Measured 23 Oct 2026, one free-run
+  frame takes about 1.0 s on the RP3 (32 ms capture, 270 ms colour correction and
+  re-encode, 0.13 s on the UART, 500 ms interval) and about 1.8 s on the HM0360
+  (about 1 s for the sensor to wake for each frame). Details in
+  `development reports/2026-10-23_mdEnhancements/`. Setting the FTDI latency timer
+  to 1 ms helps a little (see `FTDI_Cable_Speed.md`).
 
 ## The viewer: `_Tools/live_view.py`
 
 ```
-py _Tools\live_view.py            # defaults COM14, 921600
+py _Tools\live_view.py --port COM4 --wake 10
 ```
+
+Options: `--port` (default COM14), `--baud` (default 921600), `--wake SECONDS` (timelapse
+wake after a cold boot), `--save-dir DIR` (where Save frame writes).
 
 Shows the live image plus a console log pane, a command box and quick-command
 buttons, so `setop 27 ...`, `setop 28 ...`, `vcm ...`, `camreg ...` can be
@@ -53,7 +116,12 @@ sent **while watching**.
   burst, if one is running).
 * **Save frame** writes the last JPEG to `_Tools/live_frames/` (git-ignored; change
   with `--save-dir`) for A/B records. The log shows the full path.
-* Closing the window sends `preview 0`.
+* **Closing the window leaves the device quiet**, each step confirmed: `preview 0`,
+  `setop 7 0` (no timelapse), `setop 11 0` (no motion detection), `setop 8 1000`
+  (short inactivity). The firmware saves op params to CONFIG.TXT, so this replaces
+  whatever the card had, including any field MD setting: the viewer is a lab tool.
+  Closing the console instead (or Ctrl+C) skips it, and if the device is asleep the
+  viewer prints which commands were not confirmed.
 
 The status panel shows the mode: free run, stopped, busy, one image or cold boot.
 
@@ -89,7 +157,7 @@ Notes:
     sleep. Something must then wake it: motion (op11 > 0), the app (e.g.
     `AI ver`), or start the viewer with `--wake 10`. That types `setop 7 10`
     (timelapse wake 10 s after DPD) at the cold boot, then `dpd` once camera init
-    is done, and `setop 7 0` on close.
+    is done. Closing the viewer sets op7 back to 0.
   * **Any character typed on the console keeps the device awake for 60 s**
     (`INACTIVITYTIMEOUTCLI`, regardless of op8). So whenever the viewer has typed
     at a cold-booted device (the `--wake` setup, or a refused capture after

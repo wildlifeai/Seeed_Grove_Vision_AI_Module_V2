@@ -5,7 +5,8 @@
 #### Date: 23 October 2026
 
 Answers the task in [README.md](README.md). Six steps, each small enough to do, test and
-review on its own. Nothing here has been coded yet.
+review on its own. Step 2 is done and bench-checked on both cameras (23 Oct); see
+**Progress, end of 23 October 2026** at the end. Steps 3 to 6 are not started.
 
 ## What exists today
 
@@ -65,8 +66,8 @@ claim first written here, that the RP3 avoids this, was wrong. Why July saw it o
 and the last two ROI_OUT bytes are always empty, matching the ROI window ending at row 14
 (`0x354D = 0xe0`).
 
-The earlier suspicion of a genuinely dark HM0360 JPEG is now unlikely, but check it once
-frames display. The current makefile builds the HM0360 variant, live
+The earlier suspicion of a genuinely dark HM0360 JPEG is ruled out: once frames displayed
+(23 Oct), they looked normal. The current makefile builds the HM0360 variant, live
 view was only ever proven on the RP3, and an HM0360 frame indoors without IR illumination
 can be genuinely near-black. The `Black_image_findings.md` doc records HM0360 JPEGs that
 decode but display black. Quick check: press **Save frame** and open the file, and compare
@@ -76,7 +77,9 @@ Please record `ver` and `slots` with the result.
 
 ## Step 2. Fix whatever step 1 finds, then document live view
 
-**Status 23 Oct: both changes below coded, not yet built or benched.** The viewer also gained
+**Status 23 Oct: both changes below coded, built and benched on the HM0360 and RP3 builds;
+they work.** The cold-boot handling ended up different from the plan below (it sends `dpd`);
+see the Progress section at the end. The viewer also gained
 free run in 10-frame bursts (so Stop takes effect within a burst), a **One image** button,
 and `--wake N` (timelapse wake after a cold boot). `live_preview.md` is updated to match.
 The viewer's state machine was checked off-device against a scripted console transcript.
@@ -104,7 +107,8 @@ The viewer's state machine was checked off-device against a scripted console tra
 **Open question:** what wakes the device from DPD at the bench? A power cycle is another
 cold boot. That leaves motion (waving at the lens), a timelapse interval, or the BLE
 processor. The doc must give one dependable recipe. A short timelapse, set from the viewer
-before the device sleeps, is probably the easiest.
+before the device sleeps, is probably the easiest. *(Answered: `live_view.py --wake N`, which
+also sends `dpd`; motion or the app's `AI ver` work too.)*
 
 Other fixes depend on what step 1 finds, for example an HM0360 exposure or flash setting
 during preview. Then rewrite `_Documentation/live_preview.md` as the user
@@ -237,3 +241,9 @@ The viewer would need a per-camera interval, e.g. taken from the
 and position from the RP3, so an overlay won't line up cell for cell. Each HM0360 capture also
 prints `Inhibiting MD`, so MD interrupts are off during captures.
 
+
+**Later on 23 Oct, close behaviour.** The bench showed op7 = 10 and op8 = 60000 left on the
+card after viewer sessions (setop values are saved to CONFIG.TXT straight away). Agreed with
+Charles: the viewer is a lab tool, so on close it sets lab-safe values rather than restoring
+earlier ones. These are `preview 0`, `setop 7 0`, `setop 11 0` and `setop 8 1000`. Each is
+confirmed; if the device is asleep, the viewer lists what wasn't confirmed.

@@ -29,7 +29,7 @@ device with 'ver' and arms. If the device is asleep it waits for a boot banner:
    sleep."), so the viewer lets it sleep. Something then has to wake it: motion
    (op11 > 0), the app, or a timelapse. With --wake N the viewer types
    'setop 7 N' at the cold boot, then 'dpd' once camera init is done, so the
-   device wakes N s later; 'setop 7 0' on close. ('dpd' is needed because any
+   device wakes N s later. ('dpd' is needed because any
    character typed on the console keeps the device awake for 60 s.)
 
 Usage:
@@ -51,7 +51,10 @@ NOTES
    frame line; it is counted as 'dropped' and skipped.
  - op8 (inactivity) is 16-bit: 60000 ms is the usable maximum. Streaming
    resets the timer continuously, so the device stays awake while you tune.
-   Restore field behaviour when done: setop 8 1000
+ - Closing the window leaves the device quiet for the lab, each step confirmed:
+   preview 0, setop 7 0 (no timelapse), setop 11 0 (no motion detection),
+   setop 8 1000 (short inactivity). These are saved to CONFIG.TXT, so they
+   replace whatever the card had. Killing the console instead skips this.
 """
 
 import argparse
@@ -120,6 +123,18 @@ PREVIEW_STEP = ("preview 1", "Preview mode 1")
 # goes out earlier, at CLI-up (safe before the camera init).
 ARM_SEQUENCE = [PREVIEW_STEP, (CAPTURE_CMD, CAPTURE_OK)]
 SINGLE_SEQUENCE = [PREVIEW_STEP, (SINGLE_CMD, CAPTURE_OK)]
+
+# Sent on close, each confirmed. The viewer is a lab tool, so it leaves the
+# device quiet rather than restoring earlier values: no timelapse (op7), no
+# motion detection (op11), the default short inactivity period (op8). All three
+# are saved to CONFIG.TXT by the firmware.
+CLOSE_SEQUENCE = [
+    ("preview 0", "Preview off"),
+    ("setop 7 0", "Set OpParam 7 = 0"),
+    ("setop 11 0", "Set OpParam 11 = 0"),
+    ("setop 8 1000", "Set OpParam 8 = 1000"),
+]
+CLOSE_TIMEOUT_S = 10.0         # give up confirming after this (device asleep?)
 
 COLD_BOOT_HINT = ("[viewer] cold boot: the firmware refuses captures until it has slept once, "
                   "so letting it sleep. It needs something to wake it: run the viewer with "
@@ -408,6 +423,7 @@ class Viewer:
         self.save_dir = save_dir
         self.frame_q = worker.frame_q
         self.log_q = worker.log_q
+        self.closing_deadline = None   # set by close()
         self.last_jpeg = None
         self.last_rearm = time.monotonic()
         self.frame_times = deque(maxlen=10)
@@ -592,25 +608,50 @@ class Viewer:
         self.root.after(30, self.poll)
 
     def close(self):
+        """Leave the device quiet: preview off, then the lab-safe op values
+        (CLOSE_SEQUENCE), each confirmed by the device. Each setop is saved to
+        CONFIG.TXT, so without this a session's keep-awake and --wake
+        timelapse would stay on the card."""
+        if self.closing_deadline is not None:
+            return  # already closing
         w = self.worker
+        w.free_run = False
+        w.single_pending = False
+        w.autoarm_enabled = False   # a boot now must not clear the close queue
+        w.arm_at = None
+        w.sleep_at = None
+        w.seq.clear()
+        w.enqueue_verified(CLOSE_SEQUENCE)
+        w.seq_last_send = 0.0       # first step goes out at once
+        self._append_log("[viewer] closing: resetting the device to lab-safe values "
+                         "(preview off, op7 0, op11 0, op8 1000)")
+        self.closing_deadline = time.monotonic() + CLOSE_TIMEOUT_S
+        self._finish_close()
+
+    def _finish_close(self):
+        w = self.worker
+        # drain the log so the confirmations show while closing
         try:
-            # Stop the reader, then type the closing commands directly: the
-            # send queue only paces one command per SEND_RETRY_S
-            w.free_run = False
-            w.stop()
-            w.join(timeout=1.0)
-            w._write_now("preview 0")
-            if w.wake_set:
-                time.sleep(0.3)
-                w._write_now("setop 7 0")  # undo the --wake timelapse
+            while True:
+                self._append_log(self.log_q.get_nowait())
+        except queue.Empty:
+            pass
+        if w.seq and time.monotonic() < self.closing_deadline and w.is_alive():
+            self.root.after(100, self._finish_close)
+            return
+        if w.seq:
+            left = ", ".join(step[0] for step in w.seq)
+            print(f"[viewer] WARNING: not confirmed, the device may be asleep: {left}. "
+                  f"Type these at the console when it is awake.", flush=True)
+        else:
+            print("[viewer] device reset to lab-safe values", flush=True)
+        w.stop()
+        w.join(timeout=1.0)
+        try:
+            w.ser.close()
         except serial.SerialException:
             pass
-        finally:
-            try:
-                w.ser.close()
-            except serial.SerialException:
-                pass
-            self.root.destroy()
+        self.root.destroy()
 
 
 def main():
@@ -622,7 +663,7 @@ def main():
                     help="folder for 'Save frame' (default: live_frames beside this script)")
     ap.add_argument("--wake", type=int, default=0, metavar="SECONDS",
                     help="after a cold boot, set a timelapse wake (op7) of this many "
-                         "seconds so the device wakes and can capture; cleared on close")
+                         "seconds so the device wakes and can capture (op7 is set to 0 on close)")
     args = ap.parse_args()
 
     frame_q = queue.Queue()

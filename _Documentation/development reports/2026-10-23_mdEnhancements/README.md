@@ -54,11 +54,11 @@ steps that we can carry out one at a time. Place it in the same folder as this d
 
 ## Status
 
-Open. Step 2 of the proposal done and bench-checked on 23 October 2026 (HM0360 build); steps 3 to 6 not started.
+Open. Step 2 of the proposal done and bench-checked on 23 October 2026 (HM0360 and RP3 builds); steps 3 to 6 not started.
 
 ## Outcome (so far)
 
-The live view now works on the HM0360 build: Free run, Stop, One image and Save frame all
+The live view now works on both builds (HM0360 and RP3): Free run, Stop, One image and Save frame all
 produce visible frames. The black image area had two causes:
 
 1. **Every frame was corrupted.** The IF task's console prints, logging the motion/AE message

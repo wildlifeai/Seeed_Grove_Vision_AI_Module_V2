@@ -34,6 +34,16 @@ typedef struct {
 	uint8_t aeConverged;	// Value of AE_CONVERGED
 } HM0360_GAIN_T;
 
+// Motion detection status and settings, read once per frame for the live preview
+// so the MD interrupt can be compared with the ROI_OUT cell count
+typedef struct {
+	uint8_t intIndic;		// INT_INDIC (0x2064): [3] MD interrupt
+	uint8_t mdCtrl;			// MD_CTRL (0x2080): [5:4] latency mode, [0] enable
+	uint8_t mdCtrl1;		// MD_CTRL1 (0x209E): [1] interrupt enable, [0] 0 = original flag, 1 = latency flag
+	uint8_t blockNumThA;	// Context A MD_BLOCK_NUM_TH (0x354C)
+	uint8_t blockNumThB;	// Context B MD_BLOCK_NUM_TH (0x35A6)
+} HM0360_MD_STATUS_T;
+
 // Select streaming mode by writing to 0x0100.
 // See data sheet 6.1 & 10.2
 typedef enum {
@@ -98,6 +108,12 @@ HX_CIS_ERROR_E hm0360_md_getMode(mode_select_t *mode);
 HX_CIS_ERROR_E hm0360_md_setModeSelectOnly(mode_select_t mode);
 
 uint16_t hm0360_md_getMDOutput(uint8_t * regTable, uint8_t length);
+
+// Read the MD interrupt status and the registers that decide it (live preview)
+HX_CIS_ERROR_E hm0360_md_getMDStatus(HM0360_MD_STATUS_T * val);
+
+// Set MD_BLOCK_NUM_TH in the main bank and both contexts (not saved; the register table restores it)
+HX_CIS_ERROR_E hm0360_md_setBlockThreshold(uint8_t threshold);
 
 void hm0360_md_printGrid(uint8_t *roiOut, uint16_t numBlocks, char *msg, uint16_t msgLen);
 

@@ -20,6 +20,8 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#include "hm0360_md.h"	// HM0360_MD_STATUS_T
+
 /*********************************************** Global Defines **********************************************/
 
 
@@ -86,6 +88,18 @@ bool preview_isSending(void);
  * @param length number of bytes in roiOut (must be 32).
  */
 void preview_setMdBits(const uint8_t *roiOut, uint8_t length);
+
+/**
+ * @brief Record the HM0360 MD interrupt status for the next frame.
+ *
+ * Read at the start of the frame handling, before the image task clears the
+ * HM0360 interrupt bits, and sent with that frame's line as "mdstat" so the
+ * viewer can compare the MD interrupt with the motion cell count. Ignored
+ * unless preview is on.
+ *
+ * @param status the registers read by hm0360_md_getMDStatus().
+ */
+void preview_setMdStatus(const HM0360_MD_STATUS_T *status);
 
 /**
  * @brief Emit the JPEG of the capture just completed as one JSON line on the

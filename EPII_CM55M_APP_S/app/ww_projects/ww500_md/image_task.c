@@ -917,6 +917,15 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
         		(woken == APP_WAKE_REASON_BLE) ? "BLE" : "other");
 
 #if defined(USE_HM0360) || defined(USE_HM0360_MD)
+        if (preview_isActive() && !aeCheckOnlyWake) {
+        	// Live preview: send the MD interrupt status with this frame, read before the clear below
+        	HM0360_MD_STATUS_T mdStatus;
+
+        	if (hm0360_md_getMDStatus(&mdStatus) == HX_CIS_NO_ERROR) {
+        		preview_setMdStatus(&mdStatus);
+        	}
+        }
+
         // By deferring the clearing of the interrupt till here we can measure the latency of interrupt to image captured.
         // This writes to register 0x2065 - we could put this into the big config file?
         hm0360_md_clearInterrupt(0xff); // clear all bits

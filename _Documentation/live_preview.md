@@ -2,7 +2,7 @@
 
 #### File: `live_preview.md`
 #### Author: Claude, first written 10 July 2026; quick start added 23 October 2026
-#### Date: 23 October 2026
+#### Date: 24 October 2026
 
 `_Tools/live_view.py` is a Python script that shows live video from the WW500 camera on your
 PC, over the console serial cable. It also gives you a command box, so you can change camera
@@ -36,9 +36,11 @@ coming. The default port is COM14 if you leave out `--port`.
 | Stop | Stops after the current burst (up to 30 more frames) |
 | One image | Takes a single frame |
 | Save frame | Saves the last frame to `_Tools/live_frames/` (without the grid) |
-| MD grid | Draws the HM0360 motion grid over the image: blue lines between cells, red outline on cells with motion. See [Motion grid overlay](#motion-grid-overlay) |
+| MD grid | Draws the HM0360 motion grid over the image: blue lines between cells, red outline on cells with motion. The **WAKE** lamp shows whether the frame would wake the device. See [Motion grid overlay](#motion-grid-overlay) |
 
-Type any console command (`setop`, `getop`, `camreg`, `vcm` ...) in the Command box.
+Type any console command (`setop`, `getop`, `camreg`, `vcm` ...) in the Command box (right-hand
+column). **Log to file** (on by default) writes everything in the log pane, with timestamps, to
+`_Tools/live_frames/live_log_<date>_<time>.txt`; the path is shown under the box.
 
 **When you finish, close the window with its close button.** That leaves the device in a quiet
 lab state: no timelapse, no motion detection, short inactivity (`setop 7 0`, `setop 11 0`,
@@ -138,31 +140,73 @@ Close TeraTerm first - Windows COM ports are exclusive.
 
 ## Motion grid overlay
 
-Added 23 Oct 2026, **not yet checked against real motion.**
+Added 23 Oct 2026. Orientation and row count checked on the bench 24 Oct 2026.
 
-* The HM0360 reports motion as one bit per cell. Both contexts set `ROI_H = 0xf0`
-  (columns 0 to 15) and `ROI_V = 0xe0` (rows 0 to 14), so the viewer assumes **16 columns x
-  15 rows**: cells of 40 x 32 pixels on a 640 x 480 frame. The 16th row of bits has always
-  been empty in logs so far. If a bit is ever set there, the status line shows it and the
-  log suggests the **16 rows** option.
-* Bit order follows the firmware's console grid (`hm0360_md_printGrid()`): bit `b` is byte
-  `b / 8`, bit `b % 8` (LSB first), MD cell row `b / 16`, column `b % 16`. **That grid is
-  rotated 180 degrees relative to the JPEG** (bench, 23 Oct 2026: the red cells appeared
-  diagonally opposite the motion). So the viewer rotates it: the console grid's row 0,
-  column 0 is drawn in the image's bottom-right cell. The console printout itself is
-  unchanged, so read it upside down.
-* **Mirror** (left-right) and **Flip** (top-bottom) are further corrections on top of that;
-  both ticked gives the unrotated placement.
-* **To check it:** hold a hand still in one corner for three or four frames (the sensor
-  smooths motion over several frames, `MD_IIR_PARAM` 0x209A). The red cells should be
-  under it. Compare **15 rows** (cells 32 px high, filling the frame) with **16 rows**
-  (cells 30 px high, with the always-empty row now along the top).
-* **What the bits mean during a capture is still an open question.** Each capture switches
-  MD interrupts off (`Inhibiting MD` in the log), and in field use MD runs in context B while
-  the device sleeps, not during captures.
+* The HM0360 reports motion as one bit per cell, in 32 `ROI_OUT` registers (0x20A1 to
+  0x20C0). The viewer draws **16 columns x 16 rows** (cells of 40 x 30 pixels): on the bench
+  motion shows in all 16 rows, although the datasheet gives 16 x 15 for VGA and `ROI_V =
+  0xe0` selects rows 0 to 14. **15 rows** is kept to compare.
+* Bit `b` is byte `b / 8`, bit `b % 8` (LSB first), row `b / 16`, column `b % 16`, the
+  order of the console grid (`hm0360_md_printGrid()`). The sensor's own order is reversed
+  (MD application note, figure 4.1), so the viewer rotates it 180 degrees. Read the console
+  printout upside down.
+* The sensor smooths motion over several frames (`MD_IIR_PARAMETER` 0x209A), so hold a hand
+  still for three or four frames before judging where the cells are.
 * **On an RP3 build** the bits come from the HM0360, which has a different lens and
   position, so the grid is only a rough guide on the RP3 image.
-* The status panel's `motion` line shows how many cells reported motion.
+
+### Would this frame wake the device?
+
+Added 24 Oct 2026. The firmware sends each frame's `"mdstat"` (`INT_INDIC` 0x2064, `MD_CTRL`
+0x2080, `MD_CTRL1` 0x209E, and `MD_BLOCK_NUM_TH` for context A, 0x354C, and B, 0x35A6).
+
+The HM0360 raises its motion flag when the number of cells with motion is **greater than**
+`MD_BLOCK_NUM_TH` (MD application note 3.1). With `MD_CTRL1` bit 0 = 0, as the firmware sets
+it, that flag drives the MD interrupt that wakes the device. On the bench (24 Oct 2026) the
+interrupt came on at exactly the first frame where cells exceeded the threshold, and never
+with the lens taped. So the viewer predicts a wake per frame from the cell count:
+
+| Status line | Meaning |
+|---|---|
+| `motion` | Cells with motion in this frame |
+| `threshold` | `MD_BLOCK_NUM_TH`, context A (preview frames), B in brackets (sleep) |
+| `wake` | `YES` when cells > threshold; the **WAKE** lamp goes red |
+| `wakes` | Frames that would have woken the device, out of all frames, since **Free run** |
+
+The log gets an `[md]` line whenever the prediction changes, with the raw registers for
+reference.
+
+* `INT_INDIC` itself is not shown: during a burst the firmware's per-frame clear does not
+  take effect, so the bit stays set after the first motion (bench, 24 Oct 2026). The field
+  wake is not affected.
+* If `MD_CTRL1` bit 0 is ever set (interrupt follows the latency logic), the status shows a
+  `NOTE`: the prediction does not model latency.
+* Preview frames are context A (VGA). The wake uses context B (QVGA, one frame per op 11
+  interval), so a sleep test still decides what wakes the device.
+
+### MD controls
+
+| Control | Sends | Notes |
+|---|---|---|
+| Sensitivity Low / Med / High | `md 1`, `md 2`, `md 3` | Sets op 17, which is saved to CONFIG.TXT at the next sleep. The viewer reads op 17 at connect (`getop 17`) and puts it back on close if it was changed |
+| Wake threshold (cells) | `mdth N` | `MD_BLOCK_NUM_TH`, written to the main bank and contexts A and B. **Not saved:** a cold boot or `inithm0360` restores the register table's value (4) |
+
+`mdth` with no number replies with the current values (`MD threshold A = 4, B = 4`).
+
+### Set the interval to match the field before judging the controls
+
+With `USE_HM0360_CAPTURE_TIMER` (defined in the HM0360 build) the HM0360 takes the burst's
+frames by itself: one frame, then a sleep of the capture interval, then the next. MD runs on
+**every** sensor frame and compares it with the previous one. The AI processor needs about
+200 ms to stream a frame, then takes whichever sensor frame comes next. So:
+
+* **At the default 20 ms interval** the sensor makes a frame about every 55 ms, but only
+  about one in four is shown. The `ROI_OUT` bits of the others are overwritten unseen.
+* **Slow movement is missed for a second reason:** frames 55 ms apart differ too little
+  for a slowly moving object to pass the per-cell threshold. In the field the frames are an
+  op 11 interval apart, so the same movement makes a bigger difference between frames.
+* **Set Interval to the field's op 11 value** (it must be over about 250 ms). Then every
+  sensor frame is shown and MD compares frames as far apart as in the field.
 
 ## Bench session recipe
 

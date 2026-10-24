@@ -728,6 +728,68 @@ uint16_t hm0360_md_getMDOutput(uint8_t * regTable, uint8_t length) {
 }
 
 /**
+ * Reads the MD interrupt status and the registers that decide it.
+ *
+ * For the live preview, so the viewer can compare the MD interrupt with the
+ * number of ROI_OUT cells showing motion. See the HM0360 MD application note
+ * sections 3.1 (block number threshold) and 3.2 (latency).
+ *
+ * @param val - pointer to a structure that accepts the results
+ * @return error code
+ */
+HX_CIS_ERROR_E hm0360_md_getMDStatus(HM0360_MD_STATUS_T * val) {
+	HX_CIS_ERROR_E ret;
+
+	// Don't proceed if the HM0360 is missing or faulty
+	if (!hm0360_present) {
+		return HX_CIS_UNKNOWN_ERROR;
+	}
+
+	saveMainCameraConfig();
+
+	ret = hx_drv_cis_get_reg(INT_INDIC, &val->intIndic);
+	ret |= hx_drv_cis_get_reg(MD_CTRL, &val->mdCtrl);
+	ret |= hx_drv_cis_get_reg(MD_CTRL1, &val->mdCtrl1);
+	ret |= hx_drv_cis_get_reg(MD_BLOCK_NUM_TH_A, &val->blockNumThA);
+	ret |= hx_drv_cis_get_reg(MD_BLOCK_NUM_TH_B, &val->blockNumThB);
+
+	restoreMainCameraConfig();
+
+	return ret;
+}
+
+/**
+ * Sets the MD block number threshold: the motion flag (and so the MD interrupt)
+ * is raised when more than this many cells show motion. See the HM0360 MD
+ * application note section 3.1.
+ *
+ * Written to the main bank and to contexts A and B, so live preview (context A)
+ * and the motion wake (context B) use the same value. Not saved: the HM0360
+ * register table puts back its own value at the next cold boot or 'inithm0360'.
+ *
+ * @param threshold - number of cells (1 to 255)
+ * @return error code
+ */
+HX_CIS_ERROR_E hm0360_md_setBlockThreshold(uint8_t threshold) {
+	HX_CIS_ERROR_E ret;
+
+	// Don't proceed if the HM0360 is missing or faulty
+	if (!hm0360_present) {
+		return HX_CIS_UNKNOWN_ERROR;
+	}
+
+	saveMainCameraConfig();
+
+	ret = hx_drv_cis_set_reg(MD_BLOCK_NUM_TH, threshold, 0);
+	ret |= hx_drv_cis_set_reg(MD_BLOCK_NUM_TH_A, threshold, 0);
+	ret |= hx_drv_cis_set_reg(MD_BLOCK_NUM_TH_B, threshold, 0);
+
+	restoreMainCameraConfig();
+
+	return ret;
+}
+
+/**
  * Format a string that can print a 16x16 array showing where motion bits are detected
  *
  * @param regTable - address of the buffer that holds the ROI register data

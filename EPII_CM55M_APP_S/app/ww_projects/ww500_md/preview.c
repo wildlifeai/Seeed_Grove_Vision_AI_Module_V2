@@ -7,10 +7,14 @@
  * Frame line format (one line per frame, CR ... LF):
  *
  *   {"type": 1, "name": "INVOKE", "code": 0, "data": {"count": N,
- *    "resolution": [W, H], "boxes": [], "md": "<64 hex>", "image": "<base64 JPEG>"}}
+ *    "resolution": [W, H], "boxes": [], "md": "<64 hex>",
+ *    "mdstat": {"int": N, "ctrl": N, "ctrl1": N, "thA": N, "thB": N},
+ *    "image": "<base64 JPEG>"}}
  *
  * "md" (the HM0360's 32 ROI_OUT motion bytes for this capture) is present
- * only when the image task supplied them - see preview_setMdBits().
+ * only when the image task supplied them - see preview_setMdBits(). "mdstat"
+ * (INT_INDIC, MD_CTRL, MD_CTRL1 and the context A and B MD_BLOCK_NUM_TH
+ * registers, as decimal numbers) likewise - see preview_setMdStatus().
  *
  * This is the same framing the Himax/SSCMA scenario apps use (see
  * app/scenario_app/tflm_fd_fm/send_result.cpp), so as well as
@@ -68,6 +72,11 @@ static volatile bool frameSending = false;
 // Sent once as the frame's "md" field, then invalidated.
 static uint8_t mdBits[PREVIEW_MD_BYTES];
 static bool mdValid = false;
+
+// HM0360 MD interrupt status for the frame about to be sent (preview_setMdStatus()).
+// Sent once as the frame's "mdstat" field, then invalidated.
+static HM0360_MD_STATUS_T mdStatus;
+static bool mdStatusValid = false;
 
 static const char BASE64_CHARS[] =
 		"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
@@ -137,6 +146,7 @@ void preview_setMode(PREVIEW_MODE_E mode) {
 	if (mode == PREVIEW_OFF) {
 		frameCount = 0;
 		mdValid = false;
+		mdStatusValid = false;
 	}
 }
 
@@ -202,6 +212,25 @@ void preview_setMdBits(const uint8_t *roiOut, uint8_t length) {
 }
 
 /**
+ * @brief Record the HM0360 MD interrupt status for the next frame.
+ *
+ * Read at the start of the frame handling, before the image task clears the
+ * HM0360 interrupt bits, and sent with that frame's line as "mdstat" so the
+ * viewer can compare the MD interrupt with the motion cell count. Ignored
+ * unless preview is on.
+ *
+ * @param status the registers read by hm0360_md_getMDStatus().
+ */
+void preview_setMdStatus(const HM0360_MD_STATUS_T *status) {
+	if ((previewMode == PREVIEW_OFF) || (status == NULL)) {
+		return;
+	}
+
+	mdStatus = *status;
+	mdStatusValid = true;
+}
+
+/**
  * @brief Emit the JPEG of the capture just completed as one JSON line on the
  * console UART.
  *
@@ -249,6 +278,13 @@ void preview_sendFrame(void) {
 		}
 		xprintf("\", ");
 		mdValid = false;	// these bits belong to this frame only
+	}
+
+	if (mdStatusValid) {
+		xprintf("\"mdstat\": {\"int\": %d, \"ctrl\": %d, \"ctrl1\": %d, \"thA\": %d, \"thB\": %d}, ",
+				mdStatus.intIndic, mdStatus.mdCtrl, mdStatus.mdCtrl1,
+				mdStatus.blockNumThA, mdStatus.blockNumThB);
+		mdStatusValid = false;	// this status belongs to this frame only
 	}
 
 	xprintf("\"image\": \"");

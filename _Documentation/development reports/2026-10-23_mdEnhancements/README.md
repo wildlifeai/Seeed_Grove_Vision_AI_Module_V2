@@ -54,7 +54,7 @@ steps that we can carry out one at a time. Place it in the same folder as this d
 
 ## Status
 
-Open. Step 2 of the proposal done and bench-checked on 23 October 2026 (HM0360 and RP3 builds); steps 3 to 6 not started.
+Open. Step 2 of the proposal done and bench-checked on 23 October 2026 (HM0360 and RP3 builds). Step 4 (MD grid overlay) benched 24 October: orientation right, 16 rows. Step 5 started: the viewer shows the motion flag against the MD interrupt (coded and first benched 24 October). Finding: MD INT stays set and MD_CTRL1 reads 0x06 although the firmware writes 0 each capture; a console test is pending (see the proposal, 24 October section). Steps 3 and 6 not started.
 
 ## Outcome (so far)
 
@@ -81,4 +81,4 @@ live MD controls, op parameters); file issues as each is agreed.
 
 | File | What it is |
 |---|---|
-| [CLAUDE_mdEnhancements_proposal.md](CLAUDE_mdEnhancements_proposal.md) | Stepped plan, with bench findings from 23 Oct |
+| [CLAUDE_mdEnhancements_proposal.md](CLAUDE_mdEnhancements_proposal.md) | Stepped plan, with bench findings from 23 Oct and the 24 Oct register-bank and MD interrupt notes |

@@ -111,6 +111,11 @@ BURST_END_RE = re.compile(r"Current captures completed:|Capture failed after")
 # The image task starting a burst, ours or its own (a motion or timelapse wake
 # captures op5 images by itself)
 BURST_START_RE = re.compile(r"Images to capture: \d+")
+# MD settings: replies to 'getop 17', 'md N' and 'mdth [N]'
+OP17_RE = re.compile(r"OpParam 17 = (\d+)")
+MD_SENS_RE = re.compile(r"MD sensitivity (?:set to|saved as) (\d+)")
+MDTH_RE = re.compile(r"MD threshold A = (\d+), B = (\d+)")
+
 # Camera type: the reply to 'camera', or the end of the boot's camera init
 CAMERA_RE = re.compile(r"^(?:cmd> )?(HM0360|RP3|RP2)$|initialised for camera (HM0360|RP3|RP2)")
 # Firmware refuses captures between a cold boot and the first DPD (captureRefused()
@@ -129,11 +134,11 @@ PREVIEW_STEP = ("preview 1", "Preview mode 1")
 SINGLE_SEQUENCE = [PREVIEW_STEP, (SINGLE_CMD, CAPTURE_OK)]
 
 # HM0360 motion detection grid. Both contexts set ROI_H = 0xf0 (columns 0-15)
-# and ROI_V = 0xe0 (rows 0-14), so on a 640x480 frame the grid is 16 x 15 cells
-# of 40 x 32 pixels, and the 16th row of bits stays empty. The viewer can switch
-# to 16 rows to test that assumption.
+# and ROI_V = 0xe0 (rows 0-14), and the datasheet gives 16 x 15 cells for VGA,
+# but on the bench (24 Oct 2026) motion shows in all 16 rows, so 16 is the
+# default. The viewer can switch to 15 rows to compare.
 MD_COLS = 16
-MD_ROWS_DEFAULT = 15
+MD_ROWS_DEFAULT = 16
 GRID_COLOUR = (0, 170, 255)      # cell lines
 MOTION_COLOUR = (255, 40, 40)    # outline of a cell whose MD bit is set
 
@@ -143,15 +148,16 @@ def cmd_text(cmd):
     return cmd() if callable(cmd) else cmd
 
 
-def md_cells(md, rows, mirror=False, flip=False):
+def md_cells(md, rows):
     """Decode the 32 ROI_OUT bytes into the cells that report motion.
 
     Bit b (0-255) is byte b // 8, bit b % 8 (LSB first), and belongs to MD
     cell row b // 16, column b % 16: the order hm0360_md_printGrid() uses for
     the console grid. On the bench (23 Oct 2026, HM0360 build) that order is
     rotated 180 degrees relative to the JPEG: the console grid's row 0,
-    column 0 is the image's bottom-right cell. So it is rotated here, and
-    mirror (left-right) and flip (top-bottom) are extra corrections on top.
+    column 0 is the image's bottom-right cell, so it is rotated here. The
+    sensor's own order is reversed the same way (MD application note,
+    figure 4.1).
 
     Returns (cells, outside): the set of (row, col) with motion in image
     coordinates (row 0 at the top), and how many set bits fall in rows
@@ -168,15 +174,49 @@ def md_cells(md, rows, mirror=False, flip=False):
             # rotate 180 degrees into image coordinates
             row = rows - 1 - row
             col = MD_COLS - 1 - col
-            if mirror:
-                col = MD_COLS - 1 - col
-            if flip:
-                row = rows - 1 - row
             cells.add((row, col))
     return cells, outside
 
 
-def draw_md_grid(img, md, rows, mirror=False, flip=False):
+def md_status(md, mdstat):
+    """Summarise one frame's MD interrupt status.
+
+    md is the 32 ROI_OUT bytes (or None); mdstat is the frame's "mdstat" dict:
+    INT_INDIC ("int"), MD_CTRL ("ctrl"), MD_CTRL1 ("ctrl1") and the context A
+    and B MD_BLOCK_NUM_TH ("thA", "thB"). The sensor raises its motion flag
+    when the number of cells with motion is greater than MD_BLOCK_NUM_TH (MD
+    application note 3.1); preview frames are context A, so thA applies.
+    INT_INDIC bit 3 is the MD interrupt, which wakes the device. MD_CTRL1 bit 1
+    enables it, and bit 0 chooses its source: 0 the motion flag, 1 the flag
+    after the latency logic (MD_CTRL bits 5:4 = latency mode).
+
+    Returns a dict, or None if the frame had no "mdstat".
+    """
+    if not isinstance(mdstat, dict):
+        return None
+    try:
+        intr = int(mdstat["int"])
+        ctrl = int(mdstat["ctrl"])
+        ctrl1 = int(mdstat["ctrl1"])
+        th_a = int(mdstat["thA"])
+        th_b = int(mdstat["thB"])
+    except (KeyError, TypeError, ValueError):
+        return None
+    cells = sum(bin(b).count("1") for b in md) if md else 0
+    return {
+        "cells": cells,
+        "thA": th_a,
+        "thB": th_b,
+        "flag": cells > th_a,
+        "int": bool(intr & 0x08),
+        "int_enabled": bool(ctrl1 & 0x02),
+        "source": "latency" if ctrl1 & 0x01 else "flag",
+        "latency_mode": (ctrl >> 4) & 0x03,
+        "raw": (intr, ctrl, ctrl1),
+    }
+
+
+def draw_md_grid(img, md, rows):
     """Draw the MD grid over a copy of img: thin lines between cells, and a
     red outline on each cell with motion. md may be None (lines only).
 
@@ -191,7 +231,7 @@ def draw_md_grid(img, md, rows, mirror=False, flip=False):
         draw.line([(x, 0), (x, h - 1)], fill=GRID_COLOUR)
     for y in ys[1:-1]:
         draw.line([(0, y), (w - 1, y)], fill=GRID_COLOUR)
-    cells, outside = md_cells(md or b"", rows, mirror, flip)
+    cells, outside = md_cells(md or b"", rows)
     for row, col in cells:
         draw.rectangle([xs[col], ys[row], xs[col + 1] - 1, ys[row + 1] - 1],
                        outline=MOTION_COLOUR, width=2)
@@ -240,6 +280,12 @@ class SerialWorker(threading.Thread):
         self.interval_fixed = interval_ms is not None   # --interval given
         self.interval_ms = interval_ms if interval_ms is not None else INTERVAL_FALLBACK_MS
         self.seq = deque()          # entries: [cmd, expect, tries_left]
+        self.last_md_key = None     # wake prediction of the last frame, for _log_md_change()
+        self.md_sensitivity = None  # op 17 as last reported by the device
+        self.md_sensitivity_start = None    # ... as first reported: put back on close
+        self.md_threshold = None    # context A MD_BLOCK_NUM_TH, from 'mdth' or a frame
+        self.md_frames = 0          # frames with MD data since the counts were reset
+        self.wake_frames = 0        # ... of which would have woken the device
         self.seq_last_send = 0.0
         self.dropped = 0
         self.last_frame_ts = 0.0
@@ -351,6 +397,24 @@ class SerialWorker(threading.Thread):
 
     # ---- receive path ----------------------------------------------------
 
+    def _log_md_change(self, count, status):
+        """Count the frames that would wake the device, and log each frame
+        where that changes, so no change is lost when the display skips
+        frames. The raw registers are logged for reference."""
+        if status is None:
+            return
+        self.md_frames += 1
+        if status["flag"]:
+            self.wake_frames += 1
+        key = status["flag"]
+        if key != self.last_md_key:
+            self.log_q.put(f"[md] frame #{count}: {status['cells']} cells, "
+                           f"threshold {status['thA']} -> {'WAKE' if key else 'no wake'} "
+                           f"(for reference: interrupt {'on' if status['int_enabled'] else 'off'}, "
+                           f"source {status['source']}; INT_INDIC 0x{status['raw'][0]:02x}, "
+                           f"MD_CTRL 0x{status['raw'][1]:02x}, MD_CTRL1 0x{status['raw'][2]:02x})")
+        self.last_md_key = key
+
     def _handle_line(self, raw):
         line = ANSI_RE.sub("", raw.decode("utf-8", "replace")).strip("\r\n \t")
         if not line:
@@ -372,8 +436,12 @@ class SerialWorker(threading.Thread):
                         md = bytes.fromhex(md) if isinstance(md, str) and len(md) == 64 else None
                     except ValueError:
                         md = None
+                    status = md_status(md, data.get("mdstat"))
+                    if status is not None:
+                        self.md_threshold = status["thA"]
+                    self._log_md_change(count, status)
                     self.frame_q.put((data.get("count", 0),
-                                      data.get("resolution", [0, 0]), jpeg, md))
+                                      data.get("resolution", [0, 0]), jpeg, md, status))
                     # frame boundary = the quiet window: send any pending step
                     self._pump_seq(force=True)
                     return
@@ -384,6 +452,14 @@ class SerialWorker(threading.Thread):
                     return
         self._confirm(line)
         now = time.monotonic()
+        m = OP17_RE.search(line) or MD_SENS_RE.search(line)
+        if m:
+            self.md_sensitivity = int(m.group(1))
+            if self.md_sensitivity_start is None and OP17_RE.search(line):
+                self.md_sensitivity_start = self.md_sensitivity
+        m = MDTH_RE.search(line)
+        if m:
+            self.md_threshold = int(m.group(1))
         m = CAMERA_RE.search(line)
         if m:
             camera = m.group(1) or m.group(2)
@@ -476,6 +552,7 @@ class SerialWorker(threading.Thread):
         # if it is asleep the probe goes nowhere and the boot catcher arms.
         self.enqueue_verified([("ver", "WW500"), KEEPAWAKE_STEP])
         self.send("camera")         # sets the default frame interval (CAMERA_RE)
+        self.send("getop 17")       # MD sensitivity, to show and to put back on close
         self.arm("connected")
 
         buf = bytearray()
@@ -528,6 +605,7 @@ class Viewer:
         self.last_jpeg = None
         self.last_img = None           # decoded frame, before the MD overlay
         self.last_md = None            # its 32 ROI_OUT bytes, or None
+        self.last_md_status = None     # its md_status() summary, or None
         self.md_text = "-"
         self.md_row16_warned = False
         self.last_rearm = time.monotonic()
@@ -550,7 +628,15 @@ class Viewer:
         side.grid(row=0, column=1, padx=4, pady=4, sticky="ns")
 
         self.status = tk.Label(side, justify=tk.LEFT, anchor="w", font=("Consolas", 10))
-        self.status.pack(fill=tk.X, pady=(0, 8))
+        self.status.pack(fill=tk.X, pady=(0, 4))
+
+        # Would this frame wake the device? Red when the cells with motion
+        # exceed MD_BLOCK_NUM_TH, the sensor's motion flag, which drives the
+        # MD interrupt (MD_CTRL1 bit 0 = 0)
+        self.wake_lamp = tk.Label(side, text="WAKE", relief=tk.SUNKEN,
+                                  font=("Consolas", 12, "bold"))
+        self.wake_lamp.pack(fill=tk.X, pady=(0, 8))
+        self.lamp_off_bg = self.wake_lamp.cget("bg")
         self._set_status(None)
 
         tk.Button(side, text="Free run", command=self.start_stream).pack(fill=tk.X)
@@ -561,8 +647,6 @@ class Viewer:
         # MD grid overlay (HM0360 motion bits sent with each frame)
         self.show_md = tk.BooleanVar(value=True)
         self.md_rows = tk.IntVar(value=MD_ROWS_DEFAULT)
-        self.md_mirror = tk.BooleanVar(value=False)
-        self.md_flip = tk.BooleanVar(value=False)
         tk.Label(side, text="MD grid:").pack(anchor="w")
         md_box = tk.Frame(side)
         md_box.pack(fill=tk.X, pady=(0, 12))
@@ -572,10 +656,23 @@ class Viewer:
                        command=self._render).grid(row=0, column=1, sticky="w")
         tk.Radiobutton(md_box, text="16 rows", variable=self.md_rows, value=16,
                        command=self._render).grid(row=0, column=2, sticky="w")
-        tk.Checkbutton(md_box, text="Mirror", variable=self.md_mirror,
-                       command=self._render).grid(row=1, column=0, sticky="w")
-        tk.Checkbutton(md_box, text="Flip", variable=self.md_flip,
-                       command=self._render).grid(row=1, column=1, sticky="w")
+
+        # MD controls. Sensitivity is the firmware's 'md' command (op 17: saved
+        # to CONFIG.TXT at the next sleep, so the close puts back the value
+        # found at connect). The wake threshold is 'mdth', which is not saved.
+        tk.Label(md_box, text="Sensitivity:").grid(row=1, column=0, sticky="w")
+        self.md_sens = tk.IntVar(value=0)       # 0 = not known yet, or off
+        for col, (text, value) in enumerate((("Low", 1), ("Med", 2), ("High", 3)), start=1):
+            tk.Radiobutton(md_box, text=text, variable=self.md_sens, value=value,
+                           command=self._sensitivity_changed).grid(row=2, column=col - 1, sticky="w")
+        tk.Label(md_box, text="Wake threshold (cells):").grid(row=3, column=0, columnspan=2, sticky="w")
+        self.md_th_var = tk.StringVar(value="")
+        self.md_th_shown = None
+        th_spin = tk.Spinbox(md_box, from_=1, to=255, width=5, textvariable=self.md_th_var,
+                             command=self._threshold_changed)
+        th_spin.grid(row=3, column=2, sticky="w")
+        th_spin.bind("<Return>", self._threshold_changed)
+        self.md_th_spin = th_spin
 
         # Frame interval for free run: set from the camera type, or by hand.
         # Takes effect from the next burst.
@@ -588,21 +685,40 @@ class Viewer:
         spin.bind("<Return>", self._interval_changed)
         spin.bind("<FocusOut>", self._interval_changed)
 
-        tk.Label(side, text="Command:").pack(anchor="w")
-        self.cmd_entry = tk.Entry(side, width=28, font=("Consolas", 10))
+        # Third column: commands and the log file, so the side column stays
+        # short and the log pane keeps its height
+        cmds = tk.Frame(main)
+        cmds.grid(row=0, column=2, padx=4, pady=4, sticky="ns")
+
+        tk.Label(cmds, text="Command:").pack(anchor="w")
+        self.cmd_entry = tk.Entry(cmds, width=28, font=("Consolas", 10))
         self.cmd_entry.pack(fill=tk.X)
         self.cmd_entry.bind("<Return>", self.send_command)
-        tk.Button(side, text="Send", command=self.send_command).pack(fill=tk.X, pady=(4, 0))
+        tk.Button(cmds, text="Send", command=self.send_command).pack(fill=tk.X, pady=(4, 0))
 
-        tk.Label(side, text="Quick commands:").pack(anchor="w", pady=(12, 0))
+        tk.Label(cmds, text="Quick commands:").pack(anchor="w", pady=(12, 0))
         for cmd in ("getop 27", "setop 27 286", "setop 28 326",
                     "vcm 512", "status", "setop 8 1000"):
-            tk.Button(side, text=cmd, font=("Consolas", 9),
+            tk.Button(cmds, text=cmd, font=("Consolas", 9),
                       command=lambda c=cmd: self.worker.send(c)).pack(fill=tk.X, pady=1)
 
+        # Log file: everything shown in the log pane, also written to save_dir
+        self.log_file = None
+        self.log_path = None
+        self.log_to_file = tk.BooleanVar(value=True)
+        tk.Checkbutton(cmds, text="Log to file", variable=self.log_to_file,
+                       command=self._log_file_changed).pack(anchor="w", pady=(12, 0))
+        self.log_path_label = tk.Label(cmds, text="", font=("Consolas", 8),
+                                       justify=tk.LEFT, anchor="w", wraplength=200)
+        self.log_path_label.pack(fill=tk.X)
+
+        # Packed at the bottom before the main frame, so it keeps its height
+        # however tall the image and controls are
         self.log = scrolledtext.ScrolledText(root, height=12, font=("Consolas", 9),
                                              state=tk.DISABLED, wrap=tk.NONE)
-        self.log.pack(fill=tk.BOTH, expand=False, padx=4, pady=(0, 4))
+        self.log.pack(side=tk.BOTTOM, fill=tk.BOTH, expand=False, padx=4, pady=(0, 4),
+                      before=main)
+        self._log_file_changed()
 
         main.grid_columnconfigure(0, weight=1)
         main.grid_rowconfigure(0, weight=1)
@@ -620,6 +736,25 @@ class Viewer:
             return "free run"
         return "busy" if w.capture_busy else "stopped"
 
+    def _md_status_text(self):
+        st = self.last_md_status
+        w = self.worker
+        wakes = f"wakes     {w.wake_frames} of {w.md_frames} frames"
+        if st is None:
+            return f"threshold -\nwake      -\n{wakes}"
+        text = (f"threshold {st['thA']} (B {st['thB']})\n"
+                f"wake      {'YES' if st['flag'] else 'no'}  ({st['cells']} > {st['thA']}?)\n"
+                f"{wakes}")
+        if st["source"] == "latency":
+            # the prediction would need to model the latency logic
+            text += f"\nNOTE      interrupt follows latency mode {st['latency_mode']}"
+        return text
+
+    def _set_lamps(self):
+        st = self.last_md_status
+        on = st is not None and st["flag"]
+        self.wake_lamp.config(bg="#ff3030" if on else self.lamp_off_bg)
+
     def _set_status(self, info):
         if info is not None:
             self.last_info = info
@@ -628,7 +763,7 @@ class Viewer:
         if info is None:
             self.status.config(text=(f"mode      {mode}\nframes    -\nsize      -\n"
                                      f"fps       -\ndropped   {self.worker.dropped}\n"
-                                     f"motion    -"))
+                                     f"motion    -\n{self._md_status_text()}"))
             return
         count, res, kbytes, fps = info
         self.status.config(text=(f"mode      {mode}\n"
@@ -636,9 +771,12 @@ class Viewer:
                                  f"size      {kbytes:.1f} KB  {res[0]}x{res[1]}\n"
                                  f"fps       {fps:.2f}\n"
                                  f"dropped   {self.worker.dropped}\n"
-                                 f"motion    {self.md_text}"))
+                                 f"motion    {self.md_text}\n"
+                                 f"{self._md_status_text()}"))
 
     def start_stream(self):
+        self.worker.md_frames = 0      # wake counts are per free run
+        self.worker.wake_frames = 0
         self.worker.free_run = True
         self.worker.single_pending = False
         self.last_rearm = time.monotonic()
@@ -666,6 +804,33 @@ class Viewer:
             self._append_log(f"[viewer] frame interval {ms} ms (from the next burst)")
         self.interval_shown = ms
 
+    def _sensitivity_changed(self):
+        n = self.md_sens.get()
+        if n:
+            self.worker.send(f"md {n}")
+            self.worker.md_sensitivity = n   # until the reply (or a later getop) says otherwise
+
+    def _threshold_changed(self, _event=None):
+        try:
+            n = int(self.md_th_var.get())
+        except ValueError:
+            return
+        if 1 <= n <= 255:
+            self.worker.send(f"mdth {n}")
+            self.md_th_shown = n
+            self.worker.md_threshold = n     # until the reply or the next frame says otherwise
+
+    def _sync_md_controls(self):
+        """Show the sensitivity and threshold the device reports, unless the
+        user is typing a threshold."""
+        w = self.worker
+        if w.md_sensitivity is not None and w.md_sensitivity != self.md_sens.get():
+            self.md_sens.set(w.md_sensitivity)    # 0 (off) selects none
+        if (w.md_threshold is not None and w.md_threshold != self.md_th_shown
+                and self.root.focus_get() is not self.md_th_spin):
+            self.md_th_shown = w.md_threshold
+            self.md_th_var.set(str(w.md_threshold))
+
     def one_image(self):
         self.worker.free_run = False
         self.last_rearm = time.monotonic()
@@ -692,8 +857,36 @@ class Viewer:
             return
         self._append_log(f"[viewer] saved {path} ({len(self.last_jpeg)} bytes)")
 
+    def _log_file_changed(self):
+        """Open a new log file in save_dir when 'Log to file' is ticked, close
+        it when unticked."""
+        if self.log_to_file.get() and self.log_file is None:
+            name = datetime.now().strftime("live_log_%Y%m%d_%H%M%S.txt")
+            try:
+                os.makedirs(self.save_dir, exist_ok=True)
+                self.log_path = os.path.join(self.save_dir, name)
+                self.log_file = open(self.log_path, "a", encoding="utf-8")
+            except OSError as e:
+                self.log_file = None
+                self.log_to_file.set(False)
+                self._append_log(f"[viewer] could not open a log file: {e}")
+                return
+            self.log_path_label.config(text=self.log_path)
+            self._append_log(f"[viewer] logging to {self.log_path}")
+        elif not self.log_to_file.get() and self.log_file is not None:
+            self._append_log("[viewer] log file closed")
+            self.log_file.close()
+            self.log_file = None
+            self.log_path_label.config(text="")
+
     def _append_log(self, line):
         print(line, flush=True)  # tee to stdout so a supervising session can watch
+        if self.log_file is not None:
+            try:
+                self.log_file.write(datetime.now().strftime("%H:%M:%S.%f")[:-3] + " " + line + "\n")
+                self.log_file.flush()
+            except OSError:
+                self.log_file = None
         self.log.config(state=tk.NORMAL)
         self.log.insert(tk.END, line + "\n")
         # keep the pane bounded
@@ -702,7 +895,7 @@ class Viewer:
         self.log.see(tk.END)
         self.log.config(state=tk.DISABLED)
 
-    def _show_frame(self, count, res, jpeg, md=None):
+    def _show_frame(self, count, res, jpeg, md=None, md_status=None):
         self.last_jpeg = jpeg
         now = time.monotonic()
         self.frame_times.append(now)
@@ -720,7 +913,9 @@ class Viewer:
             return
         self.last_img = img
         self.last_md = md
+        self.last_md_status = md_status
         self._render()
+        self._set_lamps()
         self._set_status((count, res, len(jpeg) / 1024.0, fps))
 
     def _render(self):
@@ -731,8 +926,7 @@ class Viewer:
         img = self.last_img
         if self.show_md.get():
             rows = self.md_rows.get()
-            img, n, outside = draw_md_grid(img, self.last_md, rows,
-                                           self.md_mirror.get(), self.md_flip.get())
+            img, n, outside = draw_md_grid(img, self.last_md, rows)
             if self.last_md is None:
                 self.md_text = "no data"
             else:
@@ -783,6 +977,7 @@ class Viewer:
             self.interval_shown = w.interval_ms
             self.interval_var.set(str(w.interval_ms))
 
+        self._sync_md_controls()
         self._set_status(None)
         self.root.after(30, self.poll)
 
@@ -800,6 +995,11 @@ class Viewer:
         w.arm_at = None
         w.sleep_at = None
         w.seq.clear()
+        if (w.md_sensitivity_start is not None and w.md_sensitivity is not None
+                and w.md_sensitivity != w.md_sensitivity_start):
+            # 'md' changed op 17, which is saved at the next sleep: put it back
+            n = w.md_sensitivity_start
+            w.enqueue_verified([(f"md {n}", f"MD sensitivity set to {n}")])
         w.enqueue_verified(CLOSE_SEQUENCE)
         w.seq_last_send = 0.0       # first step goes out at once
         self._append_log("[viewer] closing: resetting the device to lab-safe values "
@@ -824,6 +1024,9 @@ class Viewer:
                   f"Type these at the console when it is awake.", flush=True)
         else:
             print("[viewer] device reset to lab-safe values", flush=True)
+        if self.log_file is not None:
+            self.log_file.close()
+            self.log_file = None
         w.stop()
         w.join(timeout=1.0)
         try:

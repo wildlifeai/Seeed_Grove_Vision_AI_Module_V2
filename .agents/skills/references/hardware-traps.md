@@ -142,3 +142,14 @@ building on any of them:
   PB7 is a GPIO output in every build (not with `ENABLESWD`), so PB7 (SWCLK) stops being SWD
   once `checkForCameras()` runs. Since 3 Oct 2026 the cold-boot RTC set (about 1.4 s) comes
   first, so SWD can connect for about 1.4 s after a reset; after a DPD wake the window is short.
+* **HM0360 MD registers come in three banks, and MD_CTRL differs between them.** The context A
+  (0x354B) and B (0x35A5) MD_CTRL hold the light coefficient in [7:1] and enable in [0]; main
+  MD_CTRL (0x2080) has latency select in [5:4]. IIR, latency, MD_CTRL1, ROI_OUT and INT_INDIC
+  are main-only and shared. Captures run in context A, sleep and wake in B. The image task
+  clears all HM0360 interrupt bits at every frame-ready, so read `INT_INDIC` before that clear.
+  Details: `2026-10-23_mdEnhancements` thread, 24 Oct 2026.
+* **In the HM0360 build the sensor times a burst itself** (`USE_HM0360_CAPTURE_TIMER` is defined in
+  `image_task.c`): one frame, a sleep of the capture interval, repeat, with the MD interrupt enabled
+  (`MD_CTRL1` = 0x06) until the last frame. The AI processor takes whichever frame comes after it
+  has handled the previous one, so at short intervals most sensor frames, and their MD bits, are
+  never seen. Found 24 Oct 2026 after it had been assumed to use the software `captureTimer`.

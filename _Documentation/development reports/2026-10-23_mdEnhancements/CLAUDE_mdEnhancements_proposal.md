@@ -286,3 +286,166 @@ lag from the sensor's IIR smoothing.
 - Expected effect: the RP3 at about 0.6 s per frame (was about 1.0 s). On the HM0360, about
   1.3 s, because its 1 s sleep/wake per frame remains; fixing that needs firmware (keep the
   sensor streaming during preview).
+
+## 24 October 2026: register banks, and motion flag against MD interrupt
+
+**Bench (Charles):** orientation is right with Mirror and Flip off. With 16 rows, motion
+shows in all rows, so 16 is now the default. That contradicts the datasheet (16 x 15 for
+VGA, section 4.1) and `ROI_V = 0xe0`; still to explain.
+
+**Sources read** (Himax confidential, cited by section only): datasheet Pre-HM0360 v06,
+MD application note v01 (May 2020), MD setting notes of 6 March and 8 April 2025.
+
+**Register banks.** Context A (0x3500 to 0x3559) and B (0x355A to 0x35B3) each have their
+own MD_CTRL, MD_BLOCK_NUM_TH, ROI V/H, MD_TH_STR H/L, flicker and TH_COEF registers
+(datasheet 10.26, 10.27). MD_TH_MIN, MD_LIGHT_COEF 0x2099, IIR, latency, MD_CTRL1, ROI_OUT
+and INT_INDIC/INT_CLEAR exist only in the main bank and are shared. Context MD_CTRL holds the
+light coefficient in [7:1] and enable in [0]; main MD_CTRL has latency select in [5:4]. That
+is why the sensitivity values are 0x41/0x31/0x21. The firmware always selects a context
+(0x3024), so the main copies of the duplicated registers are probably ignored (inference,
+untested). Captures use context A, sleep and wake use context B. **Decision (Charles):**
+`mdreg` writes A and B together.
+
+**Flag and interrupt.** The app note's motion flag is the "original flag": cells with motion
+greater than MD_BLOCK_NUM_TH (app note 3.1). Its motion interrupt is the "latency flag"
+(app note 3.2). `MD_CTRL1` bit 0 picks which one drives the interrupt (datasheet 10.16).
+Only the interrupt can be read by register (`INT_INDIC` bit 3); both flags are in embedded
+data byte 28, which is off. The firmware writes `MD_CTRL1` = 0x06 when the interrupt is on,
+so **the wake follows the original flag and the latency settings have no effect** (to
+confirm). Each capture sets `MD_CTRL1` to 0.
+
+**Coded (not built or benched).**
+- Firmware: `hm0360_md_getMDStatus()` (hm0360_md.c/h) reads INT_INDIC, MD_CTRL, MD_CTRL1 and
+  both MD_BLOCK_NUM_TH. In preview, the image task reads them at frame-ready, before its
+  existing `hm0360_md_clearInterrupt(0xff)`, and `preview_setMdStatus()` sends them as the
+  frame's `"mdstat"`. Only preview frames are affected.
+- Viewer: `md_status()` predicts the flag (cells > context A threshold); the status panel
+  shows threshold, flag, MD INT and its source; two lamps; an `[md]` log line on each change.
+
+**First bench questions:** does `INT_INDIC` bit 3 latch while the interrupt is off? Does it
+follow cells > threshold frame by frame? If it never latches, the next step is keeping the
+interrupt on during preview captures (check the INT pin while awake first).
+
+**First bench result (24 Oct, HM0360 build).** The motion count updates with motion. The
+flag lamp follows "cells > 4", but the viewer computes that itself, so it proves nothing
+about the sensor. **MD INT is set from the first frame and never clears.** Raw values:
+`0x2064 = 0xC8` (MD INT set, AE converged, reserved bit 7), `0x2080 = 0x31`,
+`0x209E = 0x06` (interrupt on, source = motion flag).
+
+This is not what the code should produce. The init table writes `0x209E = 0x06` at cold
+init, but every capture writes 0 (`hm0360_md_setMode(..., 0)`, `Inhibiting MD`) before the
+frame, and at frame-ready the image task writes `0x2065 = 0xFF`. Nothing found in the code
+re-enables the interrupt while awake (`setSensitivity`, `prepare` and the warm-boot path
+were checked). So two HM0360 writes appear not to take effect: MD_CTRL1 = 0 and the
+INT_CLEAR.
+
+Explanations, in the order to test:
+1. **A staged `camreg` write** on the bench card (replayed after the init table at every
+   cold init by `cis_file_process(CAMERA_EXTRA_FILE)`).
+2. **The sensor ignores writes to the MD/interrupt registers in the sleep phase** of
+   `MODE_SW_NFRAMES_SLEEP` (MODE_SELECT writes clearly work). Guess only. If true it matters
+   in the field: the clear in `hm0360_md_prepare()` before DPD would also be lost.
+
+**Pending bench test (console, viewer stopped):** `camreg list`; `camreg 209e 0` then
+`camreg 209e` (0x00 = write works); `camreg 2065 08` then `camreg 2064` (0xC0 = clear
+works); then `camreg clear`, because camreg writes are saved to the SD card. If both writes
+work from the console, look for what re-enables the interrupt. If not, the next step is a
+small firmware test of the same writes while the sensor streams (ask first).
+
+The viewer now also shows the raw registers (`regs` status line, and in each `[md]` log
+line, logged whenever they change).
+
+**Console test result (24 Oct, HM0360 build).**
+- `camreg list`: no registers staged, so explanation 1 is out.
+- `camreg 209e 0` read back 0x00, and `camreg 2065 08` took 0x2064 from 0xC8 to 0xC0. The
+  sensor accepts both writes when idle, so explanation 2 is unlikely.
+- Then **One image**: `2064=c8 2080=31 209e=00`.
+
+**Cause of 0x209E = 0x06: a correction.** The 23 Oct "Frame timing per camera" section says
+`USE_HM0360_CAPTURE_TIMER` is not defined. **That is wrong:** `image_task.c` defines it for
+the HM0360 build (since commit 7b73436d). So at the start of a burst the image task calls
+`hm0360_md_setMode(CONTEXT_A, MODE_SW_NFRAMES_SLEEP, 1, g_timer_period)`. A non-zero sleep
+time enables the MD interrupt (`MD_CTRL1` = 0x06) and the sensor times the burst itself.
+Only the last frame of a burst calls `setMode(..., MODE_SLEEP, 0, 0)`, which disables it,
+before the status is read. So during a burst the interrupt is on, and on a single image it
+reads 0x00. The firmware does what it is written to do; the earlier timing figures for the
+HM0360 need re-reading with this in mind.
+
+**Still open:** MD INT latched again during the single capture (0xC8 after a clear), and in
+free run it stays set even on frames where the cell count is at or below the threshold. So
+`INT_INDIC` bit 3 does not yet match "cells > MD_BLOCK_NUM_TH" frame by frame.
+
+**Tape test (24 Oct, HM0360 build, log `_Tools/live_frames/live_log_20261024_153454.txt`,
+not committed).** Lens taped, free run, tape lifted briefly once, replaced, stop.
+- Frames 1 to 60, taped: 0 cells, **MD INT 0** on every frame. So the interrupt does not set
+  by itself with no motion.
+- Frame 61, tape lifted: 19 cells, flag 1, **MD INT 1**. Frames 66 and 67: 40 and 8 cells.
+- Frames 62 to 90, tape back on (mostly 0 cells, one with 1): **MD INT stays 1**, across a
+  burst end (frame 90, interrupt off).
+- So the sensor latches MD INT on motion as expected, but the firmware's per-frame
+  `hm0360_md_clearInterrupt(0xff)` does not clear it, whereas the console `camreg 2065 08`
+  did. Candidates: the value (0xFF sets reserved bits 7:6 and 4) or the timing (the sensor
+  is already taking the next frame at frame-ready, 20 ms sleep). **Field relevance:**
+  `hm0360_md_prepare()` also clears with 0xFF before DPD.
+- Side result: with the sensor timing the burst, the HM0360 preview runs at about 5 fps
+  (30 frames in about 6 s).
+- Caution for frame-by-frame comparison: ROI_OUT is read later in the frame handling than
+  INT_INDIC, and with a 20 ms sleep the sensor may have taken another frame in between.
+
+**Clear test (24 Oct, log `live_log_20261024_154440.txt`, not committed).** Tape lifted
+during a burst: frames 11 to 22 had 13 to 48 cells and MD INT 1. MD INT then stayed 1
+through frame 30 with 0 cells, and after the burst ended. With the sensor idle,
+`camreg 2064` read 0xC8, `camreg 2065 ff` and then `camreg 2064` read 0xC0.
+- **So 0xFF is a valid clear; the value is not the problem.** The firmware's identical
+  0xFF writes at frame-ready do not take effect, including the one on the last frame, made
+  just after `setMode(..., MODE_SLEEP, ...)`.
+- The earlier wake (MD INT already 0xC0 after DPD) suggests the 0xFF clear in
+  `hm0360_md_prepare()`, made with the sensor idle, does work. That is reassuring for the
+  field, but unproven.
+- Working hypothesis: the HM0360 ignores INT_CLEAR, or re-latches at once, while a frame is
+  being read out. At frame-ready in a 20 ms-interval burst the sensor is already on its next
+  frame, and on the last frame it is still finishing one after the MODE_SLEEP request.
+- Proposed diagnostic (needs Charles's go-ahead): read INT_INDIC again straight after the
+  frame-ready clear and send it with the frame. 0xC0 then would mean the clear works but
+  something re-latches it; 0xC8 would mean the write is ignored.
+- The two test writes were still staged on the card at the end of this session (`camreg
+  clear` not yet run).
+
+**Decision (Charles, 24 Oct): stop investigating INT_INDIC.** The MD interrupt works in the
+field; what the viewer needs is to show when a wake would be triggered, to evaluate the
+controls still to come. The proposed INT_INDIC diagnostic is dropped. Last observation: with
+the lens taped, **One image** gave `2064=80`, MD INT clear.
+
+The logs support predicting the wake from the cell count: MD INT went from 0 to 1 on exactly
+the first frame with cells > MD_BLOCK_NUM_TH (frames 61 and 11 in the two logs) and never
+while taped. The viewer now shows a **WAKE** lamp and `wake YES/no (cells > threshold)`, plus
+a count of wake frames per free run. MD INT is kept only in the log for reference. The
+prediction ignores the latency logic, which the firmware leaves unused (`MD_CTRL1` bit 0 =
+0); the status warns if that changes.
+
+**Controls and frame timing (24 Oct, coded, not built or benched).**
+- Charles asked for: Mirror and Flip removed; a wake-threshold control; sensitivity limited
+  to the existing low/medium/high.
+- Firmware: new console command `mdth [N]` (CLI-commands.c) and
+  `hm0360_md_setBlockThreshold()` (hm0360_md.c/h). It writes MD_BLOCK_NUM_TH to the main
+  bank and both contexts and replies with the A and B values read back. Not saved; a cold
+  boot or `inithm0360` restores the table value. Bench-only, so not added to
+  `ble_commands.md`.
+- Viewer: Sensitivity Low/Med/High sends `md N` (op 17, saved at the next sleep; the viewer
+  reads `getop 17` at connect and puts it back on close). Wake threshold spinbox sends
+  `mdth N`.
+- **Charles's observation:** a quick finger movement is detected, a slow one usually not.
+  His question: is the HM0360 free-running in preview, with frames (and their MD bits) not
+  shown? **Answer: yes.** With `USE_HM0360_CAPTURE_TIMER` the sensor takes one frame, sleeps
+  for the capture interval, and repeats by itself. The AI processor streams one frame in
+  about 200 ms (log timestamps) and then takes whichever frame comes next. At the 20 ms
+  interval the sensor makes a frame about every 55 ms (estimate: the first capture after the
+  mode change took 55 ms), so roughly three in four frames are never shown.
+- **The likelier cause of missing slow motion** is the frame spacing itself: MD compares each
+  frame with the previous one, and frames 55 ms apart differ too little for slow movement.
+  In the field the frames are an op 11 interval apart. Recommendation: in preview, set
+  Interval to the field op 11 value (over about 250 ms, so every frame is shown).
+
+**Open (Charles, 24 Oct):** come back to MD sensitivity, meaning slow movement not being
+detected, after the controls are built and tested. First check on the bench: with Interval
+set to the field op 11 value, is slow movement detected at each of Low, Med and High?

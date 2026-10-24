@@ -305,6 +305,7 @@ static BaseType_t prvFormatCommand( char * pcWriteBuffer, size_t xWriteBufferLen
 #if defined(USE_HM0360) || defined(USE_HM0360_MD)
 static BaseType_t prvMd(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) ;
 static BaseType_t prvReinitHM0360(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) ;
+static BaseType_t prvMdThreshold(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) ;
 #endif // defined(USE_HM0360) || defined(USE_HM0360_MD)
 
 // A few commands to make the AI processor consistent with the MKL62BA
@@ -745,6 +746,15 @@ static const CLI_Command_Definition_t xReinitHM0360 = {
 	"inithm0360:\r\n Reinitialise HM0360\r\n",
 	prvReinitHM0360, /* The function to run. */
 	0			/* No parameters expected */
+};
+
+/* Structure that defines the "mdth" command line command. */
+static const CLI_Command_Definition_t xMdThreshold = {
+	"mdth", /* The command string to type. */
+	"mdth [<cells>]:\r\n Show or set the MD wake threshold (MD_BLOCK_NUM_TH, 1-255, contexts A & B)."
+	"\r\n Not saved: a cold boot or 'inithm0360' restores the table value\r\n",
+	prvMdThreshold, /* The function to run. */
+	-1		 /* Zero or one parameter */
 };
 
 #endif // defined(USE_HM0360) || defined(USE_HM0360_MD)
@@ -2555,6 +2565,44 @@ static BaseType_t prvReinitHM0360(char *pcWriteBuffer, size_t xWriteBufferLen, c
 	return pdFALSE;
 }
 
+/**
+ * Shows or sets the MD block number threshold (MD_BLOCK_NUM_TH) in contexts A and B
+ *
+ * executes 'mdth [<cells>]'. For tuning with the live preview: the value is not
+ * saved, so a cold boot or 'inithm0360' restores the register table's value.
+ */
+static BaseType_t prvMdThreshold(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) {
+	const char *pcParameter;
+	BaseType_t lParameterStringLength;
+	HM0360_MD_STATUS_T mdStatus;
+
+	pcParameter = FreeRTOS_CLIGetParameter(pcCommandString, 1, &lParameterStringLength);
+	if (pcParameter != NULL) {
+		char *endptr;
+		long threshold = strtol(pcParameter, &endptr, 10);
+
+		if ((endptr == pcParameter) || (*endptr != '\0') || (threshold < 1) || (threshold > 255)) {
+			cli_append(&pcWriteBuffer, &xWriteBufferLen, "Error: Threshold must be an integer between 1 and 255.");
+			return pdFALSE;
+		}
+		if (hm0360_md_setBlockThreshold((uint8_t) threshold) != HX_CIS_NO_ERROR) {
+			cli_append(&pcWriteBuffer, &xWriteBufferLen, "Error: the HM0360 did not respond");
+			return pdFALSE;
+		}
+	}
+
+	// Read back, so the reply shows what the sensor holds
+	if (hm0360_md_getMDStatus(&mdStatus) == HX_CIS_NO_ERROR) {
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "MD threshold A = %d, B = %d",
+				mdStatus.blockNumThA, mdStatus.blockNumThB);
+	}
+	else {
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "Error: the HM0360 did not respond");
+	}
+
+	return pdFALSE;
+}
+
 #endif // defined(USE_HM0360) || defined(USE_HM0360_MD)
 
 /********************************** Private Functions - Other *************************************/
@@ -3041,6 +3089,7 @@ static void vRegisterCLICommands(void)
 #if defined(USE_HM0360) || defined(USE_HM0360_MD)
 	FreeRTOS_CLIRegisterCommand(&xMd);	// Sets motion detection sensitivity
 	FreeRTOS_CLIRegisterCommand(&xReinitHM0360);	// Reinitialise HM0360 long register list
+	FreeRTOS_CLIRegisterCommand(&xMdThreshold);	// Shows or sets the MD block number threshold
 #endif // defined(USE_HM0360) || defined(USE_HM0360_MD)
 
 #ifdef WW500_C00

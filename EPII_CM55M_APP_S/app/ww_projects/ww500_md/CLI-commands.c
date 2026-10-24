@@ -284,6 +284,7 @@ static BaseType_t prvWriteFile(char *pcWriteBuffer, size_t xWriteBufferLen, cons
 static BaseType_t prvReadFile(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 static BaseType_t prvSend(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 static BaseType_t prvCapture(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
+static BaseType_t prvInterval(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 // Live image preview streaming over the console UART (see preview.c)
 static BaseType_t prvPreview(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 static BaseType_t prvSetgps(char *pcWriteBuffer, size_t writeBufferLen, const char *pcCommandString);
@@ -305,7 +306,6 @@ static BaseType_t prvFormatCommand( char * pcWriteBuffer, size_t xWriteBufferLen
 #if defined(USE_HM0360) || defined(USE_HM0360_MD)
 static BaseType_t prvMd(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) ;
 static BaseType_t prvReinitHM0360(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) ;
-static BaseType_t prvMdThreshold(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) ;
 #endif // defined(USE_HM0360) || defined(USE_HM0360_MD)
 
 // A few commands to make the AI processor consistent with the MKL62BA
@@ -644,6 +644,14 @@ static const CLI_Command_Definition_t xCapture = {
 	2			/* Two parameters expected */
 };
 
+/* Structure that defines the "interval" command line command. */
+static const CLI_Command_Definition_t xInterval = {
+	"interval", /* The command string to type. */
+	"interval <timerDelay>:\r\n Change the interval (ms) of the capture in progress, from its next image\r\n",
+	prvInterval, /* The function to run. */
+	1			/* One parameter expected */
+};
+
 /* Structure that defines the "preview" command line command. */
 static const CLI_Command_Definition_t xPreview = {
 	"preview", /* The command string to type. */
@@ -735,7 +743,7 @@ static BaseType_t prvFormatCommand( char * pcWriteBuffer,
 /* Structure that defines the "md" command line command. */
 static const CLI_Command_Definition_t xMd = {
 	"md", /* The command string to type. */
-	"md <sensitivity>:\r\n Set sensitivity (values 1, 2, 3 = low, med, high; 0 = off)\r\n",
+	"md <sensitivity>:\r\n Set sensitivity (values 1, 2, 3 = low, med, high). 'setop 11 0' switches MD off\r\n",
 	prvMd, /* The function to run. */
 	1		 /* One parameter expected */
 };
@@ -746,15 +754,6 @@ static const CLI_Command_Definition_t xReinitHM0360 = {
 	"inithm0360:\r\n Reinitialise HM0360\r\n",
 	prvReinitHM0360, /* The function to run. */
 	0			/* No parameters expected */
-};
-
-/* Structure that defines the "mdth" command line command. */
-static const CLI_Command_Definition_t xMdThreshold = {
-	"mdth", /* The command string to type. */
-	"mdth [<cells>]:\r\n Show or set the MD wake threshold (MD_BLOCK_NUM_TH, 1-255, contexts A & B)."
-	"\r\n Not saved: a cold boot or 'inithm0360' restores the table value\r\n",
-	prvMdThreshold, /* The function to run. */
-	-1		 /* Zero or one parameter */
 };
 
 #endif // defined(USE_HM0360) || defined(USE_HM0360_MD)
@@ -2099,6 +2098,43 @@ static BaseType_t prvCapture(char *pcWriteBuffer, size_t xWriteBufferLen, const 
 }
 
 /**
+ * Changes the interval of the capture burst in progress, from its next image.
+ *
+ * executes 'interval <timerDelay>'. For the live viewer: a burst cannot be cancelled, so without
+ * this a new interval would only apply from the next 'capture'. The image task applies it at its
+ * next frame (image_setCaptureInterval()).
+ */
+static BaseType_t prvInterval(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) {
+	const char *pcParameter;
+	BaseType_t lParameterStringLength;
+	char *endptr;
+	long interval;
+
+	pcParameter = FreeRTOS_CLIGetParameter(pcCommandString, 1, &lParameterStringLength);
+	if (pcParameter == NULL) {
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "Error: Timer interval required.");
+		return pdFALSE;
+	}
+
+	interval = strtol(pcParameter, &endptr, 10);
+
+	// Not 0: the RP camera's captureTimer cannot have a zero period (FreeRTOS asserts)
+	if ((endptr == pcParameter) || (*endptr != '\0') || (interval < 1) || (interval > MAX_IMAGE_INTERVAL)) {
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "Error: interval must be between 1 and %d.", MAX_IMAGE_INTERVAL);
+		return pdFALSE;
+	}
+
+	if (image_setCaptureInterval((uint32_t) interval)) {
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "Interval %ld ms from the next image", interval);
+	}
+	else {
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "No capture in progress: the next 'capture' sets the interval");
+	}
+
+	return pdFALSE;
+}
+
+/**
  * Turn live preview streaming on or off (see preview.c).
  *
  * Parameter: 0 = off, 1 = stream frames and skip the SD card save,
@@ -2185,8 +2221,21 @@ static BaseType_t prvSetOpParam(char *pcWriteBuffer, size_t xWriteBufferLen, con
 		return pdFALSE;
 	}
 
+	if (!fatfs_isValidOperationalParameter(index, value)) {
+		snprintf(pcWriteBuffer, xWriteBufferLen, "Error: %d is not a valid value for op %d.\r\n", value, index);
+		return pdFALSE;
+	}
+
 	// Parameters are valid
 	fatfs_setOperationalParameter(index, value);
+
+#if defined(USE_HM0360) || defined(USE_HM0360_MD)
+	// The MD settings take effect on the HM0360 at once, not only at the next sleep,
+	// so a viewer (or the app) sees the effect of the change straight away
+	if ((index == OP_PARAMETER_MD_SENSITIVITY) || (index == OP_PARAMETER_MD_BLOCK_THRESHOLD)) {
+		hm0360_md_applyMDSettings();
+	}
+#endif // defined(USE_HM0360) || defined(USE_HM0360_MD)
 
 	// Persist the change to CONFIG.TXT now, so it survives the next sleep even
 	// if no capture (which normally triggers the state save) happens first.
@@ -2498,12 +2547,13 @@ static BaseType_t prvEraseModel(char *pcWriteBuffer, size_t xWriteBufferLen, con
 
 #if defined(USE_HM0360) || defined(USE_HM0360_MD)
 /**
- * Sets motion detection sensitivity:
+ * Sets motion detection sensitivity (op 17):
  *
- * 0 = off
  * 1 = low
  * 2 = medium
  * 3 = high
+ *
+ * There is no 'off' (24 Oct 2026): op 11 = 0 switches motion detection off.
  */
 static BaseType_t prvMd(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) {
 	const char *pcParameter;
@@ -2516,8 +2566,9 @@ static BaseType_t prvMd(char *pcWriteBuffer, size_t xWriteBufferLen, const char 
 		char *endptr;
 		long sensitivity_long = strtol(pcParameter, &endptr, 10);
 
-		if (endptr == pcParameter || *endptr != '\0' || sensitivity_long < 0 || sensitivity_long > 3) {
-			cli_append(&pcWriteBuffer, &xWriteBufferLen, "Error: Sensitivity must be an integer between 0 and 3.");
+		if (endptr == pcParameter || *endptr != '\0'
+				|| !fatfs_isValidOperationalParameter(OP_PARAMETER_MD_SENSITIVITY, (uint16_t) sensitivity_long)) {
+			cli_append(&pcWriteBuffer, &xWriteBufferLen, "Error: Sensitivity must be 1, 2 or 3 (op 11 = 0 switches MD off).");
 		}
 		else {
 			sensitivity = (uint16_t)sensitivity_long;
@@ -2562,44 +2613,6 @@ static BaseType_t prvReinitHM0360(char *pcWriteBuffer, size_t xWriteBufferLen, c
 	}
 
 	/* There is no more data to return after this single string, so return pdFALSE. */
-	return pdFALSE;
-}
-
-/**
- * Shows or sets the MD block number threshold (MD_BLOCK_NUM_TH) in contexts A and B
- *
- * executes 'mdth [<cells>]'. For tuning with the live preview: the value is not
- * saved, so a cold boot or 'inithm0360' restores the register table's value.
- */
-static BaseType_t prvMdThreshold(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) {
-	const char *pcParameter;
-	BaseType_t lParameterStringLength;
-	HM0360_MD_STATUS_T mdStatus;
-
-	pcParameter = FreeRTOS_CLIGetParameter(pcCommandString, 1, &lParameterStringLength);
-	if (pcParameter != NULL) {
-		char *endptr;
-		long threshold = strtol(pcParameter, &endptr, 10);
-
-		if ((endptr == pcParameter) || (*endptr != '\0') || (threshold < 1) || (threshold > 255)) {
-			cli_append(&pcWriteBuffer, &xWriteBufferLen, "Error: Threshold must be an integer between 1 and 255.");
-			return pdFALSE;
-		}
-		if (hm0360_md_setBlockThreshold((uint8_t) threshold) != HX_CIS_NO_ERROR) {
-			cli_append(&pcWriteBuffer, &xWriteBufferLen, "Error: the HM0360 did not respond");
-			return pdFALSE;
-		}
-	}
-
-	// Read back, so the reply shows what the sensor holds
-	if (hm0360_md_getMDStatus(&mdStatus) == HX_CIS_NO_ERROR) {
-		cli_append(&pcWriteBuffer, &xWriteBufferLen, "MD threshold A = %d, B = %d",
-				mdStatus.blockNumThA, mdStatus.blockNumThB);
-	}
-	else {
-		cli_append(&pcWriteBuffer, &xWriteBufferLen, "Error: the HM0360 did not respond");
-	}
-
 	return pdFALSE;
 }
 
@@ -3065,6 +3078,7 @@ static void vRegisterCLICommands(void)
 	FreeRTOS_CLIRegisterCommand(&xReadFile);
 	FreeRTOS_CLIRegisterCommand(&xSend);
 	FreeRTOS_CLIRegisterCommand(&xCapture);
+	FreeRTOS_CLIRegisterCommand(&xInterval);	// Changes the interval of the capture in progress
 	FreeRTOS_CLIRegisterCommand(&xPreview);	// Live image preview streaming on the console UART
 
 	FreeRTOS_CLIRegisterCommand(&xSetGps);
@@ -3089,7 +3103,6 @@ static void vRegisterCLICommands(void)
 #if defined(USE_HM0360) || defined(USE_HM0360_MD)
 	FreeRTOS_CLIRegisterCommand(&xMd);	// Sets motion detection sensitivity
 	FreeRTOS_CLIRegisterCommand(&xReinitHM0360);	// Reinitialise HM0360 long register list
-	FreeRTOS_CLIRegisterCommand(&xMdThreshold);	// Shows or sets the MD block number threshold
 #endif // defined(USE_HM0360) || defined(USE_HM0360_MD)
 
 #ifdef WW500_C00

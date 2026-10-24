@@ -33,19 +33,25 @@ coming. The default port is COM14 if you leave out `--port`.
 | Button | What it does |
 |---|---|
 | Free run | Continuous frames, in bursts of 30 with a short gap (about 0.5 s) between bursts |
-| Stop | Stops after the current burst (up to 30 more frames) |
+| Stop | Stops after the current burst (up to 30 more frames); the mode line counts them down |
 | One image | Takes a single frame |
 | Save frame | Saves the last frame to `_Tools/live_frames/` (without the grid) |
-| MD grid | Draws the HM0360 motion grid over the image: blue lines between cells, red outline on cells with motion. The **WAKE** lamp shows whether the frame would wake the device. See [Motion grid overlay](#motion-grid-overlay) |
+| Frame interval (ms) | Time between frames. Takes effect from the next frame: during a burst the viewer sends `interval N` |
+| Help | Shows where this guide is, and the `--help` text |
+| Motion detection | One switch for all the MD tools: the grid over the image, the **WAKE** lamp, the MD status lines, Sensitivity, Wake threshold and grid rows. Off by default: plain live video at the camera's fastest default interval (HM0360 20 ms). On, the HM0360 frame interval follows op 11. See [Motion grid overlay](#motion-grid-overlay) |
 
 Type any console command (`setop`, `getop`, `camreg`, `vcm` ...) in the Command box (right-hand
-column). **Log to file** (on by default) writes everything in the log pane, with timestamps, to
+column). **Keep awake** (on by default) sends a bare carriage return when the link has been
+quiet for 20 s, which restarts the device's 60 s console inactivity period, so the device
+stays awake while the viewer is open and the close can always run. It is never sent during
+the cold-boot sleep or after a `dpd`. Untick it to let the device sleep, e.g. to test a wake.
+**Log to file** (on by default) writes everything in the log pane, with timestamps, to
 `_Tools/live_frames/live_log_<date>_<time>.txt`; the path is shown under the box.
 
 **When you finish, close the window with its close button.** That leaves the device in a quiet
-lab state: no timelapse, no motion detection, short inactivity (`setop 7 0`, `setop 11 0`,
-`setop 8 1000`). These are saved to the SD card, so set up the field values again before a
-deployment.
+lab state: no timelapse and short inactivity (`setop 7 0`, `setop 8 1000`). These are saved
+to the SD card, so set them again before a deployment. The MD settings (ops 11, 17 and 33)
+are left as they are: the MD controls save them on purpose.
 
 **Why `--wake 10`?** After a reset the firmware takes no pictures until it has slept once.
 `--wake 10` makes it sleep at once and wake itself 10 s later. Without it, wake the device
@@ -109,9 +115,11 @@ py _Tools\live_view.py --port COM4 --wake 10
 
 Options: `--port` (default COM14), `--baud` (default 921600), `--wake SECONDS` (timelapse
 wake after a cold boot), `--save-dir DIR` (where Save frame writes), `--interval MS`
-(free-run frame interval; by default 20 ms on the HM0360 and 100 ms on the RP3, from the
-device's `camera` reply). The **Interval (ms)** box in the window changes it from the next
-burst.
+(free-run frame interval, 20 ms minimum). The default is 20 ms on the HM0360 and 100 ms on
+the RP3. With **Motion detection** on, the HM0360 uses op 11, the MD frame interval (read
+with `getop 11` at connect), or 1000 ms if op 11 is 0.
+The **Frame interval (ms)** box in the window changes it from the next frame (`interval N`
+during a burst, then the next `capture`).
 
 Shows the live image plus a console log pane, a command box and quick-command
 buttons, so `setop 27 ...`, `setop 28 ...`, `vcm ...`, `camreg ...` can be
@@ -128,9 +136,10 @@ sent **while watching**.
 * **Save frame** writes the last JPEG to `_Tools/live_frames/` (git-ignored; change
   with `--save-dir`) for A/B records. The log shows the full path.
 * **Closing the window leaves the device quiet**, each step confirmed: `preview 0`,
-  `setop 7 0` (no timelapse), `setop 11 0` (no motion detection), `setop 8 1000`
-  (short inactivity). The firmware saves op params to CONFIG.TXT, so this replaces
-  whatever the card had, including any field MD setting: the viewer is a lab tool.
+  `setop 7 0` (no timelapse), `setop 8 1000` (short inactivity). The firmware saves op
+  params to CONFIG.TXT, so this replaces whatever the card had. The MD op params (11, 17
+  and 33) are not touched (24 Oct 2026; earlier versions set op 11 to 0, then put ops 11
+  and 17 back).
   Closing the console instead (or Ctrl+C) skips it, and if the device is asleep the
   viewer prints which commands were not confirmed.
 
@@ -186,27 +195,38 @@ reference.
 
 ### MD controls
 
-| Control | Sends | Notes |
-|---|---|---|
-| Sensitivity Low / Med / High | `md 1`, `md 2`, `md 3` | Sets op 17, which is saved to CONFIG.TXT at the next sleep. The viewer reads op 17 at connect (`getop 17`) and puts it back on close if it was changed |
-| Wake threshold (cells) | `mdth N` | `MD_BLOCK_NUM_TH`, written to the main bank and contexts A and B. **Not saved:** a cold boot or `inithm0360` restores the register table's value (4) |
+The controls are the op params the device uses for its motion wake, so what you set here is
+what the device does in the field. The viewer reads them (`getop`) at connect and after each
+wake, writes them with `setop` (saved to CONFIG.TXT at once), and reads each back, so a value
+the firmware rejects does not stay on screen.
 
-`mdth` with no number replies with the current values (`MD threshold A = 4, B = 4`).
+| Control | Op | Range | Notes |
+|---|---|---|---|
+| Sensitivity Low / Med / High | 17 | 1 to 3 | Per-cell threshold and light coefficient (the Himax low/medium/high tables). Applied to the HM0360 at once |
+| Wake threshold (cells) | 33 | 1 to 255, default 4 | `MD_BLOCK_NUM_TH`: wake when **more than** this many cells show motion. Written to the main bank and contexts A and B, at once |
+| MD interval (ms, 0 = off) | 11 | 0 to 1997 | Time between MD frames while asleep. 0 is the only way to switch motion detection off. With Motion detection on, the frame interval follows it |
 
-### Set the interval to match the field before judging the controls
+Op 10 (camera enabled) is read too: with 0, the status shows that there will be no motion
+wake. See `config_file.md` for the op params.
+
+### Why the HM0360 interval defaults to op 11
 
 With `USE_HM0360_CAPTURE_TIMER` (defined in the HM0360 build) the HM0360 takes the burst's
 frames by itself: one frame, then a sleep of the capture interval, then the next. MD runs on
 **every** sensor frame and compares it with the previous one. The AI processor needs about
 200 ms to stream a frame, then takes whichever sensor frame comes next. So:
 
-* **At the default 20 ms interval** the sensor makes a frame about every 55 ms, but only
+* **At a 20 ms interval** the sensor makes a frame about every 55 ms, but only
   about one in four is shown. The `ROI_OUT` bits of the others are overwritten unseen.
 * **Slow movement is missed for a second reason:** frames 55 ms apart differ too little
   for a slowly moving object to pass the per-cell threshold. In the field the frames are an
   op 11 interval apart, so the same movement makes a bigger difference between frames.
-* **Set Interval to the field's op 11 value** (it must be over about 250 ms). Then every
-  sensor frame is shown and MD compares frames as far apart as in the field.
+* **So the viewer uses op 11 as the interval** (24 Oct 2026). If op 11 is over about
+  250 ms, every sensor frame is shown and MD compares frames as far apart as in the field.
+  If op 11 is 0 (MD off), it uses 1000 ms.
+* **The HM0360 sleep register stops at about 1997 ms** (`calculateSleepTime()`: interval x
+  0x8030 / 1000, capped at 0xFFFF). A longer op 11 or interval runs at that, so the viewer
+  caps the HM0360 interval there and says so in the log.
 
 ## Bench session recipe
 

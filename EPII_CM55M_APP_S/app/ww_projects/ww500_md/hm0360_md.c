@@ -125,11 +125,6 @@ static HX_CIS_SensorSetting_t HM0360_md_sensitivity_high[] = {
 		//{HX_CIS_I2C_Action_W, 0x35a8, 0xf0},	// Context B ROI_H [7:4] ROI_END_H, [3:0] ROI_START_H - So 15:0
 };
 
-static HX_CIS_SensorSetting_t HM0360_md_sensitivity_off[] = {
-		{HX_CIS_I2C_Action_W, 0x354b, 0x00},	// Context A MD_LIGHT_COEF [0x41/0x31/0x21]
-		{HX_CIS_I2C_Action_W, 0x35a5, 0x00},	// Context B MD_LIGHT_COEF [0x41/0x31/0x21]
-};
-
 /*************************************** Local Function Definitions *******************/
 
 /**
@@ -764,8 +759,8 @@ HX_CIS_ERROR_E hm0360_md_getMDStatus(HM0360_MD_STATUS_T * val) {
  * application note section 3.1.
  *
  * Written to the main bank and to contexts A and B, so live preview (context A)
- * and the motion wake (context B) use the same value. Not saved: the HM0360
- * register table puts back its own value at the next cold boot or 'inithm0360'.
+ * and the motion wake (context B) use the same value. The value comes from
+ * op 33 (OP_PARAMETER_MD_BLOCK_THRESHOLD) - see hm0360_md_applyMDSettings().
  *
  * @param threshold - number of cells (1 to 255)
  * @return error code
@@ -918,14 +913,9 @@ HX_CIS_ERROR_E hm0360_md_prepare(bool cameraSystemEnabled, uint16_t mdFrameInter
 		mdInterval = 0;
 	}
 
-	// TODO - should this also depend on the md sensitivity, as value 0 sets the sensitivity to off.
-	// Maybe we should remove the md 0 value as it is a second way to disable MD.
-
-	// The message reports whether motion detection can really happen (28 Sep 2026). Sensitivity 0
-	// (OP_PARAMETER_MD_SENSITIVITY, op 17) sets MD_LIGHT_COEF to 0 in hm0360_md_setSensitivity(), so the
-	// sensor never raises a motion interrupt even though the frame interval is set. The sensor set-up below is unchanged:
-	// it still takes its frames at the interval. image_sleepNow() applies op 17 just before this in every build
-	// (issue #211, 2 Oct 2026).
+	// The message reports whether motion detection can really happen (28 Sep 2026). Op 11 = 0 (or the camera
+	// system disabled) is the only off switch: since 24 Oct 2026 op 17 has no 'off' value. image_sleepNow()
+	// applies op 17 and op 33 just before this in every build (hm0360_md_applyMDSettings()).
 	sensitivity = fatfs_getOperationalParameter(OP_PARAMETER_MD_SENSITIVITY);
 
 	if (mdInterval == 0) {
@@ -933,15 +923,11 @@ HX_CIS_ERROR_E hm0360_md_prepare(bool cameraSystemEnabled, uint16_t mdFrameInter
 		dbg_printf(DBG_LESS_INFO, "   HM0360 Motion Detection off (%s).\r\n",
 				cameraSystemEnabled ? "the frame interval, op 11, is 0" : "the camera system is disabled");
 	}
-	else if (sensitivity == MD_SENSITIVITY_OFF) {
-		//newMode = MODE_SLEEP;
-		dbg_printf(DBG_LESS_INFO, "   HM0360 Motion Detection off (the sensitivity, op 17, is 0), frames every %dms.\r\n",
-				mdFrameInterval);
-	}
 	else {
 		//newMode = MODE_SW_NFRAMES_SLEEP;
-		dbg_printf(DBG_LESS_INFO, "   HM0360 Motion Detection on! %dms frame interval, sensitivity %d\r\n",
-				mdFrameInterval, (int) sensitivity);
+		dbg_printf(DBG_LESS_INFO, "   HM0360 Motion Detection on! %dms frame interval, sensitivity %d, wake threshold %d cells\r\n",
+				mdFrameInterval, (int) sensitivity,
+				(int) fatfs_getOperationalParameter(OP_PARAMETER_MD_BLOCK_THRESHOLD));
 	}
 
 	saveMainCameraConfig();
@@ -987,7 +973,7 @@ HX_CIS_ERROR_E hm0360_md_reInitialise(void) {
 }
 
 /**
- * Programs one of 4 alternative motion detection sensitivity settings
+ * Programs one of 3 alternative motion detection sensitivity settings
  * See Himax app note "HM0360 Motion Detection Setting"
  *
  * Was cisdp_sensor_set_md_sensitivity() in the HM0360 sensor driver, which the RP builds do not compile, so op 17
@@ -1001,17 +987,13 @@ HX_CIS_ERROR_E hm0360_md_reInitialise(void) {
 HX_CIS_ERROR_E hm0360_md_setSensitivity(MD_SENSITIVITY_CONFIG_E option) {
 	HX_CIS_ERROR_E ret;
 
-	if (option < MD_SENSITIVITY_NUMBER) {
+	if ((option >= MD_SENSITIVITY_LOW) && (option < MD_SENSITIVITY_NUMBER)) {
 		xprintf("HM0360 MD sensitivity %d\n", option);
 	}
 
 	saveMainCameraConfig();
 
 	switch (option) {
-
-	case MD_SENSITIVITY_OFF:
-		ret = hx_drv_cis_setRegTable(HM0360_md_sensitivity_off, HX_CIS_SIZE_N(HM0360_md_sensitivity_off, HX_CIS_SensorSetting_t));
-		break;
 
 	case MD_SENSITIVITY_LOW:
 		ret = hx_drv_cis_setRegTable(HM0360_md_sensitivity_low, HX_CIS_SIZE_N(HM0360_md_sensitivity_low, HX_CIS_SensorSetting_t));
@@ -1032,6 +1014,26 @@ HX_CIS_ERROR_E hm0360_md_setSensitivity(MD_SENSITIVITY_CONFIG_E option) {
 	}
 
 	restoreMainCameraConfig();
+
+	return ret;
+}
+
+/**
+ * Applies the motion detection settings held in the operational parameters to the HM0360:
+ * the sensitivity (op 17) and the wake threshold (op 33, MD_BLOCK_NUM_TH).
+ *
+ * Called wherever op 17 used to be applied on its own: after the HM0360 register table is
+ * loaded (HM0360 build), just before DPD in every build (image_sleepNow()), and when either
+ * is changed with 'setop'. The values were range-checked when CONFIG.TXT was loaded or the
+ * setop was accepted (fatfs_isValidOperationalParameter()).
+ *
+ * @return error code
+ */
+HX_CIS_ERROR_E hm0360_md_applyMDSettings(void) {
+	HX_CIS_ERROR_E ret;
+
+	ret = hm0360_md_setSensitivity((MD_SENSITIVITY_CONFIG_E) fatfs_getOperationalParameter(OP_PARAMETER_MD_SENSITIVITY));
+	ret |= hm0360_md_setBlockThreshold((uint8_t) fatfs_getOperationalParameter(OP_PARAMETER_MD_BLOCK_THRESHOLD));
 
 	return ret;
 }

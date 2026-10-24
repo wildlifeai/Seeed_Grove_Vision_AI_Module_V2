@@ -153,3 +153,7 @@ building on any of them:
   (`MD_CTRL1` = 0x06) until the last frame. The AI processor takes whichever frame comes after it
   has handled the previous one, so at short intervals most sensor frames, and their MD bits, are
   never seen. Found 24 Oct 2026 after it had been assumed to use the software `captureTimer`.
+* **The HM0360 sleep between frames stops at about 1997 ms.** `calculateSleepTime()` (`hm0360_md.c`)
+  computes interval x 0x8030 / 1000 and caps it at 0xFFFF, so op 11 (MD frame interval) or an HM0360
+  capture interval above that silently runs at about 2 s (noted in `config_file.md`, op 11). Noted by
+  Charles, 24 Oct 2026.

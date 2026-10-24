@@ -82,3 +82,4 @@ live MD controls, op parameters); file issues as each is agreed.
 | File | What it is |
 |---|---|
 | [CLAUDE_mdEnhancements_proposal.md](CLAUDE_mdEnhancements_proposal.md) | Stepped plan, with bench findings from 23 Oct and the 24 Oct register-bank and MD interrupt notes |
+| [cross_repo_changes.md](cross_repo_changes.md) | Running list of changes the BLE processor and app need to know about, for the PR |

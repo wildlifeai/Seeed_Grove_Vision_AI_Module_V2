@@ -257,6 +257,10 @@ static uint32_t g_captures_to_take;
 static uint32_t g_frames_total;
 static uint32_t g_timer_period; // Interval between pictures in ms
 
+// A new interval for the burst in progress, set by image_setCaptureInterval() from the CLI task and
+// applied by the image task at its next frame-ready (0 = none). Cleared when a burst starts.
+static volatile uint32_t pendingTimerPeriod = 0;
+
 // A frame fault is a datapath event that arrives when a frame is expected: an EDM watchdog
 // timeout or another datapath error - see isFrameFaultEvent() and frameFault().
 // Rather than give up at the first fault (which loses the rest of the capture sequence),
@@ -754,6 +758,7 @@ static APP_MSG_DEST_T handleEventForInit(APP_MSG_T img_recv_msg) {
             }
             g_captures_to_take = requested_captures;
             g_timer_period = requested_period;
+            pendingTimerPeriod = 0;	// an 'interval' sent before this burst does not apply to it
             g_capture_retries = 0;	// fresh capture sequence
             g_frame_fault_seen = false;
             XP_LT_GREEN
@@ -907,6 +912,20 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
         	//hm0360_md_setMode(CONTEXT_A, MODE_SW_NFRAMES_SLEEP, 1, 0);
         }
 #endif // USE_HM0360_CAPTURE_TIMER
+
+        // A new interval for this burst ('interval' command, e.g. from the live viewer). The RP camera's
+        // captureTimer reads g_timer_period before each frame. The HM0360 times the burst itself, so it is
+        // restarted with the new sleep time, the same call that starts a burst (configure_image_sensor()).
+        if (pendingTimerPeriod != 0) {
+        	g_timer_period = pendingTimerPeriod;
+        	pendingTimerPeriod = 0;
+        	xprintf("Interval: %dms from the next frame\n", g_timer_period);
+#ifdef USE_HM0360_CAPTURE_TIMER
+        	if (g_cur_jpegenc_frame < g_captures_to_take) {
+        		hm0360_md_setMode(CONTEXT_A, MODE_SW_NFRAMES_SLEEP, 1, g_timer_period);
+        	}
+#endif // USE_HM0360_CAPTURE_TIMER
+        }
 
         // The first frame after the boot: print how long each stage took (issue #249). On a motion wake the HM0360's
         // SEN_INT is cleared just below, so a scope on it shows the whole time from motion to this point.
@@ -2295,9 +2314,10 @@ static bool configure_image_sensor(CAMERA_CONFIG_E operation) {
         }
         else  {
 #ifdef USE_HM0360
-        	// cisdp_sensor_init() has just reloaded the HM0360's register table, so re-apply op 17. HM0360 build only:
-        	// in the RP builds this is the RP camera's init, and image_sleepNow() applies op 17 to the HM0360 (#211)
-        	hm0360_md_setSensitivity(fatfs_getOperationalParameter(OP_PARAMETER_MD_SENSITIVITY));
+        	// cisdp_sensor_init() has just reloaded the HM0360's register table, so re-apply op 17 and op 33. HM0360
+        	// build only: in the RP builds this is the RP camera's init, and image_sleepNow() applies them to the
+        	// HM0360 (#211)
+        	hm0360_md_applyMDSettings();
 #endif // USE_HM0360
         	// Initialise extra registers from file
         	cis_file_process(CAMERA_EXTRA_FILE);
@@ -2332,7 +2352,7 @@ static bool configure_image_sensor(CAMERA_CONFIG_E operation) {
         else  {
 #ifdef USE_HM0360
         	// Only reached in the HM0360 build (see above)
-        	hm0360_md_setSensitivity(fatfs_getOperationalParameter(OP_PARAMETER_MD_SENSITIVITY));
+        	hm0360_md_applyMDSettings();
 #endif // USE_HM0360
         	// if wdma variable is zero when not init yet, then this step is a must be to retrieve wdma address
             //  Datapath events give callbacks to os_app_dplib_cb() in dp_task
@@ -2994,6 +3014,26 @@ const char *image_getLastImageFile(void)
 //}
 
 /**
+ * Changes the interval of the capture burst in progress, from its next frame.
+ *
+ * Called from the CLI task ('interval' command); the image task applies the value at its next
+ * frame-ready, so the sensor is only ever accessed from the image task. A later 'capture'
+ * command sets its own interval as usual.
+ *
+ * @param interval - the new interval in ms (checked by the caller)
+ * @return true if a burst is in progress, so the interval will change; false if not
+ */
+bool image_setCaptureInterval(uint32_t interval) {
+	bool burstRunning = (g_captures_to_take > 0) && (g_cur_jpegenc_frame < g_captures_to_take);
+
+	if (burstRunning) {
+		pendingTimerPeriod = interval;
+	}
+
+	return burstRunning;
+}
+
+/**
  * Returns whether the camera system is enabled.
  *
  * This is the "getter".
@@ -3043,11 +3083,11 @@ void image_sleepNow(void) {
 #if defined(USE_HM0360) || defined(USE_HM0360_MD)
     // HM0360 as main camera
     if (hm0360_md_isHM0360Present()) {
-    	// Apply the MD sensitivity (op 17) now, not only at boot (configure_image_sensor()), so that a change made
-    	// while awake (setop 17, AI setop over BLE) takes effect for this DPD rather than after the next wake, and so
-    	// matches the message hm0360_md_prepare() prints (28 Sep 2026). In every build, including the RP builds where
-    	// the HM0360 is only the motion detector: before 2 Oct 2026 op 17 had no effect there (issue #211)
-    	hm0360_md_setSensitivity(fatfs_getOperationalParameter(OP_PARAMETER_MD_SENSITIVITY));
+    	// Apply the MD sensitivity (op 17) and wake threshold (op 33) now, not only at boot
+    	// (configure_image_sensor()), so the values this DPD uses are those hm0360_md_prepare() prints (28 Sep 2026).
+    	// In every build, including the RP builds where the HM0360 is only the motion detector: before 2 Oct 2026
+    	// op 17 had no effect there (issue #211). Op 33 added 24 Oct 2026.
+    	hm0360_md_applyMDSettings();
     	XP_LT_GREY;
        	xprintf("Preparing HM0360 for MD:");
     	hm0360_md_prepare(cameraSystemEnabled, mdInterval); // select CONTEXT_B registers (if enabled)

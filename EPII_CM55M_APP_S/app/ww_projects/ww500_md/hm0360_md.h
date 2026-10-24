@@ -59,12 +59,12 @@ typedef enum {
 
 // Motion detection sensitivity options, the values of op 17 (OP_PARAMETER_MD_SENSITIVITY).
 // Moved from cis_hm0360/cisdp_sensor.h so the RP builds can use them too (issue #211, 2 Oct 2026)
+// There is no 'off' since 24 Oct 2026: op 11 (MD interval) = 0 is the one way to switch MD off.
 typedef enum {
-	MD_SENSITIVITY_OFF,
-	MD_SENSITIVITY_LOW,
+	MD_SENSITIVITY_LOW = 1,
 	MD_SENSITIVITY_MEDIUM,
 	MD_SENSITIVITY_HIGH,
-	MD_SENSITIVITY_NUMBER		// This is not one of the options - it serves to define the number of options (=4)
+	MD_SENSITIVITY_NUMBER		// Not one of the options: one more than the highest (=4)
 } MD_SENSITIVITY_CONFIG_E;
 
 /*************************************** Public Function Declarations **************************/
@@ -112,8 +112,11 @@ uint16_t hm0360_md_getMDOutput(uint8_t * regTable, uint8_t length);
 // Read the MD interrupt status and the registers that decide it (live preview)
 HX_CIS_ERROR_E hm0360_md_getMDStatus(HM0360_MD_STATUS_T * val);
 
-// Set MD_BLOCK_NUM_TH in the main bank and both contexts (not saved; the register table restores it)
+// Set MD_BLOCK_NUM_TH in the main bank and both contexts
 HX_CIS_ERROR_E hm0360_md_setBlockThreshold(uint8_t threshold);
+
+// Apply the MD sensitivity (op 17) and wake threshold (op 33) to the HM0360
+HX_CIS_ERROR_E hm0360_md_applyMDSettings(void);
 
 void hm0360_md_printGrid(uint8_t *roiOut, uint16_t numBlocks, char *msg, uint16_t msgLen);
 

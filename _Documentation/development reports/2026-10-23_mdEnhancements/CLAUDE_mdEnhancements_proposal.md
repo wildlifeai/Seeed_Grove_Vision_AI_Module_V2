@@ -449,3 +449,52 @@ prediction ignores the latency logic, which the firmware leaves unused (`MD_CTRL
 **Open (Charles, 24 Oct):** come back to MD sensitivity, meaning slow movement not being
 detected, after the controls are built and tested. First check on the bench: with Interval
 set to the field op 11 value, is slow movement detected at each of Low, Med and High?
+
+**Interval and close behaviour (24 Oct, Python only, not benched).**
+- Charles: the HM0360 default interval is op 11, with a 20 ms floor. The viewer reads
+  `getop 11` at connect, follows `setop 11 N`, and falls back to 20 ms when op 11 is 0.
+- Charles: the HM0360 sleep register caps the frame spacing at about 2 s. Code check:
+  interval x 0x8030 / 1000, capped at 0xFFFF, gives 1997 ms. The viewer caps the HM0360
+  interval there. `config_file.md` does not mention the cap (not edited: cross-repo).
+- **Change to the agreed close behaviour (Charles): op 11 stays unchanged on the SD card.**
+  The close no longer sends `setop 11 0`; it puts back the op 11 found at connect if a
+  `setop 11` changed it, as it already does for op 17. It still sets op 7 to 0 and op 8 to
+  1000.
+
+## 24 October 2026: MD settings become op params (coded, not built)
+
+**Decision (Charles):** the viewer's MD controls read and write the op params, saved to the SD
+card, so they set what the device does in the field. Op 33 (`OP_PARAMETER_RFU_2`) becomes
+`OP_PARAMETER_MD_BLOCK_THRESHOLD`, 1 to 255, default 4. Op 17 loses its 'off' value (two ways
+to switch MD off was a mistake): 1 to 3 only. The close no longer restores MD op params.
+
+**Firmware:**
+- `fatfs_task.h/.c`: op 33 renamed, default 4; range constants; new
+  `fatfs_isValidOperationalParameter()`. `load_configuration()` replaces an invalid op 17
+  (by 1) or op 33 (by 4) with a console line: cards written before this hold `33 0`, and
+  possibly `17 0`.
+- `hm0360_md.c/.h`: sensitivity 'off' table and enum value removed (`MD_SENSITIVITY_LOW` is
+  now 1 explicitly); new `hm0360_md_applyMDSettings()` applies op 17 and op 33. Called after
+  the HM0360 table load (cold and warm init), in `image_sleepNow()` before
+  `hm0360_md_prepare()` (every build: this is the DPD wake detection), and by `setop 17` /
+  `setop 33`. `hm0360_md_prepare()` prints the threshold too.
+- `CLI-commands.c`: `setop` rejects out-of-range values for ops 17 and 33 (`Error: N is not a
+  valid value for op M.`); `md` accepts 1 to 3 only; `mdth` removed.
+- **Behaviour change for field cards:** a card with op 17 = 0 used to mean "MD off" if op 11 was
+  set. It now loads as low sensitivity, so such a device would start waking on motion.
+
+**Viewer:** reads ops 10, 11, 17 and 33 at connect and after every wake; Sensitivity, Wake
+threshold and a new MD interval box write them with `setop` and read them back with `getop`.
+
+**Cross-repo (per `cross-repo-contracts.md`, needs a `Decide:` issue):** op 33's name, default
+and meaning; op 17 range; the BLE processor's mirror of the list (`aiProcessor.h` in
+ww-hardware); anything in the app, website or backend that shows or validates ops 17 or 33.
+Draft issue text was given to Charles in the session (24 Oct).
+
+**Frame interval takes effect at once (24 Oct, coded, not built).** New console command
+`interval <ms>` (CLI-commands.c) and `image_setCaptureInterval()` (image_task.c/h). The CLI only
+records the value; the image task applies it at its next frame-ready. RP camera: `captureTimer`
+reads `g_timer_period` before each frame. HM0360: the burst is restarted with
+`hm0360_md_setMode(CONTEXT_A, MODE_SW_NFRAMES_SLEEP, 1, g_timer_period)`, the burst-start call;
+untested mid-burst, a frame may be lost at the switch. A pending value is cleared when a burst
+starts. The viewer sends `interval N` when the frame interval changes during a burst.

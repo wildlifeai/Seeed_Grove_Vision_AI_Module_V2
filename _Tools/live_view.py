@@ -1,60 +1,44 @@
 #!/usr/bin/env python3
-"""Live camera preview + tuning console for the WW500.
+"""Live camera preview and tuning console for the WW500 AI processor.
 
-Companion to the firmware 'preview' CLI command (branch feat/uart-live-preview).
-The firmware streams each captured frame on the console UART as one JSON line:
+Shows the camera image live over the console UART and keeps the console
+usable at the same time, so settings can be changed while watching the
+picture. User guide: _Documentation/live_preview.md
 
-  {"type": 1, "name": "INVOKE", "code": 0, "data": {"count": N,
-   "resolution": [W, H], "boxes": [], "image": "<base64 JPEG>"}}
+Quick start (Windows):
+    py live_view.py --port COM4 --wake 10
 
-This tool displays the frames live and keeps the CLI usable at the same time,
-so camera settings can be adjusted while watching the picture change, e.g.:
+Window:
+  Free run           bursts of 30 frames, repeated until Stop. The firmware
+                     cannot cancel a burst, so Stop takes effect when the
+                     current burst ends; the mode line counts the frames down.
+  Stop / One image   stop free run / take a single frame.
+  Save frame         saves the last image to --save-dir.
+  Frame interval     the time between frames (from the next frame).
+  Motion detection   (off by default) the HM0360 motion grid over the image,
+                     a WAKE lamp that shows whether a frame would wake the
+                     device, and the MD settings the device uses for motion
+                     wake: Sensitivity (op 17), Wake threshold (op 33) and MD
+                     interval (op 11). Changes are saved to the SD card at
+                     once. While it is on, the HM0360 frame interval follows
+                     op 11.
+  Command box        any console command, e.g. setop 27 286, vcm 512,
+                     camreg 3080 (camreg writes are saved to the SD card).
+  Keep awake         keeps the device awake while the viewer is open.
+  Log to file        writes the log pane to --save-dir.
 
-    setop 27 286               WB red gain (Q8.8, 256 = 1.0x)
-    setop 28 326               WB blue gain
-    vcm 512                    focus position (RP3 only)
-    camreg w 0x0202 0x03e8     sensor register write (staged - see camreg help)
+Sleep and wake are handled automatically. After a cold boot (power-up or
+reset) the firmware takes no pictures until it has slept once; with --wake N
+the viewer sends it to sleep with an N s timelapse wake, then streams when it
+wakes.
 
-Two capture modes:
-  Free run    - short capture bursts, re-armed each time a burst ends, so Stop
-                takes effect within one burst (the firmware cannot cancel one).
-  One image   - stops free run and takes a single frame.
+On close (use the window's close button) the viewer leaves the device quiet:
+preview off, no timelapse (op 7 = 0), short inactivity (op 8 = 1000). These
+are saved to CONFIG.TXT. The MD settings are left as they are.
+If the device is asleep the close cannot reach it, and the log says what was
+not sent.
 
-It also handles the WW500's sleep habits by itself. On connect it probes the
-device with 'ver' and arms. If the device is asleep it waits for a boot banner:
- - '### Warm Boot ###' (a wake from DPD): it types the keep-awake at once, then
-   turns preview on and starts capturing - every step echo-verified with retries.
- - '### Cold Boot ###' (power-up, reset, slot switch): the firmware refuses
-   captures until it has slept once ("Error: no captures until after the first
-   sleep."), so the viewer lets it sleep. Something then has to wake it: motion
-   (op11 > 0), the app, or a timelapse. With --wake N the viewer types
-   'setop 7 N' at the cold boot, then 'dpd' once camera init is done, so the
-   device wakes N s later. ('dpd' is needed because any
-   character typed on the console keeps the device awake for 60 s.)
-
-Usage:
-    py live_view.py                    # defaults: COM14, 921600
-    py live_view.py --port COM13
-    py live_view.py --wake 10          # timelapse wake after a cold boot
-    py live_view.py --save-dir D:/pics # where 'Save frame' writes (default
-                                       # _Tools/live_frames, git-ignored)
-
-NOTES
- - Close TeraTerm first: Windows COM ports are exclusive.
- - A print from another firmware task inside a frame line corrupts that frame.
-   The firmware keeps the IF task quiet while a frame is sent
-   (preview_isSending()); other dropped frames are counted as 'dropped'.
- - The console UART receive path has a 1-character buffer re-armed by the CLI
-   task, so commands are sent one character at a time, preferably in the quiet
-   gap right after a frame arrives.
- - An occasional frame is lost when another firmware print lands inside the
-   frame line; it is counted as 'dropped' and skipped.
- - op8 (inactivity) is 16-bit: 60000 ms is the usable maximum. Streaming
-   resets the timer continuously, so the device stays awake while you tune.
- - Closing the window leaves the device quiet for the lab, each step confirmed:
-   preview 0, setop 7 0 (no timelapse), setop 11 0 (no motion detection),
-   setop 8 1000 (short inactivity). These are saved to CONFIG.TXT, so they
-   replace whatever the card had. Killing the console instead skips this.
+Close TeraTerm first: Windows COM ports are exclusive.
 """
 
 import argparse
@@ -86,10 +70,23 @@ BURST_FRAMES = 30             # 30 from 23 Oct 2026 (was 10): fewer gaps, slower
 # Interval between frames in a burst. Never 0: the firmware passes it to
 # xTimerChangePeriod(), and FreeRTOS asserts on a zero period (timers.c), which
 # resets the AI processor. That is the likely cause of the old note that
-# 'capture N 0' wedges the IMX708. 1 ms is the minimum (1 tick).
-INTERVAL_MIN_MS = 1
+# 'capture N 0' wedges the IMX708.
+INTERVAL_MIN_MS = 20
+INTERVAL_MAX_MS = 60000
 INTERVAL_FALLBACK_MS = 500     # until the camera type is known
 INTERVAL_DEFAULT_MS = {"HM0360": 20, "RP3": 100, "RP2": 100}
+# On the HM0360 the default is the field MD frame interval (op 11) instead,
+# when it is set: the sensor then spaces its frames as it does in a field
+# sleep, so MD compares frames as far apart, and every frame is shown (24 Oct
+# 2026). At 20 ms the sensor makes about four frames per frame shown, and
+# slow movement barely changes between frames 55 ms apart.
+OP11_DEFAULT_CAMERAS = ("HM0360",)
+OP11_OFF_INTERVAL_MS = 1000    # HM0360 default when op 11 is 0 (MD off) (Charles, 24 Oct 2026)
+# The HM0360 sleep between frames is a 16-bit count, interval * 0x8030 / 1000,
+# capped at 0xffff (calculateSleepTime(), hm0360_md.c): about 1997 ms. Longer
+# values, for op 11 or a capture interval, run at that. So the viewer caps the
+# HM0360 interval there too, rather than show a value the sensor does not use.
+HM0360_MAX_INTERVAL_MS = 0xFFFF * 1000 // 0x8030
 SINGLE_CMD = "capture 1 500"
 CAPTURE_OK = "About to capture"  # the CLI's reply to an accepted capture
 REARM_QUIET_S = 20.0           # fallback re-arm if a burst-end line was missed
@@ -111,10 +108,15 @@ BURST_END_RE = re.compile(r"Current captures completed:|Capture failed after")
 # The image task starting a burst, ours or its own (a motion or timelapse wake
 # captures op5 images by itself)
 BURST_START_RE = re.compile(r"Images to capture: \d+")
-# MD settings: replies to 'getop 17', 'md N' and 'mdth [N]'
-OP17_RE = re.compile(r"OpParam 17 = (\d+)")
-MD_SENS_RE = re.compile(r"MD sensitivity (?:set to|saved as) (\d+)")
-MDTH_RE = re.compile(r"MD threshold A = (\d+), B = (\d+)")
+# Progress through a burst, printed by the image task for every frame
+BURST_PROGRESS_RE = re.compile(r"Image capture (\d+)/(\d+) took")
+# Op parameter values: the reply to 'getop N' or 'setop N V'
+OP_RE = re.compile(r"OpParam (\d+) = (\d+)")
+# The MD op params the viewer reads and writes (all saved to CONFIG.TXT by setop)
+OP_CAMERA_ENABLED = 10      # read only: 0 means no MD at sleep
+OP_MD_INTERVAL = 11         # ms between MD frames while asleep; 0 = MD off
+OP_MD_SENSITIVITY = 17      # 1 = low, 2 = medium, 3 = high
+OP_MD_BLOCK_THRESHOLD = 33  # wake when more than this many cells show motion (1-255)
 
 # Camera type: the reply to 'camera', or the end of the boot's camera init
 CAMERA_RE = re.compile(r"^(?:cmd> )?(HM0360|RP3|RP2)$|initialised for camera (HM0360|RP3|RP2)")
@@ -239,16 +241,27 @@ def draw_md_grid(img, md, rows):
 
 
 # Sent on close, each confirmed. The viewer is a lab tool, so it leaves the
-# device quiet rather than restoring earlier values: no timelapse (op7), no
-# motion detection (op11), the default short inactivity period (op8). All three
-# are saved to CONFIG.TXT by the firmware.
+# device quiet rather than restoring earlier values: no timelapse (op7), the
+# default short inactivity period (op8). Both are saved to CONFIG.TXT by the
+# firmware. The MD op params (11, 17, 33) are left alone: the MD controls set
+# them on purpose, and they are already saved (Charles, 24 Oct 2026).
 CLOSE_SEQUENCE = [
     ("preview 0", "Preview off"),
     ("setop 7 0", "Set OpParam 7 = 0"),
-    ("setop 11 0", "Set OpParam 11 = 0"),
     ("setop 8 1000", "Set OpParam 8 = 1000"),
 ]
 CLOSE_TIMEOUT_S = 10.0         # give up confirming after this (device asleep?)
+# Keep-alive: any console character restarts the AI processor's inactivity
+# countdown with its 60 s CLI period (CLI-commands.c, inactivity.c), so a bare
+# CR on a quiet link keeps the device awake while the viewer is open, and the
+# close can then run. Never sent between a 'dpd' and the next boot: a
+# character there would put the 60 s period back and cancel the forced sleep.
+KEEPALIVE_S = 20.0
+
+# Asked at connect, and again after every wake: if the device was asleep at
+# connect the first ones go nowhere, and a boot clears the queue anyway.
+# Their replies set the camera, the op 11 default interval and the MD controls.
+STATUS_QUERIES = ("camera", "getop 10", "getop 11", "getop 17", "getop 33")
 
 COLD_BOOT_HINT = ("[viewer] cold boot: the firmware refuses captures until it has slept once, "
                   "so letting it sleep. It needs something to wake it: run the viewer with "
@@ -279,11 +292,12 @@ class SerialWorker(threading.Thread):
         self.camera = None          # "HM0360", "RP3", ... once reported
         self.interval_fixed = interval_ms is not None   # --interval given
         self.interval_ms = interval_ms if interval_ms is not None else INTERVAL_FALLBACK_MS
+        self.op11 = None            # MD frame interval (ms) as reported by the device
+        self.op10 = None            # camera system enabled, as reported by the device
         self.seq = deque()          # entries: [cmd, expect, tries_left]
         self.last_md_key = None     # wake prediction of the last frame, for _log_md_change()
         self.md_sensitivity = None  # op 17 as last reported by the device
-        self.md_sensitivity_start = None    # ... as first reported: put back on close
-        self.md_threshold = None    # context A MD_BLOCK_NUM_TH, from 'mdth' or a frame
+        self.md_threshold = None    # op 33 as last reported by the device
         self.md_frames = 0          # frames with MD data since the counts were reset
         self.wake_frames = 0        # ... of which would have woken the device
         self.seq_last_send = 0.0
@@ -293,6 +307,13 @@ class SerialWorker(threading.Thread):
         self.arm_at = None          # deferred arm time after boot-done
         self.sleep_at = None        # deferred 'dpd' after a cold boot (--wake)
         self.autoarm_enabled = True
+        self.keepalive = True       # the Keep awake checkbox
+        self.md_mode = False        # the Motion detection checkbox (off by default)
+        self.burst_frame = 0        # frames taken so far in the current burst ...
+        self.burst_total = 0        # ... of this many (0 = not known)
+        self.stop_requested = False # Stop pressed: the current burst is the last
+        self.last_tx_ts = 0.0       # last character sent, for the keep-alive
+        self.dpd_pending = False    # 'dpd' sent: no keep-alive until the next boot
         self.boot_kind = None       # "cold" or "warm", from the last boot banner
         self.cold_boot = False      # captures refused until the device has slept
         self.capture_busy = False   # a capture burst is running on the device
@@ -341,7 +362,8 @@ class SerialWorker(threading.Thread):
         self.enqueue_verified(steps)
 
     def capture_cmd(self):
-        return f"capture {BURST_FRAMES} {max(INTERVAL_MIN_MS, int(self.interval_ms))}"
+        ms = min(self.max_interval_ms(), max(INTERVAL_MIN_MS, int(self.interval_ms)))
+        return f"capture {BURST_FRAMES} {ms}"
 
     def _burst_ended(self):
         self.capture_busy = False
@@ -357,11 +379,31 @@ class SerialWorker(threading.Thread):
 
     def _write_now(self, cmd):
         self.log_q.put(f"> {cmd}")
+        if cmd.split()[:1] == ["dpd"]:
+            self.dpd_pending = True
         data = cmd.encode("ascii", "replace") + b"\r\n"
         for i in range(len(data)):
             self.ser.write(data[i:i + 1])
             self.ser.flush()
             time.sleep(CHAR_DELAY)
+        self.last_tx_ts = time.monotonic()
+
+    def _keep_alive(self):
+        """Send a bare CR if nothing has been sent for KEEPALIVE_S and the
+        link is quiet. Not in the cold-boot period (the device must sleep),
+        nor after a 'dpd'. Not logged, to keep the log readable."""
+        now = time.monotonic()
+        if (not self.keepalive or self.cold_boot or self.dpd_pending
+                or self.sleep_at is not None or self.seq
+                or now - self.last_tx_ts < KEEPALIVE_S
+                or now - self.last_frame_ts < 3.0):
+            return
+        try:
+            self.ser.write(b"\r")
+            self.ser.flush()
+        except serial.SerialException:
+            return
+        self.last_tx_ts = now
 
     def _pump_seq(self, force=False):
         """Send/resend the head of the queue. Called from the reader loop
@@ -407,13 +449,52 @@ class SerialWorker(threading.Thread):
         if status["flag"]:
             self.wake_frames += 1
         key = status["flag"]
-        if key != self.last_md_key:
+        if key != self.last_md_key and self.md_on():
             self.log_q.put(f"[md] frame #{count}: {status['cells']} cells, "
                            f"threshold {status['thA']} -> {'WAKE' if key else 'no wake'} "
                            f"(for reference: interrupt {'on' if status['int_enabled'] else 'off'}, "
                            f"source {status['source']}; INT_INDIC 0x{status['raw'][0]:02x}, "
                            f"MD_CTRL 0x{status['raw'][1]:02x}, MD_CTRL1 0x{status['raw'][2]:02x})")
         self.last_md_key = key
+
+    def md_on(self):
+        """MD tools on? The Motion detection checkbox, off by default for both
+        builds (Charles, 24 Oct 2026)."""
+        return bool(self.md_mode)
+
+    def max_interval_ms(self):
+        """Longest interval the camera really uses."""
+        return HM0360_MAX_INTERVAL_MS if self.camera == "HM0360" else INTERVAL_MAX_MS
+
+    def _apply_default_interval(self):
+        """Set the default free-run interval from the camera type and op 11,
+        unless the user chose one (--interval or the Interval box)."""
+        if self.interval_fixed or self.camera is None:
+            return
+        if self.camera in OP11_DEFAULT_CAMERAS and not self.md_on():
+            ms = INTERVAL_DEFAULT_MS.get(self.camera, INTERVAL_FALLBACK_MS)
+            source = "camera default, motion detection off"
+        elif self.camera in OP11_DEFAULT_CAMERAS and self.op11:
+            ms = min(self.max_interval_ms(), max(INTERVAL_MIN_MS, self.op11))
+            source = "op 11, the MD frame interval"
+            if ms < self.op11:
+                source += f"; op 11 is {self.op11} but the HM0360 sleep register stops at {ms} ms"
+        elif self.camera in OP11_DEFAULT_CAMERAS and self.op11 == 0:
+            ms = OP11_OFF_INTERVAL_MS
+            source = "op 11 is 0 (MD off)"
+        else:
+            ms = INTERVAL_DEFAULT_MS.get(self.camera, INTERVAL_FALLBACK_MS)
+            source = "camera default"
+        if ms != self.interval_ms:
+            self.interval_ms = ms
+            self.log_q.put(f"[viewer] camera {self.camera}: frame interval {ms} ms ({source})")
+            self.change_interval_now()
+
+    def change_interval_now(self):
+        """Apply the frame interval to the burst in progress too, from its next
+        frame ('interval' command), rather than only from the next burst."""
+        if self.capture_busy and not self.cold_boot:
+            self.send(f"interval {min(self.max_interval_ms(), max(INTERVAL_MIN_MS, int(self.interval_ms)))}")
 
     def _handle_line(self, raw):
         line = ANSI_RE.sub("", raw.decode("utf-8", "replace")).strip("\r\n \t")
@@ -437,8 +518,6 @@ class SerialWorker(threading.Thread):
                     except ValueError:
                         md = None
                     status = md_status(md, data.get("mdstat"))
-                    if status is not None:
-                        self.md_threshold = status["thA"]
                     self._log_md_change(count, status)
                     self.frame_q.put((data.get("count", 0),
                                       data.get("resolution", [0, 0]), jpeg, md, status))
@@ -452,28 +531,37 @@ class SerialWorker(threading.Thread):
                     return
         self._confirm(line)
         now = time.monotonic()
-        m = OP17_RE.search(line) or MD_SENS_RE.search(line)
+        m = OP_RE.search(line)
         if m:
-            self.md_sensitivity = int(m.group(1))
-            if self.md_sensitivity_start is None and OP17_RE.search(line):
-                self.md_sensitivity_start = self.md_sensitivity
-        m = MDTH_RE.search(line)
-        if m:
-            self.md_threshold = int(m.group(1))
+            index, value = int(m.group(1)), int(m.group(2))
+            if index == OP_CAMERA_ENABLED:
+                self.op10 = value
+            elif index == OP_MD_INTERVAL and value != self.op11:
+                self.op11 = value
+                self._apply_default_interval()
+            elif index == OP_MD_SENSITIVITY:
+                self.md_sensitivity = value
+            elif index == OP_MD_BLOCK_THRESHOLD:
+                self.md_threshold = value
         m = CAMERA_RE.search(line)
         if m:
             camera = m.group(1) or m.group(2)
             if camera != self.camera:
                 self.camera = camera
-                if not self.interval_fixed:
-                    self.interval_ms = INTERVAL_DEFAULT_MS.get(camera, INTERVAL_FALLBACK_MS)
-                self.log_q.put(f"[viewer] camera {camera}: frame interval {self.interval_ms} ms")
+                self._apply_default_interval()
         if CAPTURE_OK in line or BURST_START_RE.search(line):
             # A capture is running, so the cold-boot period is evidently over
             self.capture_busy = True
             self.busy_ts = now
             self.cold_boot = False
+        m = BURST_PROGRESS_RE.search(line)
+        if m:
+            self.burst_frame, self.burst_total = int(m.group(1)), int(m.group(2))
+        if BURST_START_RE.search(line):
+            self.burst_frame, self.burst_total = 0, int(line.split(":")[-1])
         if BURST_END_RE.search(line):
+            self.burst_frame = self.burst_total = 0
+            self.stop_requested = False
             self._burst_ended()
         if REFUSED_RE.search(line):
             # Cold-boot period (e.g. connected to a device that had just been
@@ -487,6 +575,7 @@ class SerialWorker(threading.Thread):
             self._sleep_now()
             return
         if COLD_BOOT_RE.search(line) or WARM_BOOT_RE.search(line):
+            self.dpd_pending = False
             self.boot_kind = "cold" if COLD_BOOT_RE.search(line) else "warm"
             self.cold_boot = (self.boot_kind == "cold")
             self.capture_busy = False
@@ -521,6 +610,8 @@ class SerialWorker(threading.Thread):
                 self.log_q.put("[viewer] wake detected - keeping device awake, preview on, "
                                "waiting for camera init before capturing")
                 self.enqueue_verified([KEEPAWAKE_STEP, PREVIEW_STEP])
+                for query in STATUS_QUERIES:
+                    self.send(query)
                 self.arm_at = now + WARM_ARM_FALLBACK_S
         if self.autoarm_enabled and BOOT_DONE_RE.search(line):
             if not self.cold_boot:
@@ -551,8 +642,8 @@ class SerialWorker(threading.Thread):
         # Probe: if the device is already awake this confirms and arms;
         # if it is asleep the probe goes nowhere and the boot catcher arms.
         self.enqueue_verified([("ver", "WW500"), KEEPAWAKE_STEP])
-        self.send("camera")         # sets the default frame interval (CAMERA_RE)
-        self.send("getop 17")       # MD sensitivity, to show and to put back on close
+        for query in STATUS_QUERIES:
+            self.send(query)
         self.arm("connected")
 
         buf = bytearray()
@@ -587,6 +678,7 @@ class SerialWorker(threading.Thread):
             # device quiet (asleep, booting, or between frames): safe to send
             if time.monotonic() - self.last_frame_ts > 3.0:
                 self._pump_seq()
+            self._keep_alive()
         # The port is closed by the owner (Viewer.close), which may still
         # need to send the closing commands
 
@@ -630,13 +722,7 @@ class Viewer:
         self.status = tk.Label(side, justify=tk.LEFT, anchor="w", font=("Consolas", 10))
         self.status.pack(fill=tk.X, pady=(0, 4))
 
-        # Would this frame wake the device? Red when the cells with motion
-        # exceed MD_BLOCK_NUM_TH, the sensor's motion flag, which drives the
-        # MD interrupt (MD_CTRL1 bit 0 = 0)
-        self.wake_lamp = tk.Label(side, text="WAKE", relief=tk.SUNKEN,
-                                  font=("Consolas", 12, "bold"))
-        self.wake_lamp.pack(fill=tk.X, pady=(0, 8))
-        self.lamp_off_bg = self.wake_lamp.cget("bg")
+        self.md_var = tk.BooleanVar(value=worker.md_on())
         self._set_status(None)
 
         tk.Button(side, text="Free run", command=self.start_stream).pack(fill=tk.X)
@@ -644,22 +730,36 @@ class Viewer:
         tk.Button(side, text="One image", command=self.one_image).pack(fill=tk.X, pady=(4, 0))
         tk.Button(side, text="Save frame", command=self.save_frame).pack(fill=tk.X, pady=(4, 8))
 
+        # Motion detection: one switch for all the MD tools. Off gives the
+        # plain live video (no grid, no MD status or controls, the camera's
+        # fastest default interval). Off by default.
+        self.md_check = tk.Checkbutton(side, text="Motion detection", variable=self.md_var,
+                                       command=self._md_mode_changed,
+                                       font=("TkDefaultFont", 10, "bold"))
+        self.md_check.pack(anchor="w")
+        self.md_panel = tk.Frame(side)
+
+        # Would this frame wake the device? Red when the cells with motion
+        # exceed MD_BLOCK_NUM_TH, the sensor's motion flag, which drives the
+        # MD interrupt (MD_CTRL1 bit 0 = 0)
+        self.wake_lamp = tk.Label(self.md_panel, text="WAKE", relief=tk.SUNKEN,
+                                  font=("Consolas", 12, "bold"))
+        self.wake_lamp.pack(fill=tk.X, pady=(0, 4))
+        self.lamp_off_bg = self.wake_lamp.cget("bg")
+
         # MD grid overlay (HM0360 motion bits sent with each frame)
-        self.show_md = tk.BooleanVar(value=True)
         self.md_rows = tk.IntVar(value=MD_ROWS_DEFAULT)
-        tk.Label(side, text="MD grid:").pack(anchor="w")
-        md_box = tk.Frame(side)
-        md_box.pack(fill=tk.X, pady=(0, 12))
-        tk.Checkbutton(md_box, text="Show", variable=self.show_md,
-                       command=self._render).grid(row=0, column=0, sticky="w")
-        tk.Radiobutton(md_box, text="15 rows", variable=self.md_rows, value=15,
+        md_box = tk.Frame(self.md_panel)
+        md_box.pack(fill=tk.X)
+        tk.Label(md_box, text="Grid rows:").grid(row=0, column=0, sticky="w")
+        tk.Radiobutton(md_box, text="15", variable=self.md_rows, value=15,
                        command=self._render).grid(row=0, column=1, sticky="w")
-        tk.Radiobutton(md_box, text="16 rows", variable=self.md_rows, value=16,
+        tk.Radiobutton(md_box, text="16", variable=self.md_rows, value=16,
                        command=self._render).grid(row=0, column=2, sticky="w")
 
-        # MD controls. Sensitivity is the firmware's 'md' command (op 17: saved
-        # to CONFIG.TXT at the next sleep, so the close puts back the value
-        # found at connect). The wake threshold is 'mdth', which is not saved.
+        # MD settings: the op params the device uses for motion wake, read with
+        # getop and written with setop, which saves them to the SD card and
+        # (ops 17 and 33) applies them to the HM0360 at once.
         tk.Label(md_box, text="Sensitivity:").grid(row=1, column=0, sticky="w")
         self.md_sens = tk.IntVar(value=0)       # 0 = not known yet, or off
         for col, (text, value) in enumerate((("Low", 1), ("Med", 2), ("High", 3)), start=1):
@@ -673,13 +773,22 @@ class Viewer:
         th_spin.grid(row=3, column=2, sticky="w")
         th_spin.bind("<Return>", self._threshold_changed)
         self.md_th_spin = th_spin
+        tk.Label(md_box, text="MD interval (ms, 0 = off):").grid(row=4, column=0, columnspan=2, sticky="w")
+        self.md_iv_var = tk.StringVar(value="")
+        self.md_iv_shown = None
+        iv_spin = tk.Spinbox(md_box, from_=0, to=HM0360_MAX_INTERVAL_MS, increment=100, width=5,
+                             textvariable=self.md_iv_var, command=self._md_interval_changed)
+        iv_spin.grid(row=4, column=2, sticky="w")
+        iv_spin.bind("<Return>", self._md_interval_changed)
+        self.md_iv_spin = iv_spin
+        self._show_md_panel()
 
         # Frame interval for free run: set from the camera type, or by hand.
-        # Takes effect from the next burst.
-        tk.Label(side, text="Interval (ms):").pack(anchor="w")
+        # Takes effect from the next frame ('interval' during a burst).
+        tk.Label(side, text="Frame interval (ms):").pack(anchor="w")
         self.interval_var = tk.StringVar(value=str(worker.interval_ms))
         self.interval_shown = worker.interval_ms
-        spin = tk.Spinbox(side, from_=INTERVAL_MIN_MS, to=5000, increment=10, width=8,
+        spin = tk.Spinbox(side, from_=INTERVAL_MIN_MS, to=INTERVAL_MAX_MS, increment=10, width=8,
                           textvariable=self.interval_var, command=self._interval_changed)
         spin.pack(anchor="w", pady=(0, 12))
         spin.bind("<Return>", self._interval_changed)
@@ -689,6 +798,8 @@ class Viewer:
         # short and the log pane keeps its height
         cmds = tk.Frame(main)
         cmds.grid(row=0, column=2, padx=4, pady=4, sticky="ns")
+
+        tk.Button(cmds, text="Help", command=self.show_help).pack(fill=tk.X, pady=(0, 12))
 
         tk.Label(cmds, text="Command:").pack(anchor="w")
         self.cmd_entry = tk.Entry(cmds, width=28, font=("Consolas", 10))
@@ -712,6 +823,12 @@ class Viewer:
                                        justify=tk.LEFT, anchor="w", wraplength=200)
         self.log_path_label.pack(fill=tk.X)
 
+        # Keep the device awake while the viewer is open (SerialWorker._keep_alive),
+        # so the close can always reset it. Untick to let it sleep, e.g. to test a wake.
+        self.keepalive_var = tk.BooleanVar(value=True)
+        tk.Checkbutton(cmds, text="Keep awake", variable=self.keepalive_var,
+                       command=self._keepalive_changed).pack(anchor="w", pady=(12, 0))
+
         # Packed at the bottom before the main frame, so it keeps its height
         # however tall the image and controls are
         self.log = scrolledtext.ScrolledText(root, height=12, font=("Consolas", 9),
@@ -728,23 +845,32 @@ class Viewer:
 
     def _mode_text(self):
         w = self.worker
+        left = w.burst_total - w.burst_frame if w.burst_total else 0
+        later = f", {left} frames to go" if left else ""
         if w.cold_boot:
             return "cold boot"
         if w.single_pending:
-            return "one image"
+            return "one image" + (f" after {left} frames" if left else "")
         if w.free_run:
             return "free run"
-        return "busy" if w.capture_busy else "stopped"
+        if w.capture_busy:
+            return ("stopping" if w.stop_requested else "busy") + later
+        return "stopped"
 
     def _md_status_text(self):
         st = self.last_md_status
         w = self.worker
         wakes = f"wakes     {w.wake_frames} of {w.md_frames} frames"
+        warn = ""
+        if w.op10 == 0:
+            warn = "\nNOTE      camera disabled (op 10 = 0): no motion wake"
+        elif w.op11 == 0:
+            warn = "\nNOTE      MD interval is 0: no motion wake"
         if st is None:
-            return f"threshold -\nwake      -\n{wakes}"
+            return f"threshold -\nwake      -\n{wakes}{warn}"
         text = (f"threshold {st['thA']} (B {st['thB']})\n"
                 f"wake      {'YES' if st['flag'] else 'no'}  ({st['cells']} > {st['thA']}?)\n"
-                f"{wakes}")
+                f"{wakes}{warn}")
         if st["source"] == "latency":
             # the prediction would need to model the latency logic
             text += f"\nNOTE      interrupt follows latency mode {st['latency_mode']}"
@@ -760,19 +886,18 @@ class Viewer:
             self.last_info = info
         info = getattr(self, "last_info", None)
         mode = self._mode_text()
+        md = (f"\nmotion    {self.md_text if info else '-'}\n{self._md_status_text()}"
+              if self.md_var.get() else "")
         if info is None:
             self.status.config(text=(f"mode      {mode}\nframes    -\nsize      -\n"
-                                     f"fps       -\ndropped   {self.worker.dropped}\n"
-                                     f"motion    -\n{self._md_status_text()}"))
+                                     f"fps       -\ndropped   {self.worker.dropped}{md}"))
             return
         count, res, kbytes, fps = info
         self.status.config(text=(f"mode      {mode}\n"
                                  f"frames    {count}\n"
                                  f"size      {kbytes:.1f} KB  {res[0]}x{res[1]}\n"
                                  f"fps       {fps:.2f}\n"
-                                 f"dropped   {self.worker.dropped}\n"
-                                 f"motion    {self.md_text}\n"
-                                 f"{self._md_status_text()}"))
+                                 f"dropped   {self.worker.dropped}{md}"))
 
     def start_stream(self):
         self.worker.md_frames = 0      # wake counts are per free run
@@ -788,27 +913,74 @@ class Viewer:
         # frames are streamed, not saved to SD.
         self.worker.free_run = False
         self.worker.single_pending = False
+        self.worker.stop_requested = self.worker.capture_busy
         if self.worker.capture_busy:
             self._append_log(f"[viewer] stopping after the current burst "
                              f"(up to {BURST_FRAMES} frames)")
 
     def _interval_changed(self, _event=None):
         try:
-            ms = max(INTERVAL_MIN_MS, int(self.interval_var.get()))
+            ms = int(self.interval_var.get())
+            limit = self.worker.max_interval_ms()
+            if ms > limit:
+                self._append_log(f"[viewer] the HM0360 sleep register stops at {limit} ms, "
+                                 f"so the interval is {limit} ms")
+            ms = min(limit, max(INTERVAL_MIN_MS, ms))
         except ValueError:
             ms = self.worker.interval_ms
         self.interval_var.set(str(ms))
         if ms != self.worker.interval_ms:
             self.worker.interval_ms = ms
             self.worker.interval_fixed = True   # a camera reply no longer overrides it
-            self._append_log(f"[viewer] frame interval {ms} ms (from the next burst)")
+            self._append_log(f"[viewer] frame interval {ms} ms")
+            self.worker.change_interval_now()
         self.interval_shown = ms
+
+    def show_help(self):
+        """A window with the user guide's location and the --help text."""
+        win = tk.Toplevel(self.root)
+        win.title("WW500 Live View - help")
+        text = scrolledtext.ScrolledText(win, width=96, height=40, font=("Consolas", 9),
+                                         wrap=tk.NONE)
+        text.pack(fill=tk.BOTH, expand=True)
+        text.insert(tk.END, f"User guide: {USER_GUIDE}\n\n"
+                            "Command-line options and notes (the same as 'live_view.py --help'):\n\n"
+                            + build_parser().format_help())
+        text.config(state=tk.DISABLED)
+
+    def _show_md_panel(self):
+        if self.md_var.get():
+            self.md_panel.pack(after=self.md_check, fill=tk.X, pady=(0, 12))
+        else:
+            self.md_panel.pack_forget()
+
+    def _md_mode_changed(self):
+        """The Motion detection checkbox: show or hide the MD tools and set
+        the default interval to suit (unless the user chose one)."""
+        on = self.md_var.get()
+        self.worker.md_mode = on
+        self._show_md_panel()
+        self._append_log("[viewer] motion detection tools " + ("on" if on else "off: plain live video"))
+        self.worker._apply_default_interval()
+        self._render()
+
+    def _keepalive_changed(self):
+        self.worker.keepalive = self.keepalive_var.get()
+        self._append_log("[viewer] keep awake " + ("on" if self.worker.keepalive else
+                         "off: the device sleeps after its inactivity period"))
+
+    def _set_op(self, index, value):
+        """Write an op param (saved to the SD card), then read it back: the
+        reply to the getop is what the controls show, so a value the
+        firmware rejects does not stay on screen."""
+        self.worker.send(f"setop {index} {value}")
+        self.worker.send(f"getop {index}")
 
     def _sensitivity_changed(self):
         n = self.md_sens.get()
         if n:
-            self.worker.send(f"md {n}")
-            self.worker.md_sensitivity = n   # until the reply (or a later getop) says otherwise
+            self._set_op(OP_MD_SENSITIVITY, n)
+            self.worker.md_sensitivity = n   # until the reply says otherwise
 
     def _threshold_changed(self, _event=None):
         try:
@@ -816,20 +988,35 @@ class Viewer:
         except ValueError:
             return
         if 1 <= n <= 255:
-            self.worker.send(f"mdth {n}")
+            self._set_op(OP_MD_BLOCK_THRESHOLD, n)
             self.md_th_shown = n
-            self.worker.md_threshold = n     # until the reply or the next frame says otherwise
+            self.worker.md_threshold = n     # until the reply says otherwise
+
+    def _md_interval_changed(self, _event=None):
+        try:
+            n = int(self.md_iv_var.get())
+        except ValueError:
+            return
+        if 0 <= n <= 65535:
+            if n > HM0360_MAX_INTERVAL_MS:
+                self._append_log(f"[viewer] op 11 = {n}: the HM0360 runs it at {HM0360_MAX_INTERVAL_MS} ms")
+            self._set_op(OP_MD_INTERVAL, n)
+            self.md_iv_shown = n
 
     def _sync_md_controls(self):
-        """Show the sensitivity and threshold the device reports, unless the
-        user is typing a threshold."""
+        """Show the MD op params the device reports, unless the user is typing
+        in that box."""
         w = self.worker
+        focus = self.root.focus_get()
         if w.md_sensitivity is not None and w.md_sensitivity != self.md_sens.get():
-            self.md_sens.set(w.md_sensitivity)    # 0 (off) selects none
+            self.md_sens.set(w.md_sensitivity)
         if (w.md_threshold is not None and w.md_threshold != self.md_th_shown
-                and self.root.focus_get() is not self.md_th_spin):
+                and focus is not self.md_th_spin):
             self.md_th_shown = w.md_threshold
             self.md_th_var.set(str(w.md_threshold))
+        if w.op11 is not None and w.op11 != self.md_iv_shown and focus is not self.md_iv_spin:
+            self.md_iv_shown = w.op11
+            self.md_iv_var.set(str(w.op11))
 
     def one_image(self):
         self.worker.free_run = False
@@ -924,7 +1111,7 @@ class Viewer:
         if self.last_img is None:
             return
         img = self.last_img
-        if self.show_md.get():
+        if self.md_var.get():
             rows = self.md_rows.get()
             img, n, outside = draw_md_grid(img, self.last_md, rows)
             if self.last_md is None:
@@ -936,7 +1123,7 @@ class Viewer:
                     self._append_log(f"[viewer] MD bits set beyond row {rows}: "
                                      f"the grid may have 16 rows, try '16 rows'")
         else:
-            self.md_text = "hidden"
+            self.md_text = "off"
         if img.width > DISPLAY_MAX[0] or img.height > DISPLAY_MAX[1]:
             img = img.copy()
             img.thumbnail(DISPLAY_MAX)
@@ -995,15 +1182,10 @@ class Viewer:
         w.arm_at = None
         w.sleep_at = None
         w.seq.clear()
-        if (w.md_sensitivity_start is not None and w.md_sensitivity is not None
-                and w.md_sensitivity != w.md_sensitivity_start):
-            # 'md' changed op 17, which is saved at the next sleep: put it back
-            n = w.md_sensitivity_start
-            w.enqueue_verified([(f"md {n}", f"MD sensitivity set to {n}")])
         w.enqueue_verified(CLOSE_SEQUENCE)
         w.seq_last_send = 0.0       # first step goes out at once
         self._append_log("[viewer] closing: resetting the device to lab-safe values "
-                         "(preview off, op7 0, op11 0, op8 1000)")
+                         "(preview off, op7 0, op8 1000)")
         self.closing_deadline = time.monotonic() + CLOSE_TIMEOUT_S
         self._finish_close()
 
@@ -1020,10 +1202,11 @@ class Viewer:
             return
         if w.seq:
             left = ", ".join(cmd_text(step[0]) for step in w.seq)
-            print(f"[viewer] WARNING: not confirmed, the device may be asleep: {left}. "
-                  f"Type these at the console when it is awake.", flush=True)
+            # _append_log also prints, and writes the log file if one is open
+            self._append_log(f"[viewer] WARNING: not confirmed, the device may be asleep: {left}. "
+                             f"Type these at the console when it is awake.")
         else:
-            print("[viewer] device reset to lab-safe values", flush=True)
+            self._append_log("[viewer] device reset to lab-safe values")
         if self.log_file is not None:
             self.log_file.close()
             self.log_file = None
@@ -1036,7 +1219,12 @@ class Viewer:
         self.root.destroy()
 
 
-def main():
+USER_GUIDE = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                          "..", "_Documentation", "live_preview.md"))
+
+
+def build_parser():
+    """The command-line options; also the text of the Help button."""
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--port", default="COM14")
@@ -1047,10 +1235,15 @@ def main():
                     help="after a cold boot, set a timelapse wake (op7) of this many "
                          "seconds so the device wakes and can capture (op7 is set to 0 on close)")
     ap.add_argument("--interval", type=int, default=None, metavar="MS",
-                    help="free-run frame interval in ms (default by camera: "
+                    help="free-run frame interval in ms (default: with Motion detection on, "
+                         "op 11 on the HM0360, or 1000 if op 11 is 0; otherwise by camera: "
                          + ", ".join(f"{k} {v}" for k, v in INTERVAL_DEFAULT_MS.items())
                          + f"; minimum {INTERVAL_MIN_MS})")
-    args = ap.parse_args()
+    return ap
+
+
+def main():
+    args = build_parser().parse_args()
 
     frame_q = queue.Queue()
     log_q = queue.Queue()

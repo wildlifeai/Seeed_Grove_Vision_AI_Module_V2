@@ -2,7 +2,7 @@
 
 #### File: `cross_repo_changes.md`
 #### Author: Claude, for Charles Palmer
-#### Date: 24 October 2026
+#### Date: 25 October 2026
 
 AI processor changes on branch `1261023_mdEnhancements` that affect ww-hardware (BLE
 processor), ww-mobile-app, ww-website or ww-backend. For the PR description and the `Decide:`
@@ -24,8 +24,7 @@ issue. Add to this list as further changes are made.
 |---|---|---|
 | `setop` | Rejects an out-of-range value for ops 17 and 33, with the reply `Error: <value> is not a valid value for op <n>.` and nothing saved. All other ops unchanged | App: handle the error reply when setting ops 17 or 33 |
 | `md` | Accepts 1-3 only; the error reply is now `Error: Sensitivity must be 1, 2 or 3 (op 11 = 0 switches MD off).` | App, if it uses `AI md` |
-
-| `interval` (new) | `interval <ms>` changes the interval of the capture burst in progress from its next image (1 ms to 15 min). Replies `Interval N ms from the next image`, or `No capture in progress: the next 'capture' sets the interval`. Made for the live viewer | None required; available to the app as `AI interval` if wanted |
+| `interval` (new) | `interval <ms>` changes the interval of the capture burst in progress from its next image (1 ms to 15 min). Replies `Interval N ms from the next image`, or `No capture in progress: the next 'capture' sets the interval`. Not saved. Made for the live viewer | None required; available to the app as `AI interval` if wanted |
 
 ## Not relevant to other repos
 

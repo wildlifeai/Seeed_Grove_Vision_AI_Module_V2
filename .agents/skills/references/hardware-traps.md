@@ -29,7 +29,8 @@ Verified on the bench (details and serial evidence in
 * **`setop` saves to CONFIG.TXT at once** (`APP_MSG_FATFSTASK_SAVE_CONFIG`), so a bench
   session's values go to the field with the card. After live-view sessions on 23 Oct 2026 the
   card held op7 = 10 (a wake every 10 s) and op8 = 60000. `live_view.py` now sets lab-safe
-  values on close; after any other bench work, check `getop 7`, `getop 8` and `getop 11`.
+  values on close (ops 7 and 8), but its MD controls write ops 11, 17 and 33 and the close
+  leaves those as set. After bench work, check ops 7, 8, 11, 17 and 33 with `getop`.
 * **`capture N 0` (N > 1) resets the AI processor.** `MIN_IMAGE_INTERVAL` is 0, but the interval
   goes to `xTimerChangePeriod()`, and FreeRTOS asserts on a zero period (`timers.c`), so it
   reaches `configASSERT()` and a reset (a hang before 13 Oct 2026). The old "interval 0 wedges

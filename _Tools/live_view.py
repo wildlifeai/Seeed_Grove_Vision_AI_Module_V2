@@ -31,6 +31,8 @@ Sleep and wake are handled automatically. After a cold boot (power-up or
 reset) the firmware takes no pictures until it has slept once; with --wake N
 the viewer sends it to sleep with an N s timelapse wake, then streams when it
 wakes.
+If no frames appear after a cold boot, send 'AI ver' from the app over BLE:
+that wakes the AI processor into a warm boot and streaming starts.
 
 On close (use the window's close button) the viewer leaves the device quiet:
 preview off, no timelapse (op 7 = 0), short inactivity (op 8 = 1000). These

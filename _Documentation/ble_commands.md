@@ -1,6 +1,6 @@
 # WW500 BLE commands
 #### CGP - 25 November 2025
-#### Updated 28 September 2026 (`AI ble`, by Claude); 1 September 2026 (`AI light` and the `AE light check` line) and 3 September 2026 (the gain-based wording from ee65771f, checked against e8b7feb5) by Claude, reviewed by Victor Anton
+#### Updated 25 October 2026 (`AI interval`, op range check, by Claude); 28 September 2026 (`AI ble`, by Claude); 1 September 2026 (`AI light` and the `AE light check` line) and 3 September 2026 (the gain-based wording from ee65771f, checked against e8b7feb5) by Claude, reviewed by Victor Anton
 
 When the smartphone app establishes a BLE connection to the WW500 it can send and receive messages.
 The messages that it sends are treated as commands to the WW500. The messages it receives are 
@@ -162,6 +162,7 @@ The "Reqd?" column indicates whether the command should be implemented by the ap
 | AI getop       | n             | Requests the value of Operational Parameter n | Y, 1  |
 | AI setop       | n m           | Sets the value of Operational Parameter n to m | Y, 1   |
 | AI capture     | n m           | Trigger capture of n images at m millisecond intervals  | Y, 7  |
+| AI interval    | ms            | Changes the interval of the capture in progress from the next image: `Interval N ms from the next image`, or `No capture in progress: the next 'capture' sets the interval`. Not saved. Used by the live viewer | -     |
 | AI txfile      | filename, or '.' | File contents returned in several chunks   | Y, 2  |
 | AI camreg      | addr [val]    | Read or write a camera sensor register (hex). Writes are saved to the SD card and re-applied at every sensor init. Also `AI camreg list` and `AI camreg clear` | 3 |
 | AI vcm         | pos           | Set focus lens position 0-1023 (RP3 camera only). `AI vcm probe` checks the actuator is present | 3 |
@@ -180,6 +181,7 @@ __Notes:__
      - Get value: `AI getop 19`
      - Set value: `AI setop 19 2`
      - ❌ **Common mistake:** Omitting the `AI` prefix will result in "Unrecognised" error
+   - Ops 17 and 33 are range-checked: an invalid value is refused with `Error: N is not a valid value for op M.` (24 October 2026)
 2. See separate document [txfile.md](txfile.md) for the details.
 3. Camera tuning commands added for bench/field validation of exposure, gain, white balance and focus.
    See [camera-phase0-bench-runbook.md](camera-phase0-bench-runbook.md) and [camera-field-tuning-roadmap.md](camera-field-tuning-roadmap.md).

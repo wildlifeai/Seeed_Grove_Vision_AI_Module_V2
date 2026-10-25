@@ -2,7 +2,7 @@
 
 #### File: `live_preview.md`
 #### Author: Claude, first written 10 July 2026; quick start added 23 October 2026
-#### Date: 24 October 2026
+#### Date: 25 October 2026
 
 `_Tools/live_view.py` is a Python script that shows live video from the WW500 camera on your
 PC, over the console serial cable. It also gives you a command box, so you can change camera
@@ -29,6 +29,9 @@ py live_view.py --port COM4 --wake 10
 
 Then reset or power-cycle the WW500. After about 20 seconds frames start to appear and keep
 coming. The default port is COM14 if you leave out `--port`.
+
+If no frames appear after a cold boot, send `AI ver` from the app over BLE. That wakes the
+AI processor into a warm boot, and the viewer then starts streaming.
 
 | Button | What it does |
 |---|---|

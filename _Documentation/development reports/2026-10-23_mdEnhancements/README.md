@@ -54,32 +54,50 @@ steps that we can carry out one at a time. Place it in the same folder as this d
 
 ## Status
 
-Open. Step 2 of the proposal done and bench-checked on 23 October 2026 (HM0360 and RP3 builds). Step 4 (MD grid overlay) benched 24 October: orientation right, 16 rows. Step 5 started: the viewer shows the motion flag against the MD interrupt (coded and first benched 24 October). Finding: MD INT stays set and MD_CTRL1 reads 0x06 although the firmware writes 0 each capture; a console test is pending (see the proposal, 24 October section). Steps 3 and 6 not started.
+Closed, 25 October 2026. The work is in [PR #276, Motion Detection enhancements](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/pull/276).
 
-## Outcome (so far)
+## Outcome
 
-The live view now works on both builds (HM0360 and RP3): Free run, Stop, One image and Save frame all
-produce visible frames. The black image area had two causes:
+**Live view works on both builds** (HM0360 and RP3). The black image area had two causes:
 
-1. **Every frame was corrupted.** The IF task's console prints, logging the motion/AE message
-   sent to the BLE processor, landed inside each frame line. Fixed in firmware: the IF task
-   stays quiet while a frame is sent (`preview_isSending()`, `consoleQuiet()`).
+1. **Every frame was corrupted.** The IF task's console prints landed inside each frame line.
+   Fixed in firmware: the IF task stays quiet while a frame is sent (`preview_isSending()`).
 2. **The viewer predated the 13 October cold-boot capture refusal**, and its typing kept the
-   device awake (every console character means 60 s awake). Fixed in `live_view.py`: it tells
-   cold and warm boots apart, sends `dpd` after a cold boot, and `--wake N` sets a timelapse
-   wake so streaming starts by itself.
+   device awake. Fixed in `live_view.py`: it tells cold and warm boots apart, and `--wake N`
+   sets a timelapse wake so streaming starts by itself.
 
-Details: [CLAUDE_mdEnhancements_proposal.md](CLAUDE_mdEnhancements_proposal.md). Durable doc:
-[live_preview.md](../../live_preview.md).
+**The viewer is now an MD tuning tool.** With Motion detection on it shows the HM0360 motion
+grid over the image and a WAKE lamp that lights when a frame would wake the device, and it
+sets Sensitivity (op 17), Wake threshold (op 33) and MD interval (op 11).
+
+**MD settings became op parameters.** Op 33 is the MD wake threshold: the device wakes when
+more than this many cells show motion (1-255, default 4). Op 17 is now 1 to 3 only; op 11 = 0
+is the one way to switch MD off. Invalid values are refused by `setop` and replaced when
+CONFIG.TXT loads. A new `interval` command changes the frame interval mid-burst. Changes the
+BLE processor, app and website need: [cross_repo_changes.md](cross_repo_changes.md).
+
+**Decided:** step 3 (speed) closed, about 2 fps is enough; no `mdreg` or per-register
+sliders; MD does not miss slow movement (it only seemed to at a 20 ms interval, when most
+frames were never displayed); the INT_INDIC per-frame clear left unexplained, since the field
+wake works.
+
+![Live view, HM0360 build, Motion detection on](live_view_hm0360_md.png)
+
+The viewer on the HM0360 build, 25 October 2026: the cells that saw motion in red, and the WAKE
+lamp lit because 26 cells is more than the wake threshold of 5.
+
+Details: [CLAUDE_mdEnhancements_proposal.md](CLAUDE_mdEnhancements_proposal.md). Durable docs:
+[live_preview.md](../../live_preview.md), [config_file.md](../../../EPII_CM55M_APP_S/app/ww_projects/ww500_md/MANIFEST/config_file.md)
+(ops 11, 17, 33), [ble_commands.md](../../ble_commands.md) (`AI interval`).
 
 ## Open items
 
-None filed yet. The remaining work is steps 3 to 6 of the proposal (speed, MD grid overlay,
-live MD controls, op parameters); file issues as each is agreed.
+None in this repo.
 
 ## Files
 
 | File | What it is |
 |---|---|
-| [CLAUDE_mdEnhancements_proposal.md](CLAUDE_mdEnhancements_proposal.md) | Stepped plan, with bench findings from 23 Oct and the 24 Oct register-bank and MD interrupt notes |
+| [CLAUDE_mdEnhancements_proposal.md](CLAUDE_mdEnhancements_proposal.md) | Stepped plan, with the bench findings and decisions from 23 to 25 Oct |
 | [cross_repo_changes.md](cross_repo_changes.md) | Running list of changes the BLE processor and app need to know about, for the PR |
+| [live_view_hm0360_md.png](live_view_hm0360_md.png) | The viewer on the HM0360 build with Motion detection on, 25 Oct |

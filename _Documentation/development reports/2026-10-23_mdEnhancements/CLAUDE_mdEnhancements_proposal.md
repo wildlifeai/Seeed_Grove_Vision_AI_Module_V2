@@ -4,9 +4,13 @@
 #### Author: Claude (Opus 5.5), for review by Charles Palmer
 #### Date: 23 October 2026
 
+> **Complete, 25 October 2026.** All six steps are done or closed, and the work is in
+> [PR #276, Motion Detection enhancements](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/pull/276).
+> See [Final status](#final-status-25-october-2026) at the end. The sections in between are the
+> dated record; where a later one corrects an earlier one, the later one is right.
+
 Answers the task in [README.md](README.md). Six steps, each small enough to do, test and
-review on its own. Step 2 is done and bench-checked on both cameras (23 Oct); see
-**Progress, end of 23 October 2026** at the end. Steps 3 to 6 are not started.
+review on its own.
 
 ## What exists today
 
@@ -181,15 +185,6 @@ Once bench tuning shows which settings matter, add op parameters for them (or ex
 from three presets to a value). Op parameter indices are a cross-repo contract with the app,
 the BLE processor and the website, so this step starts as a GitHub issue agreed with Victor
 and the app team. Not a unilateral change.
-
-## Questions for you
-
-1. Which camera variant and build were you running when the image stayed black?
-2. Did the base64 appear in the viewer's log pane, or in another terminal?
-3. Is the target the HM0360 as the main camera, or the HM0360 as MD sensor on an RP3
-   build, or both? Step 5's `mdreg` matters most for the second case.
-4. May I read the Himax HM0360 documents in ww-hardware for step 5? I'd treat them as
-   confidential, citing section numbers only and not copying their tables into this repo.
 
 ## Progress, end of 23 October 2026
 
@@ -498,3 +493,36 @@ reads `g_timer_period` before each frame. HM0360: the burst is restarted with
 `hm0360_md_setMode(CONTEXT_A, MODE_SW_NFRAMES_SLEEP, 1, g_timer_period)`, the burst-start call;
 untested mid-burst, a frame may be lost at the switch. A pending value is cleared when a burst
 starts. The viewer sends `interval N` when the frame interval changes during a burst.
+
+**Bench, 25 October 2026 (Charles).** The new op param settings work on the RP3 build.
+Changing the interval mid-burst on the HM0360 build works, so the `setMode` restart is
+confirmed. `interval` is RAM only: it changes the running burst and is never saved to an op
+param or CONFIG.TXT.
+
+[live_view_hm0360_md.png](live_view_hm0360_md.png) shows the viewer on the HM0360 build the same day: Sensitivity
+Low, wake threshold 5 (contexts A and B both read 5), MD interval 1996 ms, frame interval
+500 ms, about 2.2 fps, and 324 of 1188 frames would have woken the device.
+
+**Decisions, 25 October 2026 (Charles).** MD does not miss slow movement: it only seemed to
+at a 20 ms frame interval, when about 3 in 4 sensor frames were never displayed. Step 3 is
+closed (about 2 fps is enough for tuning). Step 5 stops at the op-param controls; `mdreg` and
+the per-register sliders were not needed.
+
+## Final status, 25 October 2026
+
+Done. PR [#276](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/pull/276).
+
+| Step | Result |
+|---|---|
+| 1. Why the image was black | Found: console prints split every frame line, and the viewer predated the cold-boot capture refusal |
+| 2. Fix and document live view | Done, both builds. Guide: [live_preview.md](../../live_preview.md) |
+| 3. Speed | Closed: about 2 fps is enough for tuning. Shorter gaps instead (per-camera interval, 30-frame bursts, `interval` command) |
+| 4. MD grid overlay | Done: 16 rows, grid rotated 180 degrees in the viewer |
+| 5. Live MD controls | Done as op-param controls (Sensitivity, Wake threshold, MD interval) and a WAKE lamp. `mdreg` and per-register sliders not needed |
+| 6. Op parameters | Done: op 33 = MD wake threshold (1-255, default 4), op 17 = 1 to 3. Other repos: [cross_repo_changes.md](cross_repo_changes.md) |
+
+Findings worth keeping: the device wakes when more than op 33 cells show motion; MD does not
+miss slow movement (that was frames going unseen at a 20 ms interval); the HM0360 interval
+stops at about 1997 ms; `capture N 0` resets the AI processor. The traps are in
+`.agents/skills/references/hardware-traps.md`. The INT_INDIC per-frame clear was left
+unexplained by decision, since the field wake works.

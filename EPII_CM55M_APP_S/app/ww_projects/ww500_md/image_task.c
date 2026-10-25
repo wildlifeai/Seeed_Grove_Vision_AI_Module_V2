@@ -1096,36 +1096,75 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
 			preview_setMdBits(roiOut, ROIOUTENTRIES);
 		}
 
-		offset += snprintf(msgToMaster + offset,
-		                   MSGTOMASTERLEN - offset,
-		                   "HM0360 motion in %d blocks:\n",
-		                   mdBlocks);
+		uint8_t wakeRoiOut[ROIOUTENTRIES];
+		uint16_t wakeBlocks;
 
-		for (uint8_t i = 0; i < ROIOUTENTRIES; i++) {
-		    offset += snprintf(msgToMaster + offset,
-		                       MSGTOMASTERLEN - offset,
-		                       "%02x ",
-		                       roiOut[i]);
+		if (hm0360_md_takeWakeGrid(wakeRoiOut, ROIOUTENTRIES, &wakeBlocks)) {
+			// Motion wake: the cells that woke the device, read at boot (hm0360_md_saveWakeGrid()) and
+			// reported only now, so nothing delays the first image. That image's own grid (below) is
+			// empty: the HM0360 has no earlier frame to compare it with
+			offset += snprintf(msgToMaster + offset,
+			                   MSGTOMASTERLEN - offset,
+			                   "HM0360 woken by motion in %d blocks:\n",
+			                   wakeBlocks);
 
-		    if (offset >= MSGTOMASTERLEN)
-		        break;
+			for (uint8_t i = 0; i < ROIOUTENTRIES; i++) {
+			    offset += snprintf(msgToMaster + offset,
+			                       MSGTOMASTERLEN - offset,
+			                       "%02x ",
+			                       wakeRoiOut[i]);
+
+			    if (offset >= MSGTOMASTERLEN)
+			        break;
+			}
+
+			XP_LT_GREY;
+			xprintf("%s\n", msgToMaster);
+			sendMsgToMaster(msgToMaster);
+
+			hm0360_md_printGrid(wakeRoiOut, 128, msgToMaster, MSGTOMASTERLEN);
+			xprintf("%s", msgToMaster);
+			hm0360_md_printGrid(&wakeRoiOut[16], 128, msgToMaster, MSGTOMASTERLEN);
+			xprintf("%s\n", msgToMaster);
+			XP_WHITE;
+
+			offset = 0;
 		}
 
-        XP_LT_GREY;
-        // print to console
-        xprintf("%s\n", msgToMaster);
+		// The first image of a burst has no earlier frame to compare with, so its grid is always empty:
+		// report from the second image on. After a motion wake the wake grid above takes its place
+		if (g_cur_jpegenc_frame > 1) {
+			offset += snprintf(msgToMaster + offset,
+			                   MSGTOMASTERLEN - offset,
+			                   "HM0360 motion in %d blocks:\n",
+			                   mdBlocks);
 
-        // and send to BLE
-        sendMsgToMaster(msgToMaster);
+			for (uint8_t i = 0; i < ROIOUTENTRIES; i++) {
+			    offset += snprintf(msgToMaster + offset,
+			                       MSGTOMASTERLEN - offset,
+			                       "%02x ",
+			                       roiOut[i]);
 
-        // Now re-use msgToMaster to print (locally) a 16x16 grid
-        // We will do this in two chunks as MSGTOMASTERLEN is too small for all characters
-        hm0360_md_printGrid(roiOut, 128, msgToMaster, MSGTOMASTERLEN);
-        xprintf("%s", msgToMaster);
-        hm0360_md_printGrid(&roiOut[16], 128, msgToMaster, MSGTOMASTERLEN);
-        xprintf("%s\n", msgToMaster);
+			    if (offset >= MSGTOMASTERLEN)
+			        break;
+			}
 
-        XP_WHITE;
+			XP_LT_GREY;
+			// print to console
+			xprintf("%s\n", msgToMaster);
+
+			// and send to BLE
+			sendMsgToMaster(msgToMaster);
+
+			// Now re-use msgToMaster to print (locally) a 16x16 grid
+			// We will do this in two chunks as MSGTOMASTERLEN is too small for all characters
+			hm0360_md_printGrid(roiOut, 128, msgToMaster, MSGTOMASTERLEN);
+			xprintf("%s", msgToMaster);
+			hm0360_md_printGrid(&roiOut[16], 128, msgToMaster, MSGTOMASTERLEN);
+			xprintf("%s\n", msgToMaster);
+
+			XP_WHITE;
+		}
 
 //		XP_LT_GREY;
 //		xprintf("HM0360 motion in %d: \n", mdBlocks);

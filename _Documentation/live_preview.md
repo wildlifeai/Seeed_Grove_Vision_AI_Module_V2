@@ -216,14 +216,13 @@ wake. See `config_file.md` for the op params.
 
 With `USE_HM0360_CAPTURE_TIMER` (defined in the HM0360 build) the HM0360 takes the burst's
 frames by itself: one frame, then a sleep of the capture interval, then the next. MD runs on
-**every** sensor frame and compares it with the previous one. The AI processor needs about
+**every** sensor frame and compares it with a background built from the earlier frames (IIR filter). The AI processor needs about
 200 ms to stream a frame, then takes whichever sensor frame comes next. So:
 
 * **At a 20 ms interval** the sensor makes a frame about every 55 ms, but only
   about one in four is shown. The `ROI_OUT` bits of the others are overwritten unseen.
-* **Slow movement is missed for a second reason:** frames 55 ms apart differ too little
-  for a slowly moving object to pass the per-cell threshold. In the field the frames are an
-  op 11 interval apart, so the same movement makes a bigger difference between frames.
+* **Slow movement only seemed to be missed at 20 ms:** most frames were never shown, and
+  frames 55 ms apart differ little. At the field interval (op 11) MD detects it (25 Oct 2026).
 * **So the viewer uses op 11 as the interval** (24 Oct 2026). If op 11 is over about
   250 ms, every sensor frame is shown and MD compares frames as far apart as in the field.
   If op 11 is 0 (MD off), it uses 1000 ms.

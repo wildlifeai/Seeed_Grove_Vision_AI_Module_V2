@@ -10,6 +10,7 @@
 /********************************** Includes ******************************************/
 
 #include <stdbool.h>
+#include <string.h>		// memcpy
 
 #include "xprintf.h"
 #include "printf_x.h"	// Print colours
@@ -720,6 +721,51 @@ uint16_t hm0360_md_getMDOutput(uint8_t * regTable, uint8_t length) {
 	restoreMainCameraConfig();
 
 	return motionCount;
+}
+
+// The ROI_OUT cells that woke the device (hm0360_md_saveWakeGrid()), held until printed
+static uint8_t wakeRoiOut[ROIOUTENTRIES];
+static uint16_t wakeBlocks = 0;
+static bool wakeGridSaved = false;
+
+/**
+ * Saves the ROI_OUT registers at a motion wake, so the cells that woke the device can be
+ * reported later.
+ *
+ * Call as early as possible in the warm boot, before the HM0360 is reconfigured: by the
+ * time the first image has been captured, ROI_OUT holds that frame's result instead (and
+ * it is empty, since the sensor has no earlier frame to compare with). Only reads the
+ * registers: printing waits until after the first image (hm0360_md_takeWakeGrid()).
+ *
+ * @return number of blocks with motion detected
+ */
+uint16_t hm0360_md_saveWakeGrid(void) {
+
+	wakeBlocks = hm0360_md_getMDOutput(wakeRoiOut, ROIOUTENTRIES);
+	wakeGridSaved = hm0360_present;
+
+	return wakeBlocks;
+}
+
+/**
+ * Fetches the ROI_OUT registers saved at a motion wake, once.
+ *
+ * @param regTable - address of the buffer to hold the data
+ * @param length - number of bytes to copy (must be 32)
+ * @param numBlocks - receives the number of blocks with motion detected
+ * @return true if a grid was saved and not yet fetched
+ */
+bool hm0360_md_takeWakeGrid(uint8_t * regTable, uint8_t length, uint16_t * numBlocks) {
+
+	if (!wakeGridSaved || (length != ROIOUTENTRIES)) {
+		return false;
+	}
+
+	memcpy(regTable, wakeRoiOut, ROIOUTENTRIES);
+	*numBlocks = wakeBlocks;
+	wakeGridSaved = false;
+
+	return true;
 }
 
 /**

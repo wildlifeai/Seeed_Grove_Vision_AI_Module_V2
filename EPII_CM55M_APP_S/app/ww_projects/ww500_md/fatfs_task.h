@@ -98,7 +98,7 @@ typedef enum {
 	OP_PARAMETER_WB_RED_GAIN,		// 27 Software white-balance red gain, Q8.8 (256 = 1.0x, 0 = correction off). RP camera only - see img_correct.c
 	OP_PARAMETER_WB_BLUE_GAIN,		// 28 Software white-balance blue gain, Q8.8 (256 = 1.0x, 0 = correction off). RP camera only - see img_correct.c
 	OP_PARAMETER_CAM_AE_ENABLE,		// 29 RP camera auto-exposure: 0 = off (init-table exposure), 1 = on. See ae.c
-	OP_PARAMETER_CAM_AE_TARGET,		// 30 RP camera auto-exposure target mean luma (0-250; 0 = built-in default 110). See ae.c
+	OP_PARAMETER_CAM_AE_TARGET,		// 30 RP camera auto-exposure target luma (0-250, default 110; 0 = ae.c's built-in AE_TARGET_DEFAULT 95). See ae.c
 	OP_PARAMETER_CAM_WB_MODE,		// 31 RP camera white balance: 0 = off, 1 = auto (grey-world per frame), 2 = manual op27/op28. See img_correct.c
 	OP_PARAMETER_LORAWAN_PING_MINUTES,	// 32 LoRaWAN ping period (0 disables LoRaWAN network join attempts).
 	OP_PARAMETER_MD_BLOCK_THRESHOLD,	// 33 Motion detection wake threshold: more than this many MD cells (1-255) must show motion

@@ -1,5 +1,5 @@
 # Description of the CONFIG.TXT File
-#### CGP - 25 April 2026 (updated 8 July 2026: parameters 21-28, immediate persistence; updated 11 July 2026: parameters 29-31 - RP camera auto-exposure and white-balance mode; updated 4 September 2026: parameters 32-36 - ALWAYS_ON/TIME_OF_DAY flash modes, OP_PARAMETER_AE_CHECK_INTERVAL renamed to OP_PARAMETER_FLASH_EVALUATE_INTERVAL; updated 24 October 2026: parameter 33 is now OP_PARAMETER_MD_BLOCK_THRESHOLD, parameter 17 no longer has an 'off' value, parameter 11 maximum noted; this is now the canonical copy - see note at the end)
+#### CGP - 25 April 2026 (updated 8 July 2026: parameters 21-28, immediate persistence; updated 11 July 2026: parameters 29-31 - RP camera auto-exposure and white-balance mode; updated 4 September 2026: parameters 32-36 - ALWAYS_ON/TIME_OF_DAY flash modes, OP_PARAMETER_AE_CHECK_INTERVAL renamed to OP_PARAMETER_FLASH_EVALUATE_INTERVAL; updated 24 October 2026: parameter 33 is now OP_PARAMETER_MD_BLOCK_THRESHOLD, parameter 17 no longer has an 'off' value, parameter 11 maximum noted; updated 25 October 2026: parameter 22 default back to 5, CONFIG.TXT made to match the firmware defaults; this is now the canonical copy - see note at the end)
 
 The CONFIG.TXT file contains "Operational Parameters" for the WW500.
 
@@ -61,9 +61,9 @@ captured first.
 |    19 | OP_PARAMETER_IMAGES_COUNT     		| 0             | Count of images in the current image folder. Use this to decide to create a new image folder. |
 |    20 | OP_PARAMETER_IMAGES_FILE_INDEX 		| 0             | Count of image folders |
 |    21 | OP_PARAMETER_MD_FLASH_LED 			| 2             | LED used to illuminate motion-detection frames while asleep: 0 = none, 1 = visible, 2 = IR |
-|    22 | OP_PARAMETER_MD_FLASH_BRIGHTNESS_PERCENT | 50         | Brightness of the motion-detection illumination (percent; 16 hardware levels; approximately, 0 means 'dim', not 'off' - op21 = 0 is the off switch). Default raised from 5 (too dim for night MD in the field); the LED remains STROBE-gated to each MD frame's ~15 ms integration window, so this scales pulse amplitude, not duty cycle |
+|    22 | OP_PARAMETER_MD_FLASH_BRIGHTNESS_PERCENT | 5          | Brightness of the motion-detection illumination (percent; 16 hardware levels; approximately, 0 means 'dim', not 'off' - op21 = 0 is the off switch). The firmware default was 50 from 8 July to 25 October 2026, when it was set back to 5 to match CONFIG.TXT. Raise it if night MD is too dim; the LED remains STROBE-gated to each MD frame's ~15 ms integration window, so this scales pulse amplitude, not duty cycle |
 |    23 | OP_PARAMETER_AE_DARK_THRESHOLD 		| 65            | AE Mean (0-255) below this means the scene is dark and the flash is needed |
-|    24 | OP_PARAMETER_FLASH_EVALUATE_INTERVAL 	| 15            | Interval (minutes) between periodic flash-mode re-evaluations (AE light level or time-of-day window). 0 disables |
+|    24 | OP_PARAMETER_FLASH_EVALUATE_INTERVAL 	| 15            | Interval (minutes) between periodic flash-mode re-evaluations (AE light level or time-of-day window). 0 disables. No periodic wake while op 34 = 0 (flash off), bench-checked 26 October 2026 |
 |    25 | OP_PARAMETER_AE_FLASH_STATE 			| 0             | Last AE flash decision (0/1). Runtime state - leave as 0 |
 |    26 | OP_PARAMETER_SLOT_SWITCH 				| 0             | Automatic light-based camera image switching: 0 = off (manual `switchslot` only), 1 = automatic (night image in the dark, colour image in daylight; reboots at the next sleep) |
 |    27 | OP_PARAMETER_WB_RED_GAIN 				| 286           | Software white-balance RED gain, Q8.8 (256 = 1.0x, 0 = correction off). RP3 colour camera only |

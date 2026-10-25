@@ -121,6 +121,21 @@ OP_MD_SENSITIVITY = 17      # 1 = low, 2 = medium, 3 = high
 OP_MD_BLOCK_THRESHOLD = 33  # wake when more than this many cells show motion (1-255)
 
 # Camera type: the reply to 'camera', or the end of the boot's camera init
+def reply_expected(cmd):
+    """The replies that show a status query or op write has been answered, so
+    the next queued command can go at once instead of after SEND_RETRY_S."""
+    parts = cmd.split()
+    if len(parts) == 2 and parts[0] == "getop":
+        return (f"OpParam {parts[1]} =",)
+    if len(parts) == 3 and parts[0] == "setop":
+        return (f"Set OpParam {parts[1]} =", f"valid value for op {parts[1]}.")
+    if parts == ["camera"]:
+        return ("HM0360", "RP3", "RP2")
+    if len(parts) == 2 and parts[0] == "interval":
+        return ("ms from the next image", "No capture in progress")
+    return None
+
+
 CAMERA_RE = re.compile(r"^(?:cmd> )?(HM0360|RP3|RP2)$|initialised for camera (HM0360|RP3|RP2)")
 # Firmware refuses captures between a cold boot and the first DPD (captureRefused()
 # in CLI-commands.c)
@@ -296,7 +311,7 @@ class SerialWorker(threading.Thread):
         self.interval_ms = interval_ms if interval_ms is not None else INTERVAL_FALLBACK_MS
         self.op11 = None            # MD frame interval (ms) as reported by the device
         self.op10 = None            # camera system enabled, as reported by the device
-        self.seq = deque()          # entries: [cmd, expect, tries_left]
+        self.seq = deque()          # entries: [cmd, expect, tries_left, quiet]
         self.last_md_key = None     # wake prediction of the last frame, for _log_md_change()
         self.md_sensitivity = None  # op 17 as last reported by the device
         self.md_threshold = None    # op 33 as last reported by the device
@@ -329,11 +344,18 @@ class SerialWorker(threading.Thread):
 
     def send(self, cmd):
         """Fire-once manual command (no confirmation)."""
-        self.seq.append([cmd.strip(), None, 1])
+        self.seq.append([cmd.strip(), None, 1, False])
+
+    def send_query(self, cmd):
+        """Status query or op write: sent once, and the next command goes as
+        soon as its reply arrives, or after SEND_RETRY_S if none does (the
+        device may be asleep: the queries are sent again after every wake)."""
+        cmd = cmd.strip()
+        self.seq.append([cmd, reply_expected(cmd), 1, True])
 
     def enqueue_verified(self, steps):
         for cmd, expect in steps:
-            self.seq.append([cmd, expect, SEND_TRIES])
+            self.seq.append([cmd, expect, SEND_TRIES, False])
 
     def _capture_queued(self):
         return any(step[1] == CAPTURE_OK for step in self.seq)
@@ -415,7 +437,7 @@ class SerialWorker(threading.Thread):
         now = time.monotonic()
         if not force and (now - self.seq_last_send) < SEND_RETRY_S:
             return
-        cmd, expect, tries = self.seq[0]
+        cmd, expect, tries, quiet = self.seq[0]
         cmd = cmd_text(cmd)
         if expect is None:
             self.seq.popleft()
@@ -423,8 +445,9 @@ class SerialWorker(threading.Thread):
             self.seq_last_send = time.monotonic()
             return
         if tries <= 0:
-            self.log_q.put(f"[viewer] no confirmation for '{cmd}' - giving up "
-                           f"(the viewer re-arms when the device next wakes)")
+            if not quiet:
+                self.log_q.put(f"[viewer] no confirmation for '{cmd}' - giving up "
+                               f"(the viewer re-arms when the device next wakes)")
             self.seq.popleft()
             return
         self.seq[0][2] = tries - 1
@@ -433,9 +456,11 @@ class SerialWorker(threading.Thread):
 
     def _confirm(self, line):
         if self.seq:
-            cmd, expect, _tries = self.seq[0]
-            if expect and expect in line:
-                self.log_q.put(f"[viewer] confirmed: {cmd_text(cmd)}")
+            cmd, expect, _tries, quiet = self.seq[0]
+            matches = (expect,) if isinstance(expect, str) else (expect or ())
+            if any(m in line for m in matches):
+                if not quiet:
+                    self.log_q.put(f"[viewer] confirmed: {cmd_text(cmd)}")
                 self.seq.popleft()
                 self.seq_last_send = 0.0  # next step goes out immediately
 
@@ -496,7 +521,7 @@ class SerialWorker(threading.Thread):
         """Apply the frame interval to the burst in progress too, from its next
         frame ('interval' command), rather than only from the next burst."""
         if self.capture_busy and not self.cold_boot:
-            self.send(f"interval {min(self.max_interval_ms(), max(INTERVAL_MIN_MS, int(self.interval_ms)))}")
+            self.send_query(f"interval {min(self.max_interval_ms(), max(INTERVAL_MIN_MS, int(self.interval_ms)))}")
 
     def _handle_line(self, raw):
         line = ANSI_RE.sub("", raw.decode("utf-8", "replace")).strip("\r\n \t")
@@ -613,7 +638,7 @@ class SerialWorker(threading.Thread):
                                "waiting for camera init before capturing")
                 self.enqueue_verified([KEEPAWAKE_STEP, PREVIEW_STEP])
                 for query in STATUS_QUERIES:
-                    self.send(query)
+                    self.send_query(query)
                 self.arm_at = now + WARM_ARM_FALLBACK_S
         if self.autoarm_enabled and BOOT_DONE_RE.search(line):
             if not self.cold_boot:
@@ -645,7 +670,7 @@ class SerialWorker(threading.Thread):
         # if it is asleep the probe goes nowhere and the boot catcher arms.
         self.enqueue_verified([("ver", "WW500"), KEEPAWAKE_STEP])
         for query in STATUS_QUERIES:
-            self.send(query)
+            self.send_query(query)
         self.arm("connected")
 
         buf = bytearray()
@@ -975,8 +1000,8 @@ class Viewer:
         """Write an op param (saved to the SD card), then read it back: the
         reply to the getop is what the controls show, so a value the
         firmware rejects does not stay on screen."""
-        self.worker.send(f"setop {index} {value}")
-        self.worker.send(f"getop {index}")
+        self.worker.send_query(f"setop {index} {value}")
+        self.worker.send_query(f"getop {index}")
 
     def _sensitivity_changed(self):
         n = self.md_sens.get()

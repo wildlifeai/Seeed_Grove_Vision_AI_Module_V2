@@ -109,6 +109,11 @@ HX_CIS_ERROR_E hm0360_md_setModeSelectOnly(mode_select_t mode);
 
 uint16_t hm0360_md_getMDOutput(uint8_t * regTable, uint8_t length);
 
+// Motion wake: save the ROI_OUT cells that woke the device, before anything else touches the HM0360,
+// then fetch them once, after the first image is captured, for printing
+uint16_t hm0360_md_saveWakeGrid(void);
+bool hm0360_md_takeWakeGrid(uint8_t * regTable, uint8_t length, uint16_t * numBlocks);
+
 // Read the MD interrupt status and the registers that decide it (live preview)
 HX_CIS_ERROR_E hm0360_md_getMDStatus(HM0360_MD_STATUS_T * val);
 

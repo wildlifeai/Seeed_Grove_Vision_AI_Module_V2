@@ -697,6 +697,10 @@ int app_main(void){
 		// HM0360 is main camera
 		if (hm0360_md_isHM0360Present()) {
 			hm0360_md_getInterruptStatus(&hm0360_interrupt_status);
+			if ((hm0360_interrupt_status & MD_INT) == MD_INT) {
+				// Save the cells that woke us before the HM0360 is reconfigured. Printed after the first image
+				hm0360_md_saveWakeGrid();
+			}
 			// Wait till image_task before clearing the interrupt as this allows simple measurement of latency
 			hm0360_md_disableInterrupt();	/// stop further MD activity
 		}

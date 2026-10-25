@@ -526,3 +526,14 @@ miss slow movement (that was frames going unseen at a 20 ms interval); the HM036
 stops at about 1997 ms; `capture N 0` resets the AI processor. The traps are in
 `.agents/skills/references/hardware-traps.md`. The INT_INDIC per-frame clear was left
 unexplained by decision, since the field wake works.
+
+## Addendum, 26 October 2026 (same PR)
+
+- **Wake grid.** The first image's MD grid is always empty (no earlier frame), so the cells
+  that woke the device were never reported. `app_main()` now saves `ROI_OUT` right after
+  reading `INT_INDIC`; the image task prints and sends `HM0360 woken by motion in N blocks:`
+  after the first image, so the wake-to-capture time is not lengthened by printing (Charles's
+  requirement). The empty first-image `HM0360 motion in` line is no longer sent. Benched.
+- **CONFIG.TXT = firmware defaults.** Op 22 C default back to 5; CONFIG.TXT op 30 = 110 and
+  op 33 = 4. Op 24 = 15 does not wake the device while op 34 = 0 (benched).
+- **Viewer:** status queries and MD control writes wait for their reply instead of 3 s each.

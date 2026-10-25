@@ -158,3 +158,8 @@ building on any of them:
   computes interval x 0x8030 / 1000 and caps it at 0xFFFF, so op 11 (MD frame interval) or an HM0360
   capture interval above that silently runs at about 2 s (noted in `config_file.md`, op 11). Noted by
   Charles, 24 Oct 2026.
+* **The MD grid (`ROI_OUT`) of the first image of a burst is always empty**: the HM0360 has no
+  earlier frame to compare it with, so only images 2 onwards report motion. The grid that woke
+  the device is lost once the warm boot reconfigures the sensor, so `app_main()` saves it right
+  after reading `INT_INDIC` (`hm0360_md_saveWakeGrid()`) and the image task reports it after the
+  first image. Keep work before the first capture to a minimum (wake latency). 26 Oct 2026.

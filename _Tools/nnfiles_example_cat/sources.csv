@@ -1,0 +1,11 @@
+file,label,animal,dataset,licence
+cat_1.jpg,cat,cat,Trail Camera Images of New Zealand Animals,CDLA-Permissive-1.0
+cat_2.jpg,cat,cat,Trail Camera Images of New Zealand Animals,CDLA-Permissive-1.0
+cat_3.jpg,cat,cat,Wellington Camera Traps,CDLA-Permissive-1.0
+cat_4.jpg,cat,cat,Wellington Camera Traps,CDLA-Permissive-1.0
+cat_5.jpg,cat,cat,Island Conservation Camera Traps,CDLA-Permissive-1.0
+possum.jpg,not cat,possum,Trail Camera Images of New Zealand Animals,CDLA-Permissive-1.0
+rabbit.jpg,not cat,European rabbit,Trail Camera Images of New Zealand Animals,CDLA-Permissive-1.0
+hedgehog.jpg,not cat,hedgehog,Wellington Camera Traps,CDLA-Permissive-1.0
+bird.jpg,not cat,bird,Wellington Camera Traps,CDLA-Permissive-1.0
+empty.jpg,not cat,empty,Wellington Camera Traps,CDLA-Permissive-1.0

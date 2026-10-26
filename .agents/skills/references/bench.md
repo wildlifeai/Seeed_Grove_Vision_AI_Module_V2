@@ -39,6 +39,12 @@ the fact is not enough, the timing has to be built in.
   before streaming. And when asking for a RESET press, act only on a `Cold boot`: the hand
   reaching for the button can set off a motion wake first, and the press then kills a
   transfer already running (30 Sep 2026).
+* **To score a model on fixed frames, `nnfiles <folder>`** runs it on raw 640x480 frames from the
+  SD card and writes `RESULTS.CSV` (scores and ms per frame); `_Tools/nnfiles_prepare.py` makes
+  the frames. Runbook `_Documentation/nn_files_bench.md`. Not while the app transfers a file.
+  The rat and cat challenges' models live on the team drive, never in this public repo (some
+  trained on non-commercial photos), and the camera's detection (class 1 above op 16) is not
+  the challenges' score (class 1 minus class 0): rank on the score.
 * **For a batch of boards, use `_Tools/ww500_ship_check.py`** (runbook
   `_Documentation/pcb_batch_flashing.md`): both images, a photo from each camera, one
   button per board.
@@ -63,6 +69,11 @@ the fact is not enough, the timing has to be built in.
   `reset` then `dpd` on its console (a watchdog reset), or let a motion wake do it. After a
   RESET, act only on a `Cold boot` banner: a WAKE or motion boot just before it looks the same,
   and the hand reaching for the button can set one off.
+* **Ask for the board to be unplugged before anyone reseats a camera ribbon.** On 11 Oct 2026 a
+  ribbon moved with the power on hung the 2nd bootloader until a power cycle, and pressure on
+  the HM0360 connector stops the boot or kills a running capture (`development reports/
+  2026-10-11_camera_connector_pressure/`). `_Tools/ww500_ship_check.py`'s photo buttons
+  report a disconnected camera, a garbled console or a boot that never starts.
 * **A keystroke in the first ~30 ms after a reset leaves the board in the 2nd bootloader's
   menu** (`[1] Xmodem download and burn FW image`) and the app never starts. Send `0` to
   reboot from the menu; no RESET needed. After `reset` + `dpd`, wait for `>>> Reset by

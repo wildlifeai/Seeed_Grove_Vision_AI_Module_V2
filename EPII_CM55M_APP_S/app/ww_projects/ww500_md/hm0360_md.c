@@ -850,10 +850,12 @@ HX_CIS_ERROR_E hm0360_md_prepare(bool cameraSystemEnabled, uint16_t mdFrameInter
 				cameraSystemEnabled ? "the frame interval, op 11, is 0" : "the camera system is disabled");
 	}
 	else if (sensitivity == MD_SENSITIVITY_OFF) {
+		//newMode = MODE_SLEEP;
 		dbg_printf(DBG_LESS_INFO, "   HM0360 Motion Detection off (the sensitivity, op 17, is 0), frames every %dms.\r\n",
 				mdFrameInterval);
 	}
 	else {
+		//newMode = MODE_SW_NFRAMES_SLEEP;
 		dbg_printf(DBG_LESS_INFO, "   HM0360 Motion Detection on! %dms frame interval, sensitivity %d\r\n",
 				mdFrameInterval, (int) sensitivity);
 	}

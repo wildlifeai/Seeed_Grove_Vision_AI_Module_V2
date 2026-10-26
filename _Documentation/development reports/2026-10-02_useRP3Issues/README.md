@@ -5,6 +5,31 @@
 #### Author: Charles Palmer
 #### Date: 2 October 2026
 
+## Status
+
+**Closed** (9 October 2026). The work merged into `dev` on 8 October 2026 as part of
+[PR #260](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/pull/260). PR #259, named below, was closed in
+its favour.
+
+## Outcome
+
+- The RP3 (colour) image applies MD sensitivity (op 17), has the `md` and `inithm0360` commands, and its photos say
+  `WW500 RP3`. Fixed [#211](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/211),
+  [#153](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/153), item 2 of
+  [#250](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/250) and part 1 of
+  [#266](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/266).
+- Bench tests T1 to T9 (below) all passed on WILD-DJZQ on 8 October 2026.
+- What the camera defines mean, and which test to use, is in `.agents/skills/references/git-and-build.md`.
+- The SWD change at the end of this README is closed out in the
+  [2026-10-03_victorsPriorities](../2026-10-03_victorsPriorities/README.md) thread.
+
+## Open items
+
+- [#267](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/267): in the colour image, `md` and
+  `inithm0360` switch the shared camera bus to the HM0360 without a lock.
+- [#266](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/266), part 2: a stuck HM0360 motion
+  interrupt cannot be seen.
+
 ## Purpose
 
 Some HM0360-related code is inadvertently compiled out when the RP3 camera is selected. This is because code is

@@ -45,6 +45,11 @@ Verified on the bench (details and serial evidence in
   battery cost worth knowing about before enabling it.
 * **camreg staged registers** (`RPV3_EX.BIN` etc.) are re-applied after the init tables
   at every sensor init, they override defaults, persist on SD, and survive DPD.
+* **Pressure on the HM0360 connector (a camera holder, tape) stops the boot or kills a
+  running capture**, and nothing restarts the AI processor afterwards. The HM0360 can stay
+  unanswered until a power cycle, since RESET does not reach it. Moving the camera or the
+  ribbon is harmless. Unplug the board before reseating a ribbon. See
+  `2026-10-11_camera_connector_pressure/` (11 Oct 2026, two boards).
 
 Verified 3 and 4 September 2026 (`2026-09-03_capture_bench_findings/`, `ae_review`
 e8b7feb5 and nRF 0.30.48). All were open issues when written; check the issue before

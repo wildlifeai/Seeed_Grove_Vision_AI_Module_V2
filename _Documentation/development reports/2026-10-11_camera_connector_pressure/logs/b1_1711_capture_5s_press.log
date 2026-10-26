@@ -1,0 +1,951 @@
+# Board 1, 17:11: 5 s press during 'capture 300 1000': frame timeout, 'retry 1/5' recovers (both consoles)
+[17:11:35.025] himax| IF Task received event 'I2C Tx' (0x0701). Rx data = 0x00000000
+[17:11:35.025] himax| I2C transmission complete.
+[17:11:35.025] himax| IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+[17:11:35.137] nrf  | <info> app: !22 
+[17:11:35.137] nrf  | <info> app: DEBUG: starting AI processor read
+[17:11:35.137] nrf  | <info> app: I2C link is initialised.
+[17:11:35.137] nrf  | <info> app: I2C RX payload 118/250 bytes. Response type is 4. CRC OK (0x5398)
+[17:11:35.137] nrf  | <info> app: !23 
+[17:11:35.137] nrf  | <info> app: AI state machine bumped with 'Msg from AI' (Current state: IDLE)
+[17:11:35.137] nrf  | BLE out: Failed to send 119 bytes: 'HM0360 AE regs:
+[17:11:35.137] nrf  |   Integration time = 376 lines
+[17:11:35.137] nrf  |   Analog gain = 0
+[17:11:35.137] nrf  |   Digital gain = 110
+[17:11:35.137] nrf  |   AE Mean = 77
+[17:11:35.137] nrf  |   AEConverged?: Y'
+[17:11:35.137] nrf  | <info> app: DEBUG: starting AI processor read
+[17:11:35.137] nrf  | <info> app: I2C link is initialised.
+[17:11:35.137] nrf  | <info> app: I2C RX payload 123/250 bytes. Response type is 4. CRC OK (0x7C2A)
+[17:11:35.137] nrf  | <info> app: AI state machine bumped with 'Msg from AI' (Current state: IDLE)
+[17:11:35.137] nrf  | BLE out: Failed to send 124 bytes: 'HM0360 motion in 0 blocks:
+[17:11:36.040] nrf  | <info> app: !24 
+[17:11:36.056] himax| IMAGE Task received event 'Image Event Frame Ready' (0x0a04). Rx data = 0x00000000
+[17:11:36.056] himax| DEBUG: ledFlashDisable()
+[17:11:36.056] himax| Image capture 12/300 took 1142ms
+[17:11:36.056] himax| Skipping NN processing (no model loaded).
+[17:11:36.056] himax| HM0360 AE regs:
+[17:11:36.056] himax|   Integration time = 376 lines
+[17:11:36.056] himax|   Analog gain = 0
+[17:11:36.056] himax|   Digital gain = 110
+[17:11:36.056] himax|   AE Mean = 77
+[17:11:36.056] himax|   AEConverged?: Y
+[17:11:36.056] himax| IF Task received event 'Message to Master' (0x070d). Rx data = 0x300115b0
+[17:11:36.056] himax| Assert inter-processor interrupt.
+[17:11:36.056] himax| Sending 124 bytes: Header 4, payload 118, checksum 2 'HM0360 AE regs:
+[17:11:36.056] himax|   Integration time = 376 lines
+[17:11:36.056] himax|   Analog gain = 0
+[17:11:36.056] himax|   Digital gain = 110
+[17:11:36.056] himax|   AE Mean = 77
+[17:11:36.056] himax|   AEConverged?: Y'
+[17:11:36.057] himax| Negate inter-processor interrupt.
+[17:11:36.057] himax| IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+[17:11:36.058] himax| IF Task received event 'I2C Tx' (0x0701). Rx data = 0x00000000
+[17:11:36.058] himax| I2C transmission complete.
+[17:11:36.058] himax| IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+[17:11:36.058] himax| HM0360 motion in 0 blocks:
+[17:11:36.058] himax| IF Task received event 'Message to Master' (0x070d). Rx data = 0x300115b0
+[17:11:36.058] himax| Assert inter-processor interrupt.
+[17:11:36.058] himax| Sending 129 bytes: Header 4, payload 123, checksum 2 'HM0360 motion in 0 blocks:
+[17:11:36.121] himax| Negate inter-processor interrupt.
+[17:11:36.121] himax| IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+[17:11:36.121] himax| Added 12 EXIF tags
+[17:11:36.121] himax| Writing 12376 bytes (11864 + 512) to '592008F0.JPG' from jpeg buffer of 115860 bytes
+[17:11:36.121] himax| IMAGE Task state changed from 'Capturing' (2) to 'NN Processing' (3)
+[17:11:36.121] himax| FatFS Task received event 'Write image' (0x0901). Rx data = 0x30020038
+[17:11:36.121] himax| FatFS task sending event 0x0a06. Tx data = 0x0000000d
+[17:11:36.121] himax| IMAGE task sending event 0x0901. Rx data = 0x30020038
+[17:11:36.121] himax| IMAGE Task received event 'Image Event Disk Write Complete' (0x0a06). Rx data = 0x0000000d
+[17:11:36.121] himax| Image not written. Error: 13
+[17:11:36.121] himax| sensor_type: 8
+[17:11:36.121] himax| IMAGE Task state changed from 'NN Processing' (3) to 'Capturing' (2)
+[17:11:36.183] himax| IF Task received event 'I2C Tx' (0x0701). Rx data = 0x00000000
+[17:11:36.183] himax| I2C transmission complete.
+[17:11:36.183] himax| IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+[17:11:36.288] nrf  | <info> app: DEBUG: starting AI processor read
+[17:11:36.288] nrf  | <info> app: I2C link is initialised.
+[17:11:36.288] nrf  | <info> app: I2C RX payload 118/250 bytes. Response type is 4. CRC OK (0x5398)
+[17:11:36.288] nrf  | <info> app: !25 
+[17:11:36.288] nrf  | <info> app: AI state machine bumped with 'Msg from AI' (Current state: IDLE)
+[17:11:36.288] nrf  | BLE out: Failed to send 119 bytes: 'HM0360 AE regs:
+[17:11:36.288] nrf  |   Integration time = 376 lines
+[17:11:36.288] nrf  |   Analog gain = 0
+[17:11:36.288] nrf  |   Digital gain = 110
+[17:11:36.288] nrf  |   AE Mean = 77
+[17:11:36.288] nrf  |   AEConverged?: Y'
+[17:11:36.288] nrf  | <info> app: DEBUG: starting AI processor read
+[17:11:36.288] nrf  | <info> app: I2C link is initialised.
+[17:11:36.288] nrf  | <info> app: I2C RX payload 123/250 bytes. Response type is 4. CRC OK (0x7C2A)
+[17:11:36.288] nrf  | <info> app: AI state machine bumped with 'Msg from AI' (Current state: IDLE)
+[17:11:36.288] nrf  | BLE out: Failed to send 124 bytes: 'HM0360 motion in 0 blocks:
+[17:11:37.190] nrf  | <info> app: !26 
+[17:11:37.206] himax| IMAGE Task received event 'Image Event Frame Ready' (0x0a04). Rx data = 0x00000000
+[17:11:37.206] himax| DEBUG: ledFlashDisable()
+[17:11:37.206] himax| Image capture 13/300 took 1141ms
+[17:11:37.206] himax| Skipping NN processing (no model loaded).
+[17:11:37.206] himax| HM0360 AE regs:
+[17:11:37.206] himax|   Integration time = 376 lines
+[17:11:37.206] himax|   Analog gain = 0
+[17:11:37.206] himax|   Digital gain = 110
+[17:11:37.206] himax|   AE Mean = 77
+[17:11:37.206] himax|   AEConverged?: Y
+[17:11:37.206] himax| IF Task received event 'Message to Master' (0x070d). Rx data = 0x300115b0
+[17:11:37.206] himax| Assert inter-processor interrupt.
+[17:11:37.206] himax| Sending 124 bytes: Header 4, payload 118, checksum 2 'HM0360 AE regs:
+[17:11:37.206] himax|   Integration time = 376 lines
+[17:11:37.206] himax|   Analog gain = 0
+[17:11:37.206] himax|   Digital gain = 110
+[17:11:37.206] himax|   AE Mean = 77
+[17:11:37.206] himax|   AEConverged?: Y'
+[17:11:37.206] himax| Negate inter-processor interrupt.
+[17:11:37.206] himax| IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+[17:11:37.206] himax| IF Task received event 'I2C Tx' (0x0701). Rx data = 0x00000000
+[17:11:37.206] himax| I2C transmission complete.
+[17:11:37.206] himax| IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+[17:11:37.206] himax| HM0360 motion in 2 blocks:
+[17:11:37.207] himax| IF Task received event 'Message to Master' (0x070d). Rx data = 0x300115b0
+[17:11:37.207] himax| Assert inter-processor interrupt.
+[17:11:37.207] himax| Sending 129 bytes: Header 4, payload 123, checksum 2 'HM0360 motion in 2 blocks:
+[17:11:37.207] himax| Negate inter-processor interrupt.
+[17:11:37.207] himax| IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+[17:11:37.207] himax| Added 12 EXIF tags
+[17:11:37.207] himax| Writing 12460 bytes (11948 + 512) to '59200900.JPG' from jpeg buffer of 115860 bytes
+[17:11:37.269] himax| IMAGE Task state changed from 'Capturing' (2) to 'NN Processing' (3)
+[17:11:37.269] himax| FatFS Task received event 'Write image' (0x0901). Rx data = 0x30020038
+[17:11:37.269] himax| FatFS task sending event 0x0a06. Tx data = 0x0000000d
+[17:11:37.269] himax| IMAGE task sending event 0x0901. Rx data = 0x30020038
+[17:11:37.269] himax| IMAGE Task received event 'Image Event Disk Write Complete' (0x0a06). Rx data = 0x0000000d
+[17:11:37.269] himax| Image not written. Error: 13
+[17:11:37.269] himax| sensor_type: 8
+[17:11:37.269] himax| IMAGE Task state changed from 'NN Processing' (3) to 'Capturing' (2)
+[17:11:37.323] himax| IF Task received event 'I2C Tx' (0x0701). Rx data = 0x00000000
+[17:11:37.323] himax| I2C transmission complete.
+[17:11:37.323] himax| IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+[17:11:37.437] nrf  | <info> app: DEBUG: starting AI processor read
+[17:11:37.437] nrf  | <info> app: I2C link is initialised.
+[17:11:37.437] nrf  | <info> app: I2C RX payload 118/250 bytes. Response type is 4. CRC OK (0x5398)
+[17:11:37.439] nrf  | <info> app: !27 
+[17:11:37.439] nrf  | <info> app: AI state machine bumped with 'Msg from AI' (Current state: IDLE)
+[17:11:37.439] nrf  | BLE out: Failed to send 119 bytes: 'HM0360 AE regs:
+[17:11:37.439] nrf  |   Integration time = 376 lines
+[17:11:37.439] nrf  |   Analog gain = 0
+[17:11:37.439] nrf  |   Digital gain = 110
+[17:11:37.439] nrf  |   AE Mean = 77
+[17:11:37.439] nrf  |   AEConverged?: Y'
+[17:11:37.439] nrf  | <info> app: DEBUG: starting AI processor read
+[17:11:37.439] nrf  | <info> app: I2C link is initialised.
+[17:11:37.439] nrf  | <info> app: I2C RX payload 123/250 bytes. Response type is 4. CRC OK (0x59F8)
+[17:11:37.439] nrf  | <info> app: AI state machine bumped with 'Msg from AI' (Current state: IDLE)
+[17:11:37.439] nrf  | BLE out: Failed to send 124 bytes: 'HM0360 motion in 2 blocks:
+[17:11:38.039] nrf  | <info> app: MAC rxTimeOut
+[17:11:38.336] nrf  | <info> app: !28 
+[17:11:38.336] himax| IMAGE Task received event 'Image Event Frame Ready' (0x0a04). Rx data = 0x00000000
+[17:11:38.336] himax| DEBUG: ledFlashDisable()
+[17:11:38.336] himax| Image capture 14/300 took 1141ms
+[17:11:38.336] himax| Skipping NN processing (no model loaded).
+[17:11:38.336] himax| HM0360 AE regs:
+[17:11:38.336] himax|   Integration time = 376 lines
+[17:11:38.336] himax|   Analog gain = 0
+[17:11:38.336] himax|   Digital gain = 110
+[17:11:38.336] himax|   AE Mean = 76
+[17:11:38.336] himax|   AEConverged?: Y
+[17:11:38.336] himax| IF Task received event 'Message to Master' (0x070d). Rx data = 0x300115b0
+[17:11:38.336] himax| Assert inter-processor interrupt.
+[17:11:38.336] himax| Sending 124 bytes: Header 4, payload 118, checksum 2 'HM0360 AE regs:
+[17:11:38.336] himax|   Integration time = 376 lines
+[17:11:38.336] himax|   Analog gain = 0
+[17:11:38.336] himax|   Digital gain = 110
+[17:11:38.336] himax|   AE Mean = 76
+[17:11:38.336] himax|   AEConverged?: Y'
+[17:11:38.337] himax| Negate inter-processor interrupt.
+[17:11:38.337] himax| IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+[17:11:38.337] himax| IF Task received event 'I2C Tx' (0x0701). Rx data = 0x00000000
+[17:11:38.337] himax| I2C transmission complete.
+[17:11:38.337] himax| IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+[17:11:38.337] himax| HM0360 motion in 6 blocks:
+[17:11:38.337] himax| IF Task received event 'Message to Master' (0x070d). Rx data = 0x300115b0
+[17:11:38.337] himax| Assert inter-processor interrupt.
+[17:11:38.337] himax| Sending 129 bytes: Header 4, payload 123, checksum 2 'HM0360 motion in 6 blocks:
+[17:11:38.392] himax| Negate inter-processor interrupt.
+[17:11:38.392] himax| IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+[17:11:38.392] himax| Added 12 EXIF tags
+[17:11:38.392] himax| Writing 12568 bytes (12056 + 512) to '59200910.JPG' from jpeg buffer of 115860 bytes
+[17:11:38.392] himax| IMAGE Task state changed from 'Capturing' (2) to 'NN Processing' (3)
+[17:11:38.392] himax| FatFS Task received event 'Write image' (0x0901). Rx data = 0x30020038
+[17:11:38.392] himax| FatFS task sending event 0x0a06. Tx data = 0x0000000d
+[17:11:38.392] himax| IMAGE task sending event 0x0901. Rx data = 0x30020038
+[17:11:38.392] himax| IMAGE Task received event 'Image Event Disk Write Complete' (0x0a06). Rx data = 0x0000000d
+[17:11:38.392] himax| Image not written. Error: 13
+[17:11:38.392] himax| sensor_type: 8
+[17:11:38.392] himax| IMAGE Task state changed from 'NN Processing' (3) to 'Capturing' (2)
+[17:11:38.455] himax| IF Task received event 'I2C Tx' (0x0701). Rx data = 0x00000000
+[17:11:38.455] himax| I2C transmission complete.
+[17:11:38.455] himax| IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+[17:11:38.583] nrf  | <info> app: DEBUG: starting AI processor read
+[17:11:38.583] nrf  | <info> app: I2C link is initialised.
+[17:11:38.583] nrf  | <info> app: I2C RX payload 118/250 bytes. Response type is 4. CRC OK (0x8D87)
+[17:11:38.583] nrf  | <info> app: !29 
+[17:11:38.583] nrf  | <info> app: AI state machine bumped with 'Msg from AI' (Current state: IDLE)
+[17:11:38.583] nrf  | BLE out: Failed to send 119 bytes: 'HM0360 AE regs:
+[17:11:38.583] nrf  |   Integration time = 376 lines
+[17:11:38.583] nrf  |   Analog gain = 0
+[17:11:38.583] nrf  |   Digital gain = 110
+[17:11:38.583] nrf  |   AE Mean = 76
+[17:11:38.583] nrf  |   AEConverged?: Y'
+[17:11:38.583] nrf  | <info> app: DEBUG: starting AI processor read
+[17:11:38.583] nrf  | <info> app: I2C link is initialised.
+[17:11:38.583] nrf  | <info> app: I2C RX payload 123/250 bytes. Response type is 4. CRC OK (0x6A18)
+[17:11:38.583] nrf  | <info> app: AI state machine bumped with 'Msg from AI' (Current state: IDLE)
+[17:11:38.583] nrf  | BLE out: Failed to send 124 bytes: 'HM0360 motion in 6 blocks:
+[17:11:39.063] nrf  | <info> app: MAC rxTimeOut
+[17:11:39.122] nrf  | Join failed. Status code -1
+[17:11:39.122] nrf  | <info> app: Bumping state machine with 'Joined' (Current state: JOINING)
+[17:11:39.122] nrf  | <info> app: Retry (attempt 2/6) in 10 seconds (0 minutes)
+[17:11:39.122] nrf  | <debug> app: FDS update success! FileId: 0x3E8 RecKey:0x1
+[17:11:39.122] nrf  | <debug> app: FDS update success! FileId: 0x3E8 RecKey:0x2
+[17:11:39.122] nrf  | <info> app: Data stored on NVM: 76 bytes
+[17:11:39.122] nrf  | BLE out: Failed to send  16 bytes: 'Failed to join.'
+[17:11:39.475] himax| IMAGE Task received event 'Image Event Frame Ready' (0x0a04). Rx data = 0x00000000
+[17:11:39.475] himax| DEBUG: ledFlashDisable()
+[17:11:39.475] himax| Image capture 15/300 took 1142ms
+[17:11:39.475] himax| Skipping NN processing (no model loaded).
+[17:11:39.475] himax| HM0360 AE regs:
+[17:11:39.475] himax|   Integration time = 376 lines
+[17:11:39.475] himax|   Analog gain = 0
+[17:11:39.475] himax|   Digital gain = 110
+[17:11:39.475] himax|   AE Mean = 73
+[17:11:39.475] himax|   AEConverged?: Y
+[17:11:39.475] himax| IF Task received event 'Message to Master' (0x070d). Rx data = 0x300115b0
+[17:11:39.475] himax| Assert inter-processor interrupt.
+[17:11:39.475] himax| Sending 124 bytes: Header 4, payload 118, checksum 2 'HM0360 AE regs:
+[17:11:39.475] himax|   Integration time = 376 lines
+[17:11:39.475] himax|   Analog gain = 0
+[17:11:39.475] himax|   Digital gain = 110
+[17:11:39.475] himax|   AE Mean = 73
+[17:11:39.475] himax|   AEConverged?: Y'
+[17:11:39.475] himax| Negate inter-processor interrupt.
+[17:11:39.475] himax| IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+[17:11:39.475] himax| IF Task received event 'I2C Tx' (0x0701). Rx data = 0x00000000
+[17:11:39.475] himax| I2C transmission complete.
+[17:11:39.475] himax| IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+[17:11:39.475] himax| HM0360 motion in 48 blocks:
+[17:11:39.475] himax| IF Task received event 'Message to Master' (0x070d). Rx data = 0x300115b0
+[17:11:39.475] himax| Assert inter-processor interrupt.
+[17:11:39.475] himax| Sending 130 bytes: Header 4, payload 124, checksum 2 'HM0360 motion in 48 blocks:
+[17:11:39.539] himax| Negate inter-processor interrupt.
+[17:11:39.539] himax| IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+[17:11:39.539] himax| Added 12 EXIF tags
+[17:11:39.539] himax| Writing 10676 bytes (10164 + 512) to '59200930.JPG' from jpeg buffer of 115860 bytes
+[17:11:39.539] himax| IMAGE Task state changed from 'Capturing' (2) to 'NN Processing' (3)
+[17:11:39.539] himax| FatFS Task received event 'Write image' (0x0901). Rx data = 0x30020038
+[17:11:39.539] himax| FatFS task sending event 0x0a06. Tx data = 0x0000000d
+[17:11:39.539] himax| IMAGE task sending event 0x0901. Rx data = 0x30020038
+[17:11:39.542] himax| IMAGE Task received event 'Image Event Disk Write Complete' (0x0a06). Rx data = 0x0000000d
+[17:11:39.542] himax| Image not written. Error: 13
+[17:11:39.542] himax| sensor_type: 8
+[17:11:39.542] himax| IMAGE Task state changed from 'NN Processing' (3) to 'Capturing' (2)
+[17:11:39.603] himax| IF Task received event 'I2C Tx' (0x0701). Rx data = 0x00000000
+[17:11:39.603] himax| I2C transmission complete.
+[17:11:39.603] himax| IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+[17:11:39.666] nrf  | <info> app: !30 
+[17:11:39.666] nrf  | <info> app: DEBUG: starting AI processor read
+[17:11:39.666] nrf  | <info> app: I2C link is initialised.
+[17:11:39.666] nrf  | <info> app: I2C RX payload 118/250 bytes. Response type is 4. CRC OK (0x1B87)
+[17:11:39.666] nrf  | <info> app: !31 
+[17:11:39.666] nrf  | <info> app: AI state machine bumped with 'Msg from AI' (Current state: IDLE)
+[17:11:39.667] nrf  | BLE out: Failed to send 119 bytes: 'HM0360 AE regs:
+[17:11:39.667] nrf  |   Integration time = 376 lines
+[17:11:39.667] nrf  |   Analog gain = 0
+[17:11:39.667] nrf  |   Digital gain = 110
+[17:11:39.667] nrf  |   AE Mean = 73
+[17:11:39.667] nrf  |   AEConverged?: Y'
+[17:11:39.667] nrf  | <info> app: DEBUG: starting AI processor read
+[17:11:39.667] nrf  | <info> app: I2C link is initialised.
+[17:11:39.667] nrf  | <info> app: I2C RX payload 124/250 bytes. Response type is 4. CRC OK (0x5E8B)
+[17:11:39.667] nrf  | <info> app: AI state machine bumped with 'Msg from AI' (Current state: IDLE)
+[17:11:39.667] nrf  | BLE out: Failed to send 125 bytes: 'HM0360 motion in 48 blocks:
+[17:11:44.542] himax| IMAGE Task received event 'Unrecognised' (0x011c). Rx data = 0x00000000
+[17:11:44.542] himax| >>>> Received a timeout event 0x011c after 5073ms <<<<
+[17:11:44.542] himax| >>>> Frame timed out - restarting sensor, retry 1/5
+[17:11:44.542] himax| Stopping sensor
+[17:11:44.542] himax|    Inhibiting MD
+[17:11:44.542] himax|    Changing mode from 2 to 0 with nFrames=0, sleepTime=0 sleepCount = 0xffff
+[17:11:44.669] himax| sensor_type: 8
+[17:11:44.669] himax|    Interval of 1000ms gives sleep count = 0x8030
+[17:11:44.669] himax|    Changing mode from 0 to 2 with nFrames=1, sleepTime=1000 sleepCount = 0x8030
+[17:11:44.669] himax| IMAGE Task received event 'Unrecognised' (0x011b). Rx data = 0x00000000
+[17:11:44.669] himax| >>>> Received a timeout event 0x011b after 1ms <<<<
+[17:11:44.724] himax| IMAGE Task received event 'Image Event Frame Ready' (0x0a04). Rx data = 0x00000000
+[17:11:44.725] himax| DEBUG: ledFlashDisable()
+[17:11:44.725] himax| Image capture 16/300 took 57ms
+[17:11:44.725] himax| Skipping NN processing (no model loaded).
+[17:11:44.725] himax| HM0360 AE regs:
+[17:11:44.725] himax|   Integration time = 376 lines
+[17:11:44.725] himax|   Analog gain = 0
+[17:11:44.725] himax|   Digital gain = 110
+[17:11:44.725] himax|   AE Mean = 64
+[17:11:44.725] himax|   AEConverged?: Y
+[17:11:44.725] himax| IF Task received event 'Message to Master' (0x070d). Rx data = 0x300115b0
+[17:11:44.725] himax| Assert inter-processor interrupt.
+[17:11:44.725] himax| Sending 124 bytes: Header 4, payload 118, checksum 2 'HM0360 AE regs:
+[17:11:44.725] himax|   Integration time = 376 lines
+[17:11:44.725] himax|   Analog gain = 0
+[17:11:44.725] himax|   Digital gain = 110
+[17:11:44.725] himax|   AE Mean = 64
+[17:11:44.725] himax|   AEConverged?: Y'
+[17:11:44.725] himax| Negate inter-processor interrupt.
+[17:11:44.725] himax| IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+[17:11:44.725] himax| IF Task received event 'I2C Tx' (0x0701). Rx data = 0x00000000
+[17:11:44.725] himax| I2C transmission complete.
+[17:11:44.725] himax| IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+[17:11:44.725] himax| HM0360 motion in 11 blocks:
+[17:11:44.725] himax| IF Task received event 'Message to Master' (0x070d). Rx data = 0x300115b0
+[17:11:44.725] himax| Assert inter-processor interrupt.
+[17:11:44.726] himax| Sending 130 bytes: Header 4, payload 124, checksum 2 'HM0360 motion in 11 blocks:
+[17:11:44.787] himax| Negate inter-processor interrupt.
+[17:11:44.787] himax| IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+[17:11:44.787] himax| Added 12 EXIF tags
+[17:11:44.787] himax| Writing 9840 bytes (9328 + 512) to '59200980.JPG' from jpeg buffer of 115860 bytes
+[17:11:44.787] himax| IMAGE Task state changed from 'Capturing' (2) to 'NN Processing' (3)
+[17:11:44.787] himax| FatFS Task received event 'Write image' (0x0901). Rx data = 0x30020038
+[17:11:44.787] himax| FatFS task sending event 0x0a06. Tx data = 0x0000000d
+[17:11:44.787] himax| IMAGE task sending event 0x0901. Rx data = 0x30020038
+[17:11:44.787] himax| IMAGE Task received event 'Image Event Disk Write Complete' (0x0a06). Rx data = 0x0000000d
+[17:11:44.787] himax| Image not written. Error: 13
+[17:11:44.787] himax| sensor_type: 8
+[17:11:44.787] himax| IMAGE Task state changed from 'NN Processing' (3) to 'Capturing' (2)
+[17:11:44.851] himax| IF Task received event 'I2C Tx' (0x0701). Rx data = 0x00000000
+[17:11:44.851] himax| I2C transmission complete.
+[17:11:44.851] himax| IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+[17:11:44.907] nrf  | <info> app: !32 
+[17:11:44.907] nrf  | <info> app: DEBUG: starting AI processor read
+[17:11:44.907] nrf  | <info> app: I2C link is initialised.
+[17:11:44.908] nrf  | <info> app: I2C RX payload 118/250 bytes. Response type is 4. CRC OK (0x142B)
+[17:11:44.908] nrf  | <info> app: !33 
+[17:11:44.908] nrf  | <info> app: AI state machine bumped with 'Msg from AI' (Current state: IDLE)
+[17:11:44.908] nrf  | BLE out: Failed to send 119 bytes: 'HM0360 AE regs:
+[17:11:44.908] nrf  |   Integration time = 376 lines
+[17:11:44.908] nrf  |   Analog gain = 0
+[17:11:44.908] nrf  |   Digital gain = 110
+[17:11:44.908] nrf  |   AE Mean = 64
+[17:11:44.908] nrf  |   AEConverged?: Y'
+[17:11:44.908] nrf  | <info> app: DEBUG: starting AI processor read
+[17:11:44.908] nrf  | <info> app: I2C link is initialised.
+[17:11:44.908] nrf  | <info> app: I2C RX payload 124/250 bytes. Response type is 4. CRC OK (0x14D4)
+[17:11:44.908] nrf  | <info> app: AI state machine bumped with 'Msg from AI' (Current state: IDLE)
+[17:11:44.908] nrf  | BLE out: Failed to send 125 bytes: 'HM0360 motion in 11 blocks:
+[17:11:45.868] himax| IMAGE Task received event 'Image Event Frame Ready' (0x0a04). Rx data = 0x00000000
+[17:11:45.868] himax| DEBUG: ledFlashDisable()
+[17:11:45.868] himax| Image capture 17/300 took 1142ms
+[17:11:45.868] himax| Skipping NN processing (no model loaded).
+[17:11:45.868] himax| HM0360 AE regs:
+[17:11:45.868] himax|   Integration time = 376 lines
+[17:11:45.868] himax|   Analog gain = 0
+[17:11:45.868] himax|   Digital gain = 110
+[17:11:45.868] himax|   AE Mean = 64
+[17:11:45.868] himax|   AEConverged?: Y
+[17:11:45.868] himax| IF Task received event 'Message to Master' (0x070d). Rx data = 0x300115b0
+[17:11:45.868] himax| Assert inter-processor interrupt.
+[17:11:45.868] himax| Sending 124 bytes: Header 4, payload 118, checksum 2 'HM0360 AE regs:
+[17:11:45.868] himax|   Integration time = 376 lines
+[17:11:45.868] himax|   Analog gain = 0
+[17:11:45.868] himax|   Digital gain = 110
+[17:11:45.868] himax|   AE Mean = 64
+[17:11:45.868] himax|   AEConverged?: Y'
+[17:11:45.868] himax| Negate inter-processor interrupt.
+[17:11:45.868] himax| IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+[17:11:45.868] himax| IF Task received event 'I2C Tx' (0x0701). Rx data = 0x00000000
+[17:11:45.868] himax| I2C transmission complete.
+[17:11:45.868] himax| IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+[17:11:45.868] himax| HM0360 motion in 2 blocks:
+[17:11:45.868] himax| IF Task received event 'Message to Master' (0x070d). Rx data = 0x300115b0
+[17:11:45.868] himax| Assert inter-processor interrupt.
+[17:11:45.868] himax| Sending 129 bytes: Header 4, payload 123, checksum 2 'HM0360 motion in 2 blocks:
+[17:11:45.870] himax| Negate inter-processor interrupt.
+[17:11:45.924] himax| IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+[17:11:45.924] himax| Added 12 EXIF tags
+[17:11:45.924] himax| Writing 9916 bytes (9404 + 512) to '59200990.JPG' from jpeg buffer of 115860 bytes
+[17:11:45.924] himax| IMAGE Task state changed from 'Capturing' (2) to 'NN Processing' (3)
+[17:11:45.924] himax| FatFS Task received event 'Write image' (0x0901). Rx data = 0x30020038
+[17:11:45.924] himax| FatFS task sending event 0x0a06. Tx data = 0x0000000d
+[17:11:45.924] himax| IMAGE task sending event 0x0901. Rx data = 0x30020038
+[17:11:45.924] himax| IMAGE Task received event 'Image Event Disk Write Complete' (0x0a06). Rx data = 0x0000000d
+[17:11:45.924] himax| Image not written. Error: 13
+[17:11:45.924] himax| sensor_type: 8
+[17:11:45.926] himax| IMAGE Task state changed from 'NN Processing' (3) to 'Capturing' (2)
+[17:11:45.987] himax| IF Task received event 'I2C Tx' (0x0701). Rx data = 0x00000000
+[17:11:45.987] himax| I2C transmission complete.
+[17:11:45.987] himax| IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+[17:11:46.104] nrf  | <info> app: !34 
+[17:11:46.104] nrf  | <info> app: DEBUG: starting AI processor read
+[17:11:46.104] nrf  | <info> app: I2C link is initialised.
+[17:11:46.104] nrf  | <info> app: I2C RX payload 118/250 bytes. Response type is 4. CRC OK (0x142B)
+[17:11:46.104] nrf  | <info> app: !35 
+[17:11:46.104] nrf  | <info> app: AI state machine bumped with 'Msg from AI' (Current state: IDLE)
+[17:11:46.104] nrf  | BLE out: Failed to send 119 bytes: 'HM0360 AE regs:
+[17:11:46.104] nrf  |   Integration time = 376 lines
+[17:11:46.104] nrf  |   Analog gain = 0
+[17:11:46.104] nrf  |   Digital gain = 110
+[17:11:46.104] nrf  |   AE Mean = 64
+[17:11:46.104] nrf  |   AEConverged?: Y'
+[17:11:46.104] nrf  | <info> app: DEBUG: starting AI processor read
+[17:11:46.104] nrf  | <info> app: I2C link is initialised.
+[17:11:46.104] nrf  | <info> app: I2C RX payload 123/250 bytes. Response type is 4. CRC OK (0x2528)
+[17:11:46.104] nrf  | <info> app: AI state machine bumped with 'Msg from AI' (Current state: IDLE)
+[17:11:46.104] nrf  | BLE out: Failed to send 124 bytes: 'HM0360 motion in 2 blocks:
+[17:11:46.971] himax| IMAGE Task received event 'Image Event Frame Ready' (0x0a04). Rx data = 0x00000000
+[17:11:46.971] himax| DEBUG: ledFlashDisable()
+[17:11:46.971] himax| Image capture 18/300 took 1142ms
+[17:11:46.971] himax| Skipping NN processing (no model loaded).
+[17:11:46.971] himax| HM0360 AE regs:
+[17:11:46.971] himax|   Integration time = 376 lines
+[17:11:46.971] himax|   Analog gain = 0
+[17:11:46.971] himax|   Digital gain = 110
+[17:11:46.971] himax|   AE Mean = 64
+[17:11:46.971] himax|   AEConverged?: Y
+[17:11:46.971] himax| IF Task received event 'Message to Master' (0x070d). Rx data = 0x300115b0
+[17:11:46.971] himax| Assert inter-processor interrupt.
+[17:11:46.971] himax| Sending 124 bytes: Header 4, payload 118, checksum 2 'HM0360 AE regs:
+[17:11:46.971] himax|   Integration time = 376 lines
+[17:11:46.971] himax|   Analog gain = 0
+[17:11:46.971] himax|   Digital gain = 110
+[17:11:46.971] himax|   AE Mean = 64
+[17:11:46.971] himax|   AEConverged?: Y'
+[17:11:47.024] nrf  | <info> app: !36 
+[17:11:47.024] himax| Negate inter-processor interrupt.
+[17:11:47.024] himax| IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+[17:11:47.024] himax| IF Task received event 'I2C Tx' (0x0701). Rx data = 0x00000000
+[17:11:47.024] himax| I2C transmission complete.
+[17:11:47.024] himax| IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+[17:11:47.024] himax| HM0360 motion in 1 blocks:
+[17:11:47.024] himax| IF Task received event 'Message to Master' (0x070d). Rx data = 0x300115b0
+[17:11:47.024] himax| Assert inter-processor interrupt.
+[17:11:47.024] himax| Sending 129 bytes: Header 4, payload 123, checksum 2 'HM0360 motion in 1 blocks:
+[17:11:47.024] himax| Negate inter-processor interrupt.
+[17:11:47.024] himax| IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+[17:11:47.027] himax| Added 12 EXIF tags
+[17:11:47.027] himax| Writing 9864 bytes (9352 + 512) to '592009A0.JPG' from jpeg buffer of 115860 bytes
+[17:11:47.027] himax| IMAGE Task state changed from 'Capturing' (2) to 'NN Processing' (3)
+[17:11:47.027] himax| FatFS Task received event 'Write image' (0x0901). Rx data = 0x30020038
+[17:11:47.027] himax| FatFS task sending event 0x0a06. Tx data = 0x0000000d
+[17:11:47.027] himax| IMAGE task sending event 0x0901. Rx data = 0x30020038
+[17:11:47.027] himax| IMAGE Task received event 'Image Event Disk Write Complete' (0x0a06). Rx data = 0x0000000d
+[17:11:47.027] himax| Image not written. Error: 13
+[17:11:47.027] himax| sensor_type: 8
+[17:11:47.027] himax| IMAGE Task state changed from 'NN Processing' (3) to 'Capturing' (2)
+[17:11:47.088] himax| IF Task received event 'I2C Tx' (0x0701). Rx data = 0x00000000
+[17:11:47.088] himax| I2C transmission complete.
+[17:11:47.088] himax| IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+[17:11:47.207] nrf  | <info> app: DEBUG: starting AI processor read
+[17:11:47.208] nrf  | <info> app: I2C link is initialised.
+[17:11:47.208] nrf  | <info> app: I2C RX payload 118/250 bytes. Response type is 4. CRC OK (0x142B)
+[17:11:47.208] nrf  | <info> app: !37 
+[17:11:47.208] nrf  | <info> app: AI state machine bumped with 'Msg from AI' (Current state: IDLE)
+[17:11:47.208] nrf  | BLE out: Failed to send 119 bytes: 'HM0360 AE regs:
+[17:11:47.208] nrf  |   Integration time = 376 lines
+[17:11:47.208] nrf  |   Analog gain = 0
+[17:11:47.208] nrf  |   Digital gain = 110
+[17:11:47.208] nrf  |   AE Mean = 64
+[17:11:47.208] nrf  |   AEConverged?: Y'
+[17:11:47.208] nrf  | <info> app: DEBUG: starting AI processor read
+[17:11:47.208] nrf  | <info> app: I2C link is initialised.
+[17:11:47.208] nrf  | <info> app: I2C RX payload 123/250 bytes. Response type is 4. CRC OK (0xBB69)
+[17:11:47.210] nrf  | <info> app: AI state machine bumped with 'Msg from AI' (Current state: IDLE)
+[17:11:47.210] nrf  | BLE out: Failed to send 124 bytes: 'HM0360 motion in 1 blocks:
+[17:11:48.125] himax| IMAGE Task received event 'Image Event Frame Ready' (0x0a04). Rx data = 0x00000000
+[17:11:48.125] himax| DEBUG: ledFlashDisable()
+[17:11:48.125] himax| Image capture 19/300 took 1142ms
+[17:11:48.125] himax| Skipping NN processing (no model loaded).
+[17:11:48.125] nrf  | <info> app: !38 
+[17:11:48.125] himax| HM0360 AE regs:
+[17:11:48.127] himax|   Integration time = 376 lines
+[17:11:48.127] himax|   Analog gain = 0
+[17:11:48.127] himax|   Digital gain = 110
+[17:11:48.127] himax|   AE Mean = 66
+[17:11:48.127] himax|   AEConverged?: Y
+[17:11:48.127] himax| IF Task received event 'Message to Master' (0x070d). Rx data = 0x300115b0
+[17:11:48.127] himax| Assert inter-processor interrupt.
+[17:11:48.127] himax| Sending 124 bytes: Header 4, payload 118, checksum 2 'HM0360 AE regs:
+[17:11:48.127] himax|   Integration time = 376 lines
+[17:11:48.127] himax|   Analog gain = 0
+[17:11:48.127] himax|   Digital gain = 110
+[17:11:48.127] himax|   AE Mean = 66
+[17:11:48.127] himax|   AEConverged?: Y'
+[17:11:48.127] himax| Negate inter-processor interrupt.
+[17:11:48.127] himax| IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+[17:11:48.127] himax| IF Task received event 'I2C Tx' (0x0701). Rx data = 0x00000000
+[17:11:48.127] himax| I2C transmission complete.
+[17:11:48.127] himax| IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+[17:11:48.189] himax| HM0360 motion in 1 blocks:
+[17:11:48.189] himax| IF Task received event 'Message to Master' (0x070d). Rx data = 0x300115b0
+[17:11:48.189] himax| Assert inter-processor interrupt.
+[17:11:48.189] himax| Sending 129 bytes: Header 4, payload 123, checksum 2 'HM0360 motion in 1 blocks:
+[17:11:48.189] himax| Negate inter-processor interrupt.
+[17:11:48.189] himax| IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+[17:11:48.189] himax| Added 12 EXIF tags
+[17:11:48.189] himax| Writing 9920 bytes (9408 + 512) to '592009C0.JPG' from jpeg buffer of 115860 bytes
+[17:11:48.189] himax| IMAGE Task state changed from 'Capturing' (2) to 'NN Processing' (3)
+[17:11:48.189] himax| FatFS Task received event 'Write image' (0x0901). Rx data = 0x30020038
+[17:11:48.189] himax| FatFS task sending event 0x0a06. Tx data = 0x0000000d
+[17:11:48.189] himax| IMAGE task sending event 0x0901. Rx data = 0x30020038
+[17:11:48.189] himax| IMAGE Task received event 'Image Event Disk Write Complete' (0x0a06). Rx data = 0x0000000d
+[17:11:48.189] himax| Image not written. Error: 13
+[17:11:48.189] himax| sensor_type: 8
+[17:11:48.189] himax| IMAGE Task state changed from 'NN Processing' (3) to 'Capturing' (2)
+[17:11:48.252] himax| IF Task received event 'I2C Tx' (0x0701). Rx data = 0x00000000
+[17:11:48.252] himax| I2C transmission complete.
+[17:11:48.252] himax| IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+[17:11:48.379] nrf  | <info> app: DEBUG: starting AI processor read
+[17:11:48.379] nrf  | <info> app: I2C link is initialised.
+[17:11:48.379] nrf  | <info> app: I2C RX payload 118/250 bytes. Response type is 4. CRC OK (0xB834)
+[17:11:48.379] nrf  | <info> app: !39 
+[17:11:48.379] nrf  | <info> app: AI state machine bumped with 'Msg from AI' (Current state: IDLE)
+[17:11:48.379] nrf  | BLE out: Failed to send 119 bytes: 'HM0360 AE regs:
+[17:11:48.379] nrf  |   Integration time = 376 lines
+[17:11:48.379] nrf  |   Analog gain = 0
+[17:11:48.379] nrf  |   Digital gain = 110
+[17:11:48.379] nrf  |   AE Mean = 66
+[17:11:48.379] nrf  |   AEConverged?: Y'
+[17:11:48.379] nrf  | <info> app: DEBUG: starting AI processor read
+[17:11:48.379] nrf  | <info> app: I2C link is initialised.
+[17:11:48.379] nrf  | <info> app: I2C RX payload 123/250 bytes. Response type is 4. CRC OK (0x99CA)
+[17:11:48.379] nrf  | <info> app: AI state machine bumped with 'Msg from AI' (Current state: IDLE)
+[17:11:48.379] nrf  | BLE out: Failed to send 124 bytes: 'HM0360 motion in 1 blocks:
+[17:11:49.175] nrf  | <info> app: Retrying transmission now.
+[17:11:49.175] nrf  | BLE out: Failed to send  27 bytes: 'Retrying transmission now.'
+[17:11:49.175] nrf  | <info> app: Bumping state machine with 'Retry Tx' (Current state: JOINING)
+[17:11:49.175] nrf  | <info> app: MLME-Request: MLME_JOIN, OK
+[17:11:49.239] himax| IMAGE Task received event 'Image Event Frame Ready' (0x0a04). Rx data = 0x00000000
+[17:11:49.239] himax| DEBUG: ledFlashDisable()
+[17:11:49.303] himax| Image capture 20/300 took 1142ms
+[17:11:49.303] nrf  | <info> app: !40 
+[17:11:49.303] himax| Skipping NN processing (no model loaded).
+[17:11:49.303] himax| HM0360 AE regs:
+[17:11:49.303] himax|   Integration time = 376 lines
+[17:11:49.303] himax|   Analog gain = 0
+[17:11:49.303] himax|   Digital gain = 110
+[17:11:49.303] himax|   AE Mean = 73
+[17:11:49.303] himax|   AEConverged?: Y
+[17:11:49.303] himax| IF Task received event 'Message to Master' (0x070d). Rx data = 0x300115b0
+[17:11:49.303] himax| Assert inter-processor interrupt.
+[17:11:49.303] himax| Sending 124 bytes: Header 4, payload 118, checksum 2 'HM0360 AE regs:
+[17:11:49.303] himax|   Integration time = 376 lines
+[17:11:49.303] himax|   Analog gain = 0
+[17:11:49.303] himax|   Digital gain = 110
+[17:11:49.303] himax|   AE Mean = 73
+[17:11:49.303] himax|   AEConverged?: Y'
+[17:11:49.303] himax| Negate inter-processor interrupt.
+[17:11:49.303] himax| IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+[17:11:49.303] himax| IF Task received event 'I2C Tx' (0x0701). Rx data = 0x00000000
+[17:11:49.303] himax| I2C transmission complete.
+[17:11:49.303] himax| IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+[17:11:49.303] himax| HM0360 motion in 16 blocks:
+[17:11:49.303] himax| IF Task received event 'Message to Master' (0x070d). Rx data = 0x300115b0
+[17:11:49.303] himax| Assert inter-processor interrupt.
+[17:11:49.303] himax| Sending 130 bytes: Header 4, payload 124, checksum 2 'HM0360 motion in 16 blocks:
+[17:11:49.303] himax| Negate inter-processor interrupt.
+[17:11:49.303] himax| IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+[17:11:49.303] himax| Added 12 EXIF tags
+[17:11:49.303] himax| Writing 10100 bytes (9588 + 512) to '592009D0.JPG' from jpeg buffer of 115860 bytes
+[17:11:49.303] himax| IMAGE Task state changed from 'Capturing' (2) to 'NN Processing' (3)
+[17:11:49.303] himax| FatFS Task received event 'Write image' (0x0901). Rx data = 0x30020038
+[17:11:49.303] himax| FatFS task sending event 0x0a06. Tx data = 0x0000000d
+[17:11:49.303] himax| IMAGE task sending event 0x0901. Rx data = 0x30020038
+[17:11:49.303] himax| IMAGE Task received event 'Image Event Disk Write Complete' (0x0a06). Rx data = 0x0000000d
+[17:11:49.303] himax| Image not written. Error: 13
+[17:11:49.366] himax| sensor_type: 8
+[17:11:49.366] himax| IMAGE Task state changed from 'NN Processing' (3) to 'Capturing' (2)
+[17:11:49.367] himax| IF Task received event 'I2C Tx' (0x0701). Rx data = 0x00000000
+[17:11:49.367] himax| I2C transmission complete.
+[17:11:49.367] himax| IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+[17:11:49.489] nrf  | <info> app: DEBUG: starting AI processor read
+[17:11:49.489] nrf  | <info> app: I2C link is initialised.
+[17:11:49.489] nrf  | <info> app: I2C RX payload 118/250 bytes. Response type is 4. CRC OK (0x1B87)
+[17:11:49.489] nrf  | <info> app: !41 
+[17:11:49.489] nrf  | <info> app: AI state machine bumped with 'Msg from AI' (Current state: IDLE)
+[17:11:49.489] nrf  | BLE out: Failed to send 119 bytes: 'HM0360 AE regs:
+[17:11:49.489] nrf  |   Integration time = 376 lines
+[17:11:49.489] nrf  |   Analog gain = 0
+[17:11:49.489] nrf  |   Digital gain = 110
+[17:11:49.489] nrf  |   AE Mean = 73
+[17:11:49.489] nrf  |   AEConverged?: Y'
+[17:11:49.489] nrf  | <info> app: DEBUG: starting AI processor read
+[17:11:49.489] nrf  | <info> app: I2C link is initialised.
+[17:11:49.489] nrf  | <info> app: I2C RX payload 124/250 bytes. Response type is 4. CRC OK (0x2576)
+[17:11:49.489] nrf  | <info> app: AI state machine bumped with 'Msg from AI' (Current state: IDLE)
+[17:11:49.489] nrf  | BLE out: Failed to send 125 bytes: 'HM0360 motion in 16 blocks:
+[17:11:49.553] nrf  | <info> app: MAC txDone
+[17:11:50.416] nrf  | <info> app: !42 
+[17:11:50.416] himax| IMAGE Task received event 'Image Event Frame Ready' (0x0a04). Rx data = 0x00000000
+[17:11:50.416] himax| DEBUG: ledFlashDisable()
+[17:11:50.416] himax| Image capture 21/300 took 1141ms
+[17:11:50.417] himax| Skipping NN processing (no model loaded).
+[17:11:50.417] himax| HM0360 AE regs:
+[17:11:50.417] himax|   Integration time = 376 lines
+[17:11:50.417] himax|   Analog gain = 0
+[17:11:50.417] himax|   Digital gain = 110
+[17:11:50.417] himax|   AE Mean = 76
+[17:11:50.417] himax|   AEConverged?: Y
+[17:11:50.417] himax| IF Task received event 'Message to Master' (0x070d). Rx data = 0x300115b0
+[17:11:50.417] himax| Assert inter-processor interrupt.
+[17:11:50.417] himax| Sending 124 bytes: Header 4, payload 118, checksum 2 'HM0360 AE regs:
+[17:11:50.417] himax|   Integration time = 376 lines
+[17:11:50.417] himax|   Analog gain = 0
+[17:11:50.417] himax|   Digital gain = 110
+[17:11:50.417] himax|   AE Mean = 76
+[17:11:50.417] himax|   AEConverged?: Y'
+[17:11:50.417] himax| Negate inter-processor interrupt.
+[17:11:50.417] himax| IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+[17:11:50.417] himax| IF Task received event 'I2C Tx' (0x0701). Rx data = 0x00000000
+[17:11:50.417] himax| I2C transmission complete.
+[17:11:50.417] himax| IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+[17:11:50.475] himax| HM0360 motion in 1 blocks:
+[17:11:50.475] himax| IF Task received event 'Message to Master' (0x070d). Rx data = 0x300115b0
+[17:11:50.475] himax| Assert inter-processor interrupt.
+[17:11:50.475] himax| Sending 129 bytes: Header 4, payload 123, checksum 2 'HM0360 motion in 1 blocks:
+[17:11:50.476] himax| Negate inter-processor interrupt.
+[17:11:50.477] himax| IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+[17:11:50.477] himax| Added 12 EXIF tags
+[17:11:50.477] himax| Writing 10060 bytes (9548 + 512) to '592009E0.JPG' from jpeg buffer of 115860 bytes
+[17:11:50.477] himax| IMAGE Task state changed from 'Capturing' (2) to 'NN Processing' (3)
+[17:11:50.477] himax| FatFS Task received event 'Write image' (0x0901). Rx data = 0x30020038
+[17:11:50.477] himax| FatFS task sending event 0x0a06. Tx data = 0x0000000d
+[17:11:50.478] himax| IMAGE task sending event 0x0901. Rx data = 0x30020038
+[17:11:50.478] himax| IMAGE Task received event 'Image Event Disk Write Complete' (0x0a06). Rx data = 0x0000000d
+[17:11:50.478] himax| Image not written. Error: 13
+[17:11:50.478] himax| sensor_type: 8
+[17:11:50.478] himax| IMAGE Task state changed from 'NN Processing' (3) to 'Capturing' (2)
+[17:11:50.539] himax| IF Task received event 'I2C Tx' (0x0701). Rx data = 0x00000000
+[17:11:50.539] himax| I2C transmission complete.
+[17:11:50.539] himax| IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+[17:11:50.658] nrf  | <info> app: DEBUG: starting AI processor read
+[17:11:50.658] nrf  | <info> app: I2C link is initialised.
+[17:11:50.658] nrf  | <info> app: I2C RX payload 118/250 bytes. Response type is 4. CRC OK (0x8D87)
+[17:11:50.658] nrf  | <info> app: !43 
+[17:11:50.658] nrf  | <info> app: AI state machine bumped with 'Msg from AI' (Current state: IDLE)
+[17:11:50.658] nrf  | BLE out: Failed to send 119 bytes: 'HM0360 AE regs:
+[17:11:50.658] nrf  |   Integration time = 376 lines
+[17:11:50.658] nrf  |   Analog gain = 0
+[17:11:50.658] nrf  |   Digital gain = 110
+[17:11:50.658] nrf  |   AE Mean = 76
+[17:11:50.658] nrf  |   AEConverged?: Y'
+[17:11:50.658] nrf  | <info> app: DEBUG: starting AI processor read
+[17:11:50.660] nrf  | <info> app: I2C link is initialised.
+[17:11:50.660] nrf  | <info> app: I2C RX payload 123/250 bytes. Response type is 4. CRC OK (0xED4B)
+[17:11:50.660] nrf  | <info> app: AI state machine bumped with 'Msg from AI' (Current state: IDLE)
+[17:11:50.660] nrf  | BLE out: Failed to send 124 bytes: 'HM0360 motion in 1 blocks:
+[17:11:51.574] himax| IMAGE Task received event 'Image Event Frame Ready' (0x0a04). Rx data = 0x00000000
+[17:11:51.574] himax| DEBUG: ledFlashDisable()
+[17:11:51.574] himax| Image capture 22/300 took 1142ms
+[17:11:51.574] himax| Skipping NN processing (no model loaded).
+[17:11:51.574] himax| HM0360 AE regs:
+[17:11:51.574] himax|   Integration time = 376 lines
+[17:11:51.574] himax|   Analog gain = 0
+[17:11:51.574] himax|   Digital gain = 110
+[17:11:51.574] himax|   AE Mean = 77
+[17:11:51.574] himax|   AEConverged?: Y
+[17:11:51.574] himax| IF Task received event 'Message to Master' (0x070d). Rx data = 0x300115b0
+[17:11:51.574] himax| Assert inter-processor interrupt.
+[17:11:51.574] himax| Sending 124 bytes: Header 4, payload 118, checksum 2 'HM0360 AE regs:
+[17:11:51.576] himax|   Integration time = 376 lines
+[17:11:51.576] himax|   Analog gain = 0
+[17:11:51.576] himax|   Digital gain = 110
+[17:11:51.576] himax|   AE Mean = 77
+[17:11:51.576] himax|   AEConverged?: Y'
+[17:11:51.576] himax| Negate inter-processor interrupt.
+[17:11:51.576] himax| IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+[17:11:51.576] himax| IF Task received event 'I2C Tx' (0x0701). Rx data = 0x00000000
+[17:11:51.576] himax| I2C transmission complete.
+[17:11:51.576] himax| IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+[17:11:51.576] himax| HM0360 motion in 1 blocks:
+[17:11:51.577] himax| IF Task received event 'Message to Master' (0x070d). Rx data = 0x300115b0
+[17:11:51.577] himax| Assert inter-processor interrupt.
+[17:11:51.577] himax| Sending 129 bytes: Header 4, payload 123, checksum 2 'HM0360 motion in 1 blocks:
+[17:11:51.637] himax| Negate inter-processor interrupt.
+[17:11:51.637] himax| IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+[17:11:51.637] himax| Added 12 EXIF tags
+[17:11:51.637] himax| Writing 10048 bytes (9536 + 512) to '592009F0.JPG' from jpeg buffer of 115860 bytes
+[17:11:51.637] himax| IMAGE Task state changed from 'Capturing' (2) to 'NN Processing' (3)
+[17:11:51.637] himax| FatFS Task received event 'Write image' (0x0901). Rx data = 0x30020038
+[17:11:51.637] himax| FatFS task sending event 0x0a06. Tx data = 0x0000000d
+[17:11:51.637] himax| IMAGE task sending event 0x0901. Rx data = 0x30020038
+[17:11:51.637] himax| IMAGE Task received event 'Image Event Disk Write Complete' (0x0a06). Rx data = 0x0000000d
+[17:11:51.637] himax| Image not written. Error: 13
+[17:11:51.637] himax| sensor_type: 8
+[17:11:51.637] himax| IMAGE Task state changed from 'NN Processing' (3) to 'Capturing' (2)
+[17:11:51.700] himax| IF Task received event 'I2C Tx' (0x0701). Rx data = 0x00000000
+[17:11:51.700] himax| I2C transmission complete.
+[17:11:51.700] himax| IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+[17:11:51.757] nrf  | <info> app: !44 
+[17:11:51.757] nrf  | <info> app: DEBUG: starting AI processor read
+[17:11:51.757] nrf  | <info> app: I2C link is initialised.
+[17:11:51.757] nrf  | <info> app: I2C RX payload 118/250 bytes. Response type is 4. CRC OK (0x5398)
+[17:11:51.757] nrf  | <info> app: !45 
+[17:11:51.757] nrf  | <info> app: AI state machine bumped with 'Msg from AI' (Current state: IDLE)
+[17:11:51.757] nrf  | BLE out: Failed to send 119 bytes: 'HM0360 AE regs:
+[17:11:51.757] nrf  |   Integration time = 376 lines
+[17:11:51.757] nrf  |   Analog gain = 0
+[17:11:51.757] nrf  |   Digital gain = 110
+[17:11:51.757] nrf  |   AE Mean = 77
+[17:11:51.757] nrf  |   AEConverged?: Y'
+[17:11:51.757] nrf  | <info> app: DEBUG: starting AI processor read
+[17:11:51.757] nrf  | <info> app: I2C link is initialised.
+[17:11:51.757] nrf  | <info> app: I2C RX payload 123/250 bytes. Response type is 4. CRC OK (0x105D)
+[17:11:51.757] nrf  | <info> app: AI state machine bumped with 'Msg from AI' (Current state: IDLE)
+[17:11:51.757] nrf  | BLE out: Failed to send 124 bytes: 'HM0360 motion in 1 blocks:
+[17:11:54.591] nrf  | <info> app: MAC rxTimeOut
+[17:11:55.587] nrf  | <info> app: MAC rxTimeOut
+[17:11:55.652] nrf  | Join failed. Status code -1
+[17:11:55.652] nrf  | <info> app: Bumping state machine with 'Joined' (Current state: JOINING)
+[17:11:55.652] nrf  | <info> app: Retry (attempt 3/6) in 20 seconds (0 minutes)
+[17:11:55.652] nrf  | <debug> app: FDS update success! FileId: 0x3E8 RecKey:0x1
+[17:11:55.652] nrf  | <debug> app: FDS update success! FileId: 0x3E8 RecKey:0x2
+[17:11:55.652] nrf  | <info> app: Data stored on NVM: 76 bytes
+[17:11:55.652] nrf  | BLE out: Failed to send  16 bytes: 'Failed to join.'
+[17:11:56.623] himax| IMAGE Task received event 'Unrecognised' (0x011c). Rx data = 0x00000000
+[17:11:56.623] himax| >>>> Received a timeout event 0x011c after 5075ms <<<<
+[17:11:56.623] himax| >>>> Frame timed out - restarting sensor, retry 1/5
+[17:11:56.623] himax| Stopping sensor
+[17:11:56.623] himax|    Inhibiting MD
+[17:11:56.623] himax|    Changing mode from 2 to 0 with nFrames=0, sleepTime=0 sleepCount = 0xffff
+[17:11:56.739] himax| sensor_type: 8
+[17:11:56.739] himax|    Interval of 1000ms gives sleep count = 0x8030
+[17:11:56.739] himax|    Changing mode from 0 to 2 with nFrames=1, sleepTime=1000 sleepCount = 0x8030
+[17:11:56.739] himax| IMAGE Task received event 'Unrecognised' (0x011b). Rx data = 0x00000000
+[17:11:56.739] himax| >>>> Received a timeout event 0x011b after 1ms <<<<
+[17:11:56.803] himax| IMAGE Task received event 'Image Event Frame Ready' (0x0a04). Rx data = 0x00000000
+[17:11:56.803] himax| DEBUG: ledFlashDisable()
+[17:11:56.803] himax| Image capture 23/300 took 57ms
+[17:11:56.803] himax| Skipping NN processing (no model loaded).
+[17:11:56.803] himax| HM0360 AE regs:
+[17:11:56.803] himax|   Integration time = 376 lines
+[17:11:56.803] himax|   Analog gain = 0
+[17:11:56.803] himax|   Digital gain = 103
+[17:11:56.803] himax|   AE Mean = 74
+[17:11:56.803] himax|   AEConverged?: Y
+[17:11:56.803] himax| IF Task received event 'Message to Master' (0x070d). Rx data = 0x300115b0
+[17:11:56.803] himax| Assert inter-processor interrupt.
+[17:11:56.803] himax| Sending 124 bytes: Header 4, payload 118, checksum 2 'HM0360 AE regs:
+[17:11:56.803] himax|   Integration time = 376 lines
+[17:11:56.803] himax|   Analog gain = 0
+[17:11:56.803] himax|   Digital gain = 103
+[17:11:56.803] himax|   AE Mean = 74
+[17:11:56.803] himax|   AEConverged?: Y'
+[17:11:56.803] himax| Negate inter-processor interrupt.
+[17:11:56.803] himax| IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+[17:11:56.803] himax| IF Task received event 'I2C Tx' (0x0701). Rx data = 0x00000000
+[17:11:56.803] himax| I2C transmission complete.
+[17:11:56.803] himax| IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+[17:11:56.866] himax| HM0360 motion in 6 blocks:
+[17:11:56.867] himax| IF Task received event 'Message to Master' (0x070d). Rx data = 0x300115b0
+[17:11:56.867] himax| Assert inter-processor interrupt.
+[17:11:56.867] himax| Sending 129 bytes: Header 4, payload 123, checksum 2 'HM0360 motion in 6 blocks:
+[17:11:56.867] himax| Negate inter-processor interrupt.
+[17:11:56.867] himax| IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+[17:11:56.867] himax| Added 12 EXIF tags
+[17:11:56.867] himax| Writing 11996 bytes (11484 + 512) to '59200A50.JPG' from jpeg buffer of 115860 bytes
+[17:11:56.867] himax| IMAGE Task state changed from 'Capturing' (2) to 'NN Processing' (3)
+[17:11:56.867] himax| FatFS Task received event 'Write image' (0x0901). Rx data = 0x30020038
+[17:11:56.867] himax| FatFS task sending event 0x0a06. Tx data = 0x0000000d
+[17:11:56.867] himax| IMAGE task sending event 0x0901. Rx data = 0x30020038
+[17:11:56.867] himax| IMAGE Task received event 'Image Event Disk Write Complete' (0x0a06). Rx data = 0x0000000d
+[17:11:56.867] himax| Image not written. Error: 13
+[17:11:56.867] himax| sensor_type: 8
+[17:11:56.867] himax| IMAGE Task state changed from 'NN Processing' (3) to 'Capturing' (2)
+[17:11:56.922] himax| IF Task received event 'I2C Tx' (0x0701). Rx data = 0x00000000
+[17:11:56.922] himax| I2C transmission complete.
+[17:11:56.922] himax| IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+[17:11:57.042] nrf  | <info> app: !46 
+[17:11:57.042] nrf  | <info> app: DEBUG: starting AI processor read
+[17:11:57.042] nrf  | <info> app: I2C link is initialised.
+[17:11:57.042] nrf  | <info> app: I2C RX payload 118/250 bytes. Response type is 4. CRC OK (0xF2E3)
+[17:11:57.042] nrf  | <info> app: !47 
+[17:11:57.042] nrf  | <info> app: AI state machine bumped with 'Msg from AI' (Current state: IDLE)
+[17:11:57.042] nrf  | BLE out: Failed to send 119 bytes: 'HM0360 AE regs:
+[17:11:57.042] nrf  |   Integration time = 376 lines
+[17:11:57.042] nrf  |   Analog gain = 0
+[17:11:57.042] nrf  |   Digital gain = 103
+[17:11:57.042] nrf  |   AE Mean = 74
+[17:11:57.042] nrf  |   AEConverged?: Y'
+[17:11:57.042] nrf  | <info> app: DEBUG: starting AI processor read
+[17:11:57.042] nrf  | <info> app: I2C link is initialised.
+[17:11:57.042] nrf  | <info> app: I2C RX payload 123/250 bytes. Response type is 4. CRC OK (0x6559)
+[17:11:57.042] nrf  | <info> app: AI state machine bumped with 'Msg from AI' (Current state: IDLE)
+[17:11:57.042] nrf  | BLE out: Failed to send 124 bytes: 'HM0360 motion in 6 blocks:
+[17:11:57.952] himax| IMAGE Task received event 'Image Event Frame Ready' (0x0a04). Rx data = 0x00000000
+[17:11:57.952] himax| DEBUG: ledFlashDisable()
+[17:11:57.952] himax| Image capture 24/300 took 1142ms
+[17:11:57.952] himax| Skipping NN processing (no model loaded).
+[17:11:57.952] himax| HM0360 AE regs:
+[17:11:57.952] himax|   Integration time = 376 lines
+[17:11:57.952] himax|   Analog gain = 0
+[17:11:57.952] himax|   Digital gain = 103
+[17:11:57.952] himax|   AE Mean = 75
+[17:11:57.952] himax|   AEConverged?: Y
+[17:11:57.952] himax| IF Task received event 'Message to Master' (0x070d). Rx data = 0x300115b0
+[17:11:57.952] himax| Assert inter-processor interrupt.
+[17:11:57.952] himax| Sending 124 bytes: Header 4, payload 118, checksum 2 'HM0360 AE regs:
+[17:11:57.952] himax|   Integration time = 376 lines
+[17:11:57.952] himax|   Analog gain = 0
+[17:11:57.952] himax|   Digital gain = 103
+[17:11:57.952] himax|   AE Mean = 75
+[17:11:57.952] himax|   AEConverged?: Y'
+[17:11:57.952] himax| Negate inter-processor interrupt.
+[17:11:57.952] himax| IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+[17:11:57.952] himax| IF Task received event 'I2C Tx' (0x0701). Rx data = 0x00000000
+[17:11:57.953] himax| I2C transmission complete.
+[17:11:57.953] himax| IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+[17:11:57.953] himax| HM0360 motion in 3 blocks:
+[17:11:57.953] himax| IF Task received event 'Message to Master' (0x070d). Rx data = 0x300115b0
+[17:11:57.953] himax| Assert inter-processor interrupt.
+[17:11:58.016] himax| Sending 129 bytes: Header 4, payload 123, checksum 2 'HM0360 motion in 3 blocks:
+[17:11:58.016] himax| Negate inter-processor interrupt.
+[17:11:58.016] himax| IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+[17:11:58.017] himax| Added 12 EXIF tags
+[17:11:58.017] himax| Writing 11944 bytes (11432 + 512) to '59200A60.JPG' from jpeg buffer of 115860 bytes
+[17:11:58.017] himax| IMAGE Task state changed from 'Capturing' (2) to 'NN Processing' (3)
+[17:11:58.017] himax| FatFS Task received event 'Write image' (0x0901). Rx data = 0x30020038
+[17:11:58.017] himax| FatFS task sending event 0x0a06. Tx data = 0x0000000d
+[17:11:58.017] himax| IMAGE task sending event 0x0901. Rx data = 0x30020038
+[17:11:58.017] himax| IMAGE Task received event 'Image Event Disk Write Complete' (0x0a06). Rx data = 0x0000000d
+[17:11:58.017] himax| Image not written. Error: 13
+[17:11:58.017] himax| sensor_type: 8
+[17:11:58.017] himax| IMAGE Task state changed from 'NN Processing' (3) to 'Capturing' (2)
+[17:11:58.072] himax| IF Task received event 'I2C Tx' (0x0701). Rx data = 0x00000000
+[17:11:58.072] himax| I2C transmission complete.
+[17:11:58.072] himax| IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+[17:11:58.198] nrf  | <info> app: !48 
+[17:11:58.198] nrf  | <info> app: DEBUG: starting AI processor read
+[17:11:58.198] nrf  | <info> app: I2C link is initialised.
+[17:11:58.198] nrf  | <info> app: I2C RX payload 118/250 bytes. Response type is 4. CRC OK (0x2CFC)
+[17:11:58.198] nrf  | <info> app: !49 
+[17:11:58.198] nrf  | <info> app: AI state machine bumped with 'Msg from AI' (Current state: IDLE)
+[17:11:58.198] nrf  | BLE out: Failed to send 119 bytes: 'HM0360 AE regs:
+[17:11:58.198] nrf  |   Integration time = 376 lines
+[17:11:58.198] nrf  |   Analog gain = 0
+[17:11:58.198] nrf  |   Digital gain = 103
+[17:11:58.198] nrf  |   AE Mean = 75
+[17:11:58.198] nrf  |   AEConverged?: Y'
+[17:11:58.198] nrf  | <info> app: DEBUG: starting AI processor read
+[17:11:58.198] nrf  | <info> app: I2C link is initialised.
+[17:11:58.198] nrf  | <info> app: I2C RX payload 123/250 bytes. Response type is 4. CRC OK (0x96D0)
+[17:11:58.198] nrf  | <info> app: AI state machine bumped with 'Msg from AI' (Current state: IDLE)
+[17:11:58.201] nrf  | BLE out: Failed to send 124 bytes: 'HM0360 motion in 3 blocks:
+[17:11:59.105] himax| IMAGE Task received event 'Image Event Frame Ready' (0x0a04). Rx data = 0x00000000
+[17:11:59.105] himax| DEBUG: ledFlashDisable()
+[17:11:59.105] himax| Image capture 25/300 took 1141ms
+[17:11:59.105] himax| Skipping NN processing (no model loaded).
+[17:11:59.105] himax| HM0360 AE regs:
+[17:11:59.105] himax|   Integration time = 376 lines
+[17:11:59.105] himax|   Analog gain = 0
+[17:11:59.105] himax|   Digital gain = 103
+[17:11:59.105] himax|   AE Mean = 75
+[17:11:59.105] himax|   AEConverged?: Y
+[17:11:59.105] himax| IF Task received event 'Message to Master' (0x070d). Rx data = 0x300115b0
+[17:11:59.105] himax| Assert inter-processor interrupt.
+[17:11:59.105] himax| Sending 124 bytes: Header 4, payload 118, checksum 2 'HM0360 AE regs:
+[17:11:59.105] himax|   Integration time = 376 lines
+[17:11:59.105] himax|   Analog gain = 0
+[17:11:59.105] himax|   Digital gain = 103
+[17:11:59.105] himax|   AE Mean = 75
+[17:11:59.105] himax|   AEConverged?: Y'
+[17:11:59.105] himax| Negate inter-processor interrupt.
+[17:11:59.105] himax| IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+[17:11:59.105] himax| IF Task received event 'I2C Tx' (0x0701). Rx data = 0x00000000
+[17:11:59.105] himax| I2C transmission complete.
+[17:11:59.105] himax| IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+[17:11:59.105] himax| HM0360 motion in 2 blocks:
+[17:11:59.105] himax| IF Task received event 'Message to Master' (0x070d). Rx data = 0x300115b0
+[17:11:59.105] himax| Assert inter-processor interrupt.
+[17:11:59.105] himax| Sending 129 bytes: Header 4, payload 123, checksum 2 'HM0360 motion in 2 blocks:
+[17:11:59.105] himax| Negate inter-processor interrupt.
+[17:11:59.121] nrf  | <info> app: !50 
+[17:11:59.169] himax| IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+[17:11:59.169] himax| Added 12 EXIF tags
+[17:11:59.169] himax| Writing 11896 bytes (11384 + 512) to '59200A70.JPG' from jpeg buffer of 115860 bytes
+[17:11:59.169] himax| IMAGE Task state changed from 'Capturing' (2) to 'NN Processing' (3)
+[17:11:59.169] himax| FatFS Task received event 'Write image' (0x0901). Rx data = 0x30020038
+[17:11:59.169] himax| FatFS task sending event 0x0a06. Tx data = 0x0000000d
+[17:11:59.169] himax| IMAGE task sending event 0x0901. Rx data = 0x30020038
+[17:11:59.169] himax| IMAGE Task received event 'Image Event Disk Write Complete' (0x0a06). Rx data = 0x0000000d
+[17:11:59.169] himax| Image not written. Error: 13
+[17:11:59.169] himax| sensor_type: 8
+[17:11:59.169] himax| IMAGE Task state changed from 'NN Processing' (3) to 'Capturing' (2)
+[17:11:59.224] himax| IF Task received event 'I2C Tx' (0x0701). Rx data = 0x00000000
+[17:11:59.224] himax| I2C transmission complete.
+[17:11:59.224] himax| IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+[17:11:59.303] nrf  | <info> app: DEBUG: starting AI processor read
+[17:11:59.303] nrf  | <info> app: I2C link is initialised.
+[17:11:59.303] nrf  | <info> app: I2C RX payload 118/250 bytes. Response type is 4. CRC OK (0x2CFC)
+[17:11:59.303] nrf  | <info> app: !51 
+[17:11:59.303] nrf  | <info> app: AI state machine bumped with 'Msg from AI' (Current state: IDLE)
+[17:11:59.303] nrf  | BLE out: Failed to send 119 bytes: 'HM0360 AE regs:
+[17:11:59.303] nrf  |   Integration time = 376 lines
+[17:11:59.303] nrf  |   Analog gain = 0
+[17:11:59.303] nrf  |   Digital gain = 103
+[17:11:59.303] nrf  |   AE Mean = 75
+[17:11:59.303] nrf  |   AEConverged?: Y'
+[17:11:59.303] nrf  | <info> app: DEBUG: starting AI processor read
+[17:11:59.303] nrf  | <info> app: I2C link is initialised.
+[17:11:59.303] nrf  | <info> app: I2C RX payload 123/250 bytes. Response type is 4. CRC OK (0x76F5)
+[17:11:59.303] nrf  | <info> app: AI state machine bumped with 'Msg from AI' (Current state: IDLE)
+[17:11:59.303] nrf  | BLE out: Failed to send 124 bytes: 'HM0360 motion in 2 blocks:
+[17:12:00.238] himax| IMAGE Task received event 'Image Event Frame Ready' (0x0a04). Rx data = 0x00000000
+[17:12:00.238] himax| DEBUG: ledFlashDisable()
+[17:12:00.238] himax| Image capture 26/300 took 1141ms
+[17:12:00.238] himax| Skipping NN processing (no model loaded).
+[17:12:00.238] himax| HM0360 AE regs:
+[17:12:00.238] himax|   Integration time = 376 lines
+[17:12:00.238] himax|   Analog gain = 0
+[17:12:00.238] himax|   Digital gain = 103
+[17:12:00.238] himax|   AE Mean = 75
+[17:12:00.238] himax|   AEConverged?: Y
+[17:12:00.238] himax| IF Task received event 'Message to Master' (0x070d). Rx data = 0x300115b0
+[17:12:00.238] himax| Assert inter-processor interrupt.
+[17:12:00.238] himax| Sending 124 bytes: Header 4, payload 118, checksum 2 'HM0360 AE regs:
+[17:12:00.238] himax|   Integration time = 376 lines
+[17:12:00.238] himax|   Analog gain = 0
+[17:12:00.238] himax|   Digital gain = 103
+[17:12:00.238] himax|   AE Mean = 75
+[17:12:00.238] himax|   AEConverged?: Y'
+[17:12:00.238] himax| Negate inter-processor interrupt.
+[17:12:00.238] himax| IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+[17:12:00.238] himax| IF Task received event 'I2C Tx' (0x0701). Rx data = 0x00000000
+[17:12:00.238] himax| I2C transmission complete.
+[17:12:00.238] himax| IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+[17:12:00.238] himax| HM0360 motion in 3 blocks:
+[17:12:00.241] himax| IF Task received event 'Message to Master' (0x070d). Rx data = 0x300115b0
+[17:12:00.241] himax| Assert inter-processor interrupt.
+[17:12:00.241] himax| Sending 129 bytes: Header 4, payload 123, checksum 2 'HM0360 motion in 3 blocks:
+[17:12:00.270] nrf  | <info> app: !52 
+[17:12:00.301] himax| Negate inter-processor interrupt.
+[17:12:00.301] himax| IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+[17:12:00.301] himax| Added 12 EXIF tags
+[17:12:00.301] himax| Writing 11948 bytes (11436 + 512) to '59200A80.JPG' from jpeg buffer of 115860 bytes
+[17:12:00.301] himax| IMAGE Task state changed from 'Capturing' (2) to 'NN Processing' (3)
+[17:12:00.301] himax| FatFS Task received event 'Write image' (0x0901). Rx data = 0x30020038
+[17:12:00.301] himax| FatFS task sending event 0x0a06. Tx data = 0x0000000d
+[17:12:00.301] himax| IMAGE task sending event 0x0901. Rx data = 0x30020038
+[17:12:00.301] himax| IMAGE Task received event 'Image Event Disk Write Complete' (0x0a06). Rx data = 0x0000000d
+[17:12:00.301] himax| Image not written. Error: 13
+[17:12:00.301] himax| sensor_type: 8
+[17:12:00.301] himax| IMAGE Task state changed from 'NN Processing' (3) to 'Capturing' (2)
+[17:12:00.356] himax| IF Task received event 'I2C Tx' (0x0701). Rx data = 0x00000000
+[17:12:00.356] himax| I2C transmission complete.
+[17:12:00.356] himax| IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+[17:12:00.441] nrf  | <info> app: DEBUG: starting AI processor read
+[17:12:00.441] nrf  | <info> app: I2C link is initialised.
+[17:12:00.441] nrf  | <info> app: I2C RX payload 118/250 bytes. Response type is 4. CRC OK (0x2CFC)
+[17:12:00.442] nrf  | <info> app: !53 
+[17:12:00.442] nrf  | <info> app: AI state machine bumped with 'Msg from AI' (Current state: IDLE)
+[17:12:00.442] nrf  | BLE out: Failed to send 119 bytes: 'HM0360 AE regs:
+[17:12:00.442] nrf  |   Integration time = 376 lines
+[17:12:00.442] nrf  |   Analog gain = 0
+[17:12:00.442] nrf  |   Digital gain = 103
+[17:12:00.442] nrf  |   AE Mean = 75
+[17:12:00.442] nrf  |   AEConverged?: Y'
+[17:12:00.442] nrf  | <info> app: DEBUG: starting AI processor read
+[17:12:00.442] nrf  | <info> app: I2C link is initialised.
+[17:12:00.442] nrf  | <info> app: I2C RX payload 123/250 bytes. Response type is 4. CRC OK (0xB858)
+[17:12:00.443] nrf  | <info> app: AI state machine bumped with 'Msg from AI' (Current state: IDLE)
+[17:12:00.444] nrf  | BLE out: Failed to send 124 bytes: 'HM0360 motion in 3 blocks:

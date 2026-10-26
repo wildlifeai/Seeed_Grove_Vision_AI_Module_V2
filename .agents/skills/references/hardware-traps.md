@@ -16,6 +16,26 @@ Verified on the bench (details and serial evidence in
   **cold** boot (PMU wakeup registers read zero). A `setop 8` does not shorten an
   inactivity countdown already running, so after raising op 8 for a session, follow the
   reboot command with `dpd` or wait out the old period.
+* **A watchdog runs while the AI processor is awake** (13 Oct 2026, `watchdog.c`). If nothing
+  feeds it for 20 s the processor resets and cold-boots. Three things follow. A debugger that
+  halts the processor gets reset: type `wdt 0` first, or build without `AWAKE_WATCHDOG`. Code in
+  the CLI or IF task that runs for 20 s without blocking stops the feeds (the FreeRTOS timer
+  task is priority 2, below both). And the hardware resets at the **second** timeout, so a
+  period of N gives a reset at 2N. Flash writes suspend it (`disable_xip()`/`enable_xip()`).
+  `freeze` tests it.
+* **A fault on the AI processor now ends in a reset, not a hang** (13 Oct 2026). Every fault
+  handler prints a report (`Entering HardFault interrupt!`, the status registers, the stacked
+  `PC` and `LR`), then `>>> Reset after fault`, and a cold boot follows at once. So an unexpected `Cold Boot` in a log may be a fault: search back for the report. The
+  `hardfault` console command forces one for testing. A failed `configASSERT()` does the same,
+  printing `ASSERT failed: <file>:<line>` first (`assert` forces one). Both need a **clean
+  build** after `FreeRTOSConfig.h` or `WW_ASSERT_RESETS` changes, as the kernel is compiled with
+  them.
+* **`capture` and `light` are refused between a cold boot and the first sleep** (13 Oct 2026):
+  `Error: no captures until after the first sleep.` A cold boot follows power-on, RESET,
+  `reset`, `switchslot` and a firmware update. To capture from a script: let the board sleep
+  (`setop 7 5` then `dpd` gives a timer wake 5 s later), then send the command. The first frame
+  after a cold boot sometimes never arrived, on both cameras, so this was ruled out
+  (`development reports/2026-10-12_cameraErrors/`).
 * **Cold-boot IMX708 first captures fail on images built before 30 Sep 2026**. Every
   in-place retry times out (`Frame timed out - restarting sensor, retry n/5`) and the image
   task then goes Uninitialised. The cause was the I2C address left on the HM0360 by nested

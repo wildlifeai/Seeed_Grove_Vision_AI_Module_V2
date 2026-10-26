@@ -1,5 +1,5 @@
 # Description of the CONFIG.TXT File
-#### CGP - 25 April 2026 (updated 8 July 2026: parameters 21-28, immediate persistence; updated 11 July 2026: parameters 29-31 - RP camera auto-exposure and white-balance mode; updated 4 September 2026: parameters 32-36 - ALWAYS_ON/TIME_OF_DAY flash modes, OP_PARAMETER_AE_CHECK_INTERVAL renamed to OP_PARAMETER_FLASH_EVALUATE_INTERVAL; this is now the canonical copy - see note at the end)
+#### CGP - 25 April 2026 (updated 8 July 2026: parameters 21-28, immediate persistence; updated 11 July 2026: parameters 29-31 - RP camera auto-exposure and white-balance mode; updated 4 September 2026: parameters 32-36 - ALWAYS_ON/TIME_OF_DAY flash modes, OP_PARAMETER_AE_CHECK_INTERVAL renamed to OP_PARAMETER_FLASH_EVALUATE_INTERVAL; updated 24 October 2026: parameter 33 is now OP_PARAMETER_MD_BLOCK_THRESHOLD, parameter 17 no longer has an 'off' value, parameter 11 maximum noted; updated 25 October 2026: parameter 22 default back to 5, CONFIG.TXT made to match the firmware defaults; this is now the canonical copy - see note at the end)
 
 The CONFIG.TXT file contains "Operational Parameters" for the WW500.
 
@@ -50,20 +50,20 @@ captured first.
 |     8 | OP_PARAMETER_INTERVAL_BEFORE_DPD      | 1000          | The interval (in ms) between when all FreeRTOS task activity ceases and the AI processor entering DPD.|
 |     9 | OP_PARAMETER_LED_BRIGHTNESS_PERCENT   | 5             | Flash LED duty cycle (brightness) in percent (approximately, 0 means 'dim', not 'off') |
 |    10 | OP_PARAMETER_CAMERA_ENABLED           | 1             | Camera and NN system disabled, 1 = Camera and NN system enabled |
-|    11 | OP_PARAMETER_MD_INTERVAL              | 0             | Interval (ms) between frames in motion detect mode (0 inhibits motion detection)|
+|    11 | OP_PARAMETER_MD_INTERVAL              | 0             | Interval (ms) between frames in motion detect mode (0 inhibits motion detection; this is the only way to switch motion detection off). The HM0360 sleep register stops at about 1997 ms, so longer values run at that |
 |    12 | OP_PARAMETER_FLASH_DURATION           | 100           | Duration (ms) that LED flash is on (RP camera only)                 |
 |    13 | OP_PARAMETER_FLASH_LED                | 0             | LED bit mask: visible LED used = 1, infra-red LED used =2, none = 0              |
 |    14 | OP_PARAMETER_MODEL_PROJECT            | 0             | Model project ID used for the NN model (0 disables NN)|
 |    15 | OP_PARAMETER_MODEL_VERSION            | 0             | Model version number used for the NN model |
 |    16 | OP_PARAMETER_MODEL_THRESHOLD          | 18            | Logit threshold for detection (0-127) |
-|    17 | OP_PARAMETER_MD_SENSITIVITY           | 1             | Motion Detection Sensitivity: 0=off, 1=low, 2=medium, 3=high |
+|    17 | OP_PARAMETER_MD_SENSITIVITY           | 1             | Motion Detection Sensitivity: 1=low, 2=medium, 3=high. Other values are rejected by `setop`, and replaced by 1 when CONFIG.TXT is loaded (until 24 October 2026, 0 meant off; use op 11 = 0 instead). Takes effect at once |
 |    18 | OP_PARAMETER_TEST_MODE_BITS           | 0             | To manage test configurations: bit or bits indicate a test function |
 |    19 | OP_PARAMETER_IMAGES_COUNT     		| 0             | Count of images in the current image folder. Use this to decide to create a new image folder. |
 |    20 | OP_PARAMETER_IMAGES_FILE_INDEX 		| 0             | Count of image folders |
 |    21 | OP_PARAMETER_MD_FLASH_LED 			| 2             | LED used to illuminate motion-detection frames while asleep: 0 = none, 1 = visible, 2 = IR |
-|    22 | OP_PARAMETER_MD_FLASH_BRIGHTNESS_PERCENT | 50         | Brightness of the motion-detection illumination (percent; 16 hardware levels; approximately, 0 means 'dim', not 'off' - op21 = 0 is the off switch). Default raised from 5 (too dim for night MD in the field); the LED remains STROBE-gated to each MD frame's ~15 ms integration window, so this scales pulse amplitude, not duty cycle |
+|    22 | OP_PARAMETER_MD_FLASH_BRIGHTNESS_PERCENT | 5          | Brightness of the motion-detection illumination (percent; 16 hardware levels; approximately, 0 means 'dim', not 'off' - op21 = 0 is the off switch). The firmware default was 50 from 8 July to 25 October 2026, when it was set back to 5 to match CONFIG.TXT. Raise it if night MD is too dim; the LED remains STROBE-gated to each MD frame's ~15 ms integration window, so this scales pulse amplitude, not duty cycle |
 |    23 | OP_PARAMETER_AE_DARK_THRESHOLD 		| 65            | AE Mean (0-255) below this means the scene is dark and the flash is needed |
-|    24 | OP_PARAMETER_FLASH_EVALUATE_INTERVAL 	| 15            | Interval (minutes) between periodic flash-mode re-evaluations (AE light level or time-of-day window). 0 disables |
+|    24 | OP_PARAMETER_FLASH_EVALUATE_INTERVAL 	| 15            | Interval (minutes) between periodic flash-mode re-evaluations (AE light level or time-of-day window). 0 disables. No periodic wake while op 34 = 0 (flash off), bench-checked 26 October 2026 |
 |    25 | OP_PARAMETER_AE_FLASH_STATE 			| 0             | Last AE flash decision (0/1). Runtime state - leave as 0 |
 |    26 | OP_PARAMETER_SLOT_SWITCH 				| 0             | Automatic light-based camera image switching: 0 = off (manual `switchslot` only), 1 = automatic (night image in the dark, colour image in daylight; reboots at the next sleep) |
 |    27 | OP_PARAMETER_WB_RED_GAIN 				| 286           | Software white-balance RED gain, Q8.8 (256 = 1.0x, 0 = correction off). RP3 colour camera only |
@@ -72,7 +72,7 @@ captured first.
 |    30 | OP_PARAMETER_CAM_AE_TARGET 			| 110           | Auto-exposure target: raw bright-quartile (p75) luma, 0-250 (0 = built-in default 95). Bright parts of the scene render just below white after the tone curve |
 |    31 | OP_PARAMETER_CAM_WB_MODE 				| 1             | RP camera white balance: 0 = off (hardware JPEG), 1 = auto (warmth-biased grey-world measured per frame), 2 = manual op27/op28. Auto falls back to manual for flash-lit or too-dark frames - see `img_correct.c` |
 |    32 | OP_PARAMETER_LORAWAN_PING_MINUTES 	| 0             | LoRaWAN ping period in minutes, read by the BLE processor. 0 = never join the network |
-|    33 | OP_PARAMETER_RFU_2 					| 0             | Reserved for future use |
+|    33 | OP_PARAMETER_MD_BLOCK_THRESHOLD 		| 4             | Motion detection wake threshold: the device wakes when **more than** this many of the HM0360's motion-detection cells (16 x 16 grid) show motion. 1-255; other values are rejected by `setop`, and replaced by 4 when CONFIG.TXT is loaded (it was RFU_2, 0, until 24 October 2026). Takes effect at once |
 |    34 | OP_PARAMETER_FLASH_MODE 				| 0             | Capture flash mode: 0 = off, 1 = AE-driven, 2 = always on, 3 = time of day |
 |    35 | OP_PARAMETER_FLASH_TOD_START 			| 0             | FLASH_MODE_TIME_OF_DAY only: minutes after midnight UTC when the flash turns on |
 |    36 | OP_PARAMETER_FLASH_TOD_DURATION 		| 0             | FLASH_MODE_TIME_OF_DAY only: duration (minutes) the flash stays on, wraps past midnight |

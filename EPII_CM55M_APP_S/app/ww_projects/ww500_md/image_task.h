@@ -98,6 +98,9 @@ const char * image_getLastImageFile(void);
 // Returns whether the camera system is enabled
 bool image_getEnabled(void);
 
+// Change the interval of the capture burst in progress, from its next frame ('interval' command)
+bool image_setCaptureInterval(uint32_t interval);
+
 // Call to shut down cameras and enter DPD
 void image_sleepNow(void);
 

@@ -262,12 +262,12 @@ uint16_t op_parameter[OP_PARAMETER_NUM_ENTRIES] = {
 	PROJECT_ID,		   // 14 OP_PARAMETER_MODEL_PROJECT (0 disables NN)
 	PROJECT_VER,	   // 15 OP_PARAMETER_MODEL_VERSION
 	MODEL_THRESHOLD,   // 16 OP_PARAMETER_MODEL_THRESHOLD default
-	1,      	   		// 17 Motion Detection Sensitivity: 0=off, 1=low, 2=medium, 3=high
+	MD_SENSITIVITY_DEFAULT,	// 17 Motion Detection Sensitivity: 1=low, 2=medium, 3=high
 	0,	    	   		// 18 Test Mode Bits - one bit to enable each test function
 	0,	    	   		// 19 OP_PARAMETER_IMAGES_COUNT
 	0,	    	   		// 20 OP_PARAMETER_IMAGES_COUNT - increment as files are added. Start a new folder when this exceeds a threhsold
 	2,	    	   		// 21 OP_PARAMETER_MD_FLASH_LED (2 = IR)
-	50,	    	   		// 22 OP_PARAMETER_MD_FLASH_BRIGHTNESS_PERCENT (STROBE-gated ~15ms pulses; 5% too dim in the field)
+	5,	    	   		// 22 OP_PARAMETER_MD_FLASH_BRIGHTNESS_PERCENT (STROBE-gated ~15ms pulses; matches MANIFEST/CONFIG.TXT)
 	65,	    	   		// 23 OP_PARAMETER_AE_DARK_THRESHOLD ('moderate' setting - see AE_Light_Sensor_Roadmap.md)
 	15,	    	   		// 24 OP_PARAMETER_FLASH_EVALUATE_INTERVAL (minutes; 0 disables)
 	0,	    	   		// 25 OP_PARAMETER_AE_FLASH_STATE (runtime state)
@@ -278,7 +278,7 @@ uint16_t op_parameter[OP_PARAMETER_NUM_ENTRIES] = {
 	110,	   			// 30 OP_PARAMETER_CAM_AE_TARGET (target mean luma; 0 = built-in default)
 	1,	    	   		// 31 OP_PARAMETER_CAM_WB_MODE (1 = auto grey-world; 2 = manual op27/28; 0 = off)
 	0,	    	   		// 32 OP_PARAMETER_LORAWAN_PING_MINUTES
-	0,	    	   		// 33 OP_PARAMETER_RFU_2
+	MD_BLOCK_THRESHOLD_DEFAULT,	// 33 OP_PARAMETER_MD_BLOCK_THRESHOLD (cells; the HM0360 table value)
 	0,	    	   		// 34 OP_PARAMETER_FLASH_MODE (0 = off - matches today's default behaviour)
 	0,	    	   		// 35 OP_PARAMETER_FLASH_TOD_START
 	0,	    	   		// 36 OP_PARAMETER_FLASH_TOD_DURATION
@@ -1233,6 +1233,20 @@ static FRESULT load_configuration(const char *filename, directoryManager_t *dirM
 		}
 	}
 
+	// MD settings with a restricted range (24 Oct 2026). Cards written before then can hold
+	// op 17 = 0 (sensitivity 'off', no longer allowed: op 11 = 0 is the off switch) and
+	// op 33 = 0 (it was RFU_2). Use the defaults instead.
+	if (!fatfs_isValidOperationalParameter(OP_PARAMETER_MD_SENSITIVITY, op_parameter[OP_PARAMETER_MD_SENSITIVITY])) {
+		xprintf("Op 17 (MD sensitivity) = %d is not valid: using %d\n",
+				op_parameter[OP_PARAMETER_MD_SENSITIVITY], MD_SENSITIVITY_DEFAULT);
+		op_parameter[OP_PARAMETER_MD_SENSITIVITY] = MD_SENSITIVITY_DEFAULT;
+	}
+	if (!fatfs_isValidOperationalParameter(OP_PARAMETER_MD_BLOCK_THRESHOLD, op_parameter[OP_PARAMETER_MD_BLOCK_THRESHOLD])) {
+		xprintf("Op 33 (MD wake threshold) = %d is not valid: using %d\n",
+				op_parameter[OP_PARAMETER_MD_BLOCK_THRESHOLD], MD_BLOCK_THRESHOLD_DEFAULT);
+		op_parameter[OP_PARAMETER_MD_BLOCK_THRESHOLD] = MD_BLOCK_THRESHOLD_DEFAULT;
+	}
+
 	// Close file
 	res = f_close(&dirManager->configFile);
 	if (res != FR_OK) {
@@ -1958,6 +1972,31 @@ uint16_t fatfs_getOperationalParameter(OP_PARAMETERS_E parameter) {
 	}
 	else {
 		return 0;
+	}
+}
+
+/**
+ * Checks a value against the allowed range of an operational parameter.
+ *
+ * Only some parameters have a restricted range; any value is allowed for the
+ * others. Used by 'setop' (console and BLE) and when CONFIG.TXT is loaded.
+ *
+ * @param parameter - one of a list of possible parameters
+ * @param value - the proposed value
+ * @return - true if the value is allowed
+ */
+bool fatfs_isValidOperationalParameter(OP_PARAMETERS_E parameter, uint16_t value) {
+
+	switch (parameter) {
+
+	case OP_PARAMETER_MD_SENSITIVITY:
+		return ((value >= MD_SENSITIVITY_MIN) && (value <= MD_SENSITIVITY_MAX));
+
+	case OP_PARAMETER_MD_BLOCK_THRESHOLD:
+		return ((value >= MD_BLOCK_THRESHOLD_MIN) && (value <= MD_BLOCK_THRESHOLD_MAX));
+
+	default:
+		return true;
 	}
 }
 

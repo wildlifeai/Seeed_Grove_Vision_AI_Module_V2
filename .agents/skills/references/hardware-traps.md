@@ -16,6 +16,26 @@ Verified on the bench (details and serial evidence in
   **cold** boot (PMU wakeup registers read zero). A `setop 8` does not shorten an
   inactivity countdown already running, so after raising op 8 for a session, follow the
   reboot command with `dpd` or wait out the old period.
+* **Any character typed on the console keeps the AI processor awake for 60 s**, whatever
+  op8 says (`CLI-commands.c`, every RX char sets `INACTIVITYTIMEOUTCLI`). So a tool that
+  types at the device (e.g. `live_view.py`) holds it awake, and `setop 8` cannot make it
+  sleep sooner; send `dpd`. Combined with the cold-boot capture refusal (`Error: no captures
+  until after the first sleep.`), this left the live viewer stuck awake after a cold boot
+  (23 Oct 2026, `2026-10-23_mdEnhancements`).
+* **A print from another task inside a live-preview frame line corrupts that frame.** On the
+  HM0360 build it hit every frame: the IF task logs the I2C send of the motion/AE message to
+  the BLE processor, which completes mid-frame. `consoleQuiet()` in `if_task.c` now also holds
+  while `preview_isSending()`. Other tasks are not held (23 Oct 2026).
+* **`setop` saves to CONFIG.TXT at once** (`APP_MSG_FATFSTASK_SAVE_CONFIG`), so a bench
+  session's values go to the field with the card. After live-view sessions on 23 Oct 2026 the
+  card held op7 = 10 (a wake every 10 s) and op8 = 60000. `live_view.py` now sets lab-safe
+  values on close (ops 7 and 8), but its MD controls write ops 11, 17 and 33 and the close
+  leaves those as set. After bench work, check ops 7, 8, 11, 17 and 33 with `getop`.
+* **`capture N 0` (N > 1) resets the AI processor.** `MIN_IMAGE_INTERVAL` is 0, but the interval
+  goes to `xTimerChangePeriod()`, and FreeRTOS asserts on a zero period (`timers.c`), so it
+  reaches `configASSERT()` and a reset (a hang before 13 Oct 2026). The old "interval 0 wedges
+  the IMX708" note is probably this. Use 1 ms or more (found from code 23 Oct 2026, not yet
+  reproduced on the bench).
 * **A watchdog runs while the AI processor is awake** (13 Oct 2026, `watchdog.c`). If nothing
   feeds it for 20 s the processor resets and cold-boots. Three things follow. A debugger that
   halts the processor gets reset: type `wdt 0` first, or build without `AWAKE_WATCHDOG`. Code in
@@ -122,3 +142,23 @@ building on any of them:
   PB7 is a GPIO output in every build (not with `ENABLESWD`), so PB7 (SWCLK) stops being SWD
   once `checkForCameras()` runs. Since 3 Oct 2026 the cold-boot RTC set (about 1.4 s) comes
   first, so SWD can connect for about 1.4 s after a reset; after a DPD wake the window is short.
+* **HM0360 MD registers come in three banks, and MD_CTRL differs between them.** The context A
+  (0x354B) and B (0x35A5) MD_CTRL hold the light coefficient in [7:1] and enable in [0]; main
+  MD_CTRL (0x2080) has latency select in [5:4]. IIR, latency, MD_CTRL1, ROI_OUT and INT_INDIC
+  are main-only and shared. Captures run in context A, sleep and wake in B. The image task
+  clears all HM0360 interrupt bits at every frame-ready, so read `INT_INDIC` before that clear.
+  Details: `2026-10-23_mdEnhancements` thread, 24 Oct 2026.
+* **In the HM0360 build the sensor times a burst itself** (`USE_HM0360_CAPTURE_TIMER` is defined in
+  `image_task.c`): one frame, a sleep of the capture interval, repeat, with the MD interrupt enabled
+  (`MD_CTRL1` = 0x06) until the last frame. The AI processor takes whichever frame comes after it
+  has handled the previous one, so at short intervals most sensor frames, and their MD bits, are
+  never seen. Found 24 Oct 2026 after it had been assumed to use the software `captureTimer`.
+* **The HM0360 sleep between frames stops at about 1997 ms.** `calculateSleepTime()` (`hm0360_md.c`)
+  computes interval x 0x8030 / 1000 and caps it at 0xFFFF, so op 11 (MD frame interval) or an HM0360
+  capture interval above that silently runs at about 2 s (noted in `config_file.md`, op 11). Noted by
+  Charles, 24 Oct 2026.
+* **The MD grid (`ROI_OUT`) of the first image of a burst is always empty**: the HM0360 has no
+  earlier frame to compare it with, so only images 2 onwards report motion. The grid that woke
+  the device is lost once the warm boot reconfigures the sensor, so `app_main()` saves it right
+  after reading `INT_INDIC` (`hm0360_md_saveWakeGrid()`) and the image task reports it after the
+  first image. Keep work before the first capture to a minimum (wake latency). 26 Oct 2026.

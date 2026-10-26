@@ -257,6 +257,10 @@ static uint32_t g_captures_to_take;
 static uint32_t g_frames_total;
 static uint32_t g_timer_period; // Interval between pictures in ms
 
+// A new interval for the burst in progress, set by image_setCaptureInterval() from the CLI task and
+// applied by the image task at its next frame-ready (0 = none). Cleared when a burst starts.
+static volatile uint32_t pendingTimerPeriod = 0;
+
 // A frame fault is a datapath event that arrives when a frame is expected: an EDM watchdog
 // timeout or another datapath error - see isFrameFaultEvent() and frameFault().
 // Rather than give up at the first fault (which loses the rest of the capture sequence),
@@ -754,6 +758,7 @@ static APP_MSG_DEST_T handleEventForInit(APP_MSG_T img_recv_msg) {
             }
             g_captures_to_take = requested_captures;
             g_timer_period = requested_period;
+            pendingTimerPeriod = 0;	// an 'interval' sent before this burst does not apply to it
             g_capture_retries = 0;	// fresh capture sequence
             g_frame_fault_seen = false;
             XP_LT_GREEN
@@ -908,6 +913,20 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
         }
 #endif // USE_HM0360_CAPTURE_TIMER
 
+        // A new interval for this burst ('interval' command, e.g. from the live viewer). The RP camera's
+        // captureTimer reads g_timer_period before each frame. The HM0360 times the burst itself, so it is
+        // restarted with the new sleep time, the same call that starts a burst (configure_image_sensor()).
+        if (pendingTimerPeriod != 0) {
+        	g_timer_period = pendingTimerPeriod;
+        	pendingTimerPeriod = 0;
+        	xprintf("Interval: %dms from the next frame\n", g_timer_period);
+#ifdef USE_HM0360_CAPTURE_TIMER
+        	if (g_cur_jpegenc_frame < g_captures_to_take) {
+        		hm0360_md_setMode(CONTEXT_A, MODE_SW_NFRAMES_SLEEP, 1, g_timer_period);
+        	}
+#endif // USE_HM0360_CAPTURE_TIMER
+        }
+
         // The first frame after the boot: print how long each stage took (issue #249). On a motion wake the HM0360's
         // SEN_INT is cleared just below, so a scope on it shows the whole time from motion to this point.
         boot_timing_mark(BOOT_TIMING_FRAME_READY);
@@ -917,6 +936,15 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
         		(woken == APP_WAKE_REASON_BLE) ? "BLE" : "other");
 
 #if defined(USE_HM0360) || defined(USE_HM0360_MD)
+        if (preview_isActive() && !aeCheckOnlyWake) {
+        	// Live preview: send the MD interrupt status with this frame, read before the clear below
+        	HM0360_MD_STATUS_T mdStatus;
+
+        	if (hm0360_md_getMDStatus(&mdStatus) == HX_CIS_NO_ERROR) {
+        		preview_setMdStatus(&mdStatus);
+        	}
+        }
+
         // By deferring the clearing of the interrupt till here we can measure the latency of interrupt to image captured.
         // This writes to register 0x2065 - we could put this into the big config file?
         hm0360_md_clearInterrupt(0xff); // clear all bits
@@ -1061,36 +1089,82 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
 
 		mdBlocks = hm0360_md_getMDOutput(roiOut, ROIOUTENTRIES);
 
-		offset += snprintf(msgToMaster + offset,
-		                   MSGTOMASTERLEN - offset,
-		                   "HM0360 motion in %d blocks:\n",
-		                   mdBlocks);
-
-		for (uint8_t i = 0; i < ROIOUTENTRIES; i++) {
-		    offset += snprintf(msgToMaster + offset,
-		                       MSGTOMASTERLEN - offset,
-		                       "%02x ",
-		                       roiOut[i]);
-
-		    if (offset >= MSGTOMASTERLEN)
-		        break;
+		if (hm0360_md_isHM0360Present() && !aeCheckOnlyWake) {
+			// Live preview: send these bits with this frame (see preview.c).
+			// Without an HM0360, roiOut was not filled in; AE-check frames
+			// are not streamed, so their bits must not reach the next frame.
+			preview_setMdBits(roiOut, ROIOUTENTRIES);
 		}
 
-        XP_LT_GREY;
-        // print to console
-        xprintf("%s\n", msgToMaster);
+		uint8_t wakeRoiOut[ROIOUTENTRIES];
+		uint16_t wakeBlocks;
 
-        // and send to BLE
-        sendMsgToMaster(msgToMaster);
+		if (hm0360_md_takeWakeGrid(wakeRoiOut, ROIOUTENTRIES, &wakeBlocks)) {
+			// Motion wake: the cells that woke the device, read at boot (hm0360_md_saveWakeGrid()) and
+			// reported only now, so nothing delays the first image. That image's own grid (below) is
+			// empty: the HM0360 has no earlier frame to compare it with
+			offset += snprintf(msgToMaster + offset,
+			                   MSGTOMASTERLEN - offset,
+			                   "HM0360 woken by motion in %d blocks:\n",
+			                   wakeBlocks);
 
-        // Now re-use msgToMaster to print (locally) a 16x16 grid
-        // We will do this in two chunks as MSGTOMASTERLEN is too small for all characters
-        hm0360_md_printGrid(roiOut, 128, msgToMaster, MSGTOMASTERLEN);
-        xprintf("%s", msgToMaster);
-        hm0360_md_printGrid(&roiOut[16], 128, msgToMaster, MSGTOMASTERLEN);
-        xprintf("%s\n", msgToMaster);
+			for (uint8_t i = 0; i < ROIOUTENTRIES; i++) {
+			    offset += snprintf(msgToMaster + offset,
+			                       MSGTOMASTERLEN - offset,
+			                       "%02x ",
+			                       wakeRoiOut[i]);
 
-        XP_WHITE;
+			    if (offset >= MSGTOMASTERLEN)
+			        break;
+			}
+
+			XP_LT_GREY;
+			xprintf("%s\n", msgToMaster);
+			sendMsgToMaster(msgToMaster);
+
+			hm0360_md_printGrid(wakeRoiOut, 128, msgToMaster, MSGTOMASTERLEN);
+			xprintf("%s", msgToMaster);
+			hm0360_md_printGrid(&wakeRoiOut[16], 128, msgToMaster, MSGTOMASTERLEN);
+			xprintf("%s\n", msgToMaster);
+			XP_WHITE;
+
+			offset = 0;
+		}
+
+		// The first image of a burst has no earlier frame to compare with, so its grid is always empty:
+		// report from the second image on. After a motion wake the wake grid above takes its place
+		if (g_cur_jpegenc_frame > 1) {
+			offset += snprintf(msgToMaster + offset,
+			                   MSGTOMASTERLEN - offset,
+			                   "HM0360 motion in %d blocks:\n",
+			                   mdBlocks);
+
+			for (uint8_t i = 0; i < ROIOUTENTRIES; i++) {
+			    offset += snprintf(msgToMaster + offset,
+			                       MSGTOMASTERLEN - offset,
+			                       "%02x ",
+			                       roiOut[i]);
+
+			    if (offset >= MSGTOMASTERLEN)
+			        break;
+			}
+
+			XP_LT_GREY;
+			// print to console
+			xprintf("%s\n", msgToMaster);
+
+			// and send to BLE
+			sendMsgToMaster(msgToMaster);
+
+			// Now re-use msgToMaster to print (locally) a 16x16 grid
+			// We will do this in two chunks as MSGTOMASTERLEN is too small for all characters
+			hm0360_md_printGrid(roiOut, 128, msgToMaster, MSGTOMASTERLEN);
+			xprintf("%s", msgToMaster);
+			hm0360_md_printGrid(&roiOut[16], 128, msgToMaster, MSGTOMASTERLEN);
+			xprintf("%s\n", msgToMaster);
+
+			XP_WHITE;
+		}
 
 //		XP_LT_GREY;
 //		xprintf("HM0360 motion in %d: \n", mdBlocks);
@@ -2279,9 +2353,10 @@ static bool configure_image_sensor(CAMERA_CONFIG_E operation) {
         }
         else  {
 #ifdef USE_HM0360
-        	// cisdp_sensor_init() has just reloaded the HM0360's register table, so re-apply op 17. HM0360 build only:
-        	// in the RP builds this is the RP camera's init, and image_sleepNow() applies op 17 to the HM0360 (#211)
-        	hm0360_md_setSensitivity(fatfs_getOperationalParameter(OP_PARAMETER_MD_SENSITIVITY));
+        	// cisdp_sensor_init() has just reloaded the HM0360's register table, so re-apply op 17 and op 33. HM0360
+        	// build only: in the RP builds this is the RP camera's init, and image_sleepNow() applies them to the
+        	// HM0360 (#211)
+        	hm0360_md_applyMDSettings();
 #endif // USE_HM0360
         	// Initialise extra registers from file
         	cis_file_process(CAMERA_EXTRA_FILE);
@@ -2316,7 +2391,7 @@ static bool configure_image_sensor(CAMERA_CONFIG_E operation) {
         else  {
 #ifdef USE_HM0360
         	// Only reached in the HM0360 build (see above)
-        	hm0360_md_setSensitivity(fatfs_getOperationalParameter(OP_PARAMETER_MD_SENSITIVITY));
+        	hm0360_md_applyMDSettings();
 #endif // USE_HM0360
         	// if wdma variable is zero when not init yet, then this step is a must be to retrieve wdma address
             //  Datapath events give callbacks to os_app_dplib_cb() in dp_task
@@ -2978,6 +3053,26 @@ const char *image_getLastImageFile(void)
 //}
 
 /**
+ * Changes the interval of the capture burst in progress, from its next frame.
+ *
+ * Called from the CLI task ('interval' command); the image task applies the value at its next
+ * frame-ready, so the sensor is only ever accessed from the image task. A later 'capture'
+ * command sets its own interval as usual.
+ *
+ * @param interval - the new interval in ms (checked by the caller)
+ * @return true if a burst is in progress, so the interval will change; false if not
+ */
+bool image_setCaptureInterval(uint32_t interval) {
+	bool burstRunning = (g_captures_to_take > 0) && (g_cur_jpegenc_frame < g_captures_to_take);
+
+	if (burstRunning) {
+		pendingTimerPeriod = interval;
+	}
+
+	return burstRunning;
+}
+
+/**
  * Returns whether the camera system is enabled.
  *
  * This is the "getter".
@@ -3027,11 +3122,11 @@ void image_sleepNow(void) {
 #if defined(USE_HM0360) || defined(USE_HM0360_MD)
     // HM0360 as main camera
     if (hm0360_md_isHM0360Present()) {
-    	// Apply the MD sensitivity (op 17) now, not only at boot (configure_image_sensor()), so that a change made
-    	// while awake (setop 17, AI setop over BLE) takes effect for this DPD rather than after the next wake, and so
-    	// matches the message hm0360_md_prepare() prints (28 Sep 2026). In every build, including the RP builds where
-    	// the HM0360 is only the motion detector: before 2 Oct 2026 op 17 had no effect there (issue #211)
-    	hm0360_md_setSensitivity(fatfs_getOperationalParameter(OP_PARAMETER_MD_SENSITIVITY));
+    	// Apply the MD sensitivity (op 17) and wake threshold (op 33) now, not only at boot
+    	// (configure_image_sensor()), so the values this DPD uses are those hm0360_md_prepare() prints (28 Sep 2026).
+    	// In every build, including the RP builds where the HM0360 is only the motion detector: before 2 Oct 2026
+    	// op 17 had no effect there (issue #211). Op 33 added 24 Oct 2026.
+    	hm0360_md_applyMDSettings();
     	XP_LT_GREY;
        	xprintf("Preparing HM0360 for MD:");
     	hm0360_md_prepare(cameraSystemEnabled, mdInterval); // select CONTEXT_B registers (if enabled)

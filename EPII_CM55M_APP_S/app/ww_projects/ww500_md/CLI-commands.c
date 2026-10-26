@@ -285,6 +285,7 @@ static BaseType_t prvReadFile(char *pcWriteBuffer, size_t xWriteBufferLen, const
 static BaseType_t prvNnFiles(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 static BaseType_t prvSend(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 static BaseType_t prvCapture(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
+static BaseType_t prvInterval(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 // Live image preview streaming over the console UART (see preview.c)
 static BaseType_t prvPreview(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 static BaseType_t prvSetgps(char *pcWriteBuffer, size_t writeBufferLen, const char *pcCommandString);
@@ -644,6 +645,14 @@ static const CLI_Command_Definition_t xCapture = {
 	2			/* Two parameters expected */
 };
 
+/* Structure that defines the "interval" command line command. */
+static const CLI_Command_Definition_t xInterval = {
+	"interval", /* The command string to type. */
+	"interval <timerDelay>:\r\n Change the interval (ms) of the capture in progress, from its next image\r\n",
+	prvInterval, /* The function to run. */
+	1			/* One parameter expected */
+};
+
 /* Structure that defines the "preview" command line command. */
 static const CLI_Command_Definition_t xPreview = {
 	"preview", /* The command string to type. */
@@ -743,7 +752,7 @@ static BaseType_t prvFormatCommand( char * pcWriteBuffer,
 /* Structure that defines the "md" command line command. */
 static const CLI_Command_Definition_t xMd = {
 	"md", /* The command string to type. */
-	"md <sensitivity>:\r\n Set sensitivity (values 1, 2, 3 = low, med, high; 0 = off)\r\n",
+	"md <sensitivity>:\r\n Set sensitivity (values 1, 2, 3 = low, med, high). 'setop 11 0' switches MD off\r\n",
 	prvMd, /* The function to run. */
 	1		 /* One parameter expected */
 };
@@ -2316,6 +2325,43 @@ static BaseType_t prvCapture(char *pcWriteBuffer, size_t xWriteBufferLen, const 
 }
 
 /**
+ * Changes the interval of the capture burst in progress, from its next image.
+ *
+ * executes 'interval <timerDelay>'. For the live viewer: a burst cannot be cancelled, so without
+ * this a new interval would only apply from the next 'capture'. The image task applies it at its
+ * next frame (image_setCaptureInterval()).
+ */
+static BaseType_t prvInterval(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) {
+	const char *pcParameter;
+	BaseType_t lParameterStringLength;
+	char *endptr;
+	long interval;
+
+	pcParameter = FreeRTOS_CLIGetParameter(pcCommandString, 1, &lParameterStringLength);
+	if (pcParameter == NULL) {
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "Error: Timer interval required.");
+		return pdFALSE;
+	}
+
+	interval = strtol(pcParameter, &endptr, 10);
+
+	// Not 0: the RP camera's captureTimer cannot have a zero period (FreeRTOS asserts)
+	if ((endptr == pcParameter) || (*endptr != '\0') || (interval < 1) || (interval > MAX_IMAGE_INTERVAL)) {
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "Error: interval must be between 1 and %d.", MAX_IMAGE_INTERVAL);
+		return pdFALSE;
+	}
+
+	if (image_setCaptureInterval((uint32_t) interval)) {
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "Interval %ld ms from the next image", interval);
+	}
+	else {
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "No capture in progress: the next 'capture' sets the interval");
+	}
+
+	return pdFALSE;
+}
+
+/**
  * Turn live preview streaming on or off (see preview.c).
  *
  * Parameter: 0 = off, 1 = stream frames and skip the SD card save,
@@ -2402,8 +2448,21 @@ static BaseType_t prvSetOpParam(char *pcWriteBuffer, size_t xWriteBufferLen, con
 		return pdFALSE;
 	}
 
+	if (!fatfs_isValidOperationalParameter(index, value)) {
+		snprintf(pcWriteBuffer, xWriteBufferLen, "Error: %d is not a valid value for op %d.\r\n", value, index);
+		return pdFALSE;
+	}
+
 	// Parameters are valid
 	fatfs_setOperationalParameter(index, value);
+
+#if defined(USE_HM0360) || defined(USE_HM0360_MD)
+	// The MD settings take effect on the HM0360 at once, not only at the next sleep,
+	// so a viewer (or the app) sees the effect of the change straight away
+	if ((index == OP_PARAMETER_MD_SENSITIVITY) || (index == OP_PARAMETER_MD_BLOCK_THRESHOLD)) {
+		hm0360_md_applyMDSettings();
+	}
+#endif // defined(USE_HM0360) || defined(USE_HM0360_MD)
 
 	// Persist the change to CONFIG.TXT now, so it survives the next sleep even
 	// if no capture (which normally triggers the state save) happens first.
@@ -2715,12 +2774,13 @@ static BaseType_t prvEraseModel(char *pcWriteBuffer, size_t xWriteBufferLen, con
 
 #if defined(USE_HM0360) || defined(USE_HM0360_MD)
 /**
- * Sets motion detection sensitivity:
+ * Sets motion detection sensitivity (op 17):
  *
- * 0 = off
  * 1 = low
  * 2 = medium
  * 3 = high
+ *
+ * There is no 'off' (24 Oct 2026): op 11 = 0 switches motion detection off.
  */
 static BaseType_t prvMd(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) {
 	const char *pcParameter;
@@ -2733,8 +2793,9 @@ static BaseType_t prvMd(char *pcWriteBuffer, size_t xWriteBufferLen, const char 
 		char *endptr;
 		long sensitivity_long = strtol(pcParameter, &endptr, 10);
 
-		if (endptr == pcParameter || *endptr != '\0' || sensitivity_long < 0 || sensitivity_long > 3) {
-			cli_append(&pcWriteBuffer, &xWriteBufferLen, "Error: Sensitivity must be an integer between 0 and 3.");
+		if (endptr == pcParameter || *endptr != '\0'
+				|| !fatfs_isValidOperationalParameter(OP_PARAMETER_MD_SENSITIVITY, (uint16_t) sensitivity_long)) {
+			cli_append(&pcWriteBuffer, &xWriteBufferLen, "Error: Sensitivity must be 1, 2 or 3 (op 11 = 0 switches MD off).");
 		}
 		else {
 			sensitivity = (uint16_t)sensitivity_long;
@@ -3256,6 +3317,7 @@ static void vRegisterCLICommands(void)
 	FreeRTOS_CLIRegisterCommand(&xReadFile);
 	FreeRTOS_CLIRegisterCommand(&xSend);
 	FreeRTOS_CLIRegisterCommand(&xCapture);
+	FreeRTOS_CLIRegisterCommand(&xInterval);	// Changes the interval of the capture in progress
 	FreeRTOS_CLIRegisterCommand(&xPreview);	// Live image preview streaming on the console UART
 	FreeRTOS_CLIRegisterCommand(&xNnFiles);	// Run the model on frames from the SD card
 

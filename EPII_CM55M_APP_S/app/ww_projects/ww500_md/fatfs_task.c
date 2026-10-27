@@ -88,6 +88,7 @@
 #include "cvapp.h"
 #include "exif_gps.h"
 #include "ae.h"			// AE exposure/gain limits, for ops 37/38
+#include "xip_state.h"	// the fast-start record in flash
 
 // TODO this is for the default project id and version - move elsewhere?
 #include "common_config.h"
@@ -772,6 +773,10 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 				xprintf("Saved state to SD card. Image sequence number = %d\n",
 						fatfs_getImageSequenceNumber());
 			}
+
+			// And the settings the first photo needs, to flash if they have changed. The NN is not
+			// running (the image task is in its save-state state), so XIP can be switched off
+			xip_state_saveFastStart();
 		}
 
 		// Signal to the caller that it may enter DPD.
@@ -1664,6 +1669,7 @@ static void vFatFsTask(void *pvParameters) {
 	APP_MSG_EVENT_E event;
 	uint32_t rxData;
 	bool enabled;
+	bool configLoaded = false;
 
 	TickType_t startTime;
 	TickType_t elapsedTime;
@@ -1681,6 +1687,11 @@ static void vFatFsTask(void *pvParameters) {
 
 	// Initialise GPS coordinates before traying to process them
 	exif_gps_init_defaults();
+
+	// The settings saved in flash at the last sleep, if any. CONFIG.TXT, loaded below, still overrides
+	// them: for now the record is only compared with it (xip_state_compareFastStart())
+	xip_state_loadFastStart();
+	boot_timing_mark(BOOT_TIMING_RECORD_READ);
 
 	// TODO - experiment - do I need settling time for 3V3_WE?
 	vTaskDelay(pdMS_TO_TICKS(10));
@@ -1704,6 +1715,7 @@ static void vFatFsTask(void *pvParameters) {
 			boot_timing_mark(BOOT_TIMING_SD_CONFIG_LOADED);
 			if (res == FR_OK) {
 				// File exists and op_parameter[] has been initialised
+				configLoaded = true;
 				enabled = op_parameter[OP_PARAMETER_CAMERA_ENABLED];
 				xprintf("'%s' found. (Next image #%d), camera %senabled. Flash brightness %d\%\r\n",
 						STATE_FILE,
@@ -1763,6 +1775,10 @@ static void vFatFsTask(void *pvParameters) {
 	// while this task is still the only one doing disk I/O - FatFs is not
 	// re-entrant, so this cannot be done lazily from the CLI task
 	cis_file_loadStagedFromFile();
+
+	if (configLoaded) {
+		xip_state_compareFastStart();
+	}
 
 	// The semaphore lets the Image Task proceed
 	// xprintf("DEBUG: giving semaphore so Image Task can proceed\n");

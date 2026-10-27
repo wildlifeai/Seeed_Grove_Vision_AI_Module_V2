@@ -28,6 +28,7 @@
 static const char * pointName[BOOT_TIMING_NUM_POINTS] = {
 		"cameras checked",
 		"scheduler started",
+		"flash record read",
 		"SD mounted",
 		"CONFIG.TXT loaded",
 		"image dir ready",

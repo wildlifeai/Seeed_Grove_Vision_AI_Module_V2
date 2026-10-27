@@ -23,6 +23,10 @@
 #include "xprintf.h"
 
 #include "crc16_ccitt.h"
+#include "fatfs_task.h"		// op_parameter[] get/set
+#include "cis_file.h"		// the staged extra camera registers
+#include "ae.h"			// AE_GAIN_CODE_MAX
+#include "camera_switch.h"	// cameraSwitch_thisVariant(): which image wrote the registers
 #include "xip_manager.h"
 #include "xip_state.h"
 
@@ -32,6 +36,11 @@
 #define SLOTS_PER_SECTOR	(SECTOR_SIZE / XIP_STATE_RECORD_SIZE)	// 16
 #define RECORD_MAGIC		0x53585757u		// "WWXS" in flash (little-endian)
 #define ERASED_WORD			0xFFFFFFFFu
+
+#define FAST_START_NUM_OPS	23			// entries in fastStartOps[]
+// The RP3 exposure counts as changed only when the total light (exposure x gain) moves more than
+// this: in steady light the settled exposure wanders about 15 % (bench, 28 Oct 2026)
+#define FAST_START_AE_TOLERANCE_PERCENT	25
 
 /*********************************************** Local Types ************************************************/
 
@@ -61,6 +70,24 @@ typedef struct {
 	uint8_t  nextFree;		// slot after the last used one (SLOTS_PER_SECTOR if full)
 } SectorScan_t;
 
+// One extra camera register write, as in the staged table (cis_file.c)
+typedef struct {
+	uint16_t addr;			// register address
+	uint8_t  value;			// value to write
+	uint8_t  action;		// HX_CIS_I2C_ActionType_e
+} FastStartReg_t;
+
+// The payload of a fast-start record. Change it only with XIP_STATE_FORMAT_VERSION.
+typedef struct {
+	uint16_t op[FAST_START_NUM_OPS];			// op_parameter[fastStartOps[i]]
+	uint8_t  regCount;							// extra camera registers in reg[], 0 = none
+	uint8_t  regCamera;							// XIP_SLOT_VARIANT_x of the image that wrote reg[]:
+												// each image has its own register file and sensor
+	FastStartReg_t reg[CIS_FILE_MAX_STAGED];	// unused entries are 0
+} FastStartPayload_t;
+
+_Static_assert(sizeof(FastStartPayload_t) <= XIP_STATE_DATA_MAX, "fast-start payload too big for a record");
+
 // xip_state_test()'s buffers, from the heap too: the CLI task's stack is small
 typedef struct {
 	XipStateWork_t work;
@@ -70,6 +97,39 @@ typedef struct {
 } TestBuffers_t;
 
 /*********************************************** Local Variables ********************************************/
+
+// The op parameters in a fast-start record: those that affect the first photo, and the light
+// state (25, 37, 38). Not the counters, GPS or deployment ID, which are only needed with the card.
+static const uint8_t fastStartOps[FAST_START_NUM_OPS] = {
+	OP_PARAMETER_NUM_PICTURES,				// 5
+	OP_PARAMETER_PICTURE_INTERVAL,			// 6
+	OP_PARAMETER_LED_BRIGHTNESS_PERCENT,	// 9
+	OP_PARAMETER_CAMERA_ENABLED,			// 10
+	OP_PARAMETER_MD_INTERVAL,				// 11
+	OP_PARAMETER_FLASH_DURATION,			// 12
+	OP_PARAMETER_FLASH_LED,					// 13
+	OP_PARAMETER_MODEL_PROJECT,				// 14
+	OP_PARAMETER_MODEL_VERSION,				// 15
+	OP_PARAMETER_MODEL_THRESHOLD,			// 16
+	OP_PARAMETER_MD_SENSITIVITY,			// 17
+	OP_PARAMETER_TEST_MODE_BITS,			// 18
+	OP_PARAMETER_AE_FLASH_STATE,			// 25
+	OP_PARAMETER_WB_RED_GAIN,				// 27
+	OP_PARAMETER_WB_BLUE_GAIN,				// 28
+	OP_PARAMETER_CAM_AE_ENABLE,				// 29
+	OP_PARAMETER_CAM_AE_TARGET,				// 30
+	OP_PARAMETER_CAM_WB_MODE,				// 31
+	OP_PARAMETER_FLASH_MODE,				// 34
+	OP_PARAMETER_FLASH_TOD_START,			// 35
+	OP_PARAMETER_FLASH_TOD_DURATION,		// 36
+	OP_PARAMETER_CAM_AE_EXPOSURE,			// 37
+	OP_PARAMETER_CAM_AE_GAIN,				// 38
+};
+
+// The fast-start record read at boot, kept to compare with CONFIG.TXT
+static FastStartPayload_t bootPayload;
+static bool bootPayloadValid = false;
+static uint32_t bootSequence = 0;
 
 
 /*********************************************** Local Function Declarations *********************************/
@@ -83,6 +143,9 @@ static int writeRecord(XIP_STATE_TYPE_E type, const uint8_t *data, uint16_t len,
 		XipStateWork_t *work, uint8_t *slotUsed, bool *erased);
 static bool readNewest(XIP_STATE_TYPE_E type, XipStateWork_t *work, uint8_t *data, uint16_t *len, uint32_t *seq);
 static void testPayload(uint16_t n, uint8_t *data, uint16_t *len);
+static void buildPayload(FastStartPayload_t *payload);
+static bool aeSimilar(uint16_t expA, uint16_t gainA, uint16_t expB, uint16_t gainB);
+static bool payloadsMatch(const FastStartPayload_t *a, const FastStartPayload_t *b);
 
 /*********************************************** Local Function Definitions *********************************/
 
@@ -285,6 +348,101 @@ static void testPayload(uint16_t n, uint8_t *data, uint16_t *len) {
 	}
 }
 
+/**
+ * @brief Fill a fast-start payload from op_parameter[] and the staged extra camera registers.
+ *
+ * The registers are labelled with this image's camera, since each image has its own.
+ *
+ * @param payload  output: the payload, unused bytes 0
+ */
+static void buildPayload(FastStartPayload_t *payload) {
+	uint16_t count = 0;
+
+	memset(payload, 0, sizeof(*payload));
+
+	for (uint8_t i = 0; i < FAST_START_NUM_OPS; i++) {
+		payload->op[i] = fatfs_getOperationalParameter((OP_PARAMETERS_E)fastStartOps[i]);
+	}
+
+	if (cis_file_isStagedLoaded()) {
+		const HX_CIS_SensorSetting_t *table = cis_file_getStagedTable();
+
+		count = cis_file_getStagedCount();
+		if (count > CIS_FILE_MAX_STAGED) {
+			count = CIS_FILE_MAX_STAGED;
+		}
+		for (uint16_t j = 0; j < count; j++) {
+			payload->reg[j].addr = table[j].RegAddree;
+			payload->reg[j].value = table[j].Value;
+			payload->reg[j].action = (uint8_t)table[j].I2C_ActionType;
+		}
+	}
+	payload->regCount = (uint8_t)count;
+	payload->regCamera = cameraSwitch_thisVariant();
+}
+
+/**
+ * @brief Whether two RP3 exposure and gain pairs give about the same total light.
+ *
+ * Compares exposure x analog gain (gain = 1024 / (1024 - code), as in ae.c), within
+ * FAST_START_AE_TOLERANCE_PERCENT of the second pair. An exposure of 0 (none saved) matches
+ * only another 0.
+ *
+ * @param expA   first exposure (lines)
+ * @param gainA  first gain code
+ * @param expB   second exposure (lines)
+ * @param gainB  second gain code
+ * @return true if within the tolerance
+ */
+static bool aeSimilar(uint16_t expA, uint16_t gainA, uint16_t expB, uint16_t gainB) {
+	if ((expA == 0) || (expB == 0)) {
+		return (expA == expB);
+	}
+	if ((gainA > AE_GAIN_CODE_MAX) || (gainB > AE_GAIN_CODE_MAX)) {
+		return ((expA == expB) && (gainA == gainB));
+	}
+
+	uint32_t lightA = ((uint32_t)expA * 1024u) / (1024u - gainA);
+	uint32_t lightB = ((uint32_t)expB * 1024u) / (1024u - gainB);
+	uint32_t diff = (lightA > lightB) ? (lightA - lightB) : (lightB - lightA);
+
+	return ((diff * 100u) <= (lightB * FAST_START_AE_TOLERANCE_PERCENT));
+}
+
+/**
+ * @brief Whether two fast-start payloads match: every op and register equal, except the RP3
+ * exposure and gain, which need only give about the same light (aeSimilar()).
+ *
+ * @param a  one payload
+ * @param b  the other
+ * @return true if they match
+ */
+static bool payloadsMatch(const FastStartPayload_t *a, const FastStartPayload_t *b) {
+	uint16_t expA = 0;
+	uint16_t gainA = 0;
+	uint16_t expB = 0;
+	uint16_t gainB = 0;
+
+	for (uint8_t i = 0; i < FAST_START_NUM_OPS; i++) {
+		if (fastStartOps[i] == OP_PARAMETER_CAM_AE_EXPOSURE) {
+			expA = a->op[i];
+			expB = b->op[i];
+		}
+		else if (fastStartOps[i] == OP_PARAMETER_CAM_AE_GAIN) {
+			gainA = a->op[i];
+			gainB = b->op[i];
+		}
+		else if (a->op[i] != b->op[i]) {
+			return false;
+		}
+	}
+	if ((a->regCamera != b->regCamera) || (a->regCount != b->regCount)
+			|| (memcmp(a->reg, b->reg, (size_t)a->regCount * sizeof(FastStartReg_t)) != 0)) {
+		return false;
+	}
+	return aeSimilar(expA, gainA, expB, gainB);
+}
+
 /*********************************************** Global Function Definitions *********************************/
 
 /**
@@ -343,7 +501,8 @@ int xip_state_write(XIP_STATE_TYPE_E type, const uint8_t *data, uint16_t len) {
  * @brief Print every slot of both sectors on the console (the 'xipstate' command).
  *
  * One line per used slot (valid or not, sequence, type, length, first data bytes), one line
- * for each run of blank slots, and a note when a sector has no valid record.
+ * for each run of blank slots, and a note when a sector has no valid record. For the
+ * fast-start sector, also the op values in the newest record.
  */
 void xip_state_dump(void) {
 	static const XIP_STATE_TYPE_E types[] = { XIP_STATE_TYPE_FAST_START, XIP_STATE_TYPE_BOARD };
@@ -392,6 +551,17 @@ void xip_state_dump(void) {
 		}
 		if (scan.newest < 0) {
 			xprintf("  No valid record: the C defaults are used\n");
+		}
+		else if ((type == XIP_STATE_TYPE_FAST_START)
+				&& (work->slot[scan.newest].dataLen == sizeof(FastStartPayload_t))) {
+			const FastStartPayload_t *payload = (const FastStartPayload_t *)work->slot[scan.newest].data;
+
+			// The newest record's values, as "op=value", for comparing with 'getop'
+			xprintf("  Newest:");
+			for (uint8_t k = 0; k < FAST_START_NUM_OPS; k++) {
+				xprintf(" %d=%d", fastStartOps[k], payload->op[k]);
+			}
+			xprintf(", %d extra camera registers (camera %d)\n", payload->regCount, payload->regCamera);
 		}
 	}
 	vPortFree(work);
@@ -536,4 +706,158 @@ bool xip_state_test(void) {
 	xprintf("xipstate test: %s (%d writes, %d erases)\n", pass ? "PASS" : "FAIL", writes, erases);
 	vPortFree(b);
 	return pass;
+}
+
+/**
+ * @brief At boot: fill op_parameter[] from the fast-start record, if there is one.
+ *
+ * Call at the start of the FatFS task, before CONFIG.TXT is loaded (which then overrides
+ * these values, as before). Keeps a copy for xip_state_compareFastStart(). Values that are
+ * not valid for their op (fatfs_isValidOperationalParameter()) are skipped. The extra camera
+ * registers are kept for the comparison only: the staged table is still loaded from the card.
+ *
+ * @return true if a record was found and used; false means the C defaults stay
+ */
+bool xip_state_loadFastStart(void) {
+	uint16_t len = 0;
+	uint32_t seq = 0;
+	bool found;
+
+	XipStateWork_t *work = (XipStateWork_t *)pvPortMalloc(sizeof(XipStateWork_t));
+	if (work == NULL) {
+		xprintf("xipstate: out of memory\n");
+		return false;
+	}
+
+	// work->record is free here, so its data field holds the payload
+	found = readNewest(XIP_STATE_TYPE_FAST_START, work, work->record.data, &len, &seq);
+	if (found && (len == sizeof(FastStartPayload_t))) {
+		memcpy(&bootPayload, work->record.data, sizeof(bootPayload));
+		bootPayloadValid = true;
+		bootSequence = seq;
+	}
+	vPortFree(work);
+
+	if (!bootPayloadValid) {
+		xprintf("Fast-start record: none, using the C defaults\n");
+		return false;
+	}
+
+	for (uint8_t i = 0; i < FAST_START_NUM_OPS; i++) {
+		OP_PARAMETERS_E op = (OP_PARAMETERS_E)fastStartOps[i];
+
+		if (fatfs_isValidOperationalParameter(op, bootPayload.op[i])) {
+			fatfs_setOperationalParameter(op, (int16_t)bootPayload.op[i]);
+		}
+	}
+	xprintf("Fast-start record: seq %lu loaded (%d ops, %d extra camera registers)\n",
+			(unsigned long)bootSequence, FAST_START_NUM_OPS, bootPayload.regCount);
+	return true;
+}
+
+/**
+ * @brief After CONFIG.TXT has loaded: print any difference from the record read at boot.
+ *
+ * Call once the card's settings and the staged extra camera registers have loaded. Prints
+ * one line if they match, otherwise one line per differing op (the RP3 exposure and gain only
+ * if outside the tolerance) and one for the extra registers. Changes nothing: CONFIG.TXT has
+ * already overridden the record.
+ */
+void xip_state_compareFastStart(void) {
+	static FastStartPayload_t card;		// static: too big for the FatFS task's stack
+
+	if (!bootPayloadValid) {
+		xprintf("Fast-start record: none at boot, nothing to compare\n");
+		return;
+	}
+
+	buildPayload(&card);
+	if (payloadsMatch(&bootPayload, &card)) {
+		xprintf("Fast-start record: seq %lu matches CONFIG.TXT\n", (unsigned long)bootSequence);
+		return;
+	}
+
+	xprintf("Fast-start record: seq %lu differs from CONFIG.TXT:\n", (unsigned long)bootSequence);
+
+	// The RP3 exposure and gain are listed only if outside the tolerance: the record keeps the
+	// last value that moved more than that, so small differences from the card are expected
+	uint16_t recExp = 0;
+	uint16_t recGain = 0;
+	uint16_t cardExp = 0;
+	uint16_t cardGain = 0;
+
+	for (uint8_t i = 0; i < FAST_START_NUM_OPS; i++) {
+		if (fastStartOps[i] == OP_PARAMETER_CAM_AE_EXPOSURE) {
+			recExp = bootPayload.op[i];
+			cardExp = card.op[i];
+		}
+		else if (fastStartOps[i] == OP_PARAMETER_CAM_AE_GAIN) {
+			recGain = bootPayload.op[i];
+			cardGain = card.op[i];
+		}
+	}
+	bool aeListed = !aeSimilar(recExp, recGain, cardExp, cardGain);
+
+	for (uint8_t i = 0; i < FAST_START_NUM_OPS; i++) {
+		bool isAe = (fastStartOps[i] == OP_PARAMETER_CAM_AE_EXPOSURE) || (fastStartOps[i] == OP_PARAMETER_CAM_AE_GAIN);
+
+		if ((bootPayload.op[i] != card.op[i]) && (!isAe || aeListed)) {
+			xprintf("  op %d: record %d, CONFIG.TXT %d\n", fastStartOps[i], bootPayload.op[i], card.op[i]);
+		}
+	}
+	if (bootPayload.regCamera != card.regCamera) {
+		xprintf("  extra camera registers: the record's are from the other camera image\n");
+	}
+	else if ((bootPayload.regCount != card.regCount)
+			|| (memcmp(bootPayload.reg, card.reg, (size_t)card.regCount * sizeof(FastStartReg_t)) != 0)) {
+		xprintf("  extra camera registers: record %d, card %d (or their values differ)\n",
+				bootPayload.regCount, card.regCount);
+	}
+}
+
+/**
+ * @brief At sleep: write a new fast-start record if anything has changed.
+ *
+ * Call from the FatFS task's save-state handler, when the NN is not running. Compares the
+ * current settings with the newest record (payloadsMatch()) and writes only if they differ,
+ * so a steady camera writes rarely.
+ *
+ * @return 0 if written or unchanged, negative on failure
+ */
+int xip_state_saveFastStart(void) {
+	static FastStartPayload_t now;		// static: too big for the FatFS task's stack
+	uint16_t len = 0;
+	uint32_t seq = 0;
+	uint8_t slot = 0;
+	bool erased = false;
+	bool found;
+	int ret;
+
+	buildPayload(&now);
+
+	XipStateWork_t *work = (XipStateWork_t *)pvPortMalloc(sizeof(XipStateWork_t));
+	if (work == NULL) {
+		xprintf("xipstate: out of memory\n");
+		return -1;
+	}
+
+	// work->record is free until writeRecord(), so its data field holds the newest payload
+	found = readNewest(XIP_STATE_TYPE_FAST_START, work, work->record.data, &len, &seq);
+	if (found && (len == sizeof(FastStartPayload_t))
+			&& payloadsMatch(&now, (const FastStartPayload_t *)work->record.data)) {
+		vPortFree(work);
+		xprintf("Fast-start record: unchanged (seq %lu)\n", (unsigned long)seq);
+		return 0;
+	}
+
+	ret = writeRecord(XIP_STATE_TYPE_FAST_START, (const uint8_t *)&now, sizeof(now), false, work, &slot, &erased);
+	if (ret == 0) {
+		xprintf("Fast-start record: written, seq %lu slot %d%s\n",
+				(unsigned long)work->slot[slot].sequence, slot, erased ? " (sector erased first)" : "");
+	}
+	else {
+		xprintf("Fast-start record: write failed (%d)\n", ret);
+	}
+	vPortFree(work);
+	return ret;
 }

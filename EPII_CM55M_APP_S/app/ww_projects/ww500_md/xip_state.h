@@ -19,6 +19,10 @@
  *  is none (blank sector, new format, bad CRC, power cut during an erase) the
  *  caller uses its C defaults.
  *
+ *  The fast-start record is a copy of the settings the first photo needs (23 op parameters)
+ *  and the staged extra camera registers. CONFIG.TXT stays the master copy. It is read at the
+ *  start of the FatFS task and written at sleep when something has changed.
+ *
  *  Not for use while the NN is running: every flash access switches XIP off.
  */
 
@@ -68,5 +72,20 @@ void xip_state_dump(void);
  * @brief Bench test of the fast-start sector (the 'xipstate test' command).
  */
 bool xip_state_test(void);
+
+/**
+ * @brief At boot: fill op_parameter[] from the fast-start record, if there is one.
+ */
+bool xip_state_loadFastStart(void);
+
+/**
+ * @brief After CONFIG.TXT has loaded: print any difference from the record read at boot.
+ */
+void xip_state_compareFastStart(void);
+
+/**
+ * @brief At sleep: write a new fast-start record if anything has changed.
+ */
+int xip_state_saveFastStart(void);
 
 #endif /* XIP_STATE_H_ */

@@ -38,6 +38,7 @@
 typedef enum {
 	BOOT_TIMING_CAMERAS_CHECKED,	// checkForCameras() finished (app_main())
 	BOOT_TIMING_SCHEDULER,			// just before vTaskStartScheduler()
+	BOOT_TIMING_RECORD_READ,		// FatFS task: fast-start record read from flash (xip_state_loadFastStart())
 	BOOT_TIMING_SD_MOUNTED,			// FatFS task: SD card mounted (fatFsInit())
 	BOOT_TIMING_SD_CONFIG_LOADED,	// FatFS task: CONFIG.TXT loaded (load_configuration())
 	BOOT_TIMING_SD_IMAGE_DIR_READY,	// FatFS task: image directory set up (dir_mgr_init_image_dir())

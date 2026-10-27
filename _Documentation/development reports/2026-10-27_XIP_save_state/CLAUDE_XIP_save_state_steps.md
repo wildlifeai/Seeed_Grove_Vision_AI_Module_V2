@@ -14,7 +14,7 @@ found, and how it was tested (with the firmware build, `AI ver`).
 | 1 | Checks: the flash chip, and the model area bounds | Done 27 Oct (code reading only); model size check coded 28 Oct |
 | 2 | RP3 exposure as ops 37 and 38 (#158) | Done 28 Oct, benched (RP3) |
 | 3 | The flash record module and its test | Done 28 Oct, benched on both images |
-| 4 | Fast-start settings, still waiting for the card | Not started |
+| 4 | Fast-start settings, still waiting for the card | Done 28 Oct, benched on both images |
 | 5 | Stop waiting for the card | Not started |
 | 6 | Optional extras | Not started |
 | 7 | Docs | Not started |
@@ -266,4 +266,161 @@ again, both sectors blank afterwards. During `capture 20 1000` the command was r
 was typed. After a sleep and wake the RP3 (colour) image took and saved a picture as normal. The same checks
 (test PASS, sectors blank, refused while busy, picture after a wake) passed on the HM0360 (mono)
 image. **Step 3 complete.**
+
+---
+
+## Step 4. Fast-start settings, still waiting for the card, coded 28 October 2026
+
+Not built or benched yet. With a card in, the camera behaves as before: CONFIG.TXT still
+overrides everything, and the record is only compared with it.
+
+### What it does
+
+- **Boot:** at the very start of the FatFS task, before the card is mounted,
+  `xip_state_loadFastStart()` reads the newest fast-start record and puts its ops into
+  `op_parameter[]`. CONFIG.TXT then loads over them as before. Once the card has loaded,
+  `xip_state_compareFastStart()` prints whether the record matched.
+- **Sleep:** in the FatFS task's save-state handler, after CONFIG.TXT is saved,
+  `xip_state_saveFastStart()` writes a new record only if something has changed. The NN is not
+  running then (the image task is in its save-state state).
+- **What is in the record:** ops 5, 6, 9 to 18, 25, 27 to 31, 34 to 38 (23 ops), and the staged
+  extra camera registers as their own block (count, then up to 24 entries), labelled with the
+  camera image that wrote them. 144 of the 240 payload bytes.
+- **"Changed"** means any op or register differs, except the RP3 exposure and gain (ops 37, 38):
+  they count as changed only if the total light (exposure x gain, as in `ae.c`) has moved more than
+  25 %. The bench run in step 2 saw the settled exposure wander about 15 % in steady light.
+- **`xipstate`** also prints the newest record's values (`Newest: 5=1 6=500 ...`), to compare
+  with `getop`.
+- **Boot timing** has a new point, `flash record read`.
+
+### Decisions made in this step
+
+- **The record is read at the start of the FatFS task, not in `app_main()`** as the proposal said.
+  Before the scheduler starts the flash code cannot run: `init_flash()` calls `vTaskDelay()` and
+  `disable_xip()` takes the SPI mutex. The FatFS task start is the earliest safe point, and nothing
+  that needs the settings runs before it (the image task waits for the FatFS task). Step 5 must keep
+  the image task waiting for the record, though no longer for the card.
+- **"For state the flash wins" (ops 25, 37, 38) is not applied yet.** In this step the card wins
+  for everything and differences are only printed. Applying it changes behaviour, so it belongs
+  in step 5.
+- **The extra registers are labelled with the camera image.** Both images share the one record,
+  but each has its own register file for its own sensor (`RPV3_EX.BIN`, `HM0360EX.BIN`). Step 5
+  must apply registers only from a record written by the same image. A side effect: after each
+  change of image the first sleep writes a new record.
+- **No record is written when there is no card,** since the save-state message is only sent when
+  the card is mounted. The record is a copy of the card, so this is right for now.
+
+### Bench test (RP3 image first)
+
+The step 3 test left the fast-start sector blank, so the first boot has no record.
+
+1. Build both images. Flash the RP3 image and power cycle. During boot the console shows
+   `Fast-start record: none, using the C defaults`, and after the card has loaded
+   `Fast-start record: none at boot, nothing to compare`.
+2. Let it sleep (or type `dpd`). After `Saved state to SD card.` the console shows
+   `Fast-start record: written, seq 1 slot 0`.
+3. At the next wake: `Fast-start record: seq 1 loaded (23 ops, N extra camera registers)`, then
+   `Fast-start record: seq 1 matches CONFIG.TXT`. The `Boot timing` line includes
+   `flash record read`, and `SD ready` should be within about 15 ms of before (195 ms on 28 Oct).
+4. Let it sleep again without changing anything: `Fast-start record: unchanged (seq 1)`.
+5. Type `xipstate`. The fast-start sector shows slot 0 valid and a `Newest:` line. Check a few
+   values against `getop` (for example `getop 6`, `getop 29`).
+6. Type `setop 6 600` and let it sleep: `Fast-start record: written, seq 2 slot 1`. At the wake,
+   `seq 2 matches CONFIG.TXT`. Then `setop 6 500` to put it back.
+7. **Card edited:** power off, and on a PC change op 5 in CONFIG.TXT (for example `5 1` to `5 2`).
+   Power on. The console shows `Fast-start record: seq ... differs from CONFIG.TXT:` and
+   `  op 5: record 1, CONFIG.TXT 2`. The next sleep writes a new record. Put op 5 back.
+8. Type `xipstate test`. It now starts `xipstate test: saved the current record` and ends with
+   `Saved record written back` and PASS. `xipstate` afterwards shows the same `Newest:` values.
+9. **Other image:** type `switchslot` and let it sleep. The HM0360 image boots, loads the record and
+   prints `extra camera registers: the record's are from the other camera image`. The next sleep
+   writes a new record. Repeat steps 4 and 5 on this image.
+
+### Bench result, steps 1 to 6 (28 October 2026, RP3 image, build 11:21, `logs/log2.txt`)
+
+Commands sent over BLE. Everything as expected:
+
+- Cold boot: `none, using the C defaults`, `none at boot, nothing to compare`. First sleep:
+  `written, seq 1 slot 0`.
+- Each following wake: `seq 1 loaded (23 ops, 0 extra camera registers)`, `seq 1 matches
+  CONFIG.TXT`, and `AE: restored exposure 2242 gain code 0`. Five sleeps with nothing changed:
+  `unchanged (seq 1)` each time.
+- `xipstate`: slot 0 valid, slots 1-15 blank, `Newest:` values agree with `getop 6` (500) and
+  `getop 29` (1).
+- `setop 6 600`: `written, seq 2 slot 1`, then `seq 2 matches` at the wake. `setop 6 500`:
+  `written, seq 3 slot 2`.
+- **Cost of reading the record:** `FatFs setup took` went from 170 ms (log1) to 182 ms, about
+  12 ms, mostly `init_flash()`'s fixed 10 ms wait. Before this step that same `init_flash()` ran
+  later, in the image task's NN start-up (log1 shows `Flash ID` there), so the time to the first
+  photo should be about the same. Not yet confirmed: these were BLE wakes with no capture, so no
+  `Boot timing` line. A timer or motion wake will show it.
+
+### Bench result, steps 7 and 8 and a capture (28 October 2026, RP3 image, `logs/log3.txt`)
+
+- **Step 7, card edited** (op 5 changed to 2 on a PC): `seq 3 differs from CONFIG.TXT:` and
+  `op 5: record 1, CONFIG.TXT 2`; `getop 5` = 2 (the card won); the sleep wrote seq 4. After
+  `setop 5 1`, seq 5, then `matches`.
+- **Step 8, `xipstate test`** with a real record: `saved the current record`, all checks OK,
+  `Saved record written back`, `PASS (35 writes, 4 erases)`. The record written back is seq 1
+  (the sector was erased), with the same values, and the next wakes load and match it.
+- **Capture** (`capture 1 1` over BLE; `capture 1` was rejected, it needs both parameters):
+
+  | ms since `app_main()` | log1 (timer wake, before step 4) | log3 (BLE wake, step 4) |
+  |---|---|---|
+  | flash record read | | 33 |
+  | SD mounted | 184 | 196 |
+  | SD ready | 195 | 208 |
+  | camera ready | 254 | 268 |
+  | capture started | 280 | 477 |
+  | frame ready | 329 | 526 |
+
+  **No time saved yet, and none expected:** step 4 still waits for the card. Up to `camera ready`
+  the record read adds about 13 ms (20 to 33 ms, mostly `init_flash()`'s fixed 10 ms wait). The
+  later `capture started` is because this capture was started by a BLE command after the wake,
+  not by the wake itself, so those two rows do not compare. The saving comes in step 5, when the
+  image task stops waiting for the card (about 170 ms).
+- **Possible saving of about 10 ms, for step 6:** the FatFS task waits a fixed 10 ms before
+  mounting the card ("settling time for 3V3_WE"), and the record read now runs just before it.
+  The read could use that wait instead of adding to it.
+
+### Bench result, step 9 (28 October 2026, HM0360 image build 11:28, `logs/log4.txt`)
+
+The HM0360 image was loaded with xmodem rather than `switchslot` (it boots from slot B,
+`flash_offset 0x00100000`). The test only needs the other image to boot on a board holding an
+RP3 record, so this is equivalent.
+
+- **An xmodem load leaves the saved-state area alone:** the first boot loaded `seq 1`, the RP3's
+  record. (Worth knowing for the docs: loading firmware does not clear the saved state.)
+- It printed `differs from CONFIG.TXT:`, `extra camera registers: the record's are from the other
+  camera image`, and `op 37: record 2242, CONFIG.TXT 1944`. The sleep wrote seq 2; the following
+  wakes `matched`, sleeps were `unchanged`, and `xipstate` showed `Newest: ... 37=1944 ...
+  (camera 1)`.
+- **Why op 37 differed:** the last RP3 capture (log3) moved the exposure from 2242 to 1944, 13 %.
+  CONFIG.TXT saved 1944, but the record stayed at 2242 (`unchanged`), since 13 % is within the
+  25 % tolerance. That is the tolerance working as intended. **But the op 37 line should not have
+  been printed:** the comparison is meant to list the exposure only when it is outside the
+  tolerance. Fixed after this test in `xip_state_compareFastStart()`: it now checks ops 37 and 38
+  together with `aeSimilar()`, as the sleep-time write does, and lists them only if outside.
+- **Boot timing (BLE capture):** `scheduler started 11, flash record read 24`: the read costs
+  13 ms on this image too.
+- `Error: File has no contents` after `HM0360 MD sensitivity 1` comes from `cis_file_process()`
+  finding an empty `HM0360EX.BIN`. Not from this work.
+
+### Bench result, the comparison fix (28 October 2026, HM0360 image build 12:10, `logs/log5.txt`, `logs/log6.txt`)
+
+- `setop 37 2100` (8 % from the record's 1944): sleep `unchanged (seq 2)`.
+- Op 5 changed to 2 on a PC: `seq 2 differs from CONFIG.TXT:` and only `op 5: record 1,
+  CONFIG.TXT 2`, with no op 37 line (2100 against 1944 is within the tolerance). Sleep wrote seq 3.
+- Op 37 changed to 3000 and op 5 back to 1 on a PC: `op 5: record 2, CONFIG.TXT 1` and
+  `op 37: record 2100, CONFIG.TXT 3000` (outside the tolerance, so listed). Sleep wrote seq 4.
+- `setop 37 1944`: sleep wrote seq 5 (1944 against 3000 is outside the tolerance).
+
+**Step 4 is complete on both images.**
+
+**For step 5, from these results:** the plan was "for state (ops 25, 37, 38), the flash record
+wins over the card". With the tolerance the record's exposure can be up to 25 % older than the
+card's, so for ops 37 and 38 the card's value is the better one when both are there. The
+difference is small either way. Suggest: the flash wins only when the card's CONFIG.TXT looks like
+it came from another camera, which cannot be told yet, so in practice keep "the card wins" for
+everything.
 

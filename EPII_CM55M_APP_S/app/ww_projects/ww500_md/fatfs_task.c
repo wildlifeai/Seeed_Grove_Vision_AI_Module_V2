@@ -87,6 +87,7 @@
 #include "selfTest.h"
 #include "cvapp.h"
 #include "exif_gps.h"
+#include "ae.h"			// AE exposure/gain limits, for ops 37/38
 
 // TODO this is for the default project id and version - move elsewhere?
 #include "common_config.h"
@@ -267,6 +268,8 @@ uint16_t op_parameter[OP_PARAMETER_NUM_ENTRIES] = {
 	0,	    	   		// 34 OP_PARAMETER_FLASH_MODE (0 = off - matches today's default behaviour)
 	0,	    	   		// 35 OP_PARAMETER_FLASH_TOD_START
 	0,	    	   		// 36 OP_PARAMETER_FLASH_TOD_DURATION
+	0,	    	   		// 37 OP_PARAMETER_CAM_AE_EXPOSURE (runtime state; 0 = none saved, start from the init table)
+	0,	    	   		// 38 OP_PARAMETER_CAM_AE_GAIN (runtime state)
 };
 
 // Deployment ID UUID string — loaded from 'I ' line in CONFIG.TXT or set via setdid CLI command
@@ -1225,6 +1228,14 @@ static FRESULT load_configuration(const char *filename, directoryManager_t *dirM
 				op_parameter[OP_PARAMETER_MD_BLOCK_THRESHOLD], MD_BLOCK_THRESHOLD_DEFAULT);
 		op_parameter[OP_PARAMETER_MD_BLOCK_THRESHOLD] = MD_BLOCK_THRESHOLD_DEFAULT;
 	}
+	// RP camera AE state (28 Oct 2026). Out of range: forget it, so AE starts from the init table
+	if (!fatfs_isValidOperationalParameter(OP_PARAMETER_CAM_AE_EXPOSURE, op_parameter[OP_PARAMETER_CAM_AE_EXPOSURE])
+			|| !fatfs_isValidOperationalParameter(OP_PARAMETER_CAM_AE_GAIN, op_parameter[OP_PARAMETER_CAM_AE_GAIN])) {
+		xprintf("Ops 37/38 (AE exposure %d, gain %d) not valid: using 0\n",
+				op_parameter[OP_PARAMETER_CAM_AE_EXPOSURE], op_parameter[OP_PARAMETER_CAM_AE_GAIN]);
+		op_parameter[OP_PARAMETER_CAM_AE_EXPOSURE] = 0;
+		op_parameter[OP_PARAMETER_CAM_AE_GAIN] = 0;
+	}
 
 	// Close file
 	res = f_close(&dirManager->configFile);
@@ -1973,6 +1984,12 @@ bool fatfs_isValidOperationalParameter(OP_PARAMETERS_E parameter, uint16_t value
 
 	case OP_PARAMETER_MD_BLOCK_THRESHOLD:
 		return ((value >= MD_BLOCK_THRESHOLD_MIN) && (value <= MD_BLOCK_THRESHOLD_MAX));
+
+	case OP_PARAMETER_CAM_AE_EXPOSURE:
+		return ((value == 0) || ((value >= AE_EXPOSURE_MIN) && (value <= AE_EXPOSURE_MAX)));
+
+	case OP_PARAMETER_CAM_AE_GAIN:
+		return (value <= AE_GAIN_CODE_MAX);
 
 	default:
 		return true;

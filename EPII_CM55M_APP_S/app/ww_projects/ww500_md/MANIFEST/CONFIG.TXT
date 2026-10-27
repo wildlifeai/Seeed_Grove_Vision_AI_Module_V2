@@ -54,3 +54,7 @@
 35 0
 # 36: time-of-day duration (min), wraps past midnight
 36 0
+# 37: RP AE exposure reached (runtime state - leave as 0)
+37 0
+# 38: RP AE gain reached (runtime state - leave as 0)
+38 0

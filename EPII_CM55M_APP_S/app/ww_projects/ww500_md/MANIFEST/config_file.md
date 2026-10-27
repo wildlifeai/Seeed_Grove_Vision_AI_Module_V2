@@ -1,5 +1,5 @@
 # Description of the CONFIG.TXT File
-#### CGP - 25 April 2026 (updated 8 July 2026: parameters 21-28, immediate persistence; updated 11 July 2026: parameters 29-31 - RP camera auto-exposure and white-balance mode; updated 4 September 2026: parameters 32-36 - ALWAYS_ON/TIME_OF_DAY flash modes, OP_PARAMETER_AE_CHECK_INTERVAL renamed to OP_PARAMETER_FLASH_EVALUATE_INTERVAL; updated 24 October 2026: parameter 33 is now OP_PARAMETER_MD_BLOCK_THRESHOLD, parameter 17 no longer has an 'off' value, parameter 11 maximum noted; updated 25 October 2026: parameter 22 default back to 5, CONFIG.TXT made to match the firmware defaults; this is now the canonical copy - see note at the end)
+#### CGP - 25 April 2026 (updated 8 July 2026: parameters 21-28, immediate persistence; updated 11 July 2026: parameters 29-31 - RP camera auto-exposure and white-balance mode; updated 4 September 2026: parameters 32-36 - ALWAYS_ON/TIME_OF_DAY flash modes, OP_PARAMETER_AE_CHECK_INTERVAL renamed to OP_PARAMETER_FLASH_EVALUATE_INTERVAL; updated 24 October 2026: parameter 33 is now OP_PARAMETER_MD_BLOCK_THRESHOLD, parameter 17 no longer has an 'off' value, parameter 11 maximum noted; updated 25 October 2026: parameter 22 default back to 5, CONFIG.TXT made to match the firmware defaults; updated 28 October 2026: parameters 37-38, RP camera AE state; this is now the canonical copy - see note at the end)
 
 The CONFIG.TXT file contains "Operational Parameters" for the WW500.
 
@@ -76,6 +76,8 @@ captured first.
 |    34 | OP_PARAMETER_FLASH_MODE 				| 0             | Capture flash mode: 0 = off, 1 = AE-driven, 2 = always on, 3 = time of day |
 |    35 | OP_PARAMETER_FLASH_TOD_START 			| 0             | FLASH_MODE_TIME_OF_DAY only: minutes after midnight UTC when the flash turns on |
 |    36 | OP_PARAMETER_FLASH_TOD_DURATION 		| 0             | FLASH_MODE_TIME_OF_DAY only: duration (minutes) the flash stays on, wraps past midnight |
+|    37 | OP_PARAMETER_CAM_AE_EXPOSURE 		| 0             | RP camera AE state, not user-set: the exposure (lines, 8-5000) the AE loop last reached. Restored at the next wake when op 29 = 1, so AE starts from it instead of the init-table 2368 lines (#158). 0 = none saved. Other values are rejected by `setop`, and replaced by 0 when CONFIG.TXT is loaded |
+|    38 | OP_PARAMETER_CAM_AE_GAIN 			| 0             | RP camera AE state, not user-set: the analog gain code (0-960 = 1x-16x) reached with op 37. Restored with op 37. Other values are rejected by `setop`, and replaced by 0 when CONFIG.TXT is loaded |
 
 ## GPS location
 

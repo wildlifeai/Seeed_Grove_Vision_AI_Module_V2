@@ -784,6 +784,19 @@ bool xip_copy_model_from_sd_to_flash(char *filename) {
 
     xprintf("Model file size: %lu bytes\n", fileSize);
 
+    // Refuse a file too big for the model area, before anything is erased:
+    // the erase would otherwise run on into the fast-start area (0x00F00000)
+    // and the slot selector. Compared before adding the metadata, so a huge
+    // fileSize cannot wrap flashSizeRequired.
+    if (fileSize > FLASH_MODEL_AREA_SIZE - align_up(sizeof(ModelMetaData), 16)) {
+        xprintf("Model file too big for the model area (%lu bytes max)\n",
+                (unsigned long)(FLASH_MODEL_AREA_SIZE - align_up(sizeof(ModelMetaData), 16)));
+        f_close(&file);
+        vPortFree(write_buf);
+        vPortFree(verify_buf);
+        return false;
+    }
+
     // Step 3: erase flash to make space for the model and the meta data.
     // The model data must be pushed out to align on a 16-byte boundary.
     flashSizeRequired = align_up(sizeof(ModelMetaData), 16) + fileSize;

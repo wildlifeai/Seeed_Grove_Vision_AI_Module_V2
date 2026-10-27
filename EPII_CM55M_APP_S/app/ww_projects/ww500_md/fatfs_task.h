@@ -105,6 +105,8 @@ typedef enum {
 	OP_PARAMETER_FLASH_MODE,			// 34 Capture flash mode: 0=off, 1=AE, 2=always-on, 3=time-of-day
 	OP_PARAMETER_FLASH_TOD_START,		// 35 FLASH_MODE_TIME_OF_DAY: minutes after midnight UTC when the flash turns on
 	OP_PARAMETER_FLASH_TOD_DURATION,	// 36 FLASH_MODE_TIME_OF_DAY: duration (minutes) the flash stays on, wraps past midnight
+	OP_PARAMETER_CAM_AE_EXPOSURE,		// 37 RP camera AE state: last exposure (lines, 8-5000; 0 = none saved). Restored at sensor init. See ae.c
+	OP_PARAMETER_CAM_AE_GAIN,			// 38 RP camera AE state: last analog gain code (0-960 = 1x-16x). Restored with op 37. See ae.c
 
 	OP_PARAMETER_NUM_ENTRIES		// Not an Operational Parameters - serves to define the size of the op_parameter[] array
 } OP_PARAMETERS_E;

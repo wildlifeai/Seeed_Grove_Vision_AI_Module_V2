@@ -13,7 +13,7 @@ found, and how it was tested (with the firmware build, `AI ver`).
 |---|---|---|
 | 1 | Checks: the flash chip, and the model area bounds | Done 27 Oct (code reading only); model size check coded 28 Oct |
 | 2 | RP3 exposure as ops 37 and 38 (#158) | Done 28 Oct, benched (RP3) |
-| 3 | The flash record module and its test | Not started |
+| 3 | The flash record module and its test | Done 28 Oct, benched on both images |
 | 4 | Fast-start settings, still waiting for the card | Not started |
 | 5 | Stop waiting for the card | Not started |
 | 6 | Optional extras | Not started |
@@ -127,8 +127,9 @@ to 0.
 - **`if_task.c`, the "Sleep" message:** it lists every op for the BLE processor. The buffer was 150
   bytes, and each value was written with the full buffer size from its offset, so a long list could
   overrun it. It is now 245 bytes (the 244-byte payload limit plus the NUL), static, and each write
-  is bounded by the space left. 39 ops of at most `65535 ` plus `Sleep ` is 240 characters, so
-  **this is nearly full: another op or two needs a different message.**
+  is bounded by the space left. 39 ops of at most `65535 ` plus `Sleep ` is 240 characters, so 39
+  ops always fit. In practice the message is about 110 bytes (160 for a busy camera), so more ops
+  fit with ordinary values; past 39, unusually large values could cut the last ops off (safely).
 - **`MANIFEST/CONFIG.TXT` and `config_file.md`**: ops 37 and 38 added.
 
 ### Cross-repo
@@ -186,3 +187,83 @@ count them over a day of wakes, and set the threshold from that (25 % is a likel
 > 28 October 2026: values saved and restored across DPD (`AE: restored exposure 2315 gain code 0`). The ww-hardware `aiProcessor.h` op list still needs ops 37 and 38.
 > Later, step 4 of the XIP save state work copies them into flash so they are available before the
 > card is ready.
+
+---
+
+## Step 3. The flash record module and its test, coded 28 October 2026
+
+Built and benched 28 October 2026 (see "Bench result" below). No change to how the camera behaves: nothing writes a real record yet
+(that is step 4).
+
+### What changed
+
+- **`xip_manager.c/.h`:** three functions, `xip_state_area_read()`, `_write()` and `_erase()`, the
+  only way into the saved-state area (0x00F00000 to 0x00F01FFF, `XIP_STATE_AREA_ADDR/SIZE`). They
+  refuse any address outside it. They use the existing `disable_xip()`/`enable_xip()` (SPI mutex,
+  watchdog suspended). The flash map comment in `xip_manager.h` now shows the area.
+- **New `xip_state.c/.h`:** the records.
+  - **Record:** 256 bytes, one flash page: magic `WWXS`, format version, type, payload length,
+    sequence number, 240 bytes of payload, CRC-16/CCITT (the existing `crc16_ccitt.c`).
+  - **16 slots per 4 KB sector.** Fast-start records at 0x00F00000. The board record sector
+    (0x00F01000) is in the format but `xip_state_write()` refuses it for now.
+  - **Write:** scan the sector, use the slot after the last used one (a part-written slot is never
+    reused), erase first if the sector is full, then read the record back and compare.
+  - **Read:** the valid record with the highest sequence number, or "none" (the caller uses the C
+    defaults).
+  - Reads use SPI commands, not the XIP window, so they never see cached data.
+  - Working memory (about 4.4 KB) comes from the heap for each call, not a task stack.
+- **`CLI-commands.c`:** the `xipstate` command. `xipstate` lists every slot of both sectors;
+  `xipstate test` runs the bench test. Both are refused unless the image task is idle (`Init`),
+  since switching XIP off while the NN runs from flash would fault it.
+
+### Changed from the proposal
+
+- **256-byte records, not 128.** Step 4's payload is about 30 bytes of ops plus the extra camera
+  registers (up to 24 entries of 3 bytes, 73 bytes). 128-byte records would leave little room.
+  With 256: 16 records per sector, an erase every 16 writes, still about 1.6 million writes before
+  wear-out.
+- **So the test is smaller:** 33 writes and 2 erases fill the sector twice, plus an erase at the
+  start and one for the fall-back check.
+
+### Not tested by step 3
+
+- **Writing the saved record back** at the end of the test: until step 4 there is no real record,
+  so the test always starts and ends with a blank sector.
+- **Reading at boot before the scheduler starts** (step 4 needs it): `disable_xip()` takes a FreeRTOS
+  mutex, which needs looking at for that case.
+
+### Bench test (either image)
+
+1. Build and flash. At the console, type `xipstate`. The reply lists:
+   - `Fast-start sector 0x00f00000 (format version 1):`, then `slots 0-15: blank` and
+     `No valid record: the C defaults are used`.
+   - The same for `Board sector 0x00f01000`.
+   - Then `Done.`
+2. Type `xipstate test`. In about 2 seconds the console shows:
+   - `xipstate test: no record before the test`
+   - `Erase 1: at the start`
+   - `Erase 2: before write 17 (sector full)`
+   - `Erase 3: before write 33 (sector full)`
+   - `Bad-CRC record in slot 1 skipped: OK`
+   - `Erase 4: to check the fall-back`
+   - `Erased sector: no record, the C defaults would be used: OK`
+   - `xipstate test: PASS (34 writes, 4 erases)`
+   - and the reply `xipstate test: PASS`.
+3. Type `xipstate`. Both sectors are blank again, as in step 1.
+4. Let the camera sleep and wake, then start a capture with a long burst (`capture 20 1000`) and
+   type `xipstate` while it runs. It replies `Error: not while the camera is busy (...)`, with the
+   image task's state in the brackets.
+5. Check the rest of the camera is unaffected: let it sleep and wake, and take a picture.
+
+### Bench result (28 October 2026)
+
+Steps 1 and 2 of the bench test gave exactly the expected output: both sectors blank, then
+`xipstate test: PASS (34 writes, 4 erases)` with every erase at the expected write.
+
+After the reformat to `c_file_format.md` (comments and layout only): built, `xipstate test` PASS
+again, both sectors blank afterwards. During `capture 20 1000` the command was refused with
+`Error: not while the camera is busy (NN Processing)` or `(Wait For Timer)`, depending on when it
+was typed. After a sleep and wake the RP3 (colour) image took and saved a picture as normal. The same checks
+(test PASS, sectors blank, refused while busy, picture after a wake) passed on the HM0360 (mono)
+image. **Step 3 complete.**
+

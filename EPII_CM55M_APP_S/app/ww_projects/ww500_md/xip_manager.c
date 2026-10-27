@@ -211,6 +211,7 @@ static int write_firmware_from_sd(uint8_t slot, const char *filepath);
 static int write_slot_selector(uint8_t slot);
 static int read_slot_meta(SlotMetaRecord *meta);
 static int write_selector_sector(const SlotSelectorHeader *hdr, const SlotMetaRecord *meta);
+static bool state_area_ok(uint32_t addr, uint32_t len);
 
 /*************************************** Local Function Definitions ***************************/
 
@@ -289,6 +290,23 @@ static uint8_t load_labels_from_manifest(char *filename, char (*labels)[MAX_LABE
         xprintf("File %s not found\n", labels_path);
         return 0;
     }
+}
+
+/**
+ * @brief Check that a flash range lies inside the saved-state area and is whole words.
+ *
+ * Used by xip_state_area_read/write/erase(), the only way into the area, so they can
+ * reach nothing else.
+ *
+ * @param addr  physical start address
+ * @param len   length in bytes
+ * @return true if [addr, addr + len) is inside the area and both are multiples of 4
+ */
+static bool state_area_ok(uint32_t addr, uint32_t len) {
+    return ((addr >= XIP_STATE_AREA_ADDR)
+            && (len <= XIP_STATE_AREA_SIZE)
+            && ((addr - XIP_STATE_AREA_ADDR) <= (XIP_STATE_AREA_SIZE - len))
+            && ((addr % 4) == 0) && ((len % 4) == 0));
 }
 
 /*************************************** Global Function Definitions **************************/
@@ -1827,4 +1845,72 @@ int xip_switch_slot(void) {
     xprintf("switch_slot: selector now points at slot %d\n", target_slot);
 
     return target_slot;
+}
+
+
+/********************* Saved-state area (see xip_state.c) ***************************/
+
+/**
+ * @brief Read from the saved-state area.
+ *
+ * Uses SPI commands, not the XIP window, so it never returns cached data.
+ *
+ * @param addr  physical address in the area, word aligned
+ * @param data  output, word aligned
+ * @param len   bytes, a multiple of 4
+ * @return 0 on success, -1 on failure or a bad address
+ */
+int xip_state_area_read(uint32_t addr, uint32_t *data, uint32_t len) {
+    if (!state_area_ok(addr, len) || (init_flash() != 0)) {
+        return -1;
+    }
+    if (!disable_xip()) {
+        return -1;
+    }
+    int ret = hx_lib_spi_eeprom_word_read(spi_inst, addr, data, len);
+    enable_xip();
+    return (ret == 0) ? 0 : -1;
+}
+
+/**
+ * @brief Program erased bytes in the saved-state area.
+ *
+ * The caller keeps each write inside one 256-byte flash page.
+ *
+ * @param addr  physical address in the area, word aligned
+ * @param data  input, word aligned
+ * @param len   bytes, a multiple of 4
+ * @return 0 on success, -1 on failure or a bad address
+ */
+int xip_state_area_write(uint32_t addr, uint32_t *data, uint32_t len) {
+    if (!state_area_ok(addr, len) || (init_flash() != 0)) {
+        return -1;
+    }
+    if (!disable_xip()) {
+        return -1;
+    }
+    int ret = hx_lib_spi_eeprom_word_write(spi_inst, addr, data, len);
+    enable_xip();
+    return (ret == 0) ? 0 : -1;
+}
+
+/**
+ * @brief Erase one 4 KB sector of the saved-state area.
+ *
+ * Takes typically 45 ms, at most about 400 ms.
+ *
+ * @param addr  physical address of the sector, sector aligned
+ * @return 0 on success, -1 on failure or a bad address
+ */
+int xip_state_area_erase(uint32_t addr) {
+    if (!state_area_ok(addr, FLASH_SECTOR_SIZE) || ((addr % FLASH_SECTOR_SIZE) != 0)
+            || (init_flash() != 0)) {
+        return -1;
+    }
+    if (!disable_xip()) {
+        return -1;
+    }
+    int ret = hx_lib_spi_eeprom_erase_sector(spi_inst, addr, FLASH_SECTOR);
+    enable_xip();
+    return (ret == 0) ? 0 : -1;
 }

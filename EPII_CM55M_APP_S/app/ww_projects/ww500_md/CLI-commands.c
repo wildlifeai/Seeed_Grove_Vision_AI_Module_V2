@@ -128,6 +128,7 @@
 #include "hx_drv_rtc.h"
 #include "ww500_md.h"
 #include "xip_manager.h"
+#include "xip_state.h"
 #include "camera_switch.h"
 #include "hm0360_md.h"
 #include "lightSensor.h"
@@ -324,6 +325,7 @@ static BaseType_t prvVcm(char *pcWriteBuffer, size_t xWriteBufferLen, const char
 
 // Day/night dual-image camera switching (see camera_switch.c)
 static BaseType_t prvSlots(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
+static BaseType_t prvXipState(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 static BaseType_t prvSwitchSlot(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 
 #ifdef WW500_C00
@@ -430,6 +432,14 @@ static const CLI_Command_Definition_t xCamera = {
 	"camera:\r\n Report main camera type\r\n",
 	prvCamera, /* The function to run. */
 	0		   /* No parameters expected */
+};
+
+/* Structure that defines the "xipstate" command line command. */
+static const CLI_Command_Definition_t xXipState = {
+	"xipstate", /* The command string to type. */
+	"xipstate [test]:\r\n Show the saved-state records in flash. 'xipstate test' runs the bench test of the fast-start sector\r\n",
+	prvXipState, /* The function to run. */
+	-1		   /* Variable number of parameters */
 };
 
 /* Structure that defines the "slots" command line command. */
@@ -1146,6 +1156,39 @@ static BaseType_t prvSlots(char *pcWriteBuffer, size_t xWriteBufferLen, const ch
 			cameraSwitch_variantName((uint8_t) ((variantB < 0) ? 0 : variantB)),
 			(fatfs_getOperationalParameter(OP_PARAMETER_SLOT_SWITCH) == 1) ? "on" : "off");
 
+	return pdFALSE;
+}
+
+/**
+ * Implements "xipstate" command
+ *
+ * 'xipstate' prints every slot of the saved-state sectors on the console (xip_state_dump()).
+ * 'xipstate test' runs the bench test of the fast-start sector (xip_state_test()): about 35
+ * writes and 4 erases, then the record that was there before is written back.
+ *
+ * Both switch XIP off while they read or write the flash, so they are refused unless the image
+ * task is idle: the NN model runs from the XIP window.
+ */
+static BaseType_t prvXipState(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) {
+	const char *pcParameter;
+	BaseType_t xParameterStringLength;
+
+	if (image_getState() != APP_IMAGE_TASK_STATE_INIT) {
+		snprintf(pcWriteBuffer, xWriteBufferLen, "Error: not while the camera is busy (%s).", image_getStateString());
+		return pdFALSE;
+	}
+
+	pcParameter = FreeRTOS_CLIGetParameter(pcCommandString, 1, &xParameterStringLength);
+	if (pcParameter == NULL) {
+		xip_state_dump();
+		snprintf(pcWriteBuffer, xWriteBufferLen, "Done.");
+	}
+	else if ((xParameterStringLength == 4) && (strncmp(pcParameter, "test", 4) == 0)) {
+		snprintf(pcWriteBuffer, xWriteBufferLen, "xipstate test: %s", xip_state_test() ? "PASS" : "FAIL");
+	}
+	else {
+		snprintf(pcWriteBuffer, xWriteBufferLen, "Error: 'xipstate' or 'xipstate test'.");
+	}
 	return pdFALSE;
 }
 
@@ -3061,6 +3104,7 @@ static void vRegisterCLICommands(void)
 	FreeRTOS_CLIRegisterCommand(&xVer);
 	FreeRTOS_CLIRegisterCommand(&xCamera);
 	FreeRTOS_CLIRegisterCommand(&xSlots);		// Report firmware slots and camera variants
+	FreeRTOS_CLIRegisterCommand(&xXipState);	// Saved-state records in flash, and their bench test
 	FreeRTOS_CLIRegisterCommand(&xSwitchSlot);	// Boot the other slot (day/night camera change)
 	FreeRTOS_CLIRegisterCommand(&xLight);		// On-demand light-sensor check
 	FreeRTOS_CLIRegisterCommand(&xEnable);

@@ -23,3 +23,4 @@ Also, as an experiment, I will start naming branches with the date I create them
 | 11 Oct 2026  | 261011_cameraConnectorPressure | Bench findings: pressure on the HM0360 connector stops the boot or kills a running capture |
 | 12 Oct 2026  | 261012_cameraErrors | Better handling of unexpected camera error messages |
 | 23 Oct 2026  | 1261023_mdEnhancements  | checked live preview, enahnced motion detection handling   | 
+| 27 Oct 2026  | 261027_XIP_save_state  | Save operational parameters in XI memory to speed time to first image   | 

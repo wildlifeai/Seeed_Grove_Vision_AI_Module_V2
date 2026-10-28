@@ -15,7 +15,7 @@ found, and how it was tested (with the firmware build, `AI ver`).
 | 2 | RP3 exposure as ops 37 and 38 (#158) | Done 28 Oct, benched (RP3) |
 | 3 | The flash record module and its test | Done 28 Oct, benched on both images |
 | 4 | Fast-start settings, still waiting for the card | Done 28 Oct, benched on both images |
-| 5 | Stop waiting for the card | Coded 28 Oct, first runs OK, formal bench test to do |
+| 5 | Stop waiting for the card | Done 29 Oct, benched on both images |
 | 6 | Optional extras | Not started |
 | 7 | Docs | Not started |
 
@@ -476,8 +476,9 @@ Not built or benched yet.
   needed.
 - **The SD driver is middleware shared by every app,** so `DELAY_YIELD()` falls back to the busy
   wait before the scheduler starts, or when `INCLUDE_xTaskGetSchedulerState` is 0.
-- **A note for building:** the FatFS library is rebuilt from source, so
-  `prebuilt_libs/.../libfatfs.a` will change. As always, do not commit it.
+- **Where the driver change lives:** `mmc_we2_spi.c` is compiled into the FatFS library
+  (`libfatfs.a`), which every build makes from source (`middleware/fatfs/fatfs.mk`). Its copy in
+  `prebuilt_libs/gnu/` is ignored by git, so there is nothing extra to commit.
 
 ### Not covered
 
@@ -531,4 +532,71 @@ ready 109, SD mounted 191, CONFIG.TXT loaded 196, image dir ready 200, SD ready 
   What would: the card's start-up path, about 180 ms from the scheduler starting to `SD ready`:
   the record read (13 ms, mostly `init_flash()`'s fixed 10 ms wait), the FatFS task's fixed 10 ms
   "settling" wait, and the mount itself (about 165 ms, mostly the card answering ACMD41).
+
+### Bench test, steps 3 to 10 (29 October 2026, RP3 image build 18:49 28 Oct, `logs/log7.txt`)
+
+Commands over BLE. Steps 1 and 2 were already covered by the HM0360 runs above (format 1 records
+ignored, format 2 written).
+
+| Step | Result |
+|---|---|
+| 3. `xipstate` | Slots 0-4 `NOT VALID` (version 1), 5-8 valid (version 2, length 162), slot 8 newest, `Newest:` with 32 values, camera 2. **Pass** |
+| 4. Timer wake | `frame ready 217`, against 329 in log1. **Pass**, see the timing below |
+| 5. More timer wakes | Three photos (`59200940`, `59200B40`, `59200D40.JPG`), each `AE: restored`, `matches`, `unchanged`. **Pass.** EXIF: after `setdid` and `setgps`, three timer-wake photos (`59201360`, `592014C0`, `59201620.JPG`, `logs/log8.txt`, `logs/exif_step5_gps.csv`) carry the deployment ID `3f2a9c1e-...`, GPS `S 36/1, 49/1, 2506/100`, `E 174/1, 47/1, 4865/100`, altitude `30/1`, and times matching the `Wrote` lines. The folder is `/MEDIA/3f2a9c1e/IMAGES.005` (named from the ID), so the card's values reached the photo. **Pass** |
+| 6. Sequence number | 1316 to 1319, one per photo. **Pass** |
+| 7. No card | Two wakes: `SD card initialisation failed (reason 3)` after about 650 ms, frame taken, `Image not written. Error: 13`, back to sleep about 1 s later. No hang, no record written. **Pass** |
+| 8. Camera off on the card | `op 10: record 1, CONFIG.TXT 0`, `Skipping file save.`, new record seq 6. The next timer wake took no photo (camera off from the record). `setop 10 1`: seq 7, then photos again. **Pass** |
+| 9. Extra register | (`logs/log9.txt`) `camreg 1010` read 0x00, `camreg 1010 00` staged it and saved `RPV3_EX.BIN`; the sleep wrote seq 13. The next two wakes: `seq 13 loaded (32 ops, 1 extra camera registers)`, then `Processed 1 staged settings (from the fast-start record)` while the card was still mounting, then `Loaded 1 staged register(s)` from the card and `matches`. `camreg clear`: seq 14 with 0 registers, loaded at the next wake. **Pass** |
+| 10. HM0360 motion wake | (`logs/log10.txt`, HM0360 build 18:26 28 Oct, op 11 = 1000) Three motion wakes, each a photo saved and the record `matches`/`unchanged`. Boot timing: `camera ready 59, frame ready 129` and `141`, `SD ready 227` and `233`, `photo queued 233` and `241`. **Pass** |
+
+**Timing, RP3 timer wake** (ms since `app_main()`):
+
+| | log1 (before step 4) | log7 (step 5) |
+|---|---|---|
+| flash record read | | 33 |
+| camera ready | 254 | 121 |
+| frame ready | 329 | 217 |
+| SD ready | 195 | 210 |
+| photo queued | about 656 (`Writing` 327 ms after the frame) | 547 |
+
+- **About 110 ms sooner** for both the frame and the photo.
+- **On the RP3 the card is ready just before the frame** (210 against 217), so the photo never
+  waits for the card. The camera starts more slowly than before (`camera ready` 121, 88 ms after the
+  record, against 59 ms after `SD ready` in log1), since it shares the CPU with the card's start-up.
+- **After the frame, 330 ms go on the RP3's software colour correction (100 ms) and JPEG encoding
+  (187 ms),** as before. That is now the largest part of the time to the photo on this image.
+
+
+### Parked: console stopped responding (29 October 2026)
+
+Not part of this work; parked by Charles to come back to. During the step 5 tests a paste into Tera
+Term (no transmit delay) hung after a few characters, and the console stopped responding. A `ver`
+then arrived over BLE: the IF task passed it to the CLI task and waited in `I2C RX State` for the
+reply, which never came. From then on it deferred every inactivity event (`Deferring event 0x070e`)
+and refused every BLE message (`unhandled event 'I2C Rx' in 'I2C RX State'`), so the camera stayed
+awake until reset. The awake watchdog did not reset it.
+
+To look at later:
+- why the console (CLI task or UART receive, one character at a time) stopped after a fast paste;
+- whether a CLI task that stops answering should trigger a watchdog reset (see the camera errors
+  work), and whether the IF task needs a timeout while waiting for a CLI reply.
+
+### Step 5 result (29 October 2026)
+
+**All ten bench steps pass on the RP3 image, and the timer and motion wakes on the HM0360.**
+
+| ms since `app_main()` | RP3 timer wake | HM0360 motion wake |
+|---|---|---|
+| flash record read | 33 | 43 |
+| camera ready | 121 | 59 |
+| frame ready | 217 (329 before) | 129 to 141 |
+| SD ready | 210 | 227 to 233 |
+| photo queued | 547 (about 656 before) | 233 to 241 |
+
+- **The camera no longer waits for the card.** On the HM0360 the frame is ready about 95 ms before
+  the card; the photo is queued within 8 ms of `SD ready`, so the card now decides the time.
+- **On the RP3** the card is ready just before the frame; the 330 ms of software colour correction
+  and JPEG encoding after the frame is now the largest part.
+- On a motion wake `scheduler started` is 30 ms (11 on a timer wake): the HM0360 checks in
+  `app_main()` before the tasks start.
 

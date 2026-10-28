@@ -97,6 +97,16 @@ bool cis_file_stageReg(uint16_t addr, uint8_t val);
 void cis_file_clearStaged(void);
 
 /**
+ * @brief Fill the staged table from the fast-start record, before the card is ready.
+ */
+void cis_file_setStagedFromRecord(const HX_CIS_SensorSetting_t *table, uint16_t count);
+
+/**
+ * @brief Apply the staged table to the sensor, without reading the card.
+ */
+HX_CIS_ERROR_E cis_file_applyStaged(void);
+
+/**
  * @brief Test function to either apply settings or print parsed data.
  *
  * @param filename The path to the binary file.

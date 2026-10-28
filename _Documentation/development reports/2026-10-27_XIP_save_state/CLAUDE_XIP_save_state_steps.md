@@ -15,7 +15,7 @@ found, and how it was tested (with the firmware build, `AI ver`).
 | 2 | RP3 exposure as ops 37 and 38 (#158) | Done 28 Oct, benched (RP3) |
 | 3 | The flash record module and its test | Done 28 Oct, benched on both images |
 | 4 | Fast-start settings, still waiting for the card | Done 28 Oct, benched on both images |
-| 5 | Stop waiting for the card | Not started |
+| 5 | Stop waiting for the card | Coded 28 Oct, first runs OK, formal bench test to do |
 | 6 | Optional extras | Not started |
 | 7 | Docs | Not started |
 
@@ -417,10 +417,118 @@ RP3 record, so this is equivalent.
 
 **Step 4 is complete on both images.**
 
-**For step 5, from these results:** the plan was "for state (ops 25, 37, 38), the flash record
-wins over the card". With the tolerance the record's exposure can be up to 25 % older than the
-card's, so for ops 37 and 38 the card's value is the better one when both are there. The
-difference is small either way. Suggest: the flash wins only when the card's CONFIG.TXT looks like
-it came from another camera, which cannot be told yet, so in practice keep "the card wins" for
-everything.
+**Decided for step 5 (Charles, 28 October 2026):** cards do not move between cameras. When
+CONFIG.TXT loads part way through a wake:
+- **Settings:** the card wins, as now.
+- **State (ops 25, 37, 38):** the value in RAM is kept. It started from the record and may already
+  have moved during this wake (an AE step, a light check), so it is newer than the card's, which
+  was saved at the last sleep.
+- **Exception:** with no record at boot, the card's values are used for state too, since RAM then
+  holds only the C defaults.
+
+---
+
+## Step 5. Stop waiting for the card, coded 28 October 2026
+
+Not built or benched yet.
+
+### What changes
+
+- **The image task starts as soon as the settings are known,** not when the card is ready. A new
+  semaphore (`fatfs_waitForSettings()`) is given right after the fast-start record is read, about
+  30 ms after `app_main()`. Without a record (first boot, new format) it is given when the card is
+  ready, so the camera behaves exactly as before.
+- **It waits for the card only where the card is needed** (`fatfs_waitForSdReady()`):
+  - before deciding whether and how to save the photo (file name, folder, sequence number,
+    deployment ID, GPS). The frame and the NN result wait in RAM;
+  - before the NN counters are incremented (`processNNOutput()`), or loading CONFIG.TXT would
+    undo the count;
+  - before the NN start-up, only if the named model is not already in flash (`cv_modelNeedsCard()`);
+  - before deciding to save state at sleep (`sdMountedForSave()`), so the camera never sleeps part
+    way through the card's start-up.
+- **The SD card start-up yields the CPU.** Its waits (`mmc_disk_initialize()`, about 150 ms of
+  polling) busy-waited (`hx_drv_timer_cm55x_delay_ms()`), and the FatFS task has a higher priority,
+  so nothing else could run. They now call `vTaskDelay()` once the scheduler runs
+  (`DELAY_YIELD()`, `middleware/fatfs/port/mmc_spi/mmc_we2_spi.c`). The waits used when reading
+  and writing files are unchanged.
+- **Extra camera registers before the card is ready:** applied from the staged table, filled from
+  the record (`cis_file_setStagedFromRecord()`, `cis_file_applyStaged()`), only if the record was
+  written by the same camera image. Once the card is ready, `cis_file_process()` reads the file as
+  before.
+- **State ops (25, 37, 38) keep the RAM value** when CONFIG.TXT loads (`xip_state_keepStateOp()`
+  in `load_configuration()`), as decided. The comparison still uses the card's values.
+- **The record now holds every op except the counters** (32 ops, not 23). The image task reads
+  more ops before the card is ready than step 4 stored: op 7 (timelapse) decides whether a timer
+  wake is a light-check-only wake, ops 23 and 26 are used at the first light check, op 33 sets up
+  motion detection. **Format version 2:** the step 4 records are ignored, so the first boot of this
+  build has no record and waits for the card; the first sleep writes a version 2 record.
+- **Camera off on the card:** if CONFIG.TXT says op 10 = 0, the frame taken from the record's
+  settings is not saved.
+- **Boot timing** is now printed when the first photo is queued for the card (new point
+  `photo queued`), so the card's points are included even when the frame comes first.
+
+### Decisions made in this step
+
+- **No new `SD_READY` message or `WAIT_FOR_SD` state** (proposal section 3). The image task blocks on
+  the existing semaphore at the first point that needs the card. At that point it holds a frame and
+  has nothing else to do: no frame or data path events can arrive, and inactivity is not running
+  until the card is ready. Much smaller change, same effect. Easy to change to a state later if
+  needed.
+- **The SD driver is middleware shared by every app,** so `DELAY_YIELD()` falls back to the busy
+  wait before the scheduler starts, or when `INCLUDE_xTaskGetSchedulerState` is 0.
+- **A note for building:** the FatFS library is rebuilt from source, so
+  `prebuilt_libs/.../libfatfs.a` will change. As always, do not commit it.
+
+### Not covered
+
+- **More than 24 extra camera registers:** the record holds the first 24, as `camreg` can edit.
+  A longer file is applied in full only once the card is ready.
+- **After a change of camera image** the record's registers are for the other sensor, so none are
+  applied until the card is ready. With the RP3 that means none for that wake (its sensor starts
+  once per wake).
+
+### Bench test (RP3 image first)
+
+1. Build both images. Flash the RP3 image. At the first wake the console shows
+   `Fast-start record: none, using the C defaults`: the step 4 records (format 1) are ignored. The
+   boot carries on as before, waiting for the card.
+2. Let it sleep: `Fast-start record: written, seq 1 slot N`.
+3. Type `xipstate`. The step 4 slots show `NOT VALID` (version 1); the newest is valid with 32
+   values in its `Newest:` line.
+4. Type `setop 7 30` and let it sleep. At the timer wake look at the `Boot timing (timer wake)`
+   line. **`frame ready` should now come before `SD ready`.** Compare `frame ready` with 329 ms
+   (log1). The photo is saved as usual (`Wrote ... byte image to SD`).
+5. Let it run a few more timer wakes. Each shows `AE: restored`, `seq N matches CONFIG.TXT`, and
+   the photo saved. Check on a PC that the photos have the right time, GPS and deployment ID.
+6. Type `getop 0` twice, a wake apart: the sequence number goes up by one per photo.
+7. **No card:** remove the card and let it make a timer wake. It takes the frame, reports
+   `SD card initialisation failed`, saves nothing and goes back to sleep (no hang). Put the card back.
+8. **Camera off on the card:** on a PC set op 10 to 0 in CONFIG.TXT. At the next timer wake the
+   frame is taken but `Skipping file save.` Then type `setop 10 1`.
+9. **Extra registers:** type `camreg 0x0101` to read a register, then `camreg 0x0101 <the same
+   value>` to stage it unchanged. After the next sleep and wake, the console shows
+   `Processed 1 staged settings (from the fast-start record)`. Then `camreg clear`.
+10. Type `setop 7 0`. Then the HM0360 image: load it, and after its first sleep check a motion wake's
+   `Boot timing (motion wake)` the same way.
+
+### First runs (28 October 2026, HM0360 image build 13:23, console pasted by Charles)
+
+A timer wake with a photo, then a BLE wake. Both loaded the format 2 record (`seq 2 loaded (32
+ops ...)`), the image task started before the card was mounted, and the card's start-up was
+interleaved with the camera's (`Mounting FatFS on SD card sensor_type: 8 ... OK`). `FatFs setup
+took 186ms`, as in step 4, so yielding did not slow the mount. `Timelapse interval: 20s` came from
+the record, before CONFIG.TXT loaded. The photo (`59200F90.JPG`, sequence 1315) was saved with 12
+EXIF tags; the record `matches` and was `unchanged` at sleep.
+
+**Boot timing, timer wake:** `flash record read 24, camera ready 40, capture started 71, frame
+ready 109, SD mounted 191, CONFIG.TXT loaded 196, image dir ready 200, SD ready 202, photo queued
+209` (ms since `app_main()`).
+
+- **The frame is ready at 109 ms, about 93 ms before the card.** Before step 5 the camera could
+  not start until `SD ready` (about 200 ms on this image), so its frame came at about 270 ms.
+- **The photo is now limited by the card:** it is queued 7 ms after `SD ready`. Making the camera
+  side faster (step 6's "NN start-up after the capture") would no longer bring the photo forward.
+  What would: the card's start-up path, about 180 ms from the scheduler starting to `SD ready`:
+  the record read (13 ms, mostly `init_flash()`'s fixed 10 ms wait), the FatFS task's fixed 10 ms
+  "settling" wait, and the mount itself (about 165 ms, mostly the card answering ACMD41).
 

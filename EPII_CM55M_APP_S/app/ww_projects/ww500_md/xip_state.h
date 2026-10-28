@@ -19,9 +19,11 @@
  *  is none (blank sector, new format, bad CRC, power cut during an erase) the
  *  caller uses its C defaults.
  *
- *  The fast-start record is a copy of the settings the first photo needs (23 op parameters)
- *  and the staged extra camera registers. CONFIG.TXT stays the master copy. It is read at the
- *  start of the FatFS task and written at sleep when something has changed.
+ *  The fast-start record is a copy of every op parameter except the counters (32 of them)
+ *  and the staged extra camera registers. CONFIG.TXT stays the master copy for settings; for the
+ *  state ops (25, 37, 38) the values in RAM, which start from the record, are kept. It is read at
+ *  the start of the FatFS task, so the camera can start before the card is ready, and written at
+ *  sleep when something has changed.
  *
  *  Not for use while the NN is running: every flash access switches XIP off.
  */
@@ -39,7 +41,7 @@
 #define XIP_STATE_RECORD_SIZE		256		// one flash page: a write never crosses a page boundary
 #define XIP_STATE_DATA_MAX			240		// payload bytes in one record
 // Raise this whenever the record or a payload layout changes: older records are then ignored
-#define XIP_STATE_FORMAT_VERSION	1
+#define XIP_STATE_FORMAT_VERSION	2		// 2: 32 ops (28 Oct 2026); 1 had 23
 
 /*********************************************** Global Types ************************************************/
 
@@ -87,5 +89,10 @@ void xip_state_compareFastStart(void);
  * @brief At sleep: write a new fast-start record if anything has changed.
  */
 int xip_state_saveFastStart(void);
+
+/**
+ * @brief While CONFIG.TXT loads: whether to keep RAM's value of a state op (25, 37, 38).
+ */
+bool xip_state_keepStateOp(uint8_t op, uint16_t cardValue);
 
 #endif /* XIP_STATE_H_ */

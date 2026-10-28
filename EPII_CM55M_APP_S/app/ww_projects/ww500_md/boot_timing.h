@@ -4,8 +4,9 @@
  *  Created on: 30 Sep 2026
  *      Author: Charles Palmer
  *
- *  Times the stages from the start of app_main() to the first frame after a boot, and prints them once (issue #249:
- *  how long after a motion wake the first photo is taken).
+ *  Times the stages from the start of app_main() to the first photo after a boot, and prints them once, when the
+ *  photo is queued for the card (issue #249: how long after a motion wake the first photo is taken). Since the
+ *  camera no longer waits for the card (XIP save state, Oct 2026), the frame can be ready before the card is.
  *
  *  The time before the FreeRTOS scheduler starts comes from the core's cycle counter (DWT CYCCNT), which is reliable
  *  there as nothing sleeps. After the scheduler starts, the FreeRTOS tick count is added (1 ms resolution): the cycle
@@ -46,6 +47,7 @@ typedef enum {
 	BOOT_TIMING_CAMERA_READY,		// image task: camera (and HM0360 for MD) initialised
 	BOOT_TIMING_CAPTURE_START,		// image task: capture started (configure_image_sensor(CAMERA_CONFIG_RUN))
 	BOOT_TIMING_FRAME_READY,		// image task: first frame ready
+	BOOT_TIMING_PHOTO_QUEUED,		// image task: first photo prepared and sent to the FatFS task to write
 	BOOT_TIMING_NUM_POINTS
 } BOOT_TIMING_POINT_E;
 

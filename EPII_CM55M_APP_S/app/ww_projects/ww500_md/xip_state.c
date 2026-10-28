@@ -37,7 +37,7 @@
 #define RECORD_MAGIC		0x53585757u		// "WWXS" in flash (little-endian)
 #define ERASED_WORD			0xFFFFFFFFu
 
-#define FAST_START_NUM_OPS	23			// entries in fastStartOps[]
+#define FAST_START_NUM_OPS	32			// entries in fastStartOps[]
 // The RP3 exposure counts as changed only when the total light (exposure x gain) moves more than
 // this: in steady light the settled exposure wanders about 15 % (bench, 28 Oct 2026)
 #define FAST_START_AE_TOLERANCE_PERCENT	25
@@ -98,38 +98,53 @@ typedef struct {
 
 /*********************************************** Local Variables ********************************************/
 
-// The op parameters in a fast-start record: those that affect the first photo, and the light
-// state (25, 37, 38). Not the counters, GPS or deployment ID, which are only needed with the card.
+// The op parameters in a fast-start record: every one except the counters (ops 0 to 4, 19, 20),
+// which change at every wake and are only needed once the card is ready. Any op the camera reads
+// before the card is ready must be here, or the first photo uses its C default.
 static const uint8_t fastStartOps[FAST_START_NUM_OPS] = {
-	OP_PARAMETER_NUM_PICTURES,				// 5
-	OP_PARAMETER_PICTURE_INTERVAL,			// 6
-	OP_PARAMETER_LED_BRIGHTNESS_PERCENT,	// 9
-	OP_PARAMETER_CAMERA_ENABLED,			// 10
-	OP_PARAMETER_MD_INTERVAL,				// 11
-	OP_PARAMETER_FLASH_DURATION,			// 12
-	OP_PARAMETER_FLASH_LED,					// 13
-	OP_PARAMETER_MODEL_PROJECT,				// 14
-	OP_PARAMETER_MODEL_VERSION,				// 15
-	OP_PARAMETER_MODEL_THRESHOLD,			// 16
-	OP_PARAMETER_MD_SENSITIVITY,			// 17
-	OP_PARAMETER_TEST_MODE_BITS,			// 18
-	OP_PARAMETER_AE_FLASH_STATE,			// 25
-	OP_PARAMETER_WB_RED_GAIN,				// 27
-	OP_PARAMETER_WB_BLUE_GAIN,				// 28
-	OP_PARAMETER_CAM_AE_ENABLE,				// 29
-	OP_PARAMETER_CAM_AE_TARGET,				// 30
-	OP_PARAMETER_CAM_WB_MODE,				// 31
-	OP_PARAMETER_FLASH_MODE,				// 34
-	OP_PARAMETER_FLASH_TOD_START,			// 35
-	OP_PARAMETER_FLASH_TOD_DURATION,		// 36
-	OP_PARAMETER_CAM_AE_EXPOSURE,			// 37
-	OP_PARAMETER_CAM_AE_GAIN,				// 38
+	OP_PARAMETER_NUM_PICTURES,					// 5
+	OP_PARAMETER_PICTURE_INTERVAL,				// 6
+	OP_PARAMETER_TIMELAPSE_INTERVAL,			// 7
+	OP_PARAMETER_INTERVAL_BEFORE_DPD,			// 8
+	OP_PARAMETER_LED_BRIGHTNESS_PERCENT,		// 9
+	OP_PARAMETER_CAMERA_ENABLED,				// 10
+	OP_PARAMETER_MD_INTERVAL,					// 11
+	OP_PARAMETER_FLASH_DURATION,				// 12
+	OP_PARAMETER_FLASH_LED,						// 13
+	OP_PARAMETER_MODEL_PROJECT,					// 14
+	OP_PARAMETER_MODEL_VERSION,					// 15
+	OP_PARAMETER_MODEL_THRESHOLD,				// 16
+	OP_PARAMETER_MD_SENSITIVITY,				// 17
+	OP_PARAMETER_TEST_MODE_BITS,				// 18
+	OP_PARAMETER_MD_FLASH_LED,					// 21
+	OP_PARAMETER_MD_FLASH_BRIGHTNESS_PERCENT,	// 22
+	OP_PARAMETER_AE_DARK_THRESHOLD,				// 23
+	OP_PARAMETER_FLASH_EVALUATE_INTERVAL,		// 24
+	OP_PARAMETER_AE_FLASH_STATE,				// 25
+	OP_PARAMETER_SLOT_SWITCH,					// 26
+	OP_PARAMETER_WB_RED_GAIN,					// 27
+	OP_PARAMETER_WB_BLUE_GAIN,					// 28
+	OP_PARAMETER_CAM_AE_ENABLE,					// 29
+	OP_PARAMETER_CAM_AE_TARGET,					// 30
+	OP_PARAMETER_CAM_WB_MODE,					// 31
+	OP_PARAMETER_LORAWAN_PING_MINUTES,			// 32
+	OP_PARAMETER_MD_BLOCK_THRESHOLD,			// 33
+	OP_PARAMETER_FLASH_MODE,					// 34
+	OP_PARAMETER_FLASH_TOD_START,				// 35
+	OP_PARAMETER_FLASH_TOD_DURATION,			// 36
+	OP_PARAMETER_CAM_AE_EXPOSURE,				// 37
+	OP_PARAMETER_CAM_AE_GAIN,					// 38
 };
 
 // The fast-start record read at boot, kept to compare with CONFIG.TXT
 static FastStartPayload_t bootPayload;
 static bool bootPayloadValid = false;
 static uint32_t bootSequence = 0;
+
+// The card's values for the state ops, which load_configuration() does not apply when there is a
+// record (xip_state_keepStateOp()). Kept only for xip_state_compareFastStart().
+static uint16_t cardStateValue[FAST_START_NUM_OPS];
+static bool cardStateSeen[FAST_START_NUM_OPS];
 
 
 /*********************************************** Local Function Declarations *********************************/
@@ -146,6 +161,7 @@ static void testPayload(uint16_t n, uint8_t *data, uint16_t *len);
 static void buildPayload(FastStartPayload_t *payload);
 static bool aeSimilar(uint16_t expA, uint16_t gainA, uint16_t expB, uint16_t gainB);
 static bool payloadsMatch(const FastStartPayload_t *a, const FastStartPayload_t *b);
+static bool isStateOp(uint8_t op);
 
 /*********************************************** Local Function Definitions *********************************/
 
@@ -441,6 +457,18 @@ static bool payloadsMatch(const FastStartPayload_t *a, const FastStartPayload_t 
 		return false;
 	}
 	return aeSimilar(expA, gainA, expB, gainB);
+}
+
+/**
+ * @brief Whether an op is state rather than a setting: it changes with the light during a wake.
+ *
+ * @param op  the op parameter index
+ * @return true for ops 25 (flash decision), 37 and 38 (RP3 exposure and gain)
+ */
+static bool isStateOp(uint8_t op) {
+	return ((op == OP_PARAMETER_AE_FLASH_STATE)
+			|| (op == OP_PARAMETER_CAM_AE_EXPOSURE)
+			|| (op == OP_PARAMETER_CAM_AE_GAIN));
 }
 
 /*********************************************** Global Function Definitions *********************************/
@@ -750,15 +778,33 @@ bool xip_state_loadFastStart(void) {
 			fatfs_setOperationalParameter(op, (int16_t)bootPayload.op[i]);
 		}
 	}
-	xprintf("Fast-start record: seq %lu loaded (%d ops, %d extra camera registers)\n",
-			(unsigned long)bootSequence, FAST_START_NUM_OPS, bootPayload.regCount);
+
+	// The extra camera registers, so the sensor can be initialised before the card is ready.
+	// Only from a record written by this image: the other image's are for the other sensor
+	uint8_t regsUsed = 0;
+
+	if (bootPayload.regCamera == cameraSwitch_thisVariant()) {
+		HX_CIS_SensorSetting_t table[CIS_FILE_MAX_STAGED];
+
+		regsUsed = (bootPayload.regCount <= CIS_FILE_MAX_STAGED) ? bootPayload.regCount : CIS_FILE_MAX_STAGED;
+		for (uint8_t j = 0; j < regsUsed; j++) {
+			table[j].I2C_ActionType = (HX_CIS_I2C_ActionType_e)bootPayload.reg[j].action;
+			table[j].RegAddree = bootPayload.reg[j].addr;
+			table[j].Value = bootPayload.reg[j].value;
+		}
+		cis_file_setStagedFromRecord(table, regsUsed);
+	}
+	xprintf("Fast-start record: seq %lu loaded (%d ops, %d extra camera registers%s)\n",
+			(unsigned long)bootSequence, FAST_START_NUM_OPS, regsUsed,
+			(bootPayload.regCamera == cameraSwitch_thisVariant()) ? "" : ", the record's are for the other camera");
 	return true;
 }
 
 /**
  * @brief After CONFIG.TXT has loaded: print any difference from the record read at boot.
  *
- * Call once the card's settings and the staged extra camera registers have loaded. Prints
+ * Call once the card's settings and the staged extra camera registers have loaded. For the state
+ * ops it compares the card's values noted by xip_state_keepStateOp(), not those in RAM. Prints
  * one line if they match, otherwise one line per differing op (the RP3 exposure and gain only
  * if outside the tolerance) and one for the extra registers. Changes nothing: CONFIG.TXT has
  * already overridden the record.
@@ -772,6 +818,15 @@ void xip_state_compareFastStart(void) {
 	}
 
 	buildPayload(&card);
+
+	// The state ops in RAM are not the card's (load_configuration() kept the record's, and they may
+	// have moved since): compare the card's values as load_configuration() saw them
+	for (uint8_t i = 0; i < FAST_START_NUM_OPS; i++) {
+		if (isStateOp(fastStartOps[i])) {
+			card.op[i] = cardStateSeen[i] ? cardStateValue[i] : bootPayload.op[i];
+		}
+	}
+
 	if (payloadsMatch(&bootPayload, &card)) {
 		xprintf("Fast-start record: seq %lu matches CONFIG.TXT\n", (unsigned long)bootSequence);
 		return;
@@ -860,4 +915,29 @@ int xip_state_saveFastStart(void) {
 	}
 	vPortFree(work);
 	return ret;
+}
+
+/**
+ * @brief While CONFIG.TXT loads: whether to keep RAM's value of an op instead of the card's.
+ *
+ * True for the state ops (25, 37, 38) when a fast-start record was loaded at boot: RAM started
+ * from the record and may already have moved during this wake (an AE step, a light check), so it
+ * is newer than the card, which was saved at the last sleep. Settings always take the card's
+ * value. Notes the card's value for xip_state_compareFastStart().
+ *
+ * @param op         the op parameter index read from CONFIG.TXT
+ * @param cardValue  its value in CONFIG.TXT
+ * @return true if load_configuration() must leave op_parameter[op] alone
+ */
+bool xip_state_keepStateOp(uint8_t op, uint16_t cardValue) {
+	if (!bootPayloadValid || !isStateOp(op)) {
+		return false;
+	}
+	for (uint8_t i = 0; i < FAST_START_NUM_OPS; i++) {
+		if (fastStartOps[i] == op) {
+			cardStateValue[i] = cardValue;
+			cardStateSeen[i] = true;
+		}
+	}
+	return true;
 }

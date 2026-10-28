@@ -156,7 +156,12 @@ extern Barrier_t shutdownBarrier;  // Object that calls a function when all task
 
 /*************************************** Local variables *******************************************/
 
-SemaphoreHandle_t xSDInitDoneSemaphore;
+// Given when the start-up work with the card is finished (fatfs_waitForSdReady())
+static SemaphoreHandle_t xSDInitDoneSemaphore;
+// Given when op_parameter[] holds this boot's values: from the fast-start record, or without
+// one, from the card (fatfs_waitForSettings())
+static SemaphoreHandle_t xSettingsReadySemaphore;
+static volatile bool sdReady = false;
 
 static APP_WAKE_REASON_E woken;
 
@@ -1210,8 +1215,10 @@ static FRESULT load_configuration(const char *filename, directoryManager_t *dirM
 
 				value = (uint16_t)atoi(token);
 
-				// Set array value if index is in range
-				if (index >= 0 && index < OP_PARAMETER_NUM_ENTRIES) {
+				// Set array value if index is in range. Not the state ops when a fast-start record
+				// was loaded: RAM's values are newer than the card's (xip_state_keepStateOp())
+				if ((index >= 0) && (index < OP_PARAMETER_NUM_ENTRIES)
+						&& !xip_state_keepStateOp((uint8_t)index, value)) {
 					op_parameter[index] = value;
 					// debug only:
 					// xprintf("   op_parameter[%d] = %d\n", index, value);
@@ -1670,6 +1677,7 @@ static void vFatFsTask(void *pvParameters) {
 	uint32_t rxData;
 	bool enabled;
 	bool configLoaded = false;
+	bool recordLoaded;
 
 	TickType_t startTime;
 	TickType_t elapsedTime;
@@ -1688,10 +1696,14 @@ static void vFatFsTask(void *pvParameters) {
 	// Initialise GPS coordinates before traying to process them
 	exif_gps_init_defaults();
 
-	// The settings saved in flash at the last sleep, if any. CONFIG.TXT, loaded below, still overrides
-	// them: for now the record is only compared with it (xip_state_compareFastStart())
-	xip_state_loadFastStart();
+	// The settings saved in flash at the last sleep, if any. CONFIG.TXT, loaded below, overrides the
+	// settings but not the state ops (xip_state_keepStateOp())
+	recordLoaded = xip_state_loadFastStart();
 	boot_timing_mark(BOOT_TIMING_RECORD_READ);
+	if (recordLoaded) {
+		// The image task can start the camera now, without waiting for the card
+		xSemaphoreGive(xSettingsReadySemaphore);
+	}
 
 	// TODO - experiment - do I need settling time for 3V3_WE?
 	vTaskDelay(pdMS_TO_TICKS(10));
@@ -1780,10 +1792,14 @@ static void vFatFsTask(void *pvParameters) {
 		xip_state_compareFastStart();
 	}
 
-	// The semaphore lets the Image Task proceed
-	// xprintf("DEBUG: giving semaphore so Image Task can proceed\n");
+	// The semaphores let the Image Task proceed: to use the card, and, if there was no fast-start
+	// record, to start at all (op_parameter[] now holds the card's values)
 	boot_timing_mark(BOOT_TIMING_SD_READY);
+	sdReady = true;
 	xSemaphoreGive(xSDInitDoneSemaphore);
+	if (!recordLoaded) {
+		xSemaphoreGive(xSettingsReadySemaphore);
+	}
 
 	barrier_ready(&startupBarrier); // Call a function when every task reaches this point
 
@@ -1923,11 +1939,12 @@ TaskHandle_t fatfs_createTask(int8_t priority, APP_WAKE_REASON_E wakeReason) {
 		configASSERT(0); // TODO add debug messages?
 	}
 
-	// Semaphore to flag that the final message has been sent and we can enter DPD
+	// Semaphores that release the image task: when the settings are known, and when the card is ready
 	xSDInitDoneSemaphore = xSemaphoreCreateBinary();
+	xSettingsReadySemaphore = xSemaphoreCreateBinary();
 
-	if (xSDInitDoneSemaphore == NULL) {
-		xprintf("Failed to create xSDInitDoneSemaphore\n");
+	if ((xSDInitDoneSemaphore == NULL) || (xSettingsReadySemaphore == NULL)) {
+		xprintf("Failed to create the start-up semaphores\n");
 		configASSERT(0); // TODO add debug messages?
 	}
 	
@@ -1950,6 +1967,37 @@ uint16_t fatfs_getState(void) {
  */
 bool fatfs_mounted(void) {
 	return mounted;
+}
+
+/**
+ * Block until op_parameter[] holds this boot's values
+ *
+ * They come from the fast-start record in flash, read at the start of the FatFS task, or without
+ * a record from CONFIG.TXT once the card is ready. Call once, from the image task at start-up.
+ */
+void fatfs_waitForSettings(void) {
+	xSemaphoreTake(xSettingsReadySemaphore, portMAX_DELAY);
+}
+
+/**
+ * Block until the FatFS task has finished its start-up work with the card
+ *
+ * That is: mounted it (or failed to), loaded CONFIG.TXT, set up the image folder and loaded the
+ * staged camera registers. Returns at once after that. Only the image task waits here.
+ */
+void fatfs_waitForSdReady(void) {
+	if (!sdReady) {
+		xSemaphoreTake(xSDInitDoneSemaphore, portMAX_DELAY);
+	}
+}
+
+/**
+ * Whether the FatFS task has finished its start-up work with the card
+ *
+ * @return true once it has (whether or not a card was found)
+ */
+bool fatfs_isSdReady(void) {
+	return sdReady;
 }
 
 /**

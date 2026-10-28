@@ -208,10 +208,11 @@ flash work (step 2 below). Then the flash record carries ops 37 and 38 like any 
 
 **Two things this changes in section 2:**
 
-- **For state, the flash wins over the card.** The record and CONFIG.TXT are written at the same
-  sleep, so they normally agree. When they do not, the card has been edited or swapped, and a swapped
-  card may come from another camera and another scene. So for settings the card wins, as in
-  section 2, but for state (ops 25, 37, 38) the flash record wins, since it belongs to this board.
+- **For state, the flash wins over the card** (revised 28 Oct: cards do not move between cameras).
+  The record and CONFIG.TXT are written at the same sleep, so they normally agree. Once the image
+  task no longer waits for the card (step 5), ops 25, 37 and 38 may change in RAM before CONFIG.TXT
+  loads, so the card's values are older: for state, the RAM value (started from the record) is kept.
+  For settings the card wins, as in section 2. With no record at boot, the card's values are used.
 - **Wear:** the exposure changes with the light, so write a new record only when it has moved by
   more than a threshold. On the bench (28 Oct) the settled exposure wandered about 15 % in a steady
   scene, so 10 % is too tight: set it in step 4 from a count of record writes (25 % is a likely start).

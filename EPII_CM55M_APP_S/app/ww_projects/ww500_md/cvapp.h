@@ -59,6 +59,8 @@ typedef struct {
 
 /********************************** Public Functions Declarations *************************************/
 
+// Whether cv_init() would need the SD card (the named model is not in flash)
+bool cv_modelNeedsCard(uint16_t project_id, uint16_t deploy_version);
 int cv_init(bool security_enable, bool privilege_enable, uint16_t project_id, uint16_t deploy_version, APP_WAKE_REASON_E woken);
 int cv_deinit(void);
 

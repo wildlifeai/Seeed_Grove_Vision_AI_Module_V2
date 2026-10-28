@@ -177,6 +177,11 @@ uint16_t fatfs_getState(void);
 
 bool fatfs_mounted(void);
 
+// Start-up: block until the settings are known (fast-start record or card), or until the card is ready
+void fatfs_waitForSettings(void);
+void fatfs_waitForSdReady(void);
+bool fatfs_isSdReady(void);
+
 const char * fatfs_getStateString(void);
 
 // Get one of the Operational Parameters

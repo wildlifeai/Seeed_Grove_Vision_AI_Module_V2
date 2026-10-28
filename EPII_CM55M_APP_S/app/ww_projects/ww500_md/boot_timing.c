@@ -36,6 +36,7 @@ static const char * pointName[BOOT_TIMING_NUM_POINTS] = {
 		"camera ready",
 		"capture started",
 		"frame ready",
+		"photo queued",
 };
 
 // Time of each point in ms since app_main() started, valid if pointRecorded[] is true
@@ -139,7 +140,7 @@ void boot_timing_mark(BOOT_TIMING_POINT_E point) {
 /**
  * @brief Prints the times recorded, once per boot.
  *
- * Call when the first frame is ready. Points not reached are left out.
+ * Call when the first photo has been queued for the card. Points not reached are left out.
  *
  * @param wakeReason Text for the console, e.g. "motion", "timer", "cold".
  */

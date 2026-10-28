@@ -210,6 +210,9 @@ static void setupLEDFlash(void);
 // When final activity from the FatFS Task and IF Task are complete, enter DPD
 static void sleepWhenPossible(void);
 
+// Before sleeping: wait for the card's start-up to finish, then say whether state can be saved
+static bool sdMountedForSave(void);
+
 static void captureSequenceComplete(uint32_t accumulatedTime);
 
 static void changeEnableState(bool setEnabled);
@@ -234,7 +237,6 @@ extern QueueHandle_t xIfTaskQueue;
 extern SemaphoreHandle_t xI2CTxSemaphore;
 extern Barrier_t shutdownBarrier;
 
-extern SemaphoreHandle_t xSDInitDoneSemaphore;
 
 extern Barrier_t startupBarrier; // Object that calls a function when all tasks are ready
 
@@ -819,7 +821,7 @@ static APP_MSG_DEST_T handleEventForInit(APP_MSG_T img_recv_msg) {
     case APP_MSG_IMAGETASK_INACTIVITY:
         // Inactivity detected. Prepare to enter DPD, saving state if possible.
 
-        if (fatfs_mounted())  {
+        if (sdMountedForSave())  {
             // TODO - can we call this without the if() and expect fatfs_task to handle it?
             // Ask the FatFS task to save state onto the SD card
             send_msg.destination = xFatTaskQueue;
@@ -927,13 +929,10 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
 #endif // USE_HM0360_CAPTURE_TIMER
         }
 
-        // The first frame after the boot: print how long each stage took (issue #249). On a motion wake the HM0360's
-        // SEN_INT is cleared just below, so a scope on it shows the whole time from motion to this point.
+        // The first frame after the boot (issue #249). On a motion wake the HM0360's SEN_INT is cleared just below,
+        // so a scope on it shows the whole time from motion to this point. The times are printed once the photo
+        // is queued for the card (below), since the frame can now be ready before the card is
         boot_timing_mark(BOOT_TIMING_FRAME_READY);
-        boot_timing_report((woken == APP_WAKE_REASON_MD) ? "motion" :
-        		(woken == APP_WAKE_REASON_TIMER) ? "timer" :
-        		(woken == APP_WAKE_REASON_COLD) ? "cold" :
-        		(woken == APP_WAKE_REASON_BLE) ? "BLE" : "other");
 
 #if defined(USE_HM0360) || defined(USE_HM0360_MD)
         if (preview_isActive() && !aeCheckOnlyWake) {
@@ -1194,7 +1193,14 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
         // AE-check wakes are not streamed - they are brief housekeeping captures.
         bool previewFrame = preview_isActive() && !aeCheckOnlyWake;
 
+        // The file name, folder, sequence number, deployment ID and GPS all come from the card, so
+        // from here on wait for it (at once if it is ready). The frame and the NN result wait in RAM.
+        // After this op_parameter[] holds the card's settings: if the card says the camera is off
+        // (op 10 = 0), this frame is not saved
+        fatfs_waitForSdReady();
+
         if (aeCheckOnlyWake
+        		|| (fatfs_getOperationalParameter(OP_PARAMETER_CAMERA_ENABLED) == 0)
         		|| (fatfs_getOperationalParameter(OP_PARAMETER_TEST_MODE_BITS) & TEST_BIT_SKIP_FILE_CREATION)
         		|| (previewFrame && preview_skipsFileSave())) {
         	// Don't save to a file. This allows faster streaming of MD and AE data to the app
@@ -1276,6 +1282,13 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
         // Proceed to write the jpeg file, even if there is no SD card
         // since the fatfs_task will handle that.
 
+        // Print how long each stage of the boot took, up to here (once per boot)
+        boot_timing_mark(BOOT_TIMING_PHOTO_QUEUED);
+        boot_timing_report((woken == APP_WAKE_REASON_MD) ? "motion" :
+        		(woken == APP_WAKE_REASON_TIMER) ? "timer" :
+        		(woken == APP_WAKE_REASON_COLD) ? "cold" :
+        		(woken == APP_WAKE_REASON_BLE) ? "BLE" : "other");
+
     	send_msg.message.msg_data = (uint32_t)&fileOp;
         send_msg.destination = xFatTaskQueue;
         send_msg.message.msg_event = APP_MSG_FATFSTASK_WRITE_IMAGE;
@@ -1323,7 +1336,7 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
 
     if (abandoned) {
     	// A frame fault has ended the capture sequence. Prepare to enter DPD, saving state if possible.
-    	if (fatfs_mounted())  {
+    	if (sdMountedForSave())  {
     		// Ask the FatFS task to save state onto the SD card
     		send_msg.destination = xFatTaskQueue;
     		send_msg.message.msg_event = APP_MSG_FATFSTASK_SAVE_STATE;
@@ -1548,7 +1561,7 @@ static APP_MSG_DEST_T handleEventForWaitForTimer(APP_MSG_T img_recv_msg) {
     	// run some sensordplib_stop functions then run HM0360_stream_off commands to the HM0360
         configure_image_sensor(CAMERA_CONFIG_STOP);
 
-        if (fatfs_mounted())  {
+        if (sdMountedForSave())  {
             // TODO - can we call this without the if() and expect fatfs_task to handle it?
             // Ask the FatFS task to save state onto the SD card
             send_msg.destination = xFatTaskQueue;
@@ -1993,8 +2006,10 @@ static void vImageTask(void *pvParameters) {
     int  nnStatus = -1;	// -1 means disabled
     uint16_t interval;
 
-    // Don't proceed until the SD initialisation is done.
-    xSemaphoreTake(xSDInitDoneSemaphore, portMAX_DELAY);
+    // Don't proceed until op_parameter[] holds this boot's values: from the fast-start record in
+    // flash (so the camera can start before the SD card is ready), or without one, from the card.
+    // Anything that needs the card waits for it later (fatfs_waitForSdReady())
+    fatfs_waitForSettings();
 
     // True means we capture images and run NN processing and report results.
     cameraSystemEnabled = fatfs_getOperationalParameter(OP_PARAMETER_CAMERA_ENABLED);
@@ -2109,6 +2124,11 @@ static void vImageTask(void *pvParameters) {
 	startTime = xTaskGetTickCount();
 
 	if (cameraSystemEnabled && !aeCheckOnlyWake) {
+		// Usually the model is in flash. If not, cv_init() looks for it on the card
+		if (cv_modelNeedsCard(fatfs_getOperationalParameter(OP_PARAMETER_MODEL_PROJECT),
+				fatfs_getOperationalParameter(OP_PARAMETER_MODEL_VERSION))) {
+			fatfs_waitForSdReady();
+		}
 		nnStatus = cv_init(true, true,
 				fatfs_getOperationalParameter(OP_PARAMETER_MODEL_PROJECT),
 				fatfs_getOperationalParameter(OP_PARAMETER_MODEL_VERSION),
@@ -2358,8 +2378,15 @@ static bool configure_image_sensor(CAMERA_CONFIG_E operation) {
         	// HM0360 (#211)
         	hm0360_md_applyMDSettings();
 #endif // USE_HM0360
-        	// Initialise extra registers from file
-        	cis_file_process(CAMERA_EXTRA_FILE);
+        	// Initialise extra registers: from the file once the card is ready, otherwise (card not
+        	// ready yet, or none) from the staged table filled from the fast-start record. FatFS is
+        	// not re-entrant: until it is ready the FatFS task may be using the card
+        	if (fatfs_isSdReady() && fatfs_mounted()) {
+        		cis_file_process(CAMERA_EXTRA_FILE);
+        	}
+        	else {
+        		cis_file_applyStaged();
+        	}
 
 #if defined(USE_RP2) || defined(USE_RP3)
         	// Sensor registers just reverted to the tables (+ staged file):
@@ -2559,6 +2586,20 @@ void sendMsgToMaster(char *str) {
 static void sleepWhenPossible(void) {
 	xprintf("Image task ready to sleep.\n");
 	barrier_ready(&shutdownBarrier);
+}
+
+/**
+ * Before sleeping: wait for the card's start-up to finish, then say whether state can be saved
+ *
+ * The camera can now finish before the FatFS task has finished with the card (a frame fault
+ * early in the wake, for example). Going to sleep part way through mounting it, or without
+ * saving state, would lose the counters and settings.
+ *
+ * @return true if the card is mounted, so APP_MSG_FATFSTASK_SAVE_STATE can be sent
+ */
+static bool sdMountedForSave(void) {
+	fatfs_waitForSdReady();
+	return fatfs_mounted();
 }
 
 /**
@@ -2918,6 +2959,10 @@ uint32_t bmp_create_gray8_header(uint8_t *buf,  uint32_t width, uint32_t height)
  */
 static void processNNOutput(int8_t * outCategories, uint8_t classCount) {
 	uint8_t threshold;
+
+	// The NN may have run before the card is ready. The counters below are loaded from CONFIG.TXT,
+	// so wait for it first, or loading it would undo the count
+	fatfs_waitForSdReady();
 
 	threshold = fatfs_getOperationalParameter(OP_PARAMETER_MODEL_THRESHOLD);
 

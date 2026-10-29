@@ -23,7 +23,6 @@ website and backend consume this firmware's EXIF fields, op-parameters and BLE c
 > * `_Documentation/Operational_Parameters.md` + `MANIFEST/config_file.md`: op-parameter meanings and defaults
 > * `_Documentation/ble_commands.md`: console/BLE command surface (the app speaks `AI <cmd>`)
 > * `EPII_CM55M_APP_S/app/ww_projects/ww500_md/doc/`: subsystem notes (slot_selector.md, FatFS behaviour, …)
-> * `REVIEW_PR<N>.md` at a branch tip: offline copy of that PR's description
 > * `_Documentation/development reports/`: **how the code got this way**; check the relevant
 >   thread before re-deriving or re-litigating a past decision
 

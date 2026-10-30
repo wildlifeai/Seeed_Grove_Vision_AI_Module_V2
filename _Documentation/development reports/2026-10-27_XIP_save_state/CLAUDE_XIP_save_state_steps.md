@@ -16,7 +16,7 @@ found, and how it was tested (with the firmware build, `AI ver`).
 | 3 | The flash record module and its test | Done 28 Oct, benched on both images |
 | 4 | Fast-start settings, still waiting for the card | Done 28 Oct, benched on both images |
 | 5 | Stop waiting for the card | Done 29 Oct, benched on both images |
-| 6 | Optional extras | Not started |
+| 6 | Optional extras: shorten the card's path | Changes 1 and 2 coded 29 Oct, not built or benched |
 | 7 | Docs | Not started |
 
 ---
@@ -600,3 +600,357 @@ To look at later:
 - On a motion wake `scheduler started` is 30 ms (11 on a timer wake): the HM0360 checks in
   `app_main()` before the tasks start.
 
+---
+
+## Step 6. Shorten the card's path, changes 1 and 2 coded 29 October 2026
+
+Not built or benched yet.
+
+### Why step 6 changed
+
+Step 5 showed the photo now waits for the card on the HM0360 (queued within 8 ms of `SD ready`),
+while on the RP3 the software colour correction and JPEG encoding after the frame take longest.
+So only time on the card's path brings the HM0360 photo forward. The proposal's idea of starting
+the NN after the capture is dropped: it would make the frame earlier, not the photo.
+
+On the HM0360 motion wakes in log10, `SD ready` (about 230 ms after `app_main()`) is made of: boot
+to scheduler (30 ms on a motion wake, 11 on a timer wake), reading the record (13 ms, mostly
+`init_flash()`'s fixed 10 ms wait), the FatFS task's fixed 10 ms "settling" wait, the mount (about
+165 ms, mostly the card answering ACMD41), and CONFIG.TXT, the image folder and the register file
+(about 10 ms).
+
+### The candidates (agreed with Charles 29 Oct)
+
+| | Change | Saves | Risk | Decision |
+|---|---|---|---|---|
+| 1 | Remove the FatFS task's 10 ms settling wait before mounting | About 10 ms, HM0360 photo | Low | **Done** |
+| 2 | Cut `init_flash()`'s 10 ms wait (before reading the flash ID) to 1 ms | About 9 ms on the card's path, both images; RP3 camera starts about 9 ms sooner too | Low | **Done** |
+| 3 | Move the motion-wake HM0360 grid read (`hm0360_md_saveWakeGrid()`, likely the 19 ms extra before the scheduler) from `app_main()` to the image task | About 19 ms, motion wakes only | Moderate: the grid must still be read before anything reconfigures the HM0360 or clears its interrupt, in both images | Later: first confirm the 19 ms with a boot timing point |
+| 4 | Read the record in the image task, overlapping the mount | About 3 ms after change 2 | Moves the read onto the camera's path, slower RP3 | Not done |
+
+### Changes 1 and 2
+
+- **1. `fatfs_task.c`:** the `vTaskDelay(10)` before `fatFsInit()` is removed (it was marked
+  `TODO - experiment - do I need settling time for 3V3_WE?`). The card is powered from 3V3_WE,
+  which the hardware switches on as the chip leaves DPD, at least 40 ms before this point. The card
+  driver's power-up sequence (`SD_powerUpSeq()`) still waits 10 ms and sends 80 clocks before the
+  first command; the SD specification asks for 1 ms. **If a card needs longer** it fails to mount
+  (`SD card initialisation failed`) and the photo is not saved.
+- **2. `xip_manager.c`:** in `init_flash()`, the wait between opening the SPI flash and reading its
+  ID is one tick (up to 1 ms), was 10 ms. The flash is the boot flash, powered all along. **If it is
+  not ready** the ID read fails and is reported (`init_flash: failed to read flash ID`): the record
+  is not read, so that boot waits for the card as before, and the NN start-up tries `init_flash()`
+  again. The other 10 ms wait in `xip_manager.c` (printing the model metadata) runs only on a cold
+  boot and is unchanged.
+
+### Bench test (both images)
+
+1. Build both images and flash one. Over many wakes of every kind (cold boot, timer, motion, BLE)
+   the console shows `Flash ID 0xEF initialised` and `Mounting FatFS on SD card ... OK` every time:
+   no `failed to read flash ID`, no `SD card initialisation failed`.
+2. Compare the `Boot timing` lines with step 5 (log7 and log10): `flash record read` about 9 ms
+   earlier (33 to about 24 on the RP3, 43 to about 34 on a motion wake), `SD ready` about 20 ms
+   earlier (227-233 to about 210 on an HM0360 motion wake), and `photo queued` on the HM0360 the
+   same amount earlier.
+3. Repeat with a second SD card, a different make if possible, since the settling wait was for the card.
+4. Repeat on the other image.
+
+
+### First run, RP3 image (29 October 2026, build 12:47; its log was saved as `logs/log12.txt` but later overwritten, the figures below are copied from it)
+
+Two BLE wakes, one with photos (`capture` over BLE). `Flash ID 0xEF initialised` and the mount OK
+both times; record loaded and `matches`.
+
+| ms since `app_main()` | Step 5 (log9, BLE wake) | Step 6 (log12, BLE wake) |
+|---|---|---|
+| flash record read | 33 | 25 |
+| SD mounted | 199 | 187 |
+| SD ready | 212 | 198 |
+| camera ready | 122 | 118 |
+
+- **The record read is 8 ms sooner,** as expected from change 2.
+- **`SD ready` is 14 ms sooner, not the 18 to 20 expected.** From the record read to `SD mounted`
+  took 162 ms, against 166 ms in step 5 with the 10 ms settling wait in it. So removing the wait
+  saved only about 4 ms: the card then spent about 6 ms longer answering its start-up command
+  (ACMD41). That suggests the card needs a fixed time from power-on before it is ready, and starting
+  sooner just means polling for longer. To confirm on more wakes and a second card.
+- BLE wakes take the photo when the command arrives, so `capture started` and later do not compare.
+
+### First run, HM0360 image (29 October 2026, build 12:48, `logs/log11.txt`)
+
+Two BLE wakes and three motion wakes, each motion wake a photo saved. No flash ID or mount failures.
+
+| ms since `app_main()` | Step 5 (log10, motion) | Step 6 (log11, motion) |
+|---|---|---|
+| flash record read | 43 | 35 |
+| SD mounted | 215, 221 | 197, 208, 208 |
+| SD ready | 227, 233 | 208, 220, 220 |
+| frame ready | 129, 141 | 141, 128, 128 |
+| photo queued | 233, 241 | 229, 228, 228 |
+
+- **The photo is about 5 to 13 ms sooner,** half the 20 ms hoped for.
+- **The same pattern as the RP3:** the record read is 8 ms sooner (change 2), but from the record
+  read to `SD mounted` took 162 to 173 ms against 172 to 178 in step 5, which still had the 10 ms
+  wait. So most of the 10 ms removed by change 1 went into the card taking longer to answer its
+  start-up command. **The card seems to need a roughly fixed time from power-on** (about 200 ms after
+  `app_main()` here), and the firmware cannot shorten that.
+- Both changes are kept: they cost nothing, and change 2 also brings the RP3 camera forward.
+- **Not tested with a second card** (bench step 3): no card of another make was to hand. Change 1
+  removed a wait before the card's start-up, so a card that needs more time after power-on would
+  fail to mount (`SD card initialisation failed`). The driver's own 10 ms power-up wait remains.
+  Worth checking when another make of card is available.
+
+### The objective, restated by Charles (29 October 2026)
+
+**What matters is the time from the wake (motion) to the frame being ready** (`frame ready`, the
+FRAME_READY message from the Himax library): that is when the scene is captured. When the photo is
+saved does not matter. So the card is off the critical path since step 5, and the comments above
+about the photo waiting for the card, or for the RP3's colour correction, do not bear on the
+objective. Changes 1 and 2 still help a little, since they free the CPU sooner (see below).
+
+**The path to `frame ready` now** (ms since `app_main()`):
+
+| | HM0360 motion wake (log11) | RP3 timer wake (log7) |
+|---|---|---|
+| cameras checked | 7 | 16 |
+| scheduler started | 30 (motion grid read and RTC before it) | 20 |
+| flash record read (image task released) | 35 | 33 (25 in log12) |
+| camera ready | 52 | 121 (118 in log12) |
+| capture started | 90 | 154 |
+| frame ready | 128 to 141 | 217 |
+
+**Candidates for the frame:**
+- **Start the NN after the capture.** Between `camera ready` and `capture started` the image task
+  spends 33 to 38 ms, mostly the NN start-up (`NN Initialisation took 19ms` on the HM0360 even with
+  no model: project ID 0). Dropped earlier in step 6 because it did not bring the photo forward; it
+  does bring the frame forward.
+- **The FatFS task runs at a higher priority than the image task,** and the card's reads and SPI
+  transfers busy-wait. So during the mount the camera start-up is slowed (19 ms for an NN start-up
+  that does nothing points to that). Running the FatFS task below the image task would let the
+  camera go first; the card would then be later, which no longer matters.
+- **The motion grid read in `app_main()`** (change 3, about 19 ms on motion wakes) is before the
+  scheduler, so it delays everything, the frame included.
+- **The RP3 sensor start-up** takes about 90 ms from the record to `camera ready`. Worth a look
+  separately.
+
+### Frame candidate 2: the image task above the FatFS task, coded 29 October 2026
+
+Agreed with Charles: candidate 2 first, then candidate 1 (the NN after the capture), measured
+separately. Not built or benched yet.
+
+- **The change (`ww500_md.c`, `app_main()`):** the image task is now created before the FatFS task.
+  Tasks get descending priorities in creation order, so the image task is now priority 2 and the
+  FatFS task priority 1 (they were the other way round). The CLI (4) and IF (3) tasks are unchanged.
+  The boot shows `Created task 'IMAGE' Priority 2` and `Created task 'FAT' Priority 1`.
+  (`fatfs_task_PRIORITY` and `image_task_PRIORITY` in the task files are not used.)
+- **Expected:** `camera ready`, `capture started` and `frame ready` sooner, on both images. The card
+  (`SD mounted`, `SD ready`) later, since the FatFS task now waits whenever the image task is busy.
+- **Risks:** the card's start-up and the photo's save run later, most on the RP3 where the colour
+  correction and JPEG encoding (330 ms of CPU) now run before the FatFS task can continue. Nothing
+  waits for the card except the image task itself, at the point where it blocks for it, so this
+  cannot deadlock. The BLE processor's `Awake` message (sent by the FatFS task after CONFIG.TXT) may
+  also come later.
+
+**Bench test (both images):**
+1. Check the boot shows the new priorities.
+2. Several timer wakes on the RP3 and motion wakes on the HM0360. Compare `camera ready`,
+   `capture started` and `frame ready` with log7 (RP3: 121, 154, 217) and log11 (HM0360: 52, 90,
+   128 to 141). Also note `SD ready` and `photo queued`, expected later.
+3. Check every photo is still saved, and the console shows no errors.
+
+### Bench result, candidate 2, HM0360 image (29 October 2026, build 13:46, `logs/log12.txt`)
+
+A cold boot, three motion wakes (each a photo saved) and BLE wakes. The boot shows `IMAGE Priority 2`,
+`FAT Priority 1`. No errors.
+
+| ms since `app_main()` | log11 (before) | log12 (image task above FatFS) |
+|---|---|---|
+| camera ready | 52 | 50 |
+| capture started | 90 | 70 |
+| **frame ready** | **128 to 141** | **103, 103, 117** |
+| SD ready | 208 to 220 | 236 to 239 |
+| photo queued | 228 to 229 | 238 to 241 |
+
+- **The frame is 25 ms sooner** (median 103 against 128). The NN start-up now takes 8 ms, against
+  19 ms when the FatFS task could interrupt it.
+- The card is about 20 ms later, as expected. It no longer matters.
+
+
+### Bench result, candidate 2, RP3 image (29 October 2026, build 13:51, `logs/log13.txt`)
+
+A cold boot, three motion wakes and a timer wake (each a photo saved), and BLE wakes. No errors.
+
+| ms since `app_main()` | log7 (step 5, timer) | log13 timer wake | log13 motion wakes |
+|---|---|---|---|
+| scheduler started | 20 | 20 | 40 |
+| flash record read | 33 | 24 | 44 |
+| camera ready | 121 | 82 | 102 |
+| capture started | 154 | 101 | 121 |
+| **frame ready** | **217** | **125** | **145 to 147** |
+| SD ready | 210 | 258 | 272 to 277 |
+| photo queued | 547 | 533 | 548 to 555 |
+
+- **The frame is 92 ms sooner on a timer wake** (125 against 217). The RP3 sensor start-up
+  (`camera ready`) is 39 ms quicker without the FatFS task interrupting it, and the frame itself
+  arrives 24 ms after the capture starts, against 63 ms before.
+- **Motion wakes on the RP3 image** (first measurement): frame ready 145 to 147. The 20 ms extra
+  before the scheduler is the motion grid read (`scheduler started` 40 against 20 on a timer wake).
+- The card is about 50 ms later and the photo is saved at about the same time as before.
+
+### Progress on the objective (wake to frame ready)
+
+| | Before this work | Step 5 | Step 6, candidate 2 |
+|---|---|---|---|
+| RP3 timer wake | 329 (log1) | 217 (log7) | 125 (log13) |
+| HM0360 motion wake | about 270 (estimate: no measurement) | 128 to 141 (log10, log11) | 103 to 117 (log12) |
+| RP3 motion wake | | | 145 to 147 (log13) |
+
+## Frame candidate 1: the NN start-up after the capture (30 October 2026)
+
+### Setup: a model in flash
+
+Until now every run had project ID 0, where `cv_init()` prints one line and returns, so the 8 ms
+`NN Initialisation` measured nothing real. A baseline with a model is measured first.
+
+- CONFIG.TXT set to op 14 = 20, op 15 = 1 (person detect, `20V1.TFL`, 2 classes). The record
+  noticed the change (`op 14: record 0, CONFIG.TXT 20`) and wrote seq 38.
+- The model was already in flash from an earlier load, with `WARNING: Number of classes and labels
+  unmatched`: the flash metadata held 1 label (`unknown`) from an older `20V1.TXT`. The card's
+  `20V1.TXT` (`logs/20V1.TXT`) has 2 lines, `no person` and `person`, CR LF. Since the named model
+  was in flash, `cv_init()` never read the new file. Fixed with `erasemodel` then `loadmodel 20 1`;
+  `capture` now reports `no person` and `person`.
+- First figure: `NN Initialisation took 13ms` (Ethos-U start-up, model found in flash,
+  interpreter built). Baseline wakes to follow.
+
+### Baseline with the model, RP3 image (30 October 2026, `logs/log14.txt`)
+
+A cold boot, then five timer wakes (20 s interval), each a photo saved, `Target object not detected`
+(scores -9 to -91, threshold 18). No errors. All five timer wakes gave identical figures:
+
+| ms since `app_main()` | log13 (no model) | log14 (model `20V1.TFL`) |
+|---|---|---|
+| flash record read | 24 | 25 |
+| camera ready | 82 | 82 |
+| capture started | 101 | 105 |
+| **frame ready** | **125** | **131** |
+| SD ready | 258 | 265 |
+| photo queued | 533 | 588 to 591 |
+
+- **`NN Initialisation took 12ms` on every wake,** against 8 ms with no model. The real start-up
+  adds only 4 ms, and the frame is 6 ms later. **Moving the NN start-up after the capture would
+  bring the RP3 frame forward by about 12 to 19 ms** (the 12 ms of start-up plus the console output
+  around it; `camera ready` to `capture started` is 23 ms).
+- **`NN processing took 140ms` on a wake, against 16 ms after a `capture` command.** The timing
+  includes `processNNOutput()`, which waits for the card before counting the result
+  (`fatfs_waitForSdReady()`): 131 + 140 = 271, just after `SD ready` at 265. So on the RP3 the image
+  task now sits idle until the card is ready before starting the colour correction and JPEG
+  encoding, and the photo is queued about 55 ms later than in log13. Not on the path to the frame,
+  but it could be avoided by counting the result later. To decide with Charles.
+
+### Baseline with the model, HM0360 image (30 October 2026, `logs/log15.txt`)
+
+Four timer wakes (op 7 still 20 s from the RP3 run; no motion wakes), each a photo saved, `Target
+object not detected` (scores -25 to -99), then a BLE wake. `There are 2 classes (2)`: the labels
+now match. No errors.
+
+| ms since `app_main()` | HM0360 timer wake, step 5 first run (no model) | log15 timer wakes (model) |
+|---|---|---|
+| scheduler started | | 11 |
+| flash record read | 24 | 16 |
+| camera ready | 40 | 31 |
+| capture started | 71 | 55 |
+| **frame ready** | **109** | **90 to 93** |
+| SD ready | 202 | 227 to 242 |
+| photo queued | 209 | 277 to 292 |
+
+- **`NN Initialisation took 12ms`,** as on the RP3. `camera ready` to `capture started` is 24 ms,
+  so moving the NN start-up after the capture should bring the frame forward by about 12 to 19 ms
+  here too.
+- **`NN processing took 140 to 157ms`,** again mostly the wait for the card in `processNNOutput()`
+  (frame 91 + 142 = 233, just after `SD ready`). The photo is queued about 50 ms after `SD ready`.
+- These are the first HM0360 timer-wake figures since step 6; motion wakes add the grid read
+  before the scheduler (about 19 ms). The comparison after the change uses the same wake type.
+
+### Candidate 1 and the NN counters, coded 30 October 2026
+
+Agreed with Charles: both. Not built or benched yet. All in `image_task.c`.
+
+- **The NN start-up after the capture.** The `cv_init()` block moved into a new `initNN()`. On a
+  timer or motion wake that will capture, `vImageTask()` sets `nnInitAfterCapture` instead of
+  calling it, and `handleEventForInit()` calls `initNN()` just after `configure_image_sensor(
+  CAMERA_CONFIG_RUN)` and the frame timer start. `FRAME_READY` waits in the queue until it returns;
+  the frame timeout is 7 s, far longer. The boot summary then says `Neural network starts after the
+  capture.`
+- **Not deferred** on cold, BLE and light-check wakes (as before), or when the model is not in
+  flash: `cv_init()` then copies it from the card, which can take seconds.
+- **The counters no longer hold up the image task.** `processNNOutput()` reports the result at
+  once (`NN+`/`NN-` to the BLE processor, console) and no longer waits for the card; the threshold
+  (op 16) is in the fast-start record. The counts (ops 1 and 2) are added by the new
+  `countNNResult()`, called just after the existing `fatfs_waitForSdReady()` before the photo is
+  saved. That wait is reached for every frame, so no count is lost.
+- The `NN Initialisation took` message lost its "TODO - consider doing this after taking the
+  picture!".
+
+**Bench test (both images, timer wakes, `setop 7 20`):**
+1. The boot summary shows `Neural network starts after the capture.` and the `NN Initialisation
+   took` line comes after `capture started`, before the frame.
+2. Compare `capture started` and `frame ready` with log14 (RP3: 105, 131) and log15 (HM0360: 55, 90
+   to 93). Expected about 12 to 19 ms sooner.
+3. `NN processing took` should be about 16 ms, not 140. On the RP3 `photo queued` should come
+   sooner than 588.
+4. Counters: `getop 1` and `getop 2` before and after a few wakes. Op 1 goes up by one per photo;
+   op 2 only on a detection (stand in front of the camera for one wake).
+5. A BLE wake then `capture`: the NN still starts at boot (`Neural network enabled.`), detection
+   works.
+
+### Bench result, candidate 1, RP3 image (30 October 2026, build 14:31, `logs/log17.txt`)
+
+A cold boot, a BLE wake, three timer wakes (each a photo saved, `Neural network starts after the
+capture.`), then a BLE wake with `capture 2`. No errors. (`logs/log16,txt` was the HM0360 image, but
+still the build of 29 October: a repeat of the log15 baseline.)
+
+| ms since `app_main()` | log14 (NN before the capture) | log17 (NN after) |
+|---|---|---|
+| camera ready | 82 | 82 |
+| capture started | 105 | 92 |
+| **frame ready** | **131** | **115 to 119** |
+| SD ready | 265 | 267, 320, 322 |
+| photo queued | 588 to 591 | 544, 597, 598 |
+
+- **The frame is 12 to 16 ms sooner** (115 to 119 against 131), as expected. The NN start-up (12
+  ms) now runs while the sensor takes the frame: the capture takes 24 to 27 ms, as before.
+- **`NN processing took 15 to 16ms`,** against 140: the counters no longer wait for the card.
+- **The photo is not sooner.** The image task still waits for the card before the colour
+  correction and JPEG encoding (the `fatfs_waitForSdReady()` before the photo is prepared, needed
+  for the file name, sequence number and EXIF). On two wakes the card was also about 55 ms slower to
+  mount (`SD mounted` 309 and 311, against 254 to 256). Seen on the HM0360 too (below), cause not
+  known yet.
+- The counters and a detection: checked on the HM0360 image (below).
+
+### Bench result, candidate 1, HM0360 image (30 October 2026, build 14:37, `logs/log18.txt`)
+
+A cold boot, a BLE wake, three timer wakes (each a photo saved, `Neural network starts after the
+capture.`), then a BLE wake with `capture 3`. No errors.
+
+| ms since `app_main()` | log15/log16 (NN before the capture) | log18 (NN after) |
+|---|---|---|
+| camera ready | 31 | 31 |
+| capture started | 55 | 42 |
+| **frame ready** | **89 to 93** | **75, 75, 76** |
+| SD mounted | 216 to 231 | 271 to 273 |
+| photo queued | 277 to 292 | 284 to 286 |
+
+- **The frame is 14 to 17 ms sooner** (75 against 89 to 93). `NN processing took 16ms`, against
+  140 to 157.
+- **Detection works:** in the `capture 3` burst the third photo gave `TARGET OBJECT DETECTED!`,
+  score 47 (threshold 18). The first scored exactly 18, not detected: the test is "above".
+- **The card mounted about 50 ms later on all three timer wakes** (271 to 273 against 216 to 231),
+  and on two of three RP3 wakes (log17). The photo is no later, since it now waits for the card
+  anyway, but the cause is not known: the image task uses about the same CPU as before, only in a
+  different order. Not investigated (Charles): it does not delay the frame.
+- **The counters are right,** read from the `Sleep` message (ops 1 and 2 are its second and third
+  values): op 1 went 350, 351, 352, 353 over the three timer wakes, then 356 after the 3-photo
+  burst; op 2 stayed 6, then 7 after the one detection.
+
+**Candidate 1 and the counter fix pass on both images.** Wake to frame ready: RP3 timer 131 to 115
+to 119, HM0360 timer 89 to 93 to 75 (with a model in flash).

@@ -369,7 +369,11 @@ static int init_flash(void) {
     }
 
     if (ret == 0) {
-        vTaskDelay(pdMS_TO_TICKS(10));
+        // One tick (up to 1 ms), was 10 ms (29 Oct 2026, XIP save state step 6: this is on the path to the first
+        // photo). The flash is the boot flash, powered all along and read by the bootloader moments before, so no
+        // power-up time applies. If it is not ready the ID read below fails and is reported: the fast-start record
+        // is not read, so the boot waits for the card as before, and the next caller (the NN start-up) tries again
+        vTaskDelay(pdMS_TO_TICKS(1));
 
         if (hx_lib_spi_eeprom_read_ID(spi_inst, &id_info) != 0) {
             xprintf("init_flash: failed to read flash ID\n");

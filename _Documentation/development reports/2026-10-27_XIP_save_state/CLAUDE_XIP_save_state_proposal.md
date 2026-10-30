@@ -288,8 +288,11 @@ Each step is a separate change, tested on its own.
 5. **Stop waiting for the card:** the `SD_READY` message and the `WAIT_FOR_SD` state (section 3),
    and change the SD driver's waits so the image task can run. Measure the time to the first frame
    with `Boot timing`.
-6. **Optional extras:** move the NN start-up after the capture start (about 25 ms), and remove the
-   two fixed 10 ms waits in the SD start-up.
+6. **Optional extras** (revised 29 Oct, after step 5 showed the photo now waits for the card, not
+   the camera): shorten the card's path. Remove the FatFS task's fixed 10 ms "settling" wait and
+   cut `init_flash()`'s fixed 10 ms wait to 1 ms; later perhaps move the motion-wake HM0360 grid
+   read out of `app_main()`. Moving the NN start-up after the capture is dropped: it would make the
+   frame earlier but not the photo.
 7. **Docs:** the flash map in `xip_manager.h` and `slot_selector.md`, and a short durable doc for the
    records.
 

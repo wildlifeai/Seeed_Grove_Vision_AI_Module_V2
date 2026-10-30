@@ -1705,8 +1705,10 @@ static void vFatFsTask(void *pvParameters) {
 		xSemaphoreGive(xSettingsReadySemaphore);
 	}
 
-	// TODO - experiment - do I need settling time for 3V3_WE?
-	vTaskDelay(pdMS_TO_TICKS(10));
+	// No settling wait for the card's supply here (removed 29 Oct 2026, XIP save state step 6: it was 10 ms on
+	// the path to the first photo). The card is powered from 3V3_WE, which the hardware switches on as the chip
+	// leaves DPD, well before this point; and the card driver's power-up sequence (SD_powerUpSeq()) waits 10 ms
+	// and sends 80 clocks before the first command, more than the SD specification's 1 ms
 	res = fatFsInit();
 	boot_timing_mark(BOOT_TIMING_SD_MOUNTED);
 

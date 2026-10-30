@@ -217,7 +217,11 @@ static void captureSequenceComplete(uint32_t accumulatedTime);
 
 static void changeEnableState(bool setEnabled);
 
+static int initNN(void);
+
 static void processNNOutput(int8_t * outCategories, uint8_t classCount);
+
+static void countNNResult(void);
 
 static void prepareJpegFile(int8_t * outCategories, uint8_t classCount, fileBufferInfo_t * extraBlock);
 
@@ -382,6 +386,13 @@ static uint8_t cameraSystemEnabled = 0; // 0 = disabled 1 = enabled
 
 // Measure interval between events
 static TickType_t startTime;
+
+// True on a timer or motion wake: the NN starts just after the capture, so the frame comes sooner
+static bool nnInitAfterCapture = false;
+
+// An NN result not yet added to the counters, which wait for the card (see countNNResult())
+static bool nnResultToCount = false;
+static bool nnResultPositive = false;
 
 #if defined(USE_HM0360) || defined(USE_HM0360_MD)
 	// HM0360 AE registers
@@ -795,6 +806,13 @@ static APP_MSG_DEST_T handleEventForInit(APP_MSG_T img_recv_msg) {
             startTime = xTaskGetTickCount();
             frameTimerStart();
 
+            // On a timer or motion wake the NN starts now, while the sensor takes the frame (issue #249).
+            // FRAME_READY waits in the queue until this returns
+            if (nnInitAfterCapture) {
+            	nnInitAfterCapture = false;
+            	initNN();
+            }
+
             // The next thing we expect is a frame ready message: APP_MSG_IMAGETASK_FRAME_READY
             image_task_state = APP_IMAGE_TASK_STATE_CAPTURING;
         }
@@ -1198,6 +1216,9 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
         // After this op_parameter[] holds the card's settings: if the card says the camera is off
         // (op 10 = 0), this frame is not saved
         fatfs_waitForSdReady();
+
+        // Now the card's counters are loaded, add this frame's NN result to them
+        countNNResult();
 
         if (aeCheckOnlyWake
         		|| (fatfs_getOperationalParameter(OP_PARAMETER_CAMERA_ENABLED) == 0)
@@ -2121,29 +2142,18 @@ static void vImageTask(void *pvParameters) {
 	// Initialise NN but only if the camera system is enabled and this isn't a
 	// throwaway light-check wake (which never runs NN inference - see
 	// aeCheckOnlyWake's handling in handleEventForNNProcessing()).
-	startTime = xTaskGetTickCount();
-
 	if (cameraSystemEnabled && !aeCheckOnlyWake) {
-		// Usually the model is in flash. If not, cv_init() looks for it on the card
-		if (cv_modelNeedsCard(fatfs_getOperationalParameter(OP_PARAMETER_MODEL_PROJECT),
-				fatfs_getOperationalParameter(OP_PARAMETER_MODEL_VERSION))) {
-			fatfs_waitForSdReady();
-		}
-		nnStatus = cv_init(true, true,
-				fatfs_getOperationalParameter(OP_PARAMETER_MODEL_PROJECT),
-				fatfs_getOperationalParameter(OP_PARAMETER_MODEL_VERSION),
-				woken);
-
-		if (nnStatus < 0) {
-			xprintf("No model found.\n");
-			// TODO - do we do this?
-			//selfTest_setErrorBits(1 << SELF_TEST_AI_NN_ERROR);
+		// A timer or motion wake starts a capture below: start the NN after the capture has started, so
+		// the frame comes sooner. Not if the model must come from the card: that can take seconds
+		if (cameraInitialised
+				&& ((woken == APP_WAKE_REASON_MD) || (woken == APP_WAKE_REASON_TIMER))
+				&& !cv_modelNeedsCard(fatfs_getOperationalParameter(OP_PARAMETER_MODEL_PROJECT),
+						fatfs_getOperationalParameter(OP_PARAMETER_MODEL_VERSION))) {
+			nnInitAfterCapture = true;
 		}
 		else {
-			xprintf("Initialised neural network.\n");
+			nnStatus = initNN();
 		}
-
-		xprintf("NN Initialisation took %dms TODO - consider doing this after taking the picture!\n\n", app_getElapsedMs(startTime));
 	}
 	else if (aeCheckOnlyWake) {
 		XP_CYAN xprintf("[LS] Skipping NN initialisation (light-check-only wake).\n\n"); XP_WHITE
@@ -2166,7 +2176,12 @@ static void vImageTask(void *pvParameters) {
 #endif	// USE_HM0360
 
     xprintf("  Camera system %s.\n", (cameraSystemEnabled > 0) ? "enabled": "disabled");
-    xprintf("  Neural network %s.\n", (nnStatus < 0) ? "disabled" : "enabled");
+    if (nnInitAfterCapture) {
+    	xprintf("  Neural network starts after the capture.\n");
+    }
+    else {
+    	xprintf("  Neural network %s.\n", (nnStatus < 0) ? "disabled" : "enabled");
+    }
     xprintf("  Flash LED(s) in use: %d\n", fatfs_getOperationalParameter(OP_PARAMETER_FLASH_LED));
     xprintf("  Flash brightness: %d%%\n", (uint8_t) fatfs_getOperationalParameter(OP_PARAMETER_LED_BRIGHTNESS_PERCENT));
     xprintf("  Flash is currently %s.\n", ledFlashIsActive() ? "armed" : "not armed");
@@ -2949,7 +2964,45 @@ uint32_t bmp_create_gray8_header(uint8_t *buf,  uint32_t width, uint32_t height)
 #endif // INVESTIGATE_BMP
 
 /**
+ * Start the neural network for this wake
+ *
+ * Usually the model is in flash. If not, cv_init() looks for it on the card, so this waits for the card
+ * first. Called during the image task's start-up, or on a timer or motion wake just after the capture
+ * starts (nnInitAfterCapture).
+ *
+ * @return 0 if the NN is ready, -1 if it is not used (no model, or project ID 0)
+ */
+static int initNN(void) {
+	TickType_t nnStartTime = xTaskGetTickCount();
+	int nnStatus;
+
+	if (cv_modelNeedsCard(fatfs_getOperationalParameter(OP_PARAMETER_MODEL_PROJECT),
+			fatfs_getOperationalParameter(OP_PARAMETER_MODEL_VERSION))) {
+		fatfs_waitForSdReady();
+	}
+	nnStatus = cv_init(true, true,
+			fatfs_getOperationalParameter(OP_PARAMETER_MODEL_PROJECT),
+			fatfs_getOperationalParameter(OP_PARAMETER_MODEL_VERSION),
+			woken);
+
+	if (nnStatus < 0) {
+		xprintf("No model found.\n");
+		// TODO - do we do this?
+		//selfTest_setErrorBits(1 << SELF_TEST_AI_NN_ERROR);
+	}
+	else {
+		xprintf("Initialised neural network.\n");
+	}
+
+	xprintf("NN Initialisation took %dms\n\n", app_getElapsedMs(nnStartTime));
+
+	return nnStatus;
+}
+
+/**
  * Do something with the NN output
+ *
+ * The result is reported at once. Adding it to the counters waits for the card (countNNResult()).
  *
  * TODO should this be in cvapp.cpp?
  * TODO this is suitable for person detection only - revisit!
@@ -2960,24 +3013,20 @@ uint32_t bmp_create_gray8_header(uint8_t *buf,  uint32_t width, uint32_t height)
 static void processNNOutput(int8_t * outCategories, uint8_t classCount) {
 	uint8_t threshold;
 
-	// The NN may have run before the card is ready. The counters below are loaded from CONFIG.TXT,
-	// so wait for it first, or loading it would undo the count
-	fatfs_waitForSdReady();
-
+	// The threshold is in the fast-start record, so the card is not needed here
 	threshold = fatfs_getOperationalParameter(OP_PARAMETER_MODEL_THRESHOLD);
 
-	fatfs_incrementOperationalParameter(OP_PARAMETER_NUM_NN_ANALYSES);
+	nnResultToCount = true;
+	nnResultPositive = (outCategories[1] > threshold);
 
 	for (uint8_t i=0; i < classCount; i++) {
 		xprintf("Class %d '%s' = logit %d\n", i, cv_getLabel(i), outCategories[i]);
 	}
 
 	// TODO This only works for the person detection
-	if (outCategories[1] > threshold)  {
+	if (nnResultPositive)  {
 		XP_LT_GREEN;
 		xprintf("TARGET OBJECT DETECTED!\n");
-
-		fatfs_incrementOperationalParameter(OP_PARAMETER_NUM_POSITIVE_NN_ANALYSES);
 
 		// Send a message to the BLE processor so it can inform the user on the app immediately.
 		// Also can be used to flash an LED.
@@ -2996,6 +3045,25 @@ static void processNNOutput(int8_t * outCategories, uint8_t classCount) {
 
 	XP_WHITE;
 	xprintf("Score %d/128 (Threshold %d)\n", outCategories[1], threshold);
+}
+
+/**
+ * Add the last NN result to the counters (ops 1 and 2)
+ *
+ * Call only once the card is ready (fatfs_waitForSdReady()): the counters are loaded from CONFIG.TXT,
+ * and loading it after counting would undo the count. Does nothing if there is no result to count.
+ */
+static void countNNResult(void) {
+	if (!nnResultToCount) {
+		return;
+	}
+	nnResultToCount = false;
+
+	fatfs_incrementOperationalParameter(OP_PARAMETER_NUM_NN_ANALYSES);
+
+	if (nnResultPositive) {
+		fatfs_incrementOperationalParameter(OP_PARAMETER_NUM_POSITIVE_NN_ANALYSES);
+	}
 }
 
 /********************************** Public Functions  *************************************/

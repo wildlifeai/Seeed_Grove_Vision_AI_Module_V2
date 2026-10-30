@@ -122,3 +122,17 @@ now logs every failure path to the console and retries the flash write once
 (`labelBootSlot: ...` messages), and the mobile app allows an explicit-confirm switch into an
 unlabelled slot (safe: `xip_switch_slot()` refuses slots without a valid secure-boot image, and
 the switch itself re-labels the slot at boot).
+
+## The rest of the flash
+
+| Physical address | Contents |
+|---|---|
+| 0x00000000 to 0x000FFFFF | Firmware slot A |
+| 0x00100000 to 0x001FFFFF | Firmware slot B |
+| 0x00200000 to 0x00EFFFFF | NN model area |
+| 0x00F00000 to 0x00F01FFF | Saved state: see [WW500_XIP_saved_state.md](WW500_XIP_saved_state.md) |
+| 0x00F02000 to 0x00FFEFFF | Unused |
+| 0x00FFF000 to 0x00FFFFFF | This selector sector |
+
+The authoritative map is in `xip_manager.h`. An X-Modem burn rewrites the selector sector but
+leaves the saved-state area alone.

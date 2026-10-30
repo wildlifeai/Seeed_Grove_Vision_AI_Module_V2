@@ -16,8 +16,8 @@ found, and how it was tested (with the firmware build, `AI ver`).
 | 3 | The flash record module and its test | Done 28 Oct, benched on both images |
 | 4 | Fast-start settings, still waiting for the card | Done 28 Oct, benched on both images |
 | 5 | Stop waiting for the card | Done 29 Oct, benched on both images |
-| 6 | Optional extras: shorten the card's path | Changes 1 and 2 coded 29 Oct, not built or benched |
-| 7 | Docs | Not started |
+| 6 | Optional extras: shorten the card's path, then the frame | Changes 1 and 2, image task priority (29 Oct), NN start-up after the capture and NN counters (30 Oct): all benched on both images |
+| 7 | Docs | Done 30 Oct: `ww500_md/doc/WW500_XIP_saved_state.md`, flash map in `slot_selector.md`, `WW500_Neural_Network_Operation.md`, `ble_commands.md` (`camreg`) |
 
 ---
 
@@ -954,3 +954,218 @@ capture.`), then a BLE wake with `capture 3`. No errors.
 
 **Candidate 1 and the counter fix pass on both images.** Wake to frame ready: RP3 timer 131 to 115
 to 119, HM0360 timer 89 to 93 to 75 (with a model in flash).
+
+## Frame candidate 3: the motion-wake grid read (30 October 2026)
+
+### Measured, HM0360 image (build 14:37, `logs/log19.txt`)
+
+Five motion wakes (op 7 = 0, op 11 = 1000), each a photo saved, NN started after the capture, one
+`TARGET OBJECT DETECTED!` (score 37). No errors.
+
+| ms since `app_main()` | log18 timer wakes | log19 motion wakes |
+|---|---|---|
+| cameras checked | 7 | 7 |
+| **scheduler started** | **11** | **30** |
+| camera ready | 31 | 50 |
+| capture started | 42 | 61 |
+| **frame ready** | **75 to 76** | **92 to 94** (107 on the first) |
+
+- **The motion wake costs 19 ms before the scheduler**, and everything after it moves by the same
+  amount. The only motion-only work there is `hm0360_md_saveWakeGrid()` (`ww500_md.c:702`), so
+  that is the grid read.
+- **Why it is slow:** `hm0360_md_getMDOutput()` reads the 32 `ROI_OUT` registers one at a time
+  (`hx_drv_cis_get_reg()`), each a separate I2C transaction at 100 kHz (the HM0360 needs 100 kHz
+  in motion detection mode), about 0.5 ms each.
+- **It cannot simply move later on the HM0360 image:** the registers must be read before the
+  HM0360 is reconfigured for the capture, which is the first thing the image task does.
+
+### Measured, RP3 image (build 14:31, `logs/log20.txt`)
+
+A cold boot, three motion wakes (each a photo saved, NN started after the capture), then a BLE
+wake. No errors.
+
+| ms since `app_main()` | log17 timer wakes | log13 motion wakes (NN before the capture) | log20 motion wakes |
+|---|---|---|---|
+| cameras checked | 16 | 16 | 16 |
+| **scheduler started** | **20** | 40 | **40** |
+| camera ready | 82 | 102 | 102 |
+| capture started | 92 | 121 | 112 |
+| **frame ready** | **115 to 119** | 145 to 147 | **135, 135, 136** |
+
+- **The grid read costs 20 ms on the RP3 image too**, the same as on the HM0360 (19 ms).
+- The NN change brought the RP3 motion-wake frame 10 ms sooner (145 to 147, now 135 to 136).
+
+### Does the wake grid survive? A temporary diagnostic, coded 30 October 2026
+
+Asked by Charles: is there evidence that `ROI_OUT` is lost when the HM0360 is set up for the
+capture? Not directly. The first photo's grid is always empty (26 Oct), but that does not say
+whether the set-up or the first new frame changed it. And `app_main()` already writes
+`MD_CTRL1 = 0` at the wake (`hm0360_md_disableInterrupt()`), which may stop the updates.
+
+**TEMPORARY, to be removed once answered** (`WAKE_GRID_DIAG`, defined in `hm0360_md.h`):
+`hm0360_md_diagWakeGrid()` and `hm0360_md_diagWakeGridReport()` in `hm0360_md.c` (and its
+`<stdio.h>`), called from four places in `image_task.c`. On a motion wake it re-reads `ROI_OUT`
+before the sensor set-up, after the capture starts, after the frame and when the photo is queued,
+and prints one line after the first photo:
+
+`Wake grid (N blocks at wake): before setup same (N blocks); after capture start ...; after frame ...; photo queued ...;`
+
+Each re-read costs about 19 ms, so the `Boot timing` figures are not valid while it is in.
+
+### Diagnostic result, HM0360 image (build 16:30, `logs/log21.txt`)
+
+Three motion wakes (71, 52 and 8 blocks at the wake), each a photo saved, no errors:
+
+`before setup same; after capture start same; after frame DIFFERS (0 blocks); photo queued DIFFERS (0 blocks)`
+
+on all three. **The grid survives the sensor set-up and the capture start, and is lost when the
+first new frame completes** (0 blocks: no earlier frame to compare with). So on the HM0360 image
+the read can move to just after the capture starts, into the wait for the frame (about 33 ms),
+and off the path to the frame.
+
+### Diagnostic result, RP3 image (build 16:35, `logs/log22.txt`)
+
+Four motion wakes (67, 61, 8 and 75 blocks), each a photo saved, no errors:
+
+`before setup same; after capture start same; after frame same; photo queued same`
+
+on all four. **On the RP3 image the grid survives to the photo being queued** (595 to 694 ms after
+`app_main()`), so it could be read after the frame. But op 11 was 1000 ms, so the HM0360 may simply
+not have taken its next motion-detection frame yet: this does not show whether `MD_CTRL1 = 0` at
+the wake stops the updates. To settle it, the same test with op 11 = 200 (several HM0360 frames
+before the photo is queued).
+
+### Diagnostic result, RP3 image, op 11 = 200 ms (`logs/log23.txt`)
+
+Three motion wakes (139, 15 and 34 blocks), each a photo saved, no errors:
+
+| Wake | before setup | after capture start | after frame | photo queued |
+|---|---|---|---|---|
+| 1 | same | DIFFERS (80) | DIFFERS (93) | DIFFERS (76) |
+| 2 | same | DIFFERS (56) | DIFFERS (56) | DIFFERS (62) |
+| 3 | same | DIFFERS (61) | DIFFERS (61) | DIFFERS (31) |
+
+- **`MD_CTRL1 = 0` at the wake does not stop the grid changing.** On the RP3 image the HM0360
+  carries on taking motion-detection frames while the AI processor is awake, and each one rewrites
+  `ROI_OUT` (non-zero, changing counts). With op 11 = 200 the wake grid was gone by the time the
+  capture started (131 ms). log22 only kept it because op 11 was 1000.
+- So the grid must be read before the HM0360's next frame: within one op 11 interval of the wake,
+  on either image. Reading it in `app_main()` is the only point that is always safe, unless the
+  HM0360 is stopped at the wake (Charles's MODE_SELECT idea). On the RP3 image that would also stop
+  the `HM0360 motion in N blocks` reports for the 2nd and later photos of a burst, which rely on
+  the HM0360 running.
+
+### Burst read of the grid: a temporary check, coded 30 October 2026
+
+The wake-grid diagnostic (`WAKE_GRID_DIAG`) is removed: `hm0360_md.c/.h` and `image_task.c` are
+back as committed. Charles doubts the HM0360 increments the register address in a burst read (the
+datasheet does not say it does), but agreed to try it.
+
+**TEMPORARY, to be removed once answered** (`WAKE_GRID_BURST_CHECK`, defined at the top of
+`hm0360_md.c`): `readRoiOutBurst()` reads the 32 `ROI_OUT` registers in one
+`hx_drv_i2cm_write_restart_read()`. At a motion wake `hm0360_md_saveWakeGrid()` reads the grid both
+ways and prints
+
+`Wake grid burst read: same (ret 0). 32 single reads N us, burst M us`
+
+and, if they differ, both sets of 32 bytes. The grid saved is still the one from the single reads.
+
+### Burst read result, RP3 image (build 16:48, `logs/log24.txt`)
+
+Three motion wakes (97, 80 and 58 blocks), each a photo saved, no errors:
+
+`Wake grid burst read: same (ret 0). 32 single reads 18852 us, burst 4020 us`
+
+on all three. **The HM0360 does increment the register address in a burst read**: the three grids
+had different, well-filled patterns and matched byte for byte. **The burst takes 4.0 ms against
+18.9 ms**, about 15 ms saved per read (at 100 kHz, with the RP3 image's bus-speed switch included).
+Tested on the RP3 image only; the HM0360 image uses the same bus at the same speed.
+
+### Burst read result, HM0360 image (build 16:53, `logs/log25.txt`), and the change
+
+Three motion wakes (95 blocks on the first): `same (ret 0). 32 single reads 18832 us, burst 4007 us`
+on all three. So the burst read works on both images.
+
+**Coded 30 October 2026** (agreed with Charles: only for the MD grid). The temporary check is
+removed. In `hm0360_md.c` a new `static readRoiOutBurst()` does the one-transaction read, and
+`hm0360_md_getMDOutput()`, the only function that reads the grid, uses it, falling back to the 32
+single reads with `MD grid: burst read failed, reading one register at a time` if the I2C transfer
+fails. Its two callers both gain: the wake grid in `app_main()` (before the scheduler, so on the
+path to the frame) and the per-frame grid in `image_task.c` (also the `md` bytes sent to
+`live_view.py`). Charles's fallback idea, skipping the wake-grid read (engineering information
+only), is parked.
+
+**Bench test:**
+1. `live_view.py` with Motion detection on: the grid over the image follows a hand moved in front
+   of the camera, on each image. No `MD grid: burst read failed` lines.
+2. Motion wakes on both images (op 7 = 0, op 11 = 1000): `HM0360 woken by motion in N blocks`
+   still printed, and `scheduler started` about 15 ms earlier than log19 (HM0360, 30) and log20
+   (RP3, 40), with `frame ready` the same amount earlier.
+
+Bench step 1 passed (Charles, 30 October 2026): `live_view.py` with Motion detection on, the grid
+follows the motion.
+
+### Bench result, burst read, HM0360 image (build 16:58, `logs/log26.txt`)
+
+A BLE wake, then three motion wakes (101, 25 and 6 blocks; one `TARGET OBJECT DETECTED!`), each a
+photo saved and the wake grid printed. No errors, no `burst read failed`. All three identical:
+
+| ms since `app_main()` | log19 (32 single reads) | log26 (burst read) |
+|---|---|---|
+| scheduler started | 30 | **15** |
+| camera ready | 50 | 35 |
+| capture started | 61 | 46 |
+| **frame ready** | **92 to 94** (107 on the first) | **92** |
+| `Image capture 1/1 took` | 32 (47 on the first) | 47 |
+
+- **The burst read saves 15 ms before the scheduler, as expected, but the HM0360 frame is not
+  sooner.** The capture now takes 47 ms instead of 32: the 15 ms saved are spent waiting for the
+  sensor. On a motion wake the HM0360 delivers its first frame about 92 ms after `app_main()`
+  however early the capture starts (log19's first wake, which started late, also took 47 ms). Why
+  is not known: perhaps the sensor finishing its motion-detection cycle, or a frame boundary of
+  its own. On a timer wake the capture takes 33 to 35 ms.
+- So on the HM0360 image the motion-wake frame is now set by the sensor, not the firmware. The
+  RP3 image, whose camera is separate from the HM0360, should still gain (log27).
+
+### The same with op 11 = 200 ms (`logs/log27.txt`)
+
+To see whether the HM0360's 92 ms is tied to its motion-detection interval. Two motion wakes (104
+and 46 blocks): `capture started 46`, `frame ready 97` and `92`, capture 53 and 47 ms. **The same
+as at 1000 ms, so the interval is not the cause.** The first HM0360 frame after a motion wake
+still comes at about 92 ms after `app_main()`. Cause unknown.
+
+### Bench result, burst read, RP3 image, op 11 = 200 ms (build 17:40, `logs/log28.txt`)
+
+Four motion wakes (28, 7, 19 and 7 blocks), each a photo saved, no errors, no `burst read failed`.
+
+| ms since `app_main()` | log20 (single reads, op 11 = 1000) | log28 (burst, op 11 = 200) |
+|---|---|---|
+| scheduler started | 40 | **25** |
+| camera ready | 102 | 87 |
+| capture started | 112 | 97 |
+| **frame ready** | **135 to 136** | **150** |
+| `Image capture 1/1 took` | 24 to 25 ms | 54 ms |
+
+- The burst read saved its 15 ms, but **the RP3 capture took 54 ms instead of 24**, so the frame
+  was 15 ms later than log20. Two things changed at once: the burst read and op 11 (200 here, 1000
+  in log20). Not explained yet. Next: the same with op 11 = 1000, to separate them.
+
+### Bench result, burst read, RP3 image, op 11 = 1000 ms (`logs/log29.txt`), and the explanation
+
+Three motion wakes: the same as log28 (`capture started 97`, `frame ready 150`, capture 54 ms).
+So op 11 is not the cause. **Neither is the burst read: the light is.** The RP3 capture time
+follows the exposure restored at the wake (`AE: restored exposure N`), which rose as the
+afternoon got darker:
+
+| Log (time) | Restored exposure (lines) | `Image capture 1/1 took` |
+|---|---|---|
+| log14 (13:06), log17 (14:33), log20 | 273 to 588 | 24 to 27 ms |
+| log28, log29 (17:45) | 2548 | 54 ms |
+| log24 (16:49), log23 (16:42) | 3816 | 71 to 88 ms |
+
+- **The burst read does what it should on the RP3:** the capture starts 15 ms sooner (97 against
+  112 in log20). In log20's light the frame would come at about 121 ms (97 + 24); it was not
+  measured again in that light.
+- **The HM0360 result stands:** its integration time was 376 lines in log19 and in log26/27, so
+  the light was the same, and its capture still grew by exactly the 15 ms saved.
+- Comparisons of `frame ready` between logs must check the RP3's restored exposure.

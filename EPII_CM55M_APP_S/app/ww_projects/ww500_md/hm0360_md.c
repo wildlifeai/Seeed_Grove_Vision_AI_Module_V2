@@ -684,9 +684,28 @@ HX_CIS_ERROR_E hm0360_md_setModeSelectOnly(mode_select_t mode) {
 }
 
 /**
+ * Reads the 32 ROI_OUT registers in one I2C transaction
+ *
+ * Writes the address of the first register, then reads 32 bytes after a restart: the HM0360 moves to
+ * the next register after each byte, though its datasheet does not say so. About 4 ms at 100 kHz,
+ * against about 19 ms for 32 single reads (bench, 30 Oct 2026, both camera images). Call between
+ * saveMainCameraConfig() and restoreMainCameraConfig().
+ *
+ * @param regTable - buffer for the 32 bytes
+ * @return true if the I2C transfer succeeded
+ */
+static bool readRoiOutBurst(uint8_t * regTable) {
+	uint8_t addr[2] = { (uint8_t)(MD_ROI_OUT_0 >> 8), (uint8_t)(MD_ROI_OUT_0 & 0xFF) };
+
+	return (hx_drv_i2cm_write_restart_read(USE_DW_IIC_1, HM0360_SENSOR_I2CID, addr, sizeof(addr),
+			regTable, ROIOUTENTRIES) == IIC_ERR_OK);
+}
+
+/**
  * Reads the Motion Detection ROI registers
  *
- * There are 32 ROI_OUT registers 20A1-20C0 - see HM0360 data sheet section 4.1
+ * There are 32 ROI_OUT registers 20A1-20C0 - see HM0360 data sheet section 4.1. Read in one transaction
+ * (readRoiOutBurst()), or one register at a time if that fails.
  *
  * @param regTable - address of teh bufferto hold the data
  * @param length - number of bytes to read (must be 32)
@@ -707,9 +726,15 @@ uint16_t hm0360_md_getMDOutput(uint8_t * regTable, uint8_t length) {
 
 	saveMainCameraConfig();
 
+	if (!readRoiOutBurst(regTable)) {
+		xprintf("MD grid: burst read failed, reading one register at a time\n");
+		for (uint8_t i=0; i < ROIOUTENTRIES; i++) {
+			hx_drv_cis_get_reg(MD_ROI_OUT_0 + i, &regTable[i]);
+		}
+	}
+
 	for (uint8_t i=0; i < ROIOUTENTRIES; i++) {
-		hx_drv_cis_get_reg(MD_ROI_OUT_0 + i, &val);
-		regTable[i] = val;
+		val = regTable[i];
 
         // Count bits set in this register
         while (val) {

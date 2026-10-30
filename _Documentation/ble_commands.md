@@ -164,7 +164,7 @@ The "Reqd?" column indicates whether the command should be implemented by the ap
 | AI capture     | n m           | Trigger capture of n images at m millisecond intervals  | Y, 7  |
 | AI interval    | ms            | Changes the interval of the capture in progress from the next image: `Interval N ms from the next image`, or `No capture in progress: the next 'capture' sets the interval`. Not saved. Used by the live viewer | -     |
 | AI txfile      | filename, or '.' | File contents returned in several chunks   | Y, 2  |
-| AI camreg      | addr [val]    | Read or write a camera sensor register (hex). Writes are saved to the SD card and re-applied at every sensor init. Also `AI camreg list` and `AI camreg clear` | 3 |
+| AI camreg      | addr [val]    | Read or write a camera sensor register (hex). Writes are saved to the SD card (and copied to the fast-start record in flash at sleep) and re-applied at every sensor init. Also `AI camreg list` and `AI camreg clear` | 3 |
 | AI vcm         | pos           | Set focus lens position 0-1023 (RP3 camera only). `AI vcm probe` checks the actuator is present | 3 |
 | AI light       |               | Requests a fresh HM0360 light-sensor reading. Replies **immediately** with `Checking light level...`; the reading itself arrives later as asynchronous telemetry | 5 |
 | AI slots       |               | Reports the active firmware slot and the camera variant in each slot, e.g. `Active slot 0 running 'RP3 (day/colour)'. Slot A: 'RP3 (day/colour)', Slot B: 'HM0360 (night/IR)'. Auto-switch: on` | Y, 4 |

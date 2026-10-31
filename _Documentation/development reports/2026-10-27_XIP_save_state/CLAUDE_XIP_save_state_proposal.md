@@ -5,6 +5,10 @@
 #### Author: Claude (Opus 5.5), for review by Charles Palmer
 #### Date: 27 October 2026
 
+> **Note (31 October 2026):** this is the plan as agreed before coding. Where the code differs, the
+> step log ([CLAUDE_XIP_save_state_steps.md](CLAUDE_XIP_save_state_steps.md)) records what was built,
+> and the clock was done differently (self-calibration, not the trim): see [CLAUDE_time_accuracy.md](CLAUDE_time_accuracy.md).
+
 ## What this is for
 
 Two problems, one solution:

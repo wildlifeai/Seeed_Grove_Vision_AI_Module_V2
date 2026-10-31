@@ -795,20 +795,23 @@ int app_main(void){
 	internalStates[taskIndex++] = internalState;
 	xprintf("Created task '%s' Priority %d\n", pcTaskGetName(task_id), priority);
 
-	// This tasks provides a CLI interface to the FatFs
-	task_id = fatfs_createTask(--priority, wakeReason);
-	internalState.task_id = task_id;
-	internalState.getState = fatfs_getState;
-	internalState.stateString = fatfs_getStateString;
-	internalState.priority = priority;
-	internalStates[taskIndex++] = internalState;
-	xprintf("Created task '%s' Priority %d\n", pcTaskGetName(task_id), priority);
-
-	// Image task for camera init & image capture and processing
+	// Image task for camera init & image capture and processing. Above the FatFS task (29 Oct 2026, XIP save
+	// state step 6): the camera starts from the fast-start record while the FatFS task is still mounting the card,
+	// and the time that matters is the wake to the first frame. The card's busy-waiting SPI transfers must not hold
+	// the camera up; the card itself is only needed once the photo is saved
 	task_id = image_createTask(--priority, wakeReason);
 	internalState.task_id = task_id;
 	internalState.getState = image_getState;
 	internalState.stateString = image_getStateString;
+	internalState.priority = priority;
+	internalStates[taskIndex++] = internalState;
+	xprintf("Created task '%s' Priority %d\n", pcTaskGetName(task_id), priority);
+
+	// This tasks provides a CLI interface to the FatFs. Below the image task (see above)
+	task_id = fatfs_createTask(--priority, wakeReason);
+	internalState.task_id = task_id;
+	internalState.getState = fatfs_getState;
+	internalState.stateString = fatfs_getStateString;
 	internalState.priority = priority;
 	internalStates[taskIndex++] = internalState;
 	xprintf("Created task '%s' Priority %d\n", pcTaskGetName(task_id), priority);

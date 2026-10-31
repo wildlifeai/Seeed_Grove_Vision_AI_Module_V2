@@ -164,12 +164,14 @@ The "Reqd?" column indicates whether the command should be implemented by the ap
 | AI capture     | n m           | Trigger capture of n images at m millisecond intervals  | Y, 7  |
 | AI interval    | ms            | Changes the interval of the capture in progress from the next image: `Interval N ms from the next image`, or `No capture in progress: the next 'capture' sets the interval`. Not saved. Used by the live viewer | -     |
 | AI txfile      | filename, or '.' | File contents returned in several chunks   | Y, 2  |
-| AI camreg      | addr [val]    | Read or write a camera sensor register (hex). Writes are saved to the SD card and re-applied at every sensor init. Also `AI camreg list` and `AI camreg clear` | 3 |
+| AI camreg      | addr [val]    | Read or write a camera sensor register (hex). Writes are saved to the SD card (and copied to the fast-start record in flash at sleep) and re-applied at every sensor init. Also `AI camreg list` and `AI camreg clear` | 3 |
 | AI vcm         | pos           | Set focus lens position 0-1023 (RP3 camera only). `AI vcm probe` checks the actuator is present | 3 |
 | AI light       |               | Requests a fresh HM0360 light-sensor reading. Replies **immediately** with `Checking light level...`; the reading itself arrives later as asynchronous telemetry | 5 |
 | AI slots       |               | Reports the active firmware slot and the camera variant in each slot, e.g. `Active slot 0 running 'RP3 (day/colour)'. Slot A: 'RP3 (day/colour)', Slot B: 'HM0360 (night/IR)'. Auto-switch: on` | Y, 4 |
 | AI switchslot  |               | Boots the firmware image in the other slot (day/night camera change). Response `Switched to slot n ('variant'). Reset scheduled.` — the device resets when it next sleeps | Y, 4 |
 | AI firmware    | file [0xCRC]  | Writes `/MANIFEST/<file>` to the INACTIVE firmware slot, verifies it and updates the slot selector; `AI reset` boots it. With the optional CRC16-CCITT the file is checked before flash is touched. Used twice (once per camera image) by the app's "Update both cameras" flow — see [firmware_update_and_recovery.md](firmware_update_and_recovery.md) | Y, 4 |
+| AI xipstate    | [test]        | Lists the flash records: each fast-start settings record (sequence number, ops) and the board record (RTC calibration). `test` runs a write and read-back test of the fast-start sector | - |
+| AI rtccal      | [measure \| on \| off] | `RTC calibration: N ppm (P %), measured S RTC s ago.` The RC32K clock's error, measured against the crystal and used to correct the sleep (#245). `measure` measures now (busy up to 3 s), `off` stops the correction, `on` restores it | - |
 | AI ble         | [clear]       | `BLE processor responsive`, or `BLE processor unresponsive: messages to it are not sent`. `clear` clears that flag | -, 6 |
 
 Note that there are addition commands that could be run on the AI processor, not documented here.

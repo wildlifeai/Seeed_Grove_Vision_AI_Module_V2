@@ -43,6 +43,24 @@ Verified on the bench (details and serial evidence in
   task is priority 2, below both). And the hardware resets at the **second** timeout, so a
   period of N gives a reset at 2N. Flash writes suspend it (`disable_xip()`/`enable_xip()`).
   `freeze` tests it.
+* **The HM0360 increments the register address in a burst read**, though its datasheet does
+  not say so. The 32 `ROI_OUT` grid bytes read in one `hx_drv_i2cm_write_restart_read()` match 32
+  single reads, in 4 ms against 19 ms at 100 kHz (`hm0360_md_getMDOutput()`, 30 Oct 2026).
+* **`MD_CTRL1 = 0` does not freeze the HM0360's motion grid.** While the AI processor is awake the
+  HM0360 keeps taking motion-detection frames (op 11 apart), and each rewrites `ROI_OUT`. A wake
+  grid read later than one op 11 interval after the wake may hold a later frame's motion. It looked
+  safe at op 11 = 1000 and failed at 200 (`2026-10-27_XIP_save_state`, log22 and log23).
+* **The RP3's first capture after a wake takes longer in dim light**: 24 ms at 273 to 588 lines
+  of restored exposure, 54 ms at 2548, 71 to 88 ms at 3816. Before comparing `Boot timing` or
+  `Image capture 1/1 took` between two logs, compare their `AE: restored exposure` lines: an
+  afternoon of bench runs as the light fell once looked like a 30 ms regression (30 Oct 2026).
+* **After a motion wake the HM0360's first frame comes about 92 ms after `app_main()`**, however
+  early the capture starts (op 11 = 200 or 1000). Starting the capture sooner only lengthens
+  `Image capture 1/1 took`. Cause unknown (30 Oct 2026).
+* **Task priorities come from the creation order in `app_main()`** (`ww500_md.c`), descending:
+  CLI 4, IF 3, IMAGE 2, FAT 1 since 29 Oct 2026. The `*_task_PRIORITY` defines in the task files
+  are not used. The image task must stay above the FatFS task: the card driver busy-waits, and
+  with FatFS on top the first frame came about 25 to 90 ms later (`2026-10-27_XIP_save_state`).
 * **A fault on the AI processor now ends in a reset, not a hang** (13 Oct 2026). Every fault
   handler prints a report (`Entering HardFault interrupt!`, the status registers, the stacked
   `PC` and `LR`), then `>>> Reset after fault`, and a cold boot follows at once. So an unexpected `Cold Boot` in a log may be a fault: search back for the report. The
@@ -76,6 +94,10 @@ Verified on the bench (details and serial evidence in
   particular file parses, set the **FAT read-only attribute** on it, which the firmware
   respects, and the card survives the boot intact. Two bench runs were spent measuring the
   device's own file before this was understood.
+* **With no card, settings live only in the fast-start record in flash** (`xip_state.c`). Since
+  31 Oct 2026 it is written at every sleep, card or not; before that, a `setop` with no card was
+  lost after one sleep (a `setop 7 300` timelapse stopped at the first wake). When a card goes back
+  in, its CONFIG.TXT overrides the record, so a change made with the card out is lost.
 * **The periodic AE light check only runs if something consumes it.**
   `aeCheckRequired = lightSensor_isRequired()`, which is true when the flash mode is
   `FLASH_MODE_AE` (**op34**, not op13) or automatic camera switching (op26) is on. With
@@ -162,3 +184,11 @@ building on any of them:
   the device is lost once the warm boot reconfigures the sensor, so `app_main()` saves it right
   after reading `INT_INDIC` (`hm0360_md_saveWakeGrid()`) and the image task reports it after the
   first image. Keep work before the first capture to a minimum (wake latency). 26 Oct 2026.
+* **The RTC and the DPD alarm run 2 to 5 % fast, differently on each board, and the RC32K trim
+  register does not change the DPD alarm** (it does change the clock while awake, and its default
+  differs between chips: 31 and 28 seen). `rtc_cal.c` measures the rate while awake and lengthens
+  the alarm instead; `_Tools/sleep_timing.py` times sleeps from a Tera Term log. Timing anything
+  with the DWT cycle counter needs the core kept busy: it stops in tickless idle. The RTC alarm
+  interrupt works while awake; `hx_drv_rtc_set_alarm()` takes about 316 us. The awake rate
+  predicts the sleep: corrected 300 s sleeps lasted 298.7 to 299.7 s on three boards and both
+  images. `rtccal` shows the value, `xipstate` the board record. 31 Oct 2026, #245.

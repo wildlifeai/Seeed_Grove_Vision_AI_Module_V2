@@ -1,4 +1,4 @@
-# WW500 Configuration Files - CGP 5 May 2026 (updated 8 July 2026)
+# WW500 Configuration Files - CGP 5 May 2026 (updated 8 July 2026, 28 October 2026)
 
 ---
 
@@ -50,6 +50,8 @@ The console command `firmware <filename>` programs an image file directly.
 Note: the extra camera register file (HM0360EX.BIN, RPV2_EX.BIN or RPV3_EX.BIN
 depending on the camera) lives in the ROOT of the SD card, not in MANIFEST. It
 is created and maintained automatically by the 'camreg' CLI command - do not
-place it here.
+place it here. On the RP3 camera, an exposure or gain set in RPV3_EX.BIN is
+replaced at each wake once auto-exposure has saved values in ops 37 and 38, unless
+auto-exposure is off (op 29 = 0).
 
 * `config_file.md` is not used by the WW500. It provides documentation for the user.

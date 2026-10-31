@@ -884,7 +884,9 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 	sendMsg.destination = NULL;
     uint32_t length;
     //char message[5 + UTCSTRINGLENGTH ];	// 'Wake 2025-02-13T22:33:44Z'
-    char message[150];	// TODO how long for all the OP_PARAMETER_NUM_ENTRIES integers?
+    // Long enough for the "Sleep" message: "Sleep " + OP_PARAMETER_NUM_ENTRIES values of up to "65535 ",
+    // 240 characters for 39 ops. Static: too big for this task's stack, and only this task uses it
+    static char message[WW130_MAX_PAYLOAD_SIZE + 1];
 
 	event = rxMessage.msg_event;
 	data = rxMessage.msg_data;
@@ -1001,8 +1003,8 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 		snprintf(message, sizeof(message), "Sleep ");
 
 		for (uint8_t i=0; i < OP_PARAMETER_NUM_ENTRIES; i++) {
-			uint8_t next = strlen(message);	// points to the place where we should write the next parameter
-			snprintf(&message[next], sizeof(message), "%d ", fatfs_getOperationalParameter(i));
+			size_t next = strlen(message);	// points to the place where we should write the next parameter
+			snprintf(&message[next], sizeof(message) - next, "%d ", fatfs_getOperationalParameter(i));
 		}
 
 		sendI2CMessage((uint8_t *) message, AI_PROCESSOR_MSG_RX_STRING, strlen(message) );

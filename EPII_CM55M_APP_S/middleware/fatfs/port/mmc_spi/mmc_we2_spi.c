@@ -127,6 +127,9 @@ static BYTE CardType;    /* Card type flags */
 /*-----------------------------------------------------------------------*/
 #define DELAY(MS)   hx_drv_timer_cm55x_delay_ms(MS, TIMER_STATE_DC)
 //#define DELAY(MS)   board_delay_ms(MS)
+// The card start-up waits (about 150 ms of polling in all) yield the CPU once the scheduler runs,
+// so a lower-priority task (the camera) can start meanwhile. DELAY() above busy-waits.
+#define DELAY_YIELD(MS)   delay_yield_ms(MS)
 
 #define MMC_WP()    0
 #define MMC_CD()    1
@@ -479,12 +482,29 @@ static uint8_t SD_goIdleState()
     return res1;
 }
 
+/*
+ * Wait MS milliseconds during the card start-up. Once the FreeRTOS scheduler runs this blocks the
+ * calling task instead of busy-waiting, so lower-priority tasks run meanwhile. vTaskDelay(n) can
+ * return up to a tick early, so one tick is added: the wait is never shorter than asked, which
+ * keeps the start-up timeouts (counted in these waits) at least as long as before.
+ */
+static void delay_yield_ms(uint32_t ms)
+{
+#if defined(INCLUDE_xTaskGetSchedulerState) && (INCLUDE_xTaskGetSchedulerState == 1)
+    if (xTaskGetSchedulerState() == taskSCHEDULER_RUNNING) {
+        vTaskDelay(pdMS_TO_TICKS(ms) + 1);
+        return;
+    }
+#endif
+    DELAY(ms);
+}
+
 static void SD_powerUpSeq()
 {
     // make sure card is deselected
     CS_HIGH(); /* Set CS# high */
 
-    DELAY(10); /* 10ms */
+    DELAY_YIELD(10); /* 10ms */
 
     for (BYTE n = 10; n; n--)
         xchg_spi(0xFF); /* Send 80 dummy clocks */
@@ -596,7 +616,7 @@ DSTATUS mmc_disk_initialize (void)
             SD_printR1(res1);
             break;
         }
-        DELAY(5);   /* Allow card time to settle between retries */
+        DELAY_YIELD(5);   /* Allow card time to settle between retries */
     }
 #endif
 
@@ -617,7 +637,7 @@ DSTATUS mmc_disk_initialize (void)
                 	/* Wait for end of initialization with ACMD41(HCS) */
                 	/* SD spec requires CS high between commands; leaving it low during delay confuses some cards */
                 	deselect();
-                    DELAY(1);
+                    DELAY_YIELD(1);
                     cnt++;
                 }
 
@@ -636,7 +656,7 @@ DSTATUS mmc_disk_initialize (void)
             }
 
             while (cnt <= wt_ms && send_cmd(cmd, 0)) { /* Wait for end of initialization */
-                DELAY(1);
+                DELAY_YIELD(1);
                 cnt++;
             }
 

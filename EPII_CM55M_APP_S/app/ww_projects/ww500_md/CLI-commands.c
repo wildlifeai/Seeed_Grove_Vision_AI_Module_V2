@@ -128,6 +128,8 @@
 #include "hx_drv_rtc.h"
 #include "ww500_md.h"
 #include "xip_manager.h"
+#include "xip_state.h"
+#include "rtc_cal.h"
 #include "camera_switch.h"
 #include "hm0360_md.h"
 #include "lightSensor.h"
@@ -137,6 +139,7 @@
 #include "preview.h"
 
 #include "inactivity.h"
+#include "watchdog.h"
 
 #include "ledFlash.h"
 
@@ -189,6 +192,9 @@ extern Barrier_t startupBarrier;  // Object that calls a function when all tasks
 
 TaskHandle_t cli_task_id;
 QueueHandle_t xCliTaskQueue;
+
+// Why we are awake. Used to refuse captures after a cold boot - see captureRefused()
+static APP_WAKE_REASON_E woken;
 
 // Strings for expected messages. Values must match Messages directed to Task 2 in app_msg.h
 const char *cliTaskEventString[APP_MSG_CLITASK_LAST - APP_MSG_CLITASK_FIRST] = {
@@ -256,6 +262,9 @@ static BaseType_t prvReset(char *pcWriteBuffer, size_t xWriteBufferLen, const ch
 
 // Enter Deep Power Down
 static BaseType_t prvDpd(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
+static BaseType_t prvHardFault(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
+static BaseType_t prvWdt(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
+static BaseType_t prvFreeze(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 
 // Report of some status
 static BaseType_t prvStatus(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
@@ -275,8 +284,10 @@ static BaseType_t prvSetUtc(char *pcWriteBuffer, size_t xWriteBufferLen, const c
 static BaseType_t prvExifUtcTests(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 static BaseType_t prvWriteFile(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 static BaseType_t prvReadFile(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
+static BaseType_t prvNnFiles(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 static BaseType_t prvSend(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 static BaseType_t prvCapture(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
+static BaseType_t prvInterval(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 // Live image preview streaming over the console UART (see preview.c)
 static BaseType_t prvPreview(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 static BaseType_t prvSetgps(char *pcWriteBuffer, size_t writeBufferLen, const char *pcCommandString);
@@ -316,6 +327,8 @@ static BaseType_t prvVcm(char *pcWriteBuffer, size_t xWriteBufferLen, const char
 
 // Day/night dual-image camera switching (see camera_switch.c)
 static BaseType_t prvSlots(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
+static BaseType_t prvXipState(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
+static BaseType_t prvRtcCal(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 static BaseType_t prvSwitchSlot(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 
 #ifdef WW500_C00
@@ -368,6 +381,30 @@ static const CLI_Command_Definition_t xDpd = {
 	0		  /* No parameters are expected. */
 };
 
+/* Structure that defines the "wdt" command line command. */
+static const CLI_Command_Definition_t xWdt = {
+	"wdt", /* The command string to type. */
+	"wdt <0|1>:\r\n Stop (0) or start (1) the awake watchdog, until the next boot. For testing\r\n",
+	prvWdt, /* The function to run. */
+	1		  /* One parameter expected */
+};
+
+/* Structure that defines the "freeze" command line command. */
+static const CLI_Command_Definition_t xFreeze = {
+	"freeze", /* The command string to type. */
+	"freeze:\r\n Mask interrupts and loop for ever, to test the awake watchdog (the processor resets)\r\n",
+	prvFreeze, /* The function to run. */
+	0		  /* No parameters are expected. */
+};
+
+/* Structure that defines the "hardfault" command line command. */
+static const CLI_Command_Definition_t xHardFault = {
+	"hardfault", /* The command string to type. */
+	"hardfault:\r\n Forces a hard fault, to test the fault handler (the processor resets)\r\n",
+	prvHardFault, /* The function to run. */
+	0		  /* No parameters are expected. */
+};
+
 /* Structure that defines the "status" command line command. */
 static const CLI_Command_Definition_t xStatus = {
 	"status", /* The command string to type. */
@@ -398,6 +435,22 @@ static const CLI_Command_Definition_t xCamera = {
 	"camera:\r\n Report main camera type\r\n",
 	prvCamera, /* The function to run. */
 	0		   /* No parameters expected */
+};
+
+/* Structure that defines the "xipstate" command line command. */
+static const CLI_Command_Definition_t xXipState = {
+	"xipstate", /* The command string to type. */
+	"xipstate [test]:\r\n Show the saved-state records in flash. 'xipstate test' runs the bench test of the fast-start sector\r\n",
+	prvXipState, /* The function to run. */
+	-1		   /* Variable number of parameters */
+};
+
+/* Structure that defines the "rtccal" command line command. */
+static const CLI_Command_Definition_t xRtcCal = {
+	"rtccal", /* The command string to type. */
+	"rtccal [measure | on | off]:\r\n Show the RTC calibration (the RC32K clock's error against the crystal, kept in the board record and used to correct the sleep). 'measure' measures now (busy up to 3 s), 'off' stops the correction, 'on' restores it\r\n",
+	prvRtcCal, /* The function to run. */
+	-1		   /* Variable number of parameters */
 };
 
 /* Structure that defines the "slots" command line command. */
@@ -612,12 +665,28 @@ static const CLI_Command_Definition_t xCapture = {
 	2			/* Two parameters expected */
 };
 
+/* Structure that defines the "interval" command line command. */
+static const CLI_Command_Definition_t xInterval = {
+	"interval", /* The command string to type. */
+	"interval <timerDelay>:\r\n Change the interval (ms) of the capture in progress, from its next image\r\n",
+	prvInterval, /* The function to run. */
+	1			/* One parameter expected */
+};
+
 /* Structure that defines the "preview" command line command. */
 static const CLI_Command_Definition_t xPreview = {
 	"preview", /* The command string to type. */
 	"preview <mode>:\r\n Live image preview on the console UART. 0=off, 1=stream (skip SD save), 2=stream+save.\r\n Then use 'capture <n> <ms>' to stream frames. View with _Tools/live_view.py\r\n",
 	prvPreview, /* The function to run. */
 	1			/* One parameter expected */
+};
+
+/* Structure that defines the "nnfiles" command line command. */
+static const CLI_Command_Definition_t xNnFiles = {
+	"nnfiles", /* The command string to type. */
+	"nnfiles <folder> [first]:\r\n Run the loaded model on <folder>/F0001.BIN, F0002.BIN... (raw 640x480 grayscale frames on the SD card)\r\n and write <folder>/RESULTS.CSV. See _Documentation/nn_files_bench.md\r\n",
+	prvNnFiles, /* The function to run. */
+	-1			/* One or two parameters */
 };
 
 /* Structure that defines the "setop" command line command. */
@@ -703,7 +772,7 @@ static BaseType_t prvFormatCommand( char * pcWriteBuffer,
 /* Structure that defines the "md" command line command. */
 static const CLI_Command_Definition_t xMd = {
 	"md", /* The command string to type. */
-	"md <sensitivity>:\r\n Set sensitivity (values 1, 2, 3 = low, med, high; 0 = off)\r\n",
+	"md <sensitivity>:\r\n Set sensitivity (values 1, 2, 3 = low, med, high). 'setop 11 0' switches MD off\r\n",
 	prvMd, /* The function to run. */
 	1		 /* One parameter expected */
 };
@@ -851,6 +920,86 @@ static BaseType_t prvDpd(char *pcWriteBuffer, size_t xWriteBufferLen, const char
 	return pdFALSE;
 }
 
+/**
+ * Forces a hard fault, to test the fault handler
+ *
+ * HardFault_Handler() in hardfault_handler.c should print a report and then reset the processor
+ * with the watchdog. Expect a cold boot about a second later.
+ *
+ * There is no reply, as the processor resets before one can be sent.
+ */
+static BaseType_t prvHardFault(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) {
+	(void)pcCommandString;
+	(void)xWriteBufferLen;
+	configASSERT(pcWriteBuffer);
+
+	xprintf("Forcing a hard fault. Expect a fault report, then a reset.\n");
+
+	// An undefined instruction gives a usage fault. With interrupts masked the usage fault can't be taken,
+	// so it becomes a hard fault (as happens when a fault occurs inside an interrupt handler).
+	__asm volatile (
+			"cpsid i    \n"
+			"udf   #255 \n"
+	);
+
+	// Not reached
+	return pdFALSE;
+}
+
+/**
+ * Stops or starts the awake watchdog (watchdog.c), for testing
+ *
+ * Parameter: 0 to stop it, 1 to start it.
+ *
+ * The watchdog is started at every boot, so stopping it only lasts until the next boot.
+ * Use this to compare power consumption with and without it.
+ */
+static BaseType_t prvWdt(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) {
+	const char *pcParameter;
+	BaseType_t xParameterStringLength;
+
+	pcParameter = FreeRTOS_CLIGetParameter(pcCommandString, 1, &xParameterStringLength);
+	if ((pcParameter == NULL) || ((pcParameter[0] != '0') && (pcParameter[0] != '1'))) {
+		snprintf(pcWriteBuffer, xWriteBufferLen, "Error: 0 (stop) or 1 (start) required.");
+		return pdFALSE;
+	}
+
+	if (pcParameter[0] == '0') {
+		watchdog_stop();
+	}
+	else {
+		watchdog_start();
+	}
+
+	snprintf(pcWriteBuffer, xWriteBufferLen, "Watchdog %s.", watchdog_isRunning() ? "running" : "stopped");
+	return pdFALSE;
+}
+
+/**
+ * Masks interrupts and loops for ever, to test the awake watchdog
+ *
+ * This imitates a dead processor: no task runs and nothing feeds the watchdog.
+ * The watchdog should reset the processor within about 20s (twice WATCHDOG_PERIOD_MS).
+ * If the watchdog is not running, press RESET.
+ *
+ * There is no reply, as the processor never returns from this.
+ */
+static BaseType_t prvFreeze(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) {
+	(void)pcCommandString;
+	(void)xWriteBufferLen;
+	configASSERT(pcWriteBuffer);
+
+	xprintf("Freezing: interrupts masked, looping for ever. Watchdog is %s.\n",
+			watchdog_isRunning() ? "running" : "stopped");
+
+	__asm volatile ("cpsid i \n");
+	for (;;) {
+	}
+
+	// Not reached
+	return pdFALSE;
+}
+
 // Reports on some status
 static BaseType_t prvStatus(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) {
 	(void)pcCommandString;
@@ -919,6 +1068,28 @@ static BaseType_t prvCamera(char *pcWriteBuffer, size_t xWriteBufferLen, const c
 }
 
 /**
+ * Refuses a capture if this is the time between a cold boot and the first DPD
+ *
+ * A cold boot is meant to set things up and then enter DPD quickly. Captures are only expected
+ * after a wake from DPD, so one requested before that is refused. This removes one variable:
+ * the first frame after a cold boot has sometimes not arrived.
+ * See _Documentation/development reports/2026-10-12_cameraErrors
+ *
+ * Note that the 'reset' and 'switchslot' commands and a firmware update all end in a cold boot.
+ *
+ * @param pcWriteBuffer - the error message is written here if the capture is refused
+ * @param xWriteBufferLen - size of that buffer
+ * @return true if the capture is refused
+ */
+static bool captureRefused(char *pcWriteBuffer, size_t xWriteBufferLen) {
+	if (woken != APP_WAKE_REASON_COLD) {
+		return false;
+	}
+	snprintf(pcWriteBuffer, xWriteBufferLen, "Error: no captures until after the first sleep.");
+	return true;
+}
+
+/**
  * Implements "light" command.
  *
  * Triggers a fresh light-sensor reading on demand (ignoring whether the AE
@@ -954,6 +1125,11 @@ static BaseType_t prvLight(char *pcWriteBuffer, size_t xWriteBufferLen, const ch
 
 	(void)pcCommandString;
 	configASSERT(pcWriteBuffer);
+
+	// A light check takes one frame, so it is a capture
+	if (captureRefused(pcWriteBuffer, xWriteBufferLen)) {
+		return pdFALSE;
+	}
 
 	send_msg.msg_data = 0;	// 0 = light-check only, see handleEventForInit()
 	send_msg.msg_parameter = 0;
@@ -999,6 +1175,108 @@ static BaseType_t prvSlots(char *pcWriteBuffer, size_t xWriteBufferLen, const ch
 			cameraSwitch_variantName((uint8_t) ((variantB < 0) ? 0 : variantB)),
 			(fatfs_getOperationalParameter(OP_PARAMETER_SLOT_SWITCH) == 1) ? "on" : "off");
 
+	return pdFALSE;
+}
+
+/**
+ * Implements "xipstate" command
+ *
+ * 'xipstate' prints every slot of the saved-state sectors on the console (xip_state_dump()).
+ * 'xipstate test' runs the bench test of the fast-start sector (xip_state_test()): about 35
+ * writes and 4 erases, then the record that was there before is written back.
+ *
+ * Both switch XIP off while they read or write the flash, so they are refused unless the image
+ * task is idle: the NN model runs from the XIP window.
+ */
+static BaseType_t prvXipState(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) {
+	const char *pcParameter;
+	BaseType_t xParameterStringLength;
+
+	if (image_getState() != APP_IMAGE_TASK_STATE_INIT) {
+		snprintf(pcWriteBuffer, xWriteBufferLen, "Error: not while the camera is busy (%s).", image_getStateString());
+		return pdFALSE;
+	}
+
+	pcParameter = FreeRTOS_CLIGetParameter(pcCommandString, 1, &xParameterStringLength);
+	if (pcParameter == NULL) {
+		xip_state_dump();
+		snprintf(pcWriteBuffer, xWriteBufferLen, "Done.");
+	}
+	else if ((xParameterStringLength == 4) && (strncmp(pcParameter, "test", 4) == 0)) {
+		snprintf(pcWriteBuffer, xWriteBufferLen, "xipstate test: %s", xip_state_test() ? "PASS" : "FAIL");
+	}
+	else {
+		snprintf(pcWriteBuffer, xWriteBufferLen, "Error: 'xipstate' or 'xipstate test'.");
+	}
+	return pdFALSE;
+}
+
+/**
+ * Implements "rtccal" command (#245)
+ *
+ * 'rtccal' shows the RTC calibration saved in the board record. 'rtccal measure' measures now (the core
+ * is busy for up to 3 s) and saves it. 'rtccal off' stops the alarm correction and the measuring, for
+ * measuring the uncorrected sleep; 'rtccal on' restores them. See rtc_cal.c.
+ *
+ * Reading or writing the board record switches XIP off, so this is refused unless the image task is idle.
+ */
+static BaseType_t prvRtcCal(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) {
+	const char *pcParameter;
+	BaseType_t xParameterStringLength;
+	XipStateBoard_t board;
+	int32_t ppm = 0;
+	uint32_t now = 0;
+	char percent[12];
+
+	if (image_getState() != APP_IMAGE_TASK_STATE_INIT) {
+		snprintf(pcWriteBuffer, xWriteBufferLen, "Error: not while the camera is busy (%s).", image_getStateString());
+		return pdFALSE;
+	}
+
+	pcParameter = FreeRTOS_CLIGetParameter(pcCommandString, 1, &xParameterStringLength);
+	if (pcParameter == NULL) {
+		xip_state_readBoard(&board);
+		if (!board.rtcCalValid) {
+			snprintf(pcWriteBuffer, xWriteBufferLen, "RTC calibration: not measured yet.%s",
+					board.rtcCalOff ? " Off ('rtccal on' to restore)." : "");
+		}
+		else {
+			exif_utc_get_rtc_as_seconds(&now);
+			rtc_cal_ppmToPercent(board.rtcPpm, percent, sizeof(percent));
+			if (now >= board.rtcMeasuredAt) {
+				snprintf(pcWriteBuffer, xWriteBufferLen, "RTC calibration: %ld ppm (%s %%), measured %lu RTC s ago.%s",
+						(long) board.rtcPpm, percent, (unsigned long) (now - board.rtcMeasuredAt),
+						board.rtcCalOff ? " Off ('rtccal on' to restore)." : "");
+			}
+			else {
+				snprintf(pcWriteBuffer, xWriteBufferLen, "RTC calibration: %ld ppm (%s %%), measured before the RTC was set back.%s",
+						(long) board.rtcPpm, percent, board.rtcCalOff ? " Off ('rtccal on' to restore)." : "");
+			}
+		}
+	}
+	else if ((xParameterStringLength == 7) && (strncmp(pcParameter, "measure", 7) == 0)) {
+		if (rtc_cal_measureAndSave(&ppm)) {
+			rtc_cal_ppmToPercent(ppm, percent, sizeof(percent));
+			snprintf(pcWriteBuffer, xWriteBufferLen, "RTC calibration: %ld ppm (%s %%), saved.", (long) ppm, percent);
+		}
+		else {
+			snprintf(pcWriteBuffer, xWriteBufferLen, "Error: the measurement failed. Try again.");
+		}
+	}
+	else if (((xParameterStringLength == 2) && (strncmp(pcParameter, "on", 2) == 0))
+			|| ((xParameterStringLength == 3) && (strncmp(pcParameter, "off", 3) == 0))) {
+		bool off = (xParameterStringLength == 3);
+
+		if (rtc_cal_setOff(off) == 0) {
+			snprintf(pcWriteBuffer, xWriteBufferLen, "RTC calibration %s from the next sleep.", off ? "off" : "on");
+		}
+		else {
+			snprintf(pcWriteBuffer, xWriteBufferLen, "Error: could not write the board record.");
+		}
+	}
+	else {
+		snprintf(pcWriteBuffer, xWriteBufferLen, "Error: 'rtccal', 'rtccal measure', 'rtccal on' or 'rtccal off'.");
+	}
 	return pdFALSE;
 }
 
@@ -1814,6 +2092,224 @@ static BaseType_t prvReadFile(char *pcWriteBuffer, size_t xWriteBufferLen, const
 	return pdFALSE;
 }
 
+/*************************************** nnfiles: run the model on frames from the SD card ****************************/
+
+// 'nnfiles <folder> [first]' reads <folder>/F0001.BIN, F0002.BIN, ... (raw 8-bit grayscale frames of the
+// camera's size, 640x480 = 307200 bytes) into the raw frame buffer, runs the loaded model on each exactly
+// as a capture does (img_rescale() then Invoke(), in cv_run()), and appends one line per frame to
+// <folder>/RESULTS.CSV: frame, ms, the int8 output per class, the percentage per class. It stops at the
+// first missing frame. The frames are prepared by _Tools/nnfiles_prepare.py. For comparing candidate
+// models on the same frames on the real camera (the rat challenge, 5 Oct 2026).
+//
+// The CLI task drives it as a small state machine on the FatFS task's replies, so the console stays
+// responsive and the FatFS task keeps sole ownership of the card. The CSV goes through the open/append/
+// close path that file transfers from the app use, so the two cannot run at the same time.
+typedef enum {
+	NN_FILES_IDLE = 0,
+	NN_FILES_OPEN_CSV,		// waiting for RESULTS.CSV to be opened
+	NN_FILES_HEADER,		// waiting for the two header lines to be written
+	NN_FILES_READ,			// waiting for a frame to be read into the raw buffer
+	NN_FILES_LINE,			// waiting for a result line to be written
+	NN_FILES_CLOSE			// waiting for RESULTS.CSV to be closed
+} NN_FILES_STATE_E;
+
+#define NN_FILES_PATH_LEN	32		// "/<8.3 folder>/RESULTS.CSV"
+#define NN_FILES_LINE_LEN	400		// the label line: 16 labels of up to 20 bytes
+
+static NN_FILES_STATE_E nnFilesState = NN_FILES_IDLE;
+static fileOperation_t nnFileOp;			// one operation at a time; the fatfs_task echoes its address back
+static char nnFolder[9];					// 8.3 folder name at the root of the card
+static char nnFramePath[NN_FILES_PATH_LEN];	// "/<folder>/F0001.BIN"
+static char nnCsvPath[NN_FILES_PATH_LEN];	// "/<folder>/RESULTS.CSV"
+static char nnLine[NN_FILES_LINE_LEN];
+static uint16_t nnIndex;					// frame number being processed
+static uint16_t nnDone;						// frames classified in this run
+static TickType_t nnRunStart;
+
+/**
+ * Sends one file operation to the FatFS task. Replies come back as APP_MSG_CLITASK_DISK_READ_COMPLETE or
+ * APP_MSG_CLITASK_DISK_WRITE_COMPLETE with msg_parameter == &nnFileOp.
+ */
+static void nnFilesSend(APP_MSG_EVENT_E event, char *path, uint8_t *buffer, uint32_t length) {
+	APP_MSG_T sendMsg;
+
+	nnFileOp.fileName = path;
+	nnFileOp.buffer = buffer;
+	nnFileOp.length = length;
+	nnFileOp.closeWhenDone = true;
+	nnFileOp.unmountWhenDone = false;
+	nnFileOp.deleteOnClose = false;
+	nnFileOp.senderQueue = xCliTaskQueue;
+	sendMsg.msg_event = event;
+	sendMsg.msg_data = (uint32_t) &nnFileOp;
+	sendMsg.msg_parameter = 0;
+	if (xQueueSend(xFatTaskQueue, (void *) &sendMsg, __QueueSendTicksToWait) != pdTRUE) {
+		xprintf("nnfiles: failed to send 0x%x to the FatFS task\n", sendMsg.msg_event);
+		nnFilesState = NN_FILES_IDLE;
+	}
+}
+
+/**
+ * Ends the run: closes RESULTS.CSV and reports.
+ */
+static void nnFilesFinish(const char *why) {
+	xprintf("nnfiles: %s. %d frames classified in %lus, results in %s\n",
+			why, (int) nnDone, (unsigned long) (app_getElapsedMs(nnRunStart) / 1000), nnCsvPath);
+	nnFilesState = NN_FILES_CLOSE;
+	nnFilesSend(APP_MSG_FATFSTASK_CLOSE_FILE, nnCsvPath, NULL, 0);
+}
+
+/**
+ * Asks the FatFS task for the next frame, straight into the raw buffer where a capture would land.
+ * On the RP3 image the raw buffer is YUV420; the frame fills its Y plane, which is all the model reads.
+ */
+static void nnFilesReadNext(void) {
+	snprintf(nnFramePath, sizeof(nnFramePath), "/%s/F%04d.BIN", nnFolder, (int) nnIndex);
+	nnFilesState = NN_FILES_READ;
+	nnFilesSend(APP_MSG_FATFSTASK_READ_FILE, nnFramePath, (uint8_t *) app_get_raw_addr(),
+			app_get_raw_width() * app_get_raw_height());
+}
+
+/**
+ * A frame is in the raw buffer: run the model as a capture would, and queue the result line.
+ */
+static void nnFilesClassify(void) {
+	int8_t raw[MAX_CLASSES];
+	uint8_t count = 0;
+	ClassConfidenceData conf;
+	TickType_t t0;
+	uint32_t ms;
+	int n;
+
+	inactivity_reset();		// a long run must not put the board to sleep
+	t0 = xTaskGetTickCount();
+	if (cv_run(raw, &count) != kTfLiteOk) {
+		nnFilesFinish("model error");
+		return;
+	}
+	ms = app_getElapsedMs(t0);
+	cv_get_confidence_data(&conf);
+
+	n = snprintf(nnLine, sizeof(nnLine), "F%04d.BIN,%lu", (int) nnIndex, (unsigned long) ms);
+	for (uint8_t i = 0; (i < count) && (n < NN_FILES_LINE_LEN - 8); i++) {
+		n += snprintf(nnLine + n, sizeof(nnLine) - n, ",%d", (int) raw[i]);
+	}
+	for (uint8_t i = 0; (i < count) && (n < NN_FILES_LINE_LEN - 8); i++) {
+		n += snprintf(nnLine + n, sizeof(nnLine) - n, ",%u", (unsigned) conf.confidence_percent[i]);
+	}
+	n += snprintf(nnLine + n, sizeof(nnLine) - n, "\n");
+	xprintf("nnfiles: %s", nnLine);
+	nnDone++;
+	nnFilesState = NN_FILES_LINE;
+	nnFilesSend(APP_MSG_FATFSTASK_APPEND_FILE, nnCsvPath, (uint8_t *) nnLine, (uint32_t) n);
+}
+
+/**
+ * The FatFS task has finished reading a frame (or failed to find one).
+ */
+static void nnFilesReadComplete(void) {
+	uint32_t expected = app_get_raw_width() * app_get_raw_height();
+
+	if ((nnFileOp.res == FR_NO_FILE) || (nnFileOp.res == FR_NO_PATH)) {
+		nnFilesFinish("no more frames");
+	}
+	else if (nnFileOp.res != FR_OK) {
+		xprintf("nnfiles: reading %s failed (%d)\n", nnFramePath, (int) nnFileOp.res);
+		nnFilesFinish("read error");
+	}
+	else if (nnFileOp.length != expected) {
+		xprintf("nnfiles: %s is %lu bytes, expected %lu (%lux%lu 8-bit grayscale)\n", nnFramePath,
+				(unsigned long) nnFileOp.length, (unsigned long) expected,
+				(unsigned long) app_get_raw_width(), (unsigned long) app_get_raw_height());
+		nnFilesFinish("wrong frame size");
+	}
+	else {
+		nnFilesClassify();
+	}
+}
+
+/**
+ * The FatFS task has finished an open, append or close on RESULTS.CSV.
+ */
+static void nnFilesWriteComplete(void) {
+	int n;
+
+	if (nnFileOp.res != FR_OK) {
+		xprintf("nnfiles: writing %s failed (%d)\n", nnCsvPath, (int) nnFileOp.res);
+		nnFilesState = NN_FILES_IDLE;
+		return;
+	}
+	switch (nnFilesState) {
+	case NN_FILES_OPEN_CSV:
+		// Two header lines: the class order from the model's labels, then the column names
+		n = snprintf(nnLine, sizeof(nnLine), "# labels:");
+		for (uint8_t i = 0; (i < metaDataFlash->class_count) && (i < MAX_CLASSES) && (n < NN_FILES_LINE_LEN - 24); i++) {
+			n += snprintf(nnLine + n, sizeof(nnLine) - n, "%s%s", (i == 0) ? " " : ",", cv_getLabel(i));
+		}
+		n += snprintf(nnLine + n, sizeof(nnLine) - n, "\nframe,ms,raw...,pct...\n");
+		xprintf("nnfiles: %s", nnLine);
+		nnFilesState = NN_FILES_HEADER;
+		nnFilesSend(APP_MSG_FATFSTASK_APPEND_FILE, nnCsvPath, (uint8_t *) nnLine, (uint32_t) n);
+		break;
+	case NN_FILES_HEADER:
+		nnFilesReadNext();
+		break;
+	case NN_FILES_LINE:
+		nnIndex++;
+		nnFilesReadNext();
+		break;
+	case NN_FILES_CLOSE:
+	default:
+		nnFilesState = NN_FILES_IDLE;
+		break;
+	}
+}
+
+/**
+ * Processes the 'nnfiles <folder> [first]' command: checks, then opens RESULTS.CSV and lets the replies drive the run.
+ */
+static BaseType_t prvNnFiles(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) {
+	const char *pcFolder;
+	const char *pcFirst;
+	BaseType_t folderLength;
+	BaseType_t firstLength;
+
+	pcFolder = FreeRTOS_CLIGetParameter(pcCommandString, 1, &folderLength);
+	pcFirst = FreeRTOS_CLIGetParameter(pcCommandString, 2, &firstLength);
+
+	if (nnFilesState != NN_FILES_IDLE) {
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "nnfiles is already running (frame %d)", (int) nnIndex);
+	}
+	else if ((pcFolder == NULL) || (folderLength < 1) || (folderLength > 8)) {
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "Usage: nnfiles <folder> [first]. The folder is at the root of the card, 8 characters at most");
+	}
+	else if (!cv_modelLoaded()) {
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "No model loaded");
+	}
+	else if (image_getState() != APP_IMAGE_TASK_STATE_INIT) {
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "Image task is '%s', not idle", image_getStateString());
+	}
+	else if ((app_get_raw_width() == 0) || (app_get_raw_height() == 0)) {
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "Camera not initialised, no raw buffer");
+	}
+	else {
+		strncpy(nnFolder, pcFolder, (size_t) folderLength);
+		nnFolder[folderLength] = '\0';
+		nnIndex = (pcFirst != NULL) ? (uint16_t) atoi(pcFirst) : 1;
+		if (nnIndex == 0) {
+			nnIndex = 1;
+		}
+		nnDone = 0;
+		nnRunStart = xTaskGetTickCount();
+		snprintf(nnCsvPath, sizeof(nnCsvPath), "/%s/RESULTS.CSV", nnFolder);
+		nnFilesState = NN_FILES_OPEN_CSV;
+		nnFilesSend(APP_MSG_FATFSTASK_OPEN_FILE, nnCsvPath, NULL, 0);
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "nnfiles: starting at /%s/F%04d.BIN, %lux%lu frames",
+				nnFolder, (int) nnIndex, (unsigned long) app_get_raw_width(), (unsigned long) app_get_raw_height());
+	}
+	return pdFALSE;
+}
+
 /**
  * Sends bytes to the WW130 to test the interface
  *
@@ -1927,6 +2423,10 @@ static BaseType_t prvCapture(char *pcWriteBuffer, size_t xWriteBufferLen, const 
 
 	// Parameters are valid
 
+	if (captureRefused(pcWriteBuffer, xWriteBufferLen)) {
+		return pdFALSE;
+	}
+
 	if (captures == 1) {
 		cli_append(&pcWriteBuffer, &xWriteBufferLen, "About to capture 1 image with an interval of '%u' milliseconds", timerInterval);
 	}
@@ -1941,6 +2441,43 @@ static BaseType_t prvCapture(char *pcWriteBuffer, size_t xWriteBufferLen, const 
 
 	if (xQueueSend(xImageTaskQueue, (void *)&send_msg, __QueueSendTicksToWait) != pdTRUE) {
 		xprintf("Failed to send 0x%x to imageTask\r\n", send_msg.msg_event);
+	}
+
+	return pdFALSE;
+}
+
+/**
+ * Changes the interval of the capture burst in progress, from its next image.
+ *
+ * executes 'interval <timerDelay>'. For the live viewer: a burst cannot be cancelled, so without
+ * this a new interval would only apply from the next 'capture'. The image task applies it at its
+ * next frame (image_setCaptureInterval()).
+ */
+static BaseType_t prvInterval(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) {
+	const char *pcParameter;
+	BaseType_t lParameterStringLength;
+	char *endptr;
+	long interval;
+
+	pcParameter = FreeRTOS_CLIGetParameter(pcCommandString, 1, &lParameterStringLength);
+	if (pcParameter == NULL) {
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "Error: Timer interval required.");
+		return pdFALSE;
+	}
+
+	interval = strtol(pcParameter, &endptr, 10);
+
+	// Not 0: the RP camera's captureTimer cannot have a zero period (FreeRTOS asserts)
+	if ((endptr == pcParameter) || (*endptr != '\0') || (interval < 1) || (interval > MAX_IMAGE_INTERVAL)) {
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "Error: interval must be between 1 and %d.", MAX_IMAGE_INTERVAL);
+		return pdFALSE;
+	}
+
+	if (image_setCaptureInterval((uint32_t) interval)) {
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "Interval %ld ms from the next image", interval);
+	}
+	else {
+		cli_append(&pcWriteBuffer, &xWriteBufferLen, "No capture in progress: the next 'capture' sets the interval");
 	}
 
 	return pdFALSE;
@@ -2033,8 +2570,21 @@ static BaseType_t prvSetOpParam(char *pcWriteBuffer, size_t xWriteBufferLen, con
 		return pdFALSE;
 	}
 
+	if (!fatfs_isValidOperationalParameter(index, value)) {
+		snprintf(pcWriteBuffer, xWriteBufferLen, "Error: %d is not a valid value for op %d.\r\n", value, index);
+		return pdFALSE;
+	}
+
 	// Parameters are valid
 	fatfs_setOperationalParameter(index, value);
+
+#if defined(USE_HM0360) || defined(USE_HM0360_MD)
+	// The MD settings take effect on the HM0360 at once, not only at the next sleep,
+	// so a viewer (or the app) sees the effect of the change straight away
+	if ((index == OP_PARAMETER_MD_SENSITIVITY) || (index == OP_PARAMETER_MD_BLOCK_THRESHOLD)) {
+		hm0360_md_applyMDSettings();
+	}
+#endif // defined(USE_HM0360) || defined(USE_HM0360_MD)
 
 	// Persist the change to CONFIG.TXT now, so it survives the next sleep even
 	// if no capture (which normally triggers the state save) happens first.
@@ -2346,12 +2896,13 @@ static BaseType_t prvEraseModel(char *pcWriteBuffer, size_t xWriteBufferLen, con
 
 #if defined(USE_HM0360) || defined(USE_HM0360_MD)
 /**
- * Sets motion detection sensitivity:
+ * Sets motion detection sensitivity (op 17):
  *
- * 0 = off
  * 1 = low
  * 2 = medium
  * 3 = high
+ *
+ * There is no 'off' (24 Oct 2026): op 11 = 0 switches motion detection off.
  */
 static BaseType_t prvMd(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) {
 	const char *pcParameter;
@@ -2364,8 +2915,9 @@ static BaseType_t prvMd(char *pcWriteBuffer, size_t xWriteBufferLen, const char 
 		char *endptr;
 		long sensitivity_long = strtol(pcParameter, &endptr, 10);
 
-		if (endptr == pcParameter || *endptr != '\0' || sensitivity_long < 0 || sensitivity_long > 3) {
-			cli_append(&pcWriteBuffer, &xWriteBufferLen, "Error: Sensitivity must be an integer between 0 and 3.");
+		if (endptr == pcParameter || *endptr != '\0'
+				|| !fatfs_isValidOperationalParameter(OP_PARAMETER_MD_SENSITIVITY, (uint16_t) sensitivity_long)) {
+			cli_append(&pcWriteBuffer, &xWriteBufferLen, "Error: Sensitivity must be 1, 2 or 3 (op 11 = 0 switches MD off).");
 		}
 		else {
 			sensitivity = (uint16_t)sensitivity_long;
@@ -2750,6 +3302,12 @@ static void vCmdLineTask(void *pvParameters) {
 				break;
 
 			case APP_MSG_CLITASK_DISK_WRITE_COMPLETE:
+				// An nnfiles run: RESULTS.CSV was opened, appended to or closed
+				if ((nnFilesState != NN_FILES_IDLE) && (rxMessage.msg_parameter == (uint32_t) &nnFileOp))
+				{
+					nnFilesWriteComplete();
+					break;
+				}
 				// xprintf("Res code %d\n", data);	// This is the same as fileOp.res
 
 				// A camreg save uses its own fileOperation_t. The fatfs_task echoes
@@ -2798,6 +3356,12 @@ static void vCmdLineTask(void *pvParameters) {
 				break;
 
 			case APP_MSG_CLITASK_DISK_READ_COMPLETE:
+				// An nnfiles run: a frame was read into the raw buffer (or was not there)
+				if ((nnFilesState == NN_FILES_READ) && (rxMessage.msg_parameter == (uint32_t) &nnFileOp))
+				{
+					nnFilesReadComplete();
+					break;
+				}
 				// xprintf("Res code %d\n", data);	// This is the same as fileOp.res
 				//  the fileOp structure should have the results
 				if (fileOp.res)
@@ -2849,12 +3413,17 @@ static void vRegisterCLICommands(void)
 	FreeRTOS_CLIRegisterCommand(&xAssert);
 	FreeRTOS_CLIRegisterCommand(&xReset);
 	FreeRTOS_CLIRegisterCommand(&xDpd);
+	FreeRTOS_CLIRegisterCommand(&xHardFault);
+	FreeRTOS_CLIRegisterCommand(&xWdt);
+	FreeRTOS_CLIRegisterCommand(&xFreeze);
 
 	FreeRTOS_CLIRegisterCommand(&xStatus);
 	FreeRTOS_CLIRegisterCommand(&xBle);			// BLE processor unresponsive flag
 	FreeRTOS_CLIRegisterCommand(&xVer);
 	FreeRTOS_CLIRegisterCommand(&xCamera);
 	FreeRTOS_CLIRegisterCommand(&xSlots);		// Report firmware slots and camera variants
+	FreeRTOS_CLIRegisterCommand(&xXipState);	// Saved-state records in flash, and their bench test
+	FreeRTOS_CLIRegisterCommand(&xRtcCal);		// The RTC calibration, kept in the board record (#245)
 	FreeRTOS_CLIRegisterCommand(&xSwitchSlot);	// Boot the other slot (day/night camera change)
 	FreeRTOS_CLIRegisterCommand(&xLight);		// On-demand light-sensor check
 	FreeRTOS_CLIRegisterCommand(&xEnable);
@@ -2872,7 +3441,9 @@ static void vRegisterCLICommands(void)
 	FreeRTOS_CLIRegisterCommand(&xReadFile);
 	FreeRTOS_CLIRegisterCommand(&xSend);
 	FreeRTOS_CLIRegisterCommand(&xCapture);
+	FreeRTOS_CLIRegisterCommand(&xInterval);	// Changes the interval of the capture in progress
 	FreeRTOS_CLIRegisterCommand(&xPreview);	// Live image preview streaming on the console UART
+	FreeRTOS_CLIRegisterCommand(&xNnFiles);	// Run the model on frames from the SD card
 
 	FreeRTOS_CLIRegisterCommand(&xSetGps);
 	FreeRTOS_CLIRegisterCommand(&xGetGps);
@@ -2913,6 +3484,8 @@ static void vRegisterCLICommands(void)
  * Not sure how bug the stack needs to be...
  */
 TaskHandle_t cli_createTask(int8_t priority, APP_WAKE_REASON_E wakeReason) {
+
+	woken = wakeReason;
 
 	if (priority < 0)
 	{

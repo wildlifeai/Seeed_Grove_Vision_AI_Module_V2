@@ -8,7 +8,8 @@
  *   0x00000000 - 0x000FFFFF   Firmware Image Slot A  (1 MB)
  *   0x00100000 - 0x001FFFFF   Firmware Image Slot B  (1 MB)
  *   0x00200000 - 0x00EFFFFF   NN model area          (13 MB)
- *   0x00F00000 - 0x00FEFFFF   Reserved / unused
+ *   0x00F00000 - 0x00F01FFF   Saved state (xip_state.c): fast-start records, board record
+ *   0x00F02000 - 0x00FEFFFF   Reserved / unused
  *   0x00FFF000 - 0x00FFFFFF   Slot A/B selector      (last 4 KB sector)
  *
  * The NN model area starts at physical 0x00200000, which maps to virtual
@@ -42,6 +43,11 @@ extern "C" {
 #endif
 
 /*************************************** Definitions *******************************************/
+
+// Saved-state area (physical): two 4 KB sectors, used by xip_state.c. Only the
+// xip_state_area_x() functions below can reach it, and they can reach nothing else.
+#define XIP_STATE_AREA_ADDR     0x00F00000
+#define XIP_STATE_AREA_SIZE     0x2000
 
 // Virtual address at which model metadata begins (physical 0x00200000)
 #define MODEL_XIP_ADDR          0x3A200000
@@ -249,6 +255,23 @@ int xip_set_slot_variant(uint8_t slot, uint8_t variant);
  *         -3 selector write failure
  */
 int xip_switch_slot(void);
+
+/********************* Saved-state area (see xip_state.c) ***************************/
+
+/**
+ * @brief Read from the saved-state area (0 on success, -1 on failure or an address outside it).
+ */
+int xip_state_area_read(uint32_t addr, uint32_t *data, uint32_t len);
+
+/**
+ * @brief Program erased bytes in the saved-state area, inside one 256-byte page (0 on success).
+ */
+int xip_state_area_write(uint32_t addr, uint32_t *data, uint32_t len);
+
+/**
+ * @brief Erase one 4 KB sector of the saved-state area, up to about 400 ms (0 on success).
+ */
+int xip_state_area_erase(uint32_t addr);
 
 #ifdef __cplusplus
 }

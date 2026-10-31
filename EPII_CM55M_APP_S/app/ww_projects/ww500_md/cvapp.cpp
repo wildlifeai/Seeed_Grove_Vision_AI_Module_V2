@@ -428,6 +428,27 @@ static const tflite::Model *load_model_from_flash(void) {
 /********************************** Public Functions  *************************************/
 
 /**
+ * Whether cv_init() would need the SD card
+ *
+ * It does unless the NN is off (project_id 0) or the named model is already in flash: otherwise
+ * it looks for the model on the card. The image task uses this to start the NN before the card is
+ * ready only when that is safe.
+ *
+ * @param project_id - from Operational Parameter OP_PARAMETER_MODEL_PROJECT
+ * @param deploy_version - from Operational Parameter OP_PARAMETER_MODEL_VERSION
+ * @return true if cv_init() may read the card
+ */
+bool cv_modelNeedsCard(uint16_t project_id, uint16_t deploy_version) {
+	char filename[MAX_MODEL_NAME_LEN];
+
+	if (project_id == 0) {
+		return false;
+	}
+	snprintf(filename, sizeof(filename), "%dV%d.TFL", (int) project_id, (int) deploy_version);
+	return !xip_is_model_in_flash(filename, false);
+}
+
+/**
  *	Initialise TFLM model
  *
  *	The project_id and deploy_version parameters are used to determine the TFLM file name & model name.

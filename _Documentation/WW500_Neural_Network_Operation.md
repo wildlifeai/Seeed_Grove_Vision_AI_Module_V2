@@ -77,7 +77,8 @@ The external 16 MB SPI flash is partitioned as follows:
 | 0x00000000–0x000FFFFF | 1 MB | Firmware Slot A |
 | 0x00100000–0x001FFFFF | 1 MB | Firmware Slot B |
 | **0x00200000–0x00EFFFFF** | **13 MB** | **NN model area** |
-| 0x00F00000–0x00FEFFFF | 1 MB | Reserved |
+| 0x00F00000–0x00F01FFF | 8 KB | Saved state (see `ww500_md/doc/WW500_XIP_saved_state.md`) |
+| 0x00F02000–0x00FEFFFF | 1 MB | Reserved |
 | 0x00FFF000–0x00FFFFFF | 4 KB | Boot-slot selector |
 
 When XIP is enabled, the model area is accessed at virtual address **0x3A200000**.
@@ -131,7 +132,9 @@ The cold-boot console prints the raw metadata bytes. Here is an example with ann
 
 ## 4. Model Loading Sequence
 
-At each cold boot `cv_init()` follows this priority order:
+`cv_init()` runs at every wake. On a timer or motion wake, when the requested model is already in flash, it runs just after the capture has started, so the first frame is not delayed (about 12 ms with a model in flash). On other wakes, or when the model must come from the SD card, it runs during the image task's start-up, before any capture.
+
+It follows this priority order:
 
 1. **Named model in flash** — the filename stored in the flash metadata matches what CONFIG.TXT requests. Model is loaded directly (no SD card required).
 2. **Named model on SD card** — the `.TFL` file is present in `/MANIFEST`. It is copied to flash (erasing the old model first), then the companion `.TXT` labels are stored in the flash metadata.
@@ -175,7 +178,7 @@ Total weight bytes : 250612
 ---------------------------------
 There are 2 classes (2)
 Initialised neural network.
-NN Initialisation took 57ms TODO - consider doing this after taking the picture!
+NN Initialisation took 57ms
 ```
 
 **What each line means:**
@@ -240,7 +243,7 @@ Meta data now in flash:
 Copied labels to flash for 1V1.TFL
 There are 2 classes (2)
 Initialised neural network.
-NN Initialisation took 4849ms TODO - consider doing this after taking the picture!
+NN Initialisation took 4849ms
 ```
 
 **What each key line means:**
@@ -418,7 +421,9 @@ The 128-bit deployment UUID set by the mobile app (e.g. `12345678-0000-0000-0000
 
 | Function | Description |
 |----------|-------------|
-| `processNNOutput(outCategories, classCount)` | Compares logit[1] against `OP_PARAMETER_MODEL_THRESHOLD`; sends `NN+` or `NN-` to the BLE processor via I2C; prints detection result; increments counters in CONFIG.TXT. |
+| `initNN()` | Calls `cv_init()` with ops 14 and 15, waiting for the SD card first only if the model is not in flash. Called at start-up, or just after the capture starts on a timer or motion wake. |
+| `processNNOutput(outCategories, classCount)` | Compares logit[1] against `OP_PARAMETER_MODEL_THRESHOLD`; sends `NN+` or `NN-` to the BLE processor via I2C; prints detection result. Does not wait for the SD card. |
+| `countNNResult()` | Adds the result to the counters (ops 1 and 2) once the SD card is ready, since the counters are loaded from CONFIG.TXT. |
 | `prepareJpegFile(outCategories, classCount, extraBlock)` | Assembles the two-buffer JPEG+EXIF output: calls `build_exif_segment()` then queues the write request for `fatfs_task`. |
 | `build_exif_segment(outCategories, categoriesCount)` | Builds a TIFF-structured EXIF APP1 block in `exif_buffer[]`. Writes tag 0xC000 (raw logits), optionally 0x9286 (UserComment confidence string), and 0xF200 (deployment ID). |
 | `sendMsgToMaster(str)` | Queues an I2C message to the BLE processor via `if_task`. |

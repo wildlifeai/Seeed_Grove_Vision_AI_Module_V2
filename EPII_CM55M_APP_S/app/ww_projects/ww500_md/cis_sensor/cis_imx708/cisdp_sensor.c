@@ -320,7 +320,8 @@ void set_mipi_csirx_disable()
 
 int cisdp_sensor_init(bool sensor_init) {
     // Kept (DBG_MORE_INFO) as the start marker for timing the camera start-up (issue #249)
-    dbg_printf(DBG_MORE_INFO, "Initialising IMX708 at 0x%02x (p.u. delay %dms)\r\n", CIS_I2C_ID, CIS_POWERUP_DELAY);
+    dbg_printf(DBG_MORE_INFO, "Initialising IMX708 at 0x%02x (p.u. delay %dms)\r\n",
+    		CIS_I2C_ID, CIS_POWERUP_DELAY);
     dbg_printf(DBG_LESS_INFO, "Memory allocated: %ld for raw buffer, %d for JPEG, %d for JPEG header\n",
             			sizeof(demosbuf), sizeof(jpegbuf), sizeof(jpegfilesizebuf));
 
@@ -334,9 +335,10 @@ int cisdp_sensor_init(bool sensor_init) {
 
 #if defined  (WW500)
 #pragma message "WW500 in IMX708 driver"     // Need a delay here for the power to come on!
-    // SENSOR_ENABLE (the camera's power enable) is not handled in this driver: it is common code in ww500_md, set up
-    // as an output, low, in every build by pinmux_init() (ww500_md.c), and switched by rp_sensor_enable()
-    // (pinmux_cfg.c) before this is called. This only waits for the camera's power to come up.
+    // SENSOR_ENABLE (the camera's power enable) is not handled in this driver: it is common code in ww500_md. PB7
+    // becomes a GPIO output in checkForCameras() (ww500_md.c), not pinmux_init(), so on a cold boot about 1.4 s after
+    // reset (see the comment there), and is switched by rp_sensor_enable() (pinmux_cfg.c) before this is called. This
+    // only waits for the camera's power to come up.
     vTaskDelay(pdMS_TO_TICKS(CIS_POWERUP_DELAY));
 
 #elif defined(GROVE_VISION_AI)

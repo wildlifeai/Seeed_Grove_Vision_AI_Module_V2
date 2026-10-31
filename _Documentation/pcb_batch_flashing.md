@@ -2,10 +2,13 @@
 #### Claude (Opus 5.5), reviewed by Victor Anton, 25 September 2026
 
 `_Tools/ww500_ship_check.py` puts both Himax images on a board and proves both cameras
-take a photo, one board at a time, from a small window with one button. The operator plugs
+take a photo, one board at a time, with one click in a small window. The operator plugs
 in a board, presses its RESET button and clicks; the tool does the rest in under two
 minutes. First used on 25 September 2026 for ten PCBs on production firmware (main
 `9da3da3e`), all of which passed.
+
+Two smaller buttons take one photo with either camera from the images already on a board,
+without flashing: see [Taking a photo](#taking-a-photo).
 
 It covers the Himax only. The nRF (BLE) firmware is updated separately, through the app.
 
@@ -55,14 +58,47 @@ left with (defaults 0 and 1000, see below).
    press it again (the tool beeps).
 5. Green **All checks passed**: glance at the two photos, unplug, next board. The label
    moves on by itself.
-6. Red **FAILED**: reseat the camera ribbon(s), press RESET and click again **with the same
-   label** (after a failure the label does not move on). A second failure goes on the
-   faulty pile: type the next label and carry on.
+6. Red **FAILED**: unplug the board, reseat the camera ribbon(s), plug it back in, press
+   RESET and click again **with the same label** (after a failure the label does not move
+   on). A second failure goes on the faulty pile: type the next label and carry on.
+
+**Never move a camera ribbon while the board is powered.** On 11 October 2026 it garbled the
+board's output and hung the bootloader, and RESET did not bring it back.
 
 **One label per physical board.** Every click adds a row to the summary under the label in
 the window, so clicking again on the same board under a new label makes it look like two
 boards. On 25 September the same SD card's image counter ran on through the runs labelled
 PCB-01 to PCB-04, which is how a relabelled rerun shows up afterwards.
+
+## Taking a photo
+
+**Take a black and white photo** (HM0360) and **Take a colour photo** (RP3) take one photo
+from a board that already has both images, for example to look at a camera's focus or to
+test a camera connector. They flash nothing and add no row to the summary. To use only
+these buttons, start the tool without images; the big button then stays grey:
+
+```
+python _Tools\ww500_ship_check.py --port COM6
+```
+
+1. Click a photo button.
+2. If the board is asleep, the window asks for **RESET**: press it.
+3. The firmware checks the cameras on I2C only at boot, so the tool always restarts the
+   image it needs: `switchslot` if the other camera's image is running (the board stays on
+   the new image afterwards), `reset` otherwise, each followed by `dpd`.
+4. It reads `selftest`. If the camera's bits are set (`0200`/`0100` for the HM0360 on its
+   image, `0100` for the RP3) the window says the camera is **disconnected** and takes no
+   photo. Each click is therefore a fresh test of the connector (reseat it with the board
+   unplugged, see [Per board](#per-board)).
+5. Otherwise it says **No issues**, shows the photo in its panel with the same measurements
+   as the check and saves it as `<label>_<camera>_<time>.jpg`. A click while the board is
+   still awake needs no RESET; how long it stays awake varies (at least 19 s once, under 12 s
+   another time on 11 October 2026).
+
+When the tool also has images to flash, it streams `1` while idle, so a RESET pressed before
+clicking a photo button leaves the board in download mode and the tool asks for RESET once
+more. On firmware without #252, a colour photo after a cold boot falls back to the 5 s sleep
+described under [Firmware behaviour](#firmware-behaviour-the-tool-depends-on).
 
 ## What PASS means
 
@@ -99,6 +135,7 @@ Default folder `~/ww500_ship_check/batch_<date>` (change with `--logdir`):
   the final `slots` line.
 * `<label>.log`: every byte the board printed, with `#####` lines marking each step.
 * `<label>_RP3.jpg`, `<label>_HM0360.jpg`: the photos that were judged.
+* `<label>_<camera>_<time>.jpg`: photos from the photo buttons.
 
 Keep the batch folder as the record of what each board shipped with.
 
@@ -113,7 +150,8 @@ has shipped.
 | "Waiting for the USB adapter on COMn" | The port is missing or held by another program. Plug the adapter in, close TeraTerm, check `--port` |
 | "Press the RESET button" keeps coming back | The bootloader was never seen: wrong port, adapter on the wrong header, or board unpowered |
 | "transfer of ... failed" | Retried automatically once (it asks for RESET). A second failure: reseat the adapter and rerun |
-| RP3 or HM0360 "no photo" | Reseat that camera's ribbon and rerun with the same label |
+| RP3 or HM0360 "no photo" | Unplug the board, reseat that camera's ribbon, plug it back in and rerun with the same label |
+| "crashed while booting", "did not finish booting", "console output is garbled" or "did not start" | Something pressing on the HM0360 connector, or a ribbon moved with the power on. Remove the pressure and press RESET; if that fails, unplug the board, check the ribbons and plug it back in |
 | "camera missing on I2C" | The camera did not answer at all: ribbon unplugged or faulty module |
 | Summary shows `sd_card` missing, `selftest` 0800 | No SD card, or one that does not mount. Only a failure with `--require-sd` |
 

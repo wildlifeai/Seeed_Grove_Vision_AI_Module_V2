@@ -50,6 +50,7 @@
 #include "exif_utc.h"
 #include "barrier.h"
 #include "selfTest.h"
+#include "preview.h"
 
 /*************************************** Definitions *******************************************/
 
@@ -85,7 +86,7 @@
 // session inactivity and the app's 15s silence timeout.
 #define MISSINGMASTERTIME	4000
 
-// Time in ms for the BLE processor to read the first message after a boot ("Wake ...", "Timer ..." or "MD ...").
+// Time in ms for the BLE processor to read the first message after a boot ("Wake ...", "Timer ..." or "Motion ...").
 // If it does not, it is treated as unresponsive (bleUnresponsive) and nothing more is sent to it until it contacts
 // us. Only the first message uses this short time; every later one uses MISSINGMASTERTIME, so file transfers keep
 // their long window. Added 28 Sep 2026 for boards with no BLE processor, where every message would otherwise wait
@@ -339,11 +340,12 @@ static bool dlTxDoneValid = false;		// dlTxDoneTick belongs to this download
 /*********************************** I2C Local Function Definitions ************************************************/
 
 /**
- * True when the per-packet console output should be suppressed: during an upload (g_fileRxActive) or
- * a download (binaryTxActive)
+ * True when the per-packet console output should be suppressed: during an upload (g_fileRxActive),
+ * a download (binaryTxActive) or while a live preview frame is on the console UART
+ * (preview_isSending(): a print there splits the frame line and the viewer drops the frame)
  */
 static bool consoleQuiet(void) {
-	return (g_fileRxActive || binaryTxActive);
+	return (g_fileRxActive || binaryTxActive || preview_isSending());
 }
 
 /**
@@ -861,8 +863,10 @@ static void i2ccomm_write_enable(uint8_t * message, aiProcessor_msg_type_t messa
 	// Start a timer in case the master does not read our data. The first message after a boot gets the short
 	// BLE_PROBE_TIME, to find out quickly whether there is a BLE processor. xTimerChangePeriod() also starts
 	// (or restarts) the timer.
+	// Wait a short time for space in the timer command queue. With no wait, a queue that was full for a moment
+	// made this fail at once, and the assert below then hung the processor (13 Oct 2026, during a firmware update).
 	if (xTimerChangePeriod(timerHndlMissingMaster,
-			pdMS_TO_TICKS(bleProbePending ? BLE_PROBE_TIME : MISSINGMASTERTIME), 0) != pdPASS) {
+			pdMS_TO_TICKS(bleProbePending ? BLE_PROBE_TIME : MISSINGMASTERTIME), pdMS_TO_TICKS(100)) != pdPASS) {
 		configASSERT(0);	// TODO add debug messages?
 	}
 }
@@ -880,7 +884,9 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 	sendMsg.destination = NULL;
     uint32_t length;
     //char message[5 + UTCSTRINGLENGTH ];	// 'Wake 2025-02-13T22:33:44Z'
-    char message[150];	// TODO how long for all the OP_PARAMETER_NUM_ENTRIES integers?
+    // Long enough for the "Sleep" message: "Sleep " + OP_PARAMETER_NUM_ENTRIES values of up to "65535 ",
+    // 240 characters for 39 ops. Static: too big for this task's stack, and only this task uses it
+    static char message[WW130_MAX_PAYLOAD_SIZE + 1];
 
 	event = rxMessage.msg_event;
 	data = rxMessage.msg_data;
@@ -953,35 +959,14 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 		break;
 
 	case APP_MSG_IFTASK_AWAKE:
-#ifdef SENDMSGEARLY
-		// else send when APP_MSG_IFTASK_FREERTOS_INIT arrives
-		// We have just woken, so send a message to the BLE processor
-		// Include the AI's time
-		if (woken == APP_WAKE_REASON_MD) {
-			// Special wake message if the wake was due to motion detection
-			snprintf(message, sizeof(message), "MD ");
-			exif_utc_get_rtc_as_utc_string(&message[3], UTCSTRINGLENGTH );
-		}
-		else {
-			snprintf(message, sizeof(message), "Wake ");
-			exif_utc_get_rtc_as_utc_string(&message[5], UTCSTRINGLENGTH );
-		}
-
-		if_task_state = APP_IF_STATE_I2C_TX;
-#endif // SENDMSGEARLY
+		// Nothing to send yet: the wake message goes when APP_MSG_IFTASK_FREERTOS_INIT arrives
 		break;
 
 	case APP_MSG_IFTASK_FREERTOS_INIT:
 		// Here when the last FreeRTOStask has done its one-off initialisation
-		// Time to send selfTest bits to BLE processor.
-#ifdef SENDMSGEARLY
-		// Report any error bits to the BLE processor
-		snprintf(message, sizeof(message), "selfTest %04x", selfTest_getErrorBits());
-#else
+		// Time to send the wake message, with the AI processor's time, to the BLE processor.
 		if (woken == APP_WAKE_REASON_MD) {
 			// Special wake message if the wake was due to motion detection
-			//snprintf(message, sizeof(message), "MD ");
-			//exif_utc_get_rtc_as_utc_string(&message[3], UTCSTRINGLENGTH );
 			snprintf(message, sizeof(message), "Motion ");
 			exif_utc_get_rtc_as_utc_string(&message[7], UTCSTRINGLENGTH );
 		}
@@ -994,8 +979,6 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 			snprintf(message, sizeof(message), "Wake ");
 			exif_utc_get_rtc_as_utc_string(&message[5], UTCSTRINGLENGTH );
 		}
-
-#endif // SENDMSGEARLY
 
 		// The first message after a boot: it also finds out whether the BLE processor is there (see BLE_PROBE_TIME)
 		bleProbePending = true;
@@ -1020,8 +1003,8 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 		snprintf(message, sizeof(message), "Sleep ");
 
 		for (uint8_t i=0; i < OP_PARAMETER_NUM_ENTRIES; i++) {
-			uint8_t next = strlen(message);	// points to the place where we should write the next parameter
-			snprintf(&message[next], sizeof(message), "%d ", fatfs_getOperationalParameter(i));
+			size_t next = strlen(message);	// points to the place where we should write the next parameter
+			snprintf(&message[next], sizeof(message) - next, "%d ", fatfs_getOperationalParameter(i));
 		}
 
 		sendI2CMessage((uint8_t *) message, AI_PROCESSOR_MSG_RX_STRING, strlen(message) );

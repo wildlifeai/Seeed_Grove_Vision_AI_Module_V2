@@ -1,0 +1,15 @@
+# Board 1, 17:09: pushing on the connector, stops after 'slot flash_offset'; the BLE log shows Wake at 17:09:25 with no new RESET (photo app log)
+##### 17:09:01 black and white photo
+##### 17:09:01 typing 'slots'
+\xff
+##### 17:09:02 typing 'slots'
+slot
+Command not recognised.  Enter 'help' to view a list of available \xc3ommands.
+cmd> \x001st BL Modem Build DATE=Jan 17 2025, Version: 2.12
+Please input any key to enter X-Modem mode in 30 ms 
+waiting input key...
+slot flash_offset 0x00000000
+New MemDesp himax_sec_SB_image_process PASS
+set_memory_s_ns
+HX_DSP_FLAG 1
+##### 17:09:17 black and white photo: FAIL the board reset but did not finish booting: a camera connector may be shorting. Remove any pressure on it, press RESET and click again; if that fails, unplug, reseat the ribbon and plug back in

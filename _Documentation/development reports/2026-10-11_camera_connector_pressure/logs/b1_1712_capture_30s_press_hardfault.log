@@ -1,0 +1,234 @@
+# Board 1, 17:12: 30 s press during the capture: event flood, EDM callback storm, HardFault, dead (both consoles)
+[17:12:49.290] himax| IMAGE Task received event 'Image Event Frame Ready' (0x0a04). Rx data = 0x00000000
+[17:12:49.290] himax| DEBUG: ledFlashDisable()
+[17:12:49.291] himax| Image capture 69/300 took 1142ms
+[17:12:49.291] himax| Skipping NN processing (no model loaded).
+[17:12:49.354] himax| HM0360 AE regs:
+[17:12:49.355] himax|   Integration time = 376 lines
+[17:12:49.355] himax|   Analog gain = 0
+[17:12:49.355] himax|   Digital gain = 103
+[17:12:49.355] himax|   AE Mean = 83
+[17:12:49.355] himax|   AEConverged?: Y
+[17:12:49.355] himax| IF Task received event 'Message to Master' (0x070d). Rx data = 0x300115b0
+[17:12:49.355] himax| Assert inter-processor interrupt.
+[17:12:49.355] himax| Sending 124 bytes: Header 4, payload 118, checksum 2 'HM0360 AE regs:
+[17:12:49.355] himax|   Integration time = 376 lines
+[17:12:49.355] himax|   Analog gain = 0
+[17:12:49.355] himax|   Digital gain = 103
+[17:12:49.355] himax|   AE Mean = 83
+[17:12:49.355] himax|   AEConverged?: Y'
+[17:12:49.355] himax| Negate inter-processor interrupt.
+[17:12:49.355] himax| IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+[17:12:49.355] himax| IF Task received event 'I2C Tx' (0x0701). Rx data = 0x00000000
+[17:12:49.355] himax| I2C transmission complete.
+[17:12:49.355] himax| IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+[17:12:49.355] himax| HM0360 motion in 7 blocks:
+[17:12:49.355] himax| IF Task received event 'Message to Master' (0x070d). Rx data = 0x300115b0
+[17:12:49.355] himax| Assert inter-processor interrupt.
+[17:12:49.357] himax| Sending 129 bytes: Header 4, payload 123, checksum 2 'HM0360 motion in 7 blocks:
+[17:12:49.357] himax| Negate inter-processor interrupt.
+[17:12:49.357] himax| IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+[17:12:49.357] himax| Added 12 EXIF tags
+[17:12:49.357] himax| Writing 12540 bytes (12028 + 512) to '59200DB0.JPG' from jpeg buffer of 115860 bytes
+[17:12:49.357] himax| IMAGE Task state changed from 'Capturing' (2) to 'NN Processing' (3)
+[17:12:49.357] himax| FatFS Task received event 'Write image' (0x0901). Rx data = 0x30020038
+[17:12:49.357] himax| FatFS task sending event 0x0a06. Tx data = 0x0000000d
+[17:12:49.357] himax| IMAGE task sending event 0x0901. Rx data = 0x30020038
+[17:12:49.359] himax| IMAGE Task received event 'Image Event Disk Write Complete' (0x0a06). Rx data = 0x0000000d
+[17:12:49.359] himax| Image not written. Error: 13
+[17:12:49.359] himax| sensor_type: 8
+[17:12:49.359] himax| IMAGE Task state changed from 'NN Processing' (3) to 'Capturing' (2)
+[17:12:49.417] himax| IF Task received event 'I2C Tx' (0x0701). Rx data = 0x00000000
+[17:12:49.417] himax| I2C transmission complete.
+[17:12:49.417] himax| IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+[17:12:49.573] nrf  | <info> app: !138 
+[17:12:49.573] nrf  | <info> app: DEBUG: starting AI processor read
+[17:12:49.573] nrf  | <info> app: I2C link is initialised.
+[17:12:49.573] nrf  | <info> app: I2C RX payload 118/250 bytes. Response type is 4. CRC OK (0xFD5C)
+[17:12:49.573] nrf  | <info> app: !139 
+[17:12:49.575] nrf  | <info> app: AI state machine bumped with 'Msg from AI' (Current state: IDLE)
+[17:12:49.575] nrf  | BLE out: Failed to send 119 bytes: 'HM0360 AE regs:
+[17:12:49.575] nrf  |   Integration time = 376 lines
+[17:12:49.575] nrf  |   Analog gain = 0
+[17:12:49.575] nrf  |   Digital gain = 103
+[17:12:49.575] nrf  |   AE Mean = 83
+[17:12:49.575] nrf  |   AEConverged?: Y'
+[17:12:49.575] nrf  | <info> app: DEBUG: starting AI processor read
+[17:12:49.575] nrf  | <info> app: I2C link is initialised.
+[17:12:49.575] nrf  | <info> app: I2C RX payload 123/250 bytes. Response type is 4. CRC OK (0x7E56)
+[17:12:49.575] nrf  | <info> app: AI state machine bumped with 'Msg from AI' (Current state: IDLE)
+[17:12:49.575] nrf  | BLE out: Failed to send 124 bytes: 'HM0360 motion in 7 blocks:
+[17:12:50.455] himax| IMAGE Task received event 'Image Event Frame Ready' (0x0a04). Rx data = 0x00000000
+[17:12:50.455] himax| DEBUG: ledFlashDisable()
+[17:12:50.455] himax| Image capture 70/300 took 1142ms
+[17:12:50.455] himax| Skipping NN processing (no model loaded).
+[17:12:50.455] himax| HM0360 AE regs:
+[17:12:50.455] himax|   Integration time = 376 lines
+[17:12:50.455] himax|   Analog gain = 0
+[17:12:50.455] himax|   Digital gain = 103
+[17:12:50.455] himax|   AE Mean = 75
+[17:12:50.455] himax|   AEConverged?: Y
+[17:12:50.455] himax| IF Task received event 'Message to Master' (0x070d). Rx data = 0x300115b0
+[17:12:50.455] himax| Assert inter-processor interrupt.
+[17:12:50.455] himax| Sending 124 bytes: Header 4, payload 118, checksum 2 'HM0360 AE regs:
+[17:12:50.455] himax|   Integration time = 376 lines
+[17:12:50.455] himax|   Analog gain = 0
+[17:12:50.455] himax|   Digital gain = 103
+[17:12:50.456] himax|   AE Mean = 75
+[17:12:50.456] himax|   AEConverged?: Y'
+[17:12:50.457] himax| Negate inter-processor interrupt.
+[17:12:50.457] himax| IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+[17:12:50.457] himax| IF Task received event 'I2C Tx' (0x0701). Rx data = 0x00000000
+[17:12:50.457] himax| I2C transmission complete.
+[17:12:50.457] himax| IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+[17:12:50.518] himax| HM0360 motion in 60 blocks:
+[17:12:50.518] himax| IF Task received event 'Message to Master' (0x070d). Rx data = 0x300115b0
+[17:12:50.518] himax| Assert inter-processor interrupt.
+[17:12:50.518] himax| Sending 130 bytes: Header 4, payload 124, checksum 2 'HM0360 motion in 60 blocks:
+[17:12:50.518] himax| Negate inter-processor interrupt.
+[17:12:50.518] himax| IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+[17:12:50.518] himax| Added 12 EXIF tags
+[17:12:50.518] himax| Writing 9364 bytes (8852 + 512) to '59200DC0.JPG' from jpeg buffer of 115860 bytes
+[17:12:50.518] himax| IMAGE Task state changed from 'Capturing' (2) to 'NN Processing' (3)
+[17:12:50.518] himax| FatFS Task received event 'Write image' (0x0901). Rx data = 0x30020038
+[17:12:50.518] himax| FatFS task sending event 0x0a06. Tx data = 0x0000000d
+[17:12:50.518] himax| IMAGE task sending event 0x0901. Rx data = 0x30020038
+[17:12:50.518] himax| IMAGE Task received event 'Image Event Disk Write Complete' (0x0a06). Rx data = 0x0000000d
+[17:12:50.518] himax| Image not written. Error: 13
+[17:12:50.518] himax| sensor_type: 8
+[17:12:50.518] himax| IMAGE Task state changed from 'NN Processing' (3) to 'Capturing' (2)
+[17:12:50.577] himax| IF Task received event 'I2C Tx' (0x0701). Rx data = 0x00000000
+[17:12:50.577] himax| I2C transmission complete.
+[17:12:50.577] himax| IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+[17:12:50.685] nrf  | <info> app: !140 
+[17:12:50.685] nrf  | <info> app: DEBUG: starting AI processor read
+[17:12:50.685] nrf  | <info> app: I2C link is initialised.
+[17:12:50.685] nrf  | <info> app: I2C RX payload 118/250 bytes. Response type is 4. CRC OK (0x2CFC)
+[17:12:50.685] nrf  | <info> app: !141 
+[17:12:50.685] nrf  | <info> app: AI state machine bumped with 'Msg from AI' (Current state: IDLE)
+[17:12:50.685] nrf  | BLE out: Failed to send 119 bytes: 'HM0360 AE regs:
+[17:12:50.685] nrf  |   Integration time = 376 lines
+[17:12:50.685] nrf  |   Analog gain = 0
+[17:12:50.687] nrf  |   Digital gain = 103
+[17:12:50.687] nrf  |   AE Mean = 75
+[17:12:50.687] nrf  |   AEConverged?: Y'
+[17:12:50.687] nrf  | <info> app: DEBUG: starting AI processor read
+[17:12:50.687] nrf  | <info> app: I2C link is initialised.
+[17:12:50.687] nrf  | <info> app: I2C RX payload 124/250 bytes. Response type is 4. CRC OK (0x614D)
+[17:12:50.687] nrf  | <info> app: AI state machine bumped with 'Msg from AI' (Current state: IDLE)
+[17:12:50.687] nrf  | BLE out: Failed to send 125 bytes: 'HM0360 motion in 60 blocks:
+[17:12:55.717] himax| \x00\x00\xfc\x80\x18\x00\xfe \xfd\x8a\xff\xc7\xd2\xffster EDM Timing Callback Fun 0x3ffff
+[17:12:55.717] himax| IMAGE Task received event 'Unrecognised' (0x011c). Rx data = 0x00000000
+[17:12:55.717] himax| >>>> Received a timeout event 0x011c after 4542ms <<<<
+[17:12:55.718] himax| >>>> Frame timed out - restarting sensor, retry 1/5
+[17:12:55.718] himax| Stopping sensor
+[17:12:55.718] himax|    Inhibiting MD
+[17:12:55.718] himax|    Changing mode from 2 to 0 with nFrames=0, sleepTime=0 sleepCount = 0xffff
+[17:12:55.901] himax| sensor_type: 8
+[17:12:55.901] himax|    Interva\xd8\xff\x00\xfc\x1e\xfc\xc0\xb0\x00\xfe\x00\x18\xf0\x00\xc0\x00\x00\x00\xe0\x00`\xf6\x80\x1c\x00\xfe\xe0\xf6\xd1\xffv\xc5s sleep count = 0x8030
+[17:12:55.901] himax|    Changing mode from 0 to 2 with nFrames=1, sleepTime=1000 sleepCount = 0x8030
+[17:12:55.901] himax| IMAGE Task received event 'Unrecognised' (0x011b). Rx data = 0x00000000
+[17:12:55.901] himax| >>>> Received a timeout event 0x011b after 1ms <<<<
+[17:12:55.901] himax| IMAGE Task received event 'Unrecognised' (0x011c). Rx data = 0x00000000
+[17:12:55.901] himax| >>>> Received a timeout event 0x011c after 2ms <<<<
+[17:12:55.901] himax| IMAGE Task receiv\xca\xff\x80\xe6\x80\xfc `\x008\x00\x08\xd8\x00\x80\xf8\x008\x80\x00\xfc\xe0\x80\xfcP\xfd\xc0\xfb\xe2ecognised' (0x011b). Rx data = 0x00000000
+[17:12:55.901] himax| >>>> Received a timeout event 0x011b after 4ms <<<<
+[17:12:55.901] himax| IMAGE Task received event 'Unrecognised' (0x011c). Rx data = 0x00000000
+[17:12:55.901] himax| >>>> Received a timeout event 0x011c after 6ms <<<<
+[17:12:55.901] himax| IMAGE Task received event 'Unrecognised' (0x011b). Rx data = 0x00000000
+[17:12:55.901] himax| >>>> Received a timeout event 0x011b after 8ms <<<<
+[17:12:55.901] himax| IMAGE Task received event 'Unrecognised' (0x011c). Rx data = 0x00000000
+[17:12:55.901] himax| >>>> Received a timeout event 0x011c after 10ms <<<<
+[17:12:55.901] himax| IMAGE Task received event 'Unrecognised' (0x011b). Rx data = 0x00000000
+[17:12:55.901] himax| >>>> Received a timeout event 0x011b after 12ms <<<<
+[17:13:01.130] himax| No Register EDM Timing Callback Fun 0x20000
+[17:13:01.130] himax| No Register EDM Timing Callback Fun 0x20000
+[17:13:01.130] himax| No Register EDM Timing Callback Fun 0x20000
+[17:13:01.130] himax| No Register EDM Timing Callback Fun 0x20000
+[17:13:01.130] himax| No Register EDM Timing Callback Fun 0x20000
+[17:13:01.130] himax| No Register EDM Timing Callback Fun 0x20000
+[17:13:01.130] himax| No Register EDM Timing Callback Fun 0x20000
+[17:13:01.130] himax| No Register EDM Timing Callback Fun 0x20000
+[17:13:01.130] himax| No Register EDM Timing Callback Fun 0x20000
+[17:13:01.130] himax| No Register EDM Timing Callback Fun 0x20000
+[17:13:01.130] himax| No Register EDM Timing Callback Fun 0x20000
+[17:13:01.130] himax| No Register EDM Timing Callback Fun 0x20000
+[17:13:01.130] himax| No Register EDM Timing Callback Fun 0x20000
+[17:13:01.130] himax| No Register EDM Timing Callback Fun 0x200\x80\xfe\xc0\xfe \xf0\xa0\x00\x00\x08\xff\x00\x10\x00\x07\x03\xff\x00\x00\x00\x00\x00\x00\x00\x00\x00\xf0\x00\x00\xfc\x00\x000\xc0\x80\xff\x00\xf7\x92\xff\x10\xff@\x89\xff\x84\x99 Timing Callback Fun 0x20000
+[17:13:01.130] himax| No Register EDM Timing Callback Fun 0x20000
+[17:13:01.130] himax| No Register EDM Timing Callback Fun 0x20000
+[17:13:01.130] himax| No Register EDM Timing Callback Fun 0x20000
+[17:13:01.133] himax| No Register EDM Timing Callback Fun 0x20000
+[17:13:01.133] himax| No Register EDM Timing Callback Fun 0x20000
+[17:13:01.133] himax| No Register EDM Timing Callback Fun 0x20000
+[17:13:01.133] himax| No Register EDM Timing Callback Fun 0x20000
+[17:13:01.133] himax| No Register EDM Timing Callback Fun 0x20000
+[17:13:01.133] himax| No Register EDM Timing Callback Fun 0x20000
+[17:13:01.133] himax| No Register EDM Timing Callback Fun 0x20000
+[17:13:01.133] himax| No Register EDM Timing Callback Fun 0x20000
+[17:13:01.133] himax| No Register EDM Timing Callback Fun 0x20000
+[17:13:01.133] himax| No Register EDM Timing Callback Fun 0x20000
+[17:13:01.133] himax| No Register EDM Timing Callback Fun 0x20000
+[17:13:01.133] himax| No R\xc5\xc7\xfe@\xda\x18\xb8\x00\xe7\x00\x04\xc0\x00\x00\xf8\x00\x00\x00\x00\x00\x00\x00\x00\xf8\x00`\x00\xfe\x00\xfe\x00\xe9\x10hh\xfe\xd2\xff\xce\xc7\xff@C\xc1llback Fun 0x20000
+[17:13:01.133] himax| No Register EDM Timing Callback Fun 0x20000
+[17:13:01.133] himax| No Register EDM Timing Callback Fun 0x20000
+[17:13:01.133] himax| No Register EDM Timing Callback Fun 0x20000
+[17:13:01.133] himax| No Register EDM Timing Callback Fun 0x20000
+[17:13:01.185] himax| No Register EDM Timing Callback Fun 0x20000
+[17:13:01.185] himax| No Register EDM Timing Callback Fun 0x20000
+[17:13:01.185] himax| No Register EDM Timing Callback Fun 0x20000
+[17:13:01.185] himax| No Register EDM Timing Callback Fun 0x20000
+[17:13:01.185] himax| No Register EDM Timing Callback Fun 0x20000
+[17:13:01.185] himax| No Register EDM Timing Callback Fun 0x20000
+[17:13:01.185] himax| No Register EDM Timing Callback Fun 0x20000
+[17:13:01.185] himax| No Register EDM Timing Callback Fun 0x20000
+[17:13:01.185] himax| No Register EDM Timing Callback Fun 0x20000
+[17:13:01.185] himax| No Register EDM Timing Callback Fun 0x20000\x0d\x0dP\xfc\x1c\xff\x80\xf6\x00\xfe\x00\x00\xfd@\x01\xc3\x00\x00\xf0\x00\x00`\xf8\x00\x00\x00\x00\x00\xc0\x00 \x00\xfe\x00\xe0\xf8\x00\xfe@\xe8\x00\xf4\x8d@\xffTi\xffming Callback Fun 0x20000
+[17:13:01.185] himax| No Register EDM Timing Callback Fun 0x20000
+[17:13:01.185] himax| No Register EDM Timing Callback Fun 0x20000
+[17:13:01.185] himax| No Register EDM Timing Callback Fun 0x20000
+[17:13:01.187] himax| No Register EDM Timing Callback Fun 0x20000
+[17:13:01.187] himax| No Register EDM Timing Callback Fun 0x20000
+[17:13:01.187] himax| No Register EDM Timing Callback Fun 0x20000
+[17:13:01.187] himax| No Register EDM Timing Callback Fun 0x20000
+[17:13:01.187] himax| No Register EDM Timing Callback Fun 0x20000
+[17:13:01.187] himax| No Register EDM Timing Callback Fun 0x20000
+[17:13:01.187] himax| No Register EDM Timing Callback Fun 0x20000
+[17:13:01.187] himax| No Register EDM Timing Callback Fun 0x20000
+[17:13:01.187] himax| No Register EDM Timing Callback Fun 0x20000
+[17:13:01.187] himax| No Register EDM Timing Callback Fun 0x20000
+[17:13:01.187] himax| No Register EDM Timing Callback Fun 0x20000
+[17:13:01.187] himax| No Regis\xe8\xff\x14\xfe\x88\xfc\x00\xfc\x00B\x00\x00\xff\x00\xc0\x00\xf8\x00\x00\x00\x00\x00\x02\xfc\x00\x00\xc0\xc0\x00``\xf8\x00\x00d\x00\xe6\xc0\x00\xfe\x00\xfc\x03\xf4\xc1l\xccb\xc2ck@Fun 0x20000
+[17:13:01.187] himax| No Register EDM Timing Callback Fun 0x20000
+[17:13:01.187] himax| No Register EDM Timing Callback Fun 0x20000
+[17:13:01.187] himax| No Register EDM Timing Callback Fun 0x20000
+[17:13:01.187] himax| No Register EDM Timing Callback Fun 0x20000
+[17:13:01.187] himax| No Register EDM Timing Callback Fun 0x20000
+[17:13:01.188] himax| No Register EDM Timing Callback Fun 0x20000
+[17:13:01.188] himax| No Register EDM Timing Callback Fun 0x20000
+[17:13:01.188] himax| No Register EDM Timing Callback Fun 0x20000
+[17:13:01.188] himax| No Register EDM Timing Callback Fun 0x20000
+[17:13:01.188] himax| No Register EDM Timing Callback Fun 0x20000
+[17:13:01.188] himax| No Register EDM Timing Callback Fun 0x20000
+[17:13:01.188] himax| No Register EDM Timing Callback Fun 0x20000
+[17:13:01.188] himax| No Register EDM Timing Callback Fun 0x20000
+[17:13:01.369] himax| Entering HardFault interrupt!
+[17:13:01.369] himax| Security Another secure bus error 1.
+[17:13:01.369] himax| SCB->CFSR:0x00020000
+[17:13:01.369] himax| SCB->BFAR:0xabcff4c7
+[17:13:01.369] himax| SCB->HFSR:0x40000000
+[17:13:05.806] nrf  | <info> app: Retrying transmission now.
+[17:13:05.806] nrf  | BLE out: Failed to send  27 bytes: 'Retrying transmission now.'
+[17:13:05.806] nrf  | <info> app: Bumping state machine with 'Retry Tx' (Current state: JOINING)
+[17:13:05.806] nrf  | <info> app: MLME-Request: MLME_JOIN, OK
+[17:13:06.167] nrf  | <info> app: MAC txDone
+[17:13:11.273] nrf  | <info> app: MAC rxTimeOut
+[17:13:12.323] nrf  | <info> app: MAC rxTimeOut
+[17:13:12.323] nrf  | Join failed. Status code -1
+[17:13:12.323] nrf  | <info> app: Bumping state machine with 'Joined' (Current state: JOINING)
+[17:13:12.323] nrf  | <info> app: Retry (attempt 5/6) in 85 seconds (1 minutes)
+[17:13:12.323] nrf  | <debug> app: FDS update success! FileId: 0x3E8 RecKey:0x1
+[17:13:12.323] nrf  | <debug> app: FDS update success! FileId: 0x3E8 RecKey:0x2
+[17:13:12.323] nrf  | <info> app: Data stored on NVM: 76 bytes
+[17:13:12.323] nrf  | BLE out: Failed to send  16 bytes: 'Failed to join.'
+[17:13:31.378] himax| --- silent for 30 s ---

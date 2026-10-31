@@ -49,6 +49,14 @@ extern "C" {
 
 /**************************************** Type declarations  *************************************/
 
+// Ranges of the operational parameters that have one (see fatfs_isValidOperationalParameter())
+#define MD_SENSITIVITY_DEFAULT		1	// op 17: 1 = low
+#define MD_SENSITIVITY_MIN			1	// op 17 range: 1 = low to 3 = high. There is no 'off': op 11 = 0 is the off switch
+#define MD_SENSITIVITY_MAX			3
+#define MD_BLOCK_THRESHOLD_DEFAULT	4	// op 33: the HM0360 register table's MD_BLOCK_NUM_TH
+#define MD_BLOCK_THRESHOLD_MIN		1	// op 33 range, from the HM0360 MD application note 3.1
+#define MD_BLOCK_THRESHOLD_MAX		255
+
 // Operational parameters to get/set.
 // Typically the values are saved to SD card before entering DPD
 // OP_PARAMETER_NUM_ENTRIES is only used to establish the number of entries
@@ -71,13 +79,13 @@ typedef enum {
 	OP_PARAMETER_INTERVAL_BEFORE_DPD, // 8 The interval (in ms) between when all FreeRTOS task activity ceases and the AI processor entering DPD.
 	OP_PARAMETER_LED_BRIGHTNESS_PERCENT,	// 9 Flash LED duty cycle (brightness) in percent (approximately, 0 means 'dim', not 'off')
 	OP_PARAMETER_CAMERA_ENABLED,	// 10 0 = Camera and NN system disabled, 1 = Camera and NN system enabled
-	OP_PARAMETER_MD_INTERVAL,		// 11 Interval (ms) between frames in motion detect mode (0 inhibits motion detection)
+	OP_PARAMETER_MD_INTERVAL,		// 11 Interval (ms) between frames in motion detect mode (0 inhibits motion detection). HM0360 maximum about 1997
 	OP_PARAMETER_FLASH_DURATION,	// 12 Duration (ms) that LED flash is on (RP camera only)
 	OP_PARAMETER_FLASH_LED,			// 13 Flash LED bit mask: visible LED used = 1, infra-red LED used =2, none = 0
 	OP_PARAMETER_MODEL_PROJECT,		// 14 Model project ID used for the NN model (0 disables NN)
 	OP_PARAMETER_MODEL_VERSION,		// 15 Model version number used for the NN model
 	OP_PARAMETER_MODEL_THRESHOLD,	// 16 Logit threshold for detection (0-127)
-	OP_PARAMETER_MD_SENSITIVITY,	// 17 Motion Detection Sensitivity: 0=off, 1=low, 2=medium, 3=high
+	OP_PARAMETER_MD_SENSITIVITY,	// 17 Motion Detection Sensitivity: 1=low, 2=medium, 3=high (op 11 = 0 is the off switch)
 	OP_PARAMETER_TEST_MODE_BITS,	// 18 To manage test configurations: bit or bits indicate a test function
 	OP_PARAMETER_IMAGES_COUNT,		// 19 Count of images in the current image folder. Use this to decide to create a new image folder.
 	OP_PARAMETER_IMAGES_FILE_INDEX,	// 20 Count of image folders
@@ -90,13 +98,15 @@ typedef enum {
 	OP_PARAMETER_WB_RED_GAIN,		// 27 Software white-balance red gain, Q8.8 (256 = 1.0x, 0 = correction off). RP camera only - see img_correct.c
 	OP_PARAMETER_WB_BLUE_GAIN,		// 28 Software white-balance blue gain, Q8.8 (256 = 1.0x, 0 = correction off). RP camera only - see img_correct.c
 	OP_PARAMETER_CAM_AE_ENABLE,		// 29 RP camera auto-exposure: 0 = off (init-table exposure), 1 = on. See ae.c
-	OP_PARAMETER_CAM_AE_TARGET,		// 30 RP camera auto-exposure target mean luma (0-250; 0 = built-in default 110). See ae.c
+	OP_PARAMETER_CAM_AE_TARGET,		// 30 RP camera auto-exposure target luma (0-250, default 110; 0 = ae.c's built-in AE_TARGET_DEFAULT 95). See ae.c
 	OP_PARAMETER_CAM_WB_MODE,		// 31 RP camera white balance: 0 = off, 1 = auto (grey-world per frame), 2 = manual op27/op28. See img_correct.c
 	OP_PARAMETER_LORAWAN_PING_MINUTES,	// 32 LoRaWAN ping period (0 disables LoRaWAN network join attempts).
-	OP_PARAMETER_RFU_2,				// 33 RFU
+	OP_PARAMETER_MD_BLOCK_THRESHOLD,	// 33 Motion detection wake threshold: more than this many MD cells (1-255) must show motion
 	OP_PARAMETER_FLASH_MODE,			// 34 Capture flash mode: 0=off, 1=AE, 2=always-on, 3=time-of-day
 	OP_PARAMETER_FLASH_TOD_START,		// 35 FLASH_MODE_TIME_OF_DAY: minutes after midnight UTC when the flash turns on
 	OP_PARAMETER_FLASH_TOD_DURATION,	// 36 FLASH_MODE_TIME_OF_DAY: duration (minutes) the flash stays on, wraps past midnight
+	OP_PARAMETER_CAM_AE_EXPOSURE,		// 37 RP camera AE state: last exposure (lines, 8-5000; 0 = none saved). Restored at sensor init. See ae.c
+	OP_PARAMETER_CAM_AE_GAIN,			// 38 RP camera AE state: last analog gain code (0-960 = 1x-16x). Restored with op 37. See ae.c
 
 	OP_PARAMETER_NUM_ENTRIES		// Not an Operational Parameters - serves to define the size of the op_parameter[] array
 } OP_PARAMETERS_E;
@@ -167,6 +177,11 @@ uint16_t fatfs_getState(void);
 
 bool fatfs_mounted(void);
 
+// Start-up: block until the settings are known (fast-start record or card), or until the card is ready
+void fatfs_waitForSettings(void);
+void fatfs_waitForSdReady(void);
+bool fatfs_isSdReady(void);
+
 const char * fatfs_getStateString(void);
 
 // Get one of the Operational Parameters
@@ -174,6 +189,9 @@ uint16_t fatfs_getOperationalParameter(OP_PARAMETERS_E parameter);
 
 // Set one of the operational parameters
 void fatfs_setOperationalParameter(OP_PARAMETERS_E parameter, int16_t value);
+
+// True if value is allowed for this parameter (only some parameters have a restricted range)
+bool fatfs_isValidOperationalParameter(OP_PARAMETERS_E parameter, uint16_t value);
 
 uint16_t fatfs_getImageSequenceNumber(void);
 

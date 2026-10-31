@@ -40,16 +40,21 @@
 28 326
 # 29: RP camera auto-exposure: 0 = off, 1 = on.
 29 1
-# 30: auto-exposure target (0=built-in default)
-30 0
+# 30: RP auto-exposure target (0-250)
+30 110
 # 31: RP white balance (0=off,1=auto,2=manual)
 31 1
-# 32, 33: reserved for future use
+# 32: LoRaWAN ping period (min, 0=never join)
 32 0
-33 0
+# 33: MD wake threshold (wake if more cells, 1-255)
+33 4
 # 34: flash mode 0=off 1=AE 2=always-on 3=time-of-day
 34 0
 # 35: time-of-day start (min after midnight UTC)
 35 0
 # 36: time-of-day duration (min), wraps past midnight
 36 0
+# 37: RP AE exposure reached (runtime state - leave as 0)
+37 0
+# 38: RP AE gain reached (runtime state - leave as 0)
+38 0

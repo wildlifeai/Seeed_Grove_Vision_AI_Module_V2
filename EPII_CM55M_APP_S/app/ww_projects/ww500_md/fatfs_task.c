@@ -87,6 +87,8 @@
 #include "selfTest.h"
 #include "cvapp.h"
 #include "exif_gps.h"
+#include "ae.h"			// AE exposure/gain limits, for ops 37/38
+#include "xip_state.h"	// the fast-start record in flash
 
 // TODO this is for the default project id and version - move elsewhere?
 #include "common_config.h"
@@ -154,7 +156,12 @@ extern Barrier_t shutdownBarrier;  // Object that calls a function when all task
 
 /*************************************** Local variables *******************************************/
 
-SemaphoreHandle_t xSDInitDoneSemaphore;
+// Given when the start-up work with the card is finished (fatfs_waitForSdReady())
+static SemaphoreHandle_t xSDInitDoneSemaphore;
+// Given when op_parameter[] holds this boot's values: from the fast-start record, or without
+// one, from the card (fatfs_waitForSettings())
+static SemaphoreHandle_t xSettingsReadySemaphore;
+static volatile bool sdReady = false;
 
 static APP_WAKE_REASON_E woken;
 
@@ -174,6 +181,21 @@ static bool mounted;
 // Persistent file handle for incremental file writes (OPEN_FILE / APPEND_FILE / CLOSE_FILE)
 static FIL transferFile;
 static bool transferFileOpen = false;
+
+/**
+ * The 'disk write complete' event a task expects, by its queue. The file-transfer path (open, append,
+ * close) used to reply to the IF task whatever the sender; the CLI's 'nnfiles' command uses the same
+ * path, so the reply now follows the sender like the other operations.
+ */
+static APP_MSG_EVENT_E diskWriteCompleteEvent(QueueHandle_t dest) {
+	if (dest == xIfTaskQueue) {
+		return APP_MSG_IFTASK_DISK_WRITE_COMPLETE;
+	}
+	if (dest == xImageTaskQueue) {
+		return APP_MSG_IMAGETASK_DISK_WRITE_COMPLETE;
+	}
+	return APP_MSG_CLITASK_DISK_WRITE_COMPLETE;
+}
 
 // Flush FAT metadata with f_sync() every N appends. Without this a long
 // transfer accumulates unbounded dirty filesystem state (cluster chain and
@@ -247,12 +269,12 @@ uint16_t op_parameter[OP_PARAMETER_NUM_ENTRIES] = {
 	PROJECT_ID,		   // 14 OP_PARAMETER_MODEL_PROJECT (0 disables NN)
 	PROJECT_VER,	   // 15 OP_PARAMETER_MODEL_VERSION
 	MODEL_THRESHOLD,   // 16 OP_PARAMETER_MODEL_THRESHOLD default
-	1,      	   		// 17 Motion Detection Sensitivity: 0=off, 1=low, 2=medium, 3=high
+	MD_SENSITIVITY_DEFAULT,	// 17 Motion Detection Sensitivity: 1=low, 2=medium, 3=high
 	0,	    	   		// 18 Test Mode Bits - one bit to enable each test function
 	0,	    	   		// 19 OP_PARAMETER_IMAGES_COUNT
 	0,	    	   		// 20 OP_PARAMETER_IMAGES_COUNT - increment as files are added. Start a new folder when this exceeds a threhsold
 	2,	    	   		// 21 OP_PARAMETER_MD_FLASH_LED (2 = IR)
-	50,	    	   		// 22 OP_PARAMETER_MD_FLASH_BRIGHTNESS_PERCENT (STROBE-gated ~15ms pulses; 5% too dim in the field)
+	5,	    	   		// 22 OP_PARAMETER_MD_FLASH_BRIGHTNESS_PERCENT (STROBE-gated ~15ms pulses; matches MANIFEST/CONFIG.TXT)
 	65,	    	   		// 23 OP_PARAMETER_AE_DARK_THRESHOLD ('moderate' setting - see AE_Light_Sensor_Roadmap.md)
 	15,	    	   		// 24 OP_PARAMETER_FLASH_EVALUATE_INTERVAL (minutes; 0 disables)
 	0,	    	   		// 25 OP_PARAMETER_AE_FLASH_STATE (runtime state)
@@ -263,10 +285,12 @@ uint16_t op_parameter[OP_PARAMETER_NUM_ENTRIES] = {
 	110,	   			// 30 OP_PARAMETER_CAM_AE_TARGET (target mean luma; 0 = built-in default)
 	1,	    	   		// 31 OP_PARAMETER_CAM_WB_MODE (1 = auto grey-world; 2 = manual op27/28; 0 = off)
 	0,	    	   		// 32 OP_PARAMETER_LORAWAN_PING_MINUTES
-	0,	    	   		// 33 OP_PARAMETER_RFU_2
+	MD_BLOCK_THRESHOLD_DEFAULT,	// 33 OP_PARAMETER_MD_BLOCK_THRESHOLD (cells; the HM0360 table value)
 	0,	    	   		// 34 OP_PARAMETER_FLASH_MODE (0 = off - matches today's default behaviour)
 	0,	    	   		// 35 OP_PARAMETER_FLASH_TOD_START
 	0,	    	   		// 36 OP_PARAMETER_FLASH_TOD_DURATION
+	0,	    	   		// 37 OP_PARAMETER_CAM_AE_EXPOSURE (runtime state; 0 = none saved, start from the init table)
+	0,	    	   		// 38 OP_PARAMETER_CAM_AE_GAIN (runtime state)
 };
 
 // Deployment ID UUID string — loaded from 'I ' line in CONFIG.TXT or set via setdid CLI command
@@ -508,12 +532,10 @@ static FRESULT fileRead(fileOperation_t *fileOp) {
  */
 static APP_MSG_DEST_T handleEventForUninit(APP_MSG_T rxMessage) {
 	APP_MSG_EVENT_E event;
-	FRESULT res;
 	fileOperation_t *fileOp;
 	static APP_MSG_DEST_T sendMsg;
 
 	sendMsg.destination = NULL;
-	res = FR_OK;
 
 	event = rxMessage.msg_event;
 
@@ -554,6 +576,7 @@ static APP_MSG_DEST_T handleEventForUninit(APP_MSG_T rxMessage) {
 		// just msg_data - see APP_MSG_FATFSTASK_WRITE_FILE above).
 		fileOp->res = FR_NO_FILESYSTEM;
 		sendMsg.message.msg_data = (uint32_t)FR_NO_FILESYSTEM;
+		sendMsg.message.msg_parameter = (uint32_t)fileOp;
 		sendMsg.destination = fileOp->senderQueue;
 		// The message to send depends on the destination! In retrospect it would have been better
 		// if the messages were grouped by the sender rather than the receiver, so this next test was not necessary:
@@ -571,14 +594,14 @@ static APP_MSG_DEST_T handleEventForUninit(APP_MSG_T rxMessage) {
 		break;
 
 	case APP_MSG_FATFSTASK_SAVE_STATE:
-		// Return an error in this state
+		// No card, so nothing to save on it. But the settings go to flash, so a setop or BLE change
+		// survives the sleep. The NN is not running (the image task is in its save-state state)
+		xip_state_saveFastStart();
 
-		sendMsg.message.msg_data = (uint32_t)FR_NO_FILESYSTEM;
-
-		// Signal to the caller that it may enter DPD.
+		// Signal to the caller that it may enter DPD, with an error as there is no card
 		sendMsg.destination = xImageTaskQueue; // fileOp->senderQueue;
 		sendMsg.message.msg_event = APP_MSG_IMAGETASK_DISK_WRITE_COMPLETE;
-		sendMsg.message.msg_data = (uint32_t)res;
+		sendMsg.message.msg_data = (uint32_t)FR_NO_FILESYSTEM;
 
 		break;
 
@@ -590,7 +613,8 @@ static APP_MSG_DEST_T handleEventForUninit(APP_MSG_T rxMessage) {
 		fileOp->res = FR_NO_FILESYSTEM;
 		sendMsg.message.msg_data = (uint32_t)FR_NO_FILESYSTEM;
 		sendMsg.destination = fileOp->senderQueue;
-		sendMsg.message.msg_event = APP_MSG_IFTASK_DISK_WRITE_COMPLETE;
+		sendMsg.message.msg_parameter = (uint32_t)fileOp;
+		sendMsg.message.msg_event = diskWriteCompleteEvent(sendMsg.destination);
 		break;
 
 	case APP_MSG_IMAGETASK_DISK_WRITE_COMPLETE:
@@ -730,6 +754,7 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 
 		// Inform the if task that the disk operation is complete
 		sendMsg.message.msg_data = (uint32_t)res;
+		sendMsg.message.msg_parameter = (uint32_t)fileOp;
 		sendMsg.destination = fileOp->senderQueue;
 		// The message to send depends on the destination! In retrospect it would have been better
 		// if the messages were grouped by the sender rather than the receiver, so this next test was not necessary:
@@ -770,6 +795,10 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 						fatfs_getImageSequenceNumber());
 			}
 		}
+
+		// And the settings the first photo needs, to flash if they have changed, card or not. The NN is
+		// not running (the image task is in its save-state state), so XIP can be switched off
+		xip_state_saveFastStart();
 
 		// Signal to the caller that it may enter DPD.
 		sendMsg.destination = xImageTaskQueue; // fileOp->senderQueue;
@@ -849,7 +878,8 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 
 		sendMsg.message.msg_data = (uint32_t)res;
 		sendMsg.destination = fileOp->senderQueue;
-		sendMsg.message.msg_event = APP_MSG_IFTASK_DISK_WRITE_COMPLETE;
+		sendMsg.message.msg_parameter = (uint32_t)fileOp;
+		sendMsg.message.msg_event = diskWriteCompleteEvent(sendMsg.destination);
 
 		break;
 
@@ -900,7 +930,8 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 
 		sendMsg.message.msg_data = (uint32_t)res;
 		sendMsg.destination = fileOp->senderQueue;
-		sendMsg.message.msg_event = APP_MSG_IFTASK_DISK_WRITE_COMPLETE;
+		sendMsg.message.msg_parameter = (uint32_t)fileOp;
+		sendMsg.message.msg_event = diskWriteCompleteEvent(sendMsg.destination);
 
 		break;
 	}
@@ -931,7 +962,8 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 
 		sendMsg.message.msg_data = (uint32_t)res;
 		sendMsg.destination = fileOp->senderQueue;
-		sendMsg.message.msg_event = APP_MSG_IFTASK_DISK_WRITE_COMPLETE;
+		sendMsg.message.msg_parameter = (uint32_t)fileOp;
+		sendMsg.message.msg_event = diskWriteCompleteEvent(sendMsg.destination);
 
 		break;
 
@@ -1202,14 +1234,38 @@ static FRESULT load_configuration(const char *filename, directoryManager_t *dirM
 
 				value = (uint16_t)atoi(token);
 
-				// Set array value if index is in range
-				if (index >= 0 && index < OP_PARAMETER_NUM_ENTRIES) {
+				// Set array value if index is in range. Not the state ops when a fast-start record
+				// was loaded: RAM's values are newer than the card's (xip_state_keepStateOp())
+				if ((index >= 0) && (index < OP_PARAMETER_NUM_ENTRIES)
+						&& !xip_state_keepStateOp((uint8_t)index, value)) {
 					op_parameter[index] = value;
 					// debug only:
 					// xprintf("   op_parameter[%d] = %d\n", index, value);
 				}
 			}
 		}
+	}
+
+	// MD settings with a restricted range (24 Oct 2026). Cards written before then can hold
+	// op 17 = 0 (sensitivity 'off', no longer allowed: op 11 = 0 is the off switch) and
+	// op 33 = 0 (it was RFU_2). Use the defaults instead.
+	if (!fatfs_isValidOperationalParameter(OP_PARAMETER_MD_SENSITIVITY, op_parameter[OP_PARAMETER_MD_SENSITIVITY])) {
+		xprintf("Op 17 (MD sensitivity) = %d is not valid: using %d\n",
+				op_parameter[OP_PARAMETER_MD_SENSITIVITY], MD_SENSITIVITY_DEFAULT);
+		op_parameter[OP_PARAMETER_MD_SENSITIVITY] = MD_SENSITIVITY_DEFAULT;
+	}
+	if (!fatfs_isValidOperationalParameter(OP_PARAMETER_MD_BLOCK_THRESHOLD, op_parameter[OP_PARAMETER_MD_BLOCK_THRESHOLD])) {
+		xprintf("Op 33 (MD wake threshold) = %d is not valid: using %d\n",
+				op_parameter[OP_PARAMETER_MD_BLOCK_THRESHOLD], MD_BLOCK_THRESHOLD_DEFAULT);
+		op_parameter[OP_PARAMETER_MD_BLOCK_THRESHOLD] = MD_BLOCK_THRESHOLD_DEFAULT;
+	}
+	// RP camera AE state (28 Oct 2026). Out of range: forget it, so AE starts from the init table
+	if (!fatfs_isValidOperationalParameter(OP_PARAMETER_CAM_AE_EXPOSURE, op_parameter[OP_PARAMETER_CAM_AE_EXPOSURE])
+			|| !fatfs_isValidOperationalParameter(OP_PARAMETER_CAM_AE_GAIN, op_parameter[OP_PARAMETER_CAM_AE_GAIN])) {
+		xprintf("Ops 37/38 (AE exposure %d, gain %d) not valid: using 0\n",
+				op_parameter[OP_PARAMETER_CAM_AE_EXPOSURE], op_parameter[OP_PARAMETER_CAM_AE_GAIN]);
+		op_parameter[OP_PARAMETER_CAM_AE_EXPOSURE] = 0;
+		op_parameter[OP_PARAMETER_CAM_AE_GAIN] = 0;
 	}
 
 	// Close file
@@ -1639,6 +1695,8 @@ static void vFatFsTask(void *pvParameters) {
 	APP_MSG_EVENT_E event;
 	uint32_t rxData;
 	bool enabled;
+	bool configLoaded = false;
+	bool recordLoaded;
 
 	TickType_t startTime;
 	TickType_t elapsedTime;
@@ -1657,8 +1715,19 @@ static void vFatFsTask(void *pvParameters) {
 	// Initialise GPS coordinates before traying to process them
 	exif_gps_init_defaults();
 
-	// TODO - experiment - do I need settling time for 3V3_WE?
-	vTaskDelay(pdMS_TO_TICKS(10));
+	// The settings saved in flash at the last sleep, if any. CONFIG.TXT, loaded below, overrides the
+	// settings but not the state ops (xip_state_keepStateOp())
+	recordLoaded = xip_state_loadFastStart();
+	boot_timing_mark(BOOT_TIMING_RECORD_READ);
+	if (recordLoaded) {
+		// The image task can start the camera now, without waiting for the card
+		xSemaphoreGive(xSettingsReadySemaphore);
+	}
+
+	// No settling wait for the card's supply here (removed 29 Oct 2026, XIP save state step 6: it was 10 ms on
+	// the path to the first photo). The card is powered from 3V3_WE, which the hardware switches on as the chip
+	// leaves DPD, well before this point; and the card driver's power-up sequence (SD_powerUpSeq()) waits 10 ms
+	// and sends 80 clocks before the first command, more than the SD specification's 1 ms
 	res = fatFsInit();
 	boot_timing_mark(BOOT_TIMING_SD_MOUNTED);
 
@@ -1679,6 +1748,7 @@ static void vFatFsTask(void *pvParameters) {
 			boot_timing_mark(BOOT_TIMING_SD_CONFIG_LOADED);
 			if (res == FR_OK) {
 				// File exists and op_parameter[] has been initialised
+				configLoaded = true;
 				enabled = op_parameter[OP_PARAMETER_CAMERA_ENABLED];
 				xprintf("'%s' found. (Next image #%d), camera %senabled. Flash brightness %d\%\r\n",
 						STATE_FILE,
@@ -1739,10 +1809,18 @@ static void vFatFsTask(void *pvParameters) {
 	// re-entrant, so this cannot be done lazily from the CLI task
 	cis_file_loadStagedFromFile();
 
-	// The semaphore lets the Image Task proceed
-	// xprintf("DEBUG: giving semaphore so Image Task can proceed\n");
+	if (configLoaded) {
+		xip_state_compareFastStart();
+	}
+
+	// The semaphores let the Image Task proceed: to use the card, and, if there was no fast-start
+	// record, to start at all (op_parameter[] now holds the card's values)
 	boot_timing_mark(BOOT_TIMING_SD_READY);
+	sdReady = true;
 	xSemaphoreGive(xSDInitDoneSemaphore);
+	if (!recordLoaded) {
+		xSemaphoreGive(xSettingsReadySemaphore);
+	}
 
 	barrier_ready(&startupBarrier); // Call a function when every task reaches this point
 
@@ -1882,11 +1960,12 @@ TaskHandle_t fatfs_createTask(int8_t priority, APP_WAKE_REASON_E wakeReason) {
 		configASSERT(0); // TODO add debug messages?
 	}
 
-	// Semaphore to flag that the final message has been sent and we can enter DPD
+	// Semaphores that release the image task: when the settings are known, and when the card is ready
 	xSDInitDoneSemaphore = xSemaphoreCreateBinary();
+	xSettingsReadySemaphore = xSemaphoreCreateBinary();
 
-	if (xSDInitDoneSemaphore == NULL) {
-		xprintf("Failed to create xSDInitDoneSemaphore\n");
+	if ((xSDInitDoneSemaphore == NULL) || (xSettingsReadySemaphore == NULL)) {
+		xprintf("Failed to create the start-up semaphores\n");
 		configASSERT(0); // TODO add debug messages?
 	}
 	
@@ -1909,6 +1988,37 @@ uint16_t fatfs_getState(void) {
  */
 bool fatfs_mounted(void) {
 	return mounted;
+}
+
+/**
+ * Block until op_parameter[] holds this boot's values
+ *
+ * They come from the fast-start record in flash, read at the start of the FatFS task, or without
+ * a record from CONFIG.TXT once the card is ready. Call once, from the image task at start-up.
+ */
+void fatfs_waitForSettings(void) {
+	xSemaphoreTake(xSettingsReadySemaphore, portMAX_DELAY);
+}
+
+/**
+ * Block until the FatFS task has finished its start-up work with the card
+ *
+ * That is: mounted it (or failed to), loaded CONFIG.TXT, set up the image folder and loaded the
+ * staged camera registers. Returns at once after that. Only the image task waits here.
+ */
+void fatfs_waitForSdReady(void) {
+	if (!sdReady) {
+		xSemaphoreTake(xSDInitDoneSemaphore, portMAX_DELAY);
+	}
+}
+
+/**
+ * Whether the FatFS task has finished its start-up work with the card
+ *
+ * @return true once it has (whether or not a card was found)
+ */
+bool fatfs_isSdReady(void) {
+	return sdReady;
 }
 
 /**
@@ -1937,6 +2047,37 @@ uint16_t fatfs_getOperationalParameter(OP_PARAMETERS_E parameter) {
 	}
 	else {
 		return 0;
+	}
+}
+
+/**
+ * Checks a value against the allowed range of an operational parameter.
+ *
+ * Only some parameters have a restricted range; any value is allowed for the
+ * others. Used by 'setop' (console and BLE) and when CONFIG.TXT is loaded.
+ *
+ * @param parameter - one of a list of possible parameters
+ * @param value - the proposed value
+ * @return - true if the value is allowed
+ */
+bool fatfs_isValidOperationalParameter(OP_PARAMETERS_E parameter, uint16_t value) {
+
+	switch (parameter) {
+
+	case OP_PARAMETER_MD_SENSITIVITY:
+		return ((value >= MD_SENSITIVITY_MIN) && (value <= MD_SENSITIVITY_MAX));
+
+	case OP_PARAMETER_MD_BLOCK_THRESHOLD:
+		return ((value >= MD_BLOCK_THRESHOLD_MIN) && (value <= MD_BLOCK_THRESHOLD_MAX));
+
+	case OP_PARAMETER_CAM_AE_EXPOSURE:
+		return ((value == 0) || ((value >= AE_EXPOSURE_MIN) && (value <= AE_EXPOSURE_MAX)));
+
+	case OP_PARAMETER_CAM_AE_GAIN:
+		return (value <= AE_GAIN_CODE_MAX);
+
+	default:
+		return true;
 	}
 }
 

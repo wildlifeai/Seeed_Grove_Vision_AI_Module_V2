@@ -16,6 +16,64 @@ Verified on the bench (details and serial evidence in
   **cold** boot (PMU wakeup registers read zero). A `setop 8` does not shorten an
   inactivity countdown already running, so after raising op 8 for a session, follow the
   reboot command with `dpd` or wait out the old period.
+* **Any character typed on the console keeps the AI processor awake for 60 s**, whatever
+  op8 says (`CLI-commands.c`, every RX char sets `INACTIVITYTIMEOUTCLI`). So a tool that
+  types at the device (e.g. `live_view.py`) holds it awake, and `setop 8` cannot make it
+  sleep sooner; send `dpd`. Combined with the cold-boot capture refusal (`Error: no captures
+  until after the first sleep.`), this left the live viewer stuck awake after a cold boot
+  (23 Oct 2026, `2026-10-23_mdEnhancements`).
+* **A print from another task inside a live-preview frame line corrupts that frame.** On the
+  HM0360 build it hit every frame: the IF task logs the I2C send of the motion/AE message to
+  the BLE processor, which completes mid-frame. `consoleQuiet()` in `if_task.c` now also holds
+  while `preview_isSending()`. Other tasks are not held (23 Oct 2026).
+* **`setop` saves to CONFIG.TXT at once** (`APP_MSG_FATFSTASK_SAVE_CONFIG`), so a bench
+  session's values go to the field with the card. After live-view sessions on 23 Oct 2026 the
+  card held op7 = 10 (a wake every 10 s) and op8 = 60000. `live_view.py` now sets lab-safe
+  values on close (ops 7 and 8), but its MD controls write ops 11, 17 and 33 and the close
+  leaves those as set. After bench work, check ops 7, 8, 11, 17 and 33 with `getop`.
+* **`capture N 0` (N > 1) resets the AI processor.** `MIN_IMAGE_INTERVAL` is 0, but the interval
+  goes to `xTimerChangePeriod()`, and FreeRTOS asserts on a zero period (`timers.c`), so it
+  reaches `configASSERT()` and a reset (a hang before 13 Oct 2026). The old "interval 0 wedges
+  the IMX708" note is probably this. Use 1 ms or more (found from code 23 Oct 2026, not yet
+  reproduced on the bench).
+* **A watchdog runs while the AI processor is awake** (13 Oct 2026, `watchdog.c`). If nothing
+  feeds it for 20 s the processor resets and cold-boots. Three things follow. A debugger that
+  halts the processor gets reset: type `wdt 0` first, or build without `AWAKE_WATCHDOG`. Code in
+  the CLI or IF task that runs for 20 s without blocking stops the feeds (the FreeRTOS timer
+  task is priority 2, below both). And the hardware resets at the **second** timeout, so a
+  period of N gives a reset at 2N. Flash writes suspend it (`disable_xip()`/`enable_xip()`).
+  `freeze` tests it.
+* **The HM0360 increments the register address in a burst read**, though its datasheet does
+  not say so. The 32 `ROI_OUT` grid bytes read in one `hx_drv_i2cm_write_restart_read()` match 32
+  single reads, in 4 ms against 19 ms at 100 kHz (`hm0360_md_getMDOutput()`, 30 Oct 2026).
+* **`MD_CTRL1 = 0` does not freeze the HM0360's motion grid.** While the AI processor is awake the
+  HM0360 keeps taking motion-detection frames (op 11 apart), and each rewrites `ROI_OUT`. A wake
+  grid read later than one op 11 interval after the wake may hold a later frame's motion. It looked
+  safe at op 11 = 1000 and failed at 200 (`2026-10-27_XIP_save_state`, log22 and log23).
+* **The RP3's first capture after a wake takes longer in dim light**: 24 ms at 273 to 588 lines
+  of restored exposure, 54 ms at 2548, 71 to 88 ms at 3816. Before comparing `Boot timing` or
+  `Image capture 1/1 took` between two logs, compare their `AE: restored exposure` lines: an
+  afternoon of bench runs as the light fell once looked like a 30 ms regression (30 Oct 2026).
+* **After a motion wake the HM0360's first frame comes about 92 ms after `app_main()`**, however
+  early the capture starts (op 11 = 200 or 1000). Starting the capture sooner only lengthens
+  `Image capture 1/1 took`. Cause unknown (30 Oct 2026).
+* **Task priorities come from the creation order in `app_main()`** (`ww500_md.c`), descending:
+  CLI 4, IF 3, IMAGE 2, FAT 1 since 29 Oct 2026. The `*_task_PRIORITY` defines in the task files
+  are not used. The image task must stay above the FatFS task: the card driver busy-waits, and
+  with FatFS on top the first frame came about 25 to 90 ms later (`2026-10-27_XIP_save_state`).
+* **A fault on the AI processor now ends in a reset, not a hang** (13 Oct 2026). Every fault
+  handler prints a report (`Entering HardFault interrupt!`, the status registers, the stacked
+  `PC` and `LR`), then `>>> Reset after fault`, and a cold boot follows at once. So an unexpected `Cold Boot` in a log may be a fault: search back for the report. The
+  `hardfault` console command forces one for testing. A failed `configASSERT()` does the same,
+  printing `ASSERT failed: <file>:<line>` first (`assert` forces one). Both need a **clean
+  build** after `FreeRTOSConfig.h` or `WW_ASSERT_RESETS` changes, as the kernel is compiled with
+  them.
+* **`capture` and `light` are refused between a cold boot and the first sleep** (13 Oct 2026):
+  `Error: no captures until after the first sleep.` A cold boot follows power-on, RESET,
+  `reset`, `switchslot` and a firmware update. To capture from a script: let the board sleep
+  (`setop 7 5` then `dpd` gives a timer wake 5 s later), then send the command. The first frame
+  after a cold boot sometimes never arrived, on both cameras, so this was ruled out
+  (`development reports/2026-10-12_cameraErrors/`).
 * **Cold-boot IMX708 first captures fail on images built before 30 Sep 2026**. Every
   in-place retry times out (`Frame timed out - restarting sensor, retry n/5`) and the image
   task then goes Uninitialised. The cause was the I2C address left on the HM0360 by nested
@@ -36,6 +94,10 @@ Verified on the bench (details and serial evidence in
   particular file parses, set the **FAT read-only attribute** on it, which the firmware
   respects, and the card survives the boot intact. Two bench runs were spent measuring the
   device's own file before this was understood.
+* **With no card, settings live only in the fast-start record in flash** (`xip_state.c`). Since
+  31 Oct 2026 it is written at every sleep, card or not; before that, a `setop` with no card was
+  lost after one sleep (a `setop 7 300` timelapse stopped at the first wake). When a card goes back
+  in, its CONFIG.TXT overrides the record, so a change made with the card out is lost.
 * **The periodic AE light check only runs if something consumes it.**
   `aeCheckRequired = lightSensor_isRequired()`, which is true when the flash mode is
   `FLASH_MODE_AE` (**op34**, not op13) or automatic camera switching (op26) is on. With
@@ -45,6 +107,11 @@ Verified on the bench (details and serial evidence in
   battery cost worth knowing about before enabling it.
 * **camreg staged registers** (`RPV3_EX.BIN` etc.) are re-applied after the init tables
   at every sensor init, they override defaults, persist on SD, and survive DPD.
+* **Pressure on the HM0360 connector (a camera holder, tape) stops the boot or kills a
+  running capture**, and nothing restarts the AI processor afterwards. The HM0360 can stay
+  unanswered until a power cycle, since RESET does not reach it. Moving the camera or the
+  ribbon is harmless. Unplug the board before reseating a ribbon. See
+  `2026-10-11_camera_connector_pressure/` (11 Oct 2026, two boards).
 
 Verified 3 and 4 September 2026 (`2026-09-03_capture_bench_findings/`, `ae_review`
 e8b7feb5 and nRF 0.30.48). All were open issues when written; check the issue before
@@ -75,14 +142,13 @@ building on any of them:
   flashed at 0.30.48 (75406df) and moves only when someone runs the app's firmware update,
   most recently to 0.30.51 on 18 September. Read the version off the device rather than
   assuming it matches the tip.
-* **Releasing nRF firmware takes two workflows, in order:** **Build BLE Firmware** compiles
-  and signs at whatever `version.mk` declares and opens a PR with the `.zip` and `.hex`, then
-  **Upload BLE Firmware to Supabase** publishes it. Editing `version.mk` alone ships nothing:
-  the upload silently falls back to the newest zip present and takes the version from *its*
-  filename, so a bump with no build republishes the old image under the old number and then
-  fails on a duplicate key. The version is compiled into the image and written into the DFU
-  package, so renaming a zip is never a shortcut. nRF5 SDK 16.0.0 needs **GCC 10.3.1**; 12
-  and newer fail on `-Werror=array-bounds` in `nrf_section.h`.
+* **Releasing nRF firmware** is two workflows in ww-hardware, Build BLE Firmware then Upload
+  BLE Firmware to Supabase, at the version `version.mk` names. The procedure and its traps
+  live in ww-hardware's `.agents/skills/references/build-and-release.md`.
+* **A model file that is not a TFLite flatbuffer halts the image task** (#241). `loadmodel`
+  copies it to flash, prints `No valid TFLite model in flash` and `TFLM: model = NULL`, and
+  the camera then answers commands but never captures or sleeps until a reset. A real model
+  has `TFL3` at bytes 4 to 7; on 8 Oct 2026 the dev backend's model 7 v1 was a ZIP (`PK`).
 
 * **In the RP builds every HM0360 access must go through `hm0360_md.c`'s
   `saveMainCameraConfig()`/`restoreMainCameraConfig()`** (added 30 Sep 2026, issue #249). The
@@ -98,3 +164,31 @@ building on any of them:
   PB7 is a GPIO output in every build (not with `ENABLESWD`), so PB7 (SWCLK) stops being SWD
   once `checkForCameras()` runs. Since 3 Oct 2026 the cold-boot RTC set (about 1.4 s) comes
   first, so SWD can connect for about 1.4 s after a reset; after a DPD wake the window is short.
+* **HM0360 MD registers come in three banks, and MD_CTRL differs between them.** The context A
+  (0x354B) and B (0x35A5) MD_CTRL hold the light coefficient in [7:1] and enable in [0]; main
+  MD_CTRL (0x2080) has latency select in [5:4]. IIR, latency, MD_CTRL1, ROI_OUT and INT_INDIC
+  are main-only and shared. Captures run in context A, sleep and wake in B. The image task
+  clears all HM0360 interrupt bits at every frame-ready, so read `INT_INDIC` before that clear.
+  Details: `2026-10-23_mdEnhancements` thread, 24 Oct 2026.
+* **In the HM0360 build the sensor times a burst itself** (`USE_HM0360_CAPTURE_TIMER` is defined in
+  `image_task.c`): one frame, a sleep of the capture interval, repeat, with the MD interrupt enabled
+  (`MD_CTRL1` = 0x06) until the last frame. The AI processor takes whichever frame comes after it
+  has handled the previous one, so at short intervals most sensor frames, and their MD bits, are
+  never seen. Found 24 Oct 2026 after it had been assumed to use the software `captureTimer`.
+* **The HM0360 sleep between frames stops at about 1997 ms.** `calculateSleepTime()` (`hm0360_md.c`)
+  computes interval x 0x8030 / 1000 and caps it at 0xFFFF, so op 11 (MD frame interval) or an HM0360
+  capture interval above that silently runs at about 2 s (noted in `config_file.md`, op 11). Noted by
+  Charles, 24 Oct 2026.
+* **The MD grid (`ROI_OUT`) of the first image of a burst is always empty**: the HM0360 has no
+  earlier frame to compare it with, so only images 2 onwards report motion. The grid that woke
+  the device is lost once the warm boot reconfigures the sensor, so `app_main()` saves it right
+  after reading `INT_INDIC` (`hm0360_md_saveWakeGrid()`) and the image task reports it after the
+  first image. Keep work before the first capture to a minimum (wake latency). 26 Oct 2026.
+* **The RTC and the DPD alarm run 2 to 5 % fast, differently on each board, and the RC32K trim
+  register does not change the DPD alarm** (it does change the clock while awake, and its default
+  differs between chips: 31 and 28 seen). `rtc_cal.c` measures the rate while awake and lengthens
+  the alarm instead; `_Tools/sleep_timing.py` times sleeps from a Tera Term log. Timing anything
+  with the DWT cycle counter needs the core kept busy: it stops in tickless idle. The RTC alarm
+  interrupt works while awake; `hx_drv_rtc_set_alarm()` takes about 316 us. The awake rate
+  predicts the sleep: corrected 300 s sleeps lasted 298.7 to 299.7 s on three boards and both
+  images. `rtccal` shows the value, `xipstate` the board record. 31 Oct 2026, #245.

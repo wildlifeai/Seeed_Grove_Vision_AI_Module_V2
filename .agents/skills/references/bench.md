@@ -15,6 +15,11 @@ the fact is not enough, the timing has to be built in.
   card: the keystroke was echoed and the board slept anyway). Miss it and every command
   returns nothing, which looks exactly like a dead port rather than a sleeping device. Put
   op8 back (`setop 8 1000`, or the deployment's value) before the board is left to sleep.
+  The running countdown keeps the old period, and the app's live monitor polls every 60 s,
+  so with the app connected a board left at 60000 never sleeps and motion detection never
+  arms (8 Oct 2026). Send `dpd` to put it to sleep.
+* **`read <file>` prints only up to the first zero byte**, so it cannot show a JPEG's EXIF.
+  Read the card on a PC.
 * **Arm the script first, then ask for the reset.** The device does not wake on serial
   input, so opening the port and sending has already lost. Wait for the boot banner.
 * **Probe for the console port every session; never hard-code it.** It moves between
@@ -34,6 +39,12 @@ the fact is not enough, the timing has to be built in.
   before streaming. And when asking for a RESET press, act only on a `Cold boot`: the hand
   reaching for the button can set off a motion wake first, and the press then kills a
   transfer already running (30 Sep 2026).
+* **To score a model on fixed frames, `nnfiles <folder>`** runs it on raw 640x480 frames from the
+  SD card and writes `RESULTS.CSV` (scores and ms per frame); `_Tools/nnfiles_prepare.py` makes
+  the frames. Runbook `_Documentation/nn_files_bench.md`. Not while the app transfers a file.
+  The rat and cat challenges' models live on the team drive, never in this public repo (some
+  trained on non-commercial photos), and the camera's detection (class 1 above op 16) is not
+  the challenges' score (class 1 minus class 0): rank on the score.
 * **For a batch of boards, use `_Tools/ww500_ship_check.py`** (runbook
   `_Documentation/pcb_batch_flashing.md`): both images, a photo from each camera, one
   button per board.

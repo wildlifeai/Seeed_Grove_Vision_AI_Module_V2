@@ -18,6 +18,11 @@ wrong here goes wrong before any code is compiled.
   their PR conflict when it merges (2 Oct 2026, #258 on top of #257).
 * Ask the maintainer before pushing to any shared branch. Commit messages use
   conventional prefixes (`feat:`, `fix:`, `docs:`, `ci:`).
+* **A merge into `dev` is a release to the dev firmware database.**
+  `build_and_upload_firmware.yml` builds both images and uploads them at once (`main` goes to
+  production). A change to a string the nRF or the app parses needs the matching nRF in that
+  database first: on 8 Oct 2026 #260's `Motion` wake reached it while the database still held
+  an nRF that only knew `MD `.
 * **Check whether the clone is shallow before any branch analysis.** A shallow clone makes
   `git merge-base` return *empty* rather than fail, so ahead/behind counts, fork points and
   overlap tables come out confidently wrong, and a trial merge dies with `refusing to merge

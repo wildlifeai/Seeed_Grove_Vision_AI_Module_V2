@@ -80,7 +80,8 @@ Include a brief summary of the points already documented, but write them afresh,
 ## Status
 
 Open. Save state in flash is done and benched on both camera images (steps 1 to 7, 27 to 30
-October 2026). The clock items are next.
+October 2026). The sleep timer (#245) is corrected and benched (31 October). The time of day
+(#245's clock half, #56, #152) is next.
 
 ## Outcome so far
 
@@ -107,13 +108,20 @@ motion-wake time. Why the sensor takes that long is not known. CONFIG.TXT is sti
 [CLAUDE_XIP_save_state_steps.md](CLAUDE_XIP_save_state_steps.md). Design and decisions:
 [CLAUDE_XIP_save_state_proposal.md](CLAUDE_XIP_save_state_proposal.md).
 
-## The TODO list: where each item stands (30 October 2026)
+**Sleep timer (31 Oct):** the RTC runs 2 to 4.6 % fast, differently on each board, and the RC32K
+trim does not affect it in DPD. Each board now measures its own rate while awake (`rtc_cal.c`, at a
+cold boot and daily), keeps it in flash and lengthens the alarm. A 300 s sleep went from 286 to
+293 s to 298.7 to 299.7 s, on three boards and both images. `rtccal` shows it. Also found: with no
+SD card a `setop` was lost after one sleep; the fast-start record is now saved without a card.
+Results: [CLAUDE_time_accuracy.md](CLAUDE_time_accuracy.md) (Results 1 to 8).
+
+## The TODO list: where each item stands (31 October 2026)
 
 | # | Item | Where it stands |
 |---|---|---|
 | [#251](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/251) | Save state in flash for a faster wake | **Done** (steps 1 to 7). Ready to close once merged |
 | [#158](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/158) | RP3 forgets its exposure at sleep | **Done** (ops 37, 38, also in the flash record). Closing comment drafted in the step log. The BLE processor's op list (ww-hardware `aiProcessor.h`) still needs ops 37 and 38 |
-| [#245](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/245) | Sleep timer and clock 5 % fast | **Next.** Room is reserved in flash (the board record) for a per-board trim, set at production |
+| [#245](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/245) | Sleep timer and clock 5 % fast | **Sleep timer done** (self-calibration, 31 Oct). The time of day still runs fast between updates from the BLE processor: next, with #56 and #152 |
 | [#56](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/56) | Clock stale after a motion wake | Not started, after #245 |
 | [#152](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/152) | A restart sets the clock to 2024 | Not started, after #245 |
 | [#247](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/247) | HM0360 keeps taking frames with MD off | Parked, with the power work |
@@ -121,14 +129,15 @@ motion-wake time. Why the sensor takes that long is not known. CONFIG.TXT is sti
 | [#270](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/270) | Detection tests class 1 alone | Waiting on a decision |
 | [#262](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/262) | LoRaWAN message content | Waiting on a decision |
 
-So two of the nine are done, three (the clock) are next in this thread, one is parked and three
-wait on decisions.
+So two of the nine are done, the sleep half of a third is done, three (the time of day) are next
+in this thread, one is parked and three wait on decisions.
 
 ## Open items
 
 - [#245](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/245),
   [#56](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/56),
-  [#152](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/152): the clock, next in this thread.
+  [#152](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/152): the time of day, next in this thread (the sleep timer is done). Analysis and ideas:
+  [CLAUDE_time_accuracy.md](CLAUDE_time_accuracy.md).
 - Found along the way, not yet filed as issues (Charles to decide):
   - a fast paste into the console hung it, then the IF task stayed in `I2C RX State` and the
     camera never slept (step log, "Parked: console stopped responding");

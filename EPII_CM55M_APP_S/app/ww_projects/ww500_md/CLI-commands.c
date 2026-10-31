@@ -129,6 +129,7 @@
 #include "ww500_md.h"
 #include "xip_manager.h"
 #include "xip_state.h"
+#include "rtc_cal.h"
 #include "camera_switch.h"
 #include "hm0360_md.h"
 #include "lightSensor.h"
@@ -326,6 +327,7 @@ static BaseType_t prvVcm(char *pcWriteBuffer, size_t xWriteBufferLen, const char
 // Day/night dual-image camera switching (see camera_switch.c)
 static BaseType_t prvSlots(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 static BaseType_t prvXipState(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
+static BaseType_t prvRtcCal(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 static BaseType_t prvSwitchSlot(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 
 #ifdef WW500_C00
@@ -439,6 +441,14 @@ static const CLI_Command_Definition_t xXipState = {
 	"xipstate", /* The command string to type. */
 	"xipstate [test]:\r\n Show the saved-state records in flash. 'xipstate test' runs the bench test of the fast-start sector\r\n",
 	prvXipState, /* The function to run. */
+	-1		   /* Variable number of parameters */
+};
+
+/* Structure that defines the "rtccal" command line command. */
+static const CLI_Command_Definition_t xRtcCal = {
+	"rtccal", /* The command string to type. */
+	"rtccal [measure | on | off]:\r\n Show the RTC calibration (the RC32K clock's error against the crystal, kept in the board record and used to correct the sleep). 'measure' measures now (busy up to 3 s), 'off' stops the correction, 'on' restores it\r\n",
+	prvRtcCal, /* The function to run. */
 	-1		   /* Variable number of parameters */
 };
 
@@ -1188,6 +1198,75 @@ static BaseType_t prvXipState(char *pcWriteBuffer, size_t xWriteBufferLen, const
 	}
 	else {
 		snprintf(pcWriteBuffer, xWriteBufferLen, "Error: 'xipstate' or 'xipstate test'.");
+	}
+	return pdFALSE;
+}
+
+/**
+ * Implements "rtccal" command (#245)
+ *
+ * 'rtccal' shows the RTC calibration saved in the board record. 'rtccal measure' measures now (the core
+ * is busy for up to 3 s) and saves it. 'rtccal off' stops the alarm correction and the measuring, for
+ * measuring the uncorrected sleep; 'rtccal on' restores them. See rtc_cal.c.
+ *
+ * Reading or writing the board record switches XIP off, so this is refused unless the image task is idle.
+ */
+static BaseType_t prvRtcCal(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) {
+	const char *pcParameter;
+	BaseType_t xParameterStringLength;
+	XipStateBoard_t board;
+	int32_t ppm = 0;
+	uint32_t now = 0;
+	char percent[12];
+
+	if (image_getState() != APP_IMAGE_TASK_STATE_INIT) {
+		snprintf(pcWriteBuffer, xWriteBufferLen, "Error: not while the camera is busy (%s).", image_getStateString());
+		return pdFALSE;
+	}
+
+	pcParameter = FreeRTOS_CLIGetParameter(pcCommandString, 1, &xParameterStringLength);
+	if (pcParameter == NULL) {
+		xip_state_readBoard(&board);
+		if (!board.rtcCalValid) {
+			snprintf(pcWriteBuffer, xWriteBufferLen, "RTC calibration: not measured yet.%s",
+					board.rtcCalOff ? " Off ('rtccal on' to restore)." : "");
+		}
+		else {
+			exif_utc_get_rtc_as_seconds(&now);
+			rtc_cal_ppmToPercent(board.rtcPpm, percent, sizeof(percent));
+			if (now >= board.rtcMeasuredAt) {
+				snprintf(pcWriteBuffer, xWriteBufferLen, "RTC calibration: %ld ppm (%s %%), measured %lu RTC s ago.%s",
+						(long) board.rtcPpm, percent, (unsigned long) (now - board.rtcMeasuredAt),
+						board.rtcCalOff ? " Off ('rtccal on' to restore)." : "");
+			}
+			else {
+				snprintf(pcWriteBuffer, xWriteBufferLen, "RTC calibration: %ld ppm (%s %%), measured before the RTC was set back.%s",
+						(long) board.rtcPpm, percent, board.rtcCalOff ? " Off ('rtccal on' to restore)." : "");
+			}
+		}
+	}
+	else if ((xParameterStringLength == 7) && (strncmp(pcParameter, "measure", 7) == 0)) {
+		if (rtc_cal_measureAndSave(&ppm)) {
+			rtc_cal_ppmToPercent(ppm, percent, sizeof(percent));
+			snprintf(pcWriteBuffer, xWriteBufferLen, "RTC calibration: %ld ppm (%s %%), saved.", (long) ppm, percent);
+		}
+		else {
+			snprintf(pcWriteBuffer, xWriteBufferLen, "Error: the measurement failed. Try again.");
+		}
+	}
+	else if (((xParameterStringLength == 2) && (strncmp(pcParameter, "on", 2) == 0))
+			|| ((xParameterStringLength == 3) && (strncmp(pcParameter, "off", 3) == 0))) {
+		bool off = (xParameterStringLength == 3);
+
+		if (rtc_cal_setOff(off) == 0) {
+			snprintf(pcWriteBuffer, xWriteBufferLen, "RTC calibration %s from the next sleep.", off ? "off" : "on");
+		}
+		else {
+			snprintf(pcWriteBuffer, xWriteBufferLen, "Error: could not write the board record.");
+		}
+	}
+	else {
+		snprintf(pcWriteBuffer, xWriteBufferLen, "Error: 'rtccal', 'rtccal measure', 'rtccal on' or 'rtccal off'.");
 	}
 	return pdFALSE;
 }
@@ -3105,6 +3184,7 @@ static void vRegisterCLICommands(void)
 	FreeRTOS_CLIRegisterCommand(&xCamera);
 	FreeRTOS_CLIRegisterCommand(&xSlots);		// Report firmware slots and camera variants
 	FreeRTOS_CLIRegisterCommand(&xXipState);	// Saved-state records in flash, and their bench test
+	FreeRTOS_CLIRegisterCommand(&xRtcCal);		// The RTC calibration, kept in the board record (#245)
 	FreeRTOS_CLIRegisterCommand(&xSwitchSlot);	// Boot the other slot (day/night camera change)
 	FreeRTOS_CLIRegisterCommand(&xLight);		// On-demand light-sensor check
 	FreeRTOS_CLIRegisterCommand(&xEnable);

@@ -84,6 +84,7 @@
 #include "img_correct.h"
 #include "preview.h"
 #include "ae.h"
+#include "rtc_cal.h"	// the RTC calibration, measured if due before DPD (#245)
 
 /*************************************** Definitions *******************************************/
 
@@ -210,8 +211,8 @@ static void setupLEDFlash(void);
 // When final activity from the FatFS Task and IF Task are complete, enter DPD
 static void sleepWhenPossible(void);
 
-// Before sleeping: wait for the card's start-up to finish, then say whether state can be saved
-static bool sdMountedForSave(void);
+// Before sleeping: wait for the card's start-up to finish, then ask the FatFS task to save state
+static APP_MSG_DEST_T saveStateBeforeSleep(void);
 
 static void captureSequenceComplete(uint32_t accumulatedTime);
 
@@ -839,20 +840,8 @@ static APP_MSG_DEST_T handleEventForInit(APP_MSG_T img_recv_msg) {
     case APP_MSG_IMAGETASK_INACTIVITY:
         // Inactivity detected. Prepare to enter DPD, saving state if possible.
 
-        if (sdMountedForSave())  {
-            // TODO - can we call this without the if() and expect fatfs_task to handle it?
-            // Ask the FatFS task to save state onto the SD card
-            send_msg.destination = xFatTaskQueue;
-            send_msg.message.msg_event = APP_MSG_FATFSTASK_SAVE_STATE;
-            send_msg.message.msg_data = 0;
-            image_task_state = APP_IMAGE_TASK_STATE_SAVE_STATE;
-        }
-        else {
-            // No SD card therefore can't save state
-            // Wait till the IF Task is also ready, then sleep
-            sleepWhenPossible(); // does not return
-            image_task_state = APP_IMAGE_TASK_STATE_UNINIT;
-        }
+        // Save state, with or without a card: the FatFS task replies when done
+        send_msg = saveStateBeforeSleep();
 
         break;
 
@@ -1357,19 +1346,7 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
 
     if (abandoned) {
     	// A frame fault has ended the capture sequence. Prepare to enter DPD, saving state if possible.
-    	if (sdMountedForSave())  {
-    		// Ask the FatFS task to save state onto the SD card
-    		send_msg.destination = xFatTaskQueue;
-    		send_msg.message.msg_event = APP_MSG_FATFSTASK_SAVE_STATE;
-    		send_msg.message.msg_data = 0;
-    		image_task_state = APP_IMAGE_TASK_STATE_SAVE_STATE;
-    	}
-    	else  {
-    		// No SD card therefore can't save state
-    		// Wait till the IF Task is also ready, then sleep
-    		sleepWhenPossible(); // does not return
-    		image_task_state = APP_IMAGE_TASK_STATE_UNINIT;
-    	}
+    	send_msg = saveStateBeforeSleep();
     }
     // else stay in APP_IMAGE_TASK_STATE_CAPTURING, or the state set above
 
@@ -1582,20 +1559,8 @@ static APP_MSG_DEST_T handleEventForWaitForTimer(APP_MSG_T img_recv_msg) {
     	// run some sensordplib_stop functions then run HM0360_stream_off commands to the HM0360
         configure_image_sensor(CAMERA_CONFIG_STOP);
 
-        if (sdMountedForSave())  {
-            // TODO - can we call this without the if() and expect fatfs_task to handle it?
-            // Ask the FatFS task to save state onto the SD card
-            send_msg.destination = xFatTaskQueue;
-            send_msg.message.msg_event = APP_MSG_FATFSTASK_SAVE_STATE;
-            send_msg.message.msg_data = 0;
-            image_task_state = APP_IMAGE_TASK_STATE_SAVE_STATE;
-        }
-        else {
-            // No SD card therefore can't save state
-            // Wait till the IF Task is also ready, then sleep
-            sleepWhenPossible(); // does not return
-            image_task_state = APP_IMAGE_TASK_STATE_UNINIT;
-        }
+        // Save state, with or without a card: the FatFS task replies when done
+        send_msg = saveStateBeforeSleep();
 
     	break;
 
@@ -2604,17 +2569,29 @@ static void sleepWhenPossible(void) {
 }
 
 /**
- * Before sleeping: wait for the card's start-up to finish, then say whether state can be saved
+ * Before sleeping: wait for the card's start-up to finish, then ask the FatFS task to save state
  *
  * The camera can now finish before the FatFS task has finished with the card (a frame fault
  * early in the wake, for example). Going to sleep part way through mounting it, or without
  * saving state, would lose the counters and settings.
  *
- * @return true if the card is mounted, so APP_MSG_FATFSTASK_SAVE_STATE can be sent
+ * Sent with or without a card: the FatFS task saves the counters and CONFIG.TXT to the card if
+ * there is one, and the fast-start record to flash either way, so settings changed with no card
+ * (setop, BLE) survive the sleep. It replies APP_MSG_IMAGETASK_DISK_WRITE_COMPLETE, and
+ * handleEventForSaveState() then sleeps.
+ *
+ * @return the message for the FatFS task
  */
-static bool sdMountedForSave(void) {
+static APP_MSG_DEST_T saveStateBeforeSleep(void) {
+	APP_MSG_DEST_T msg;
+
 	fatfs_waitForSdReady();
-	return fatfs_mounted();
+
+	msg.destination = xFatTaskQueue;
+	msg.message.msg_event = APP_MSG_FATFSTASK_SAVE_STATE;
+	msg.message.msg_data = 0;
+	image_task_state = APP_IMAGE_TASK_STATE_SAVE_STATE;
+	return msg;
 }
 
 /**
@@ -3269,6 +3246,11 @@ void image_sleepNow(void) {
 #endif // USE_HM0360
 
     timelapseDelay = fatfs_getOperationalParameter(OP_PARAMETER_TIMELAPSE_INTERVAL);
+
+    // The RTC calibration (#245): measured if due (2 to 3 s busy), and the correction loaded for the alarm.
+    // Here because the NN is not running (the board record is in the flash, which switches XIP off) and
+    // the watchdog has been stopped
+    rtc_cal_beforeSleep(woken == APP_WAKE_REASON_COLD);
 
 	// CLI command might have requested this after firmware update
 	if (app_getResetRequest()) {

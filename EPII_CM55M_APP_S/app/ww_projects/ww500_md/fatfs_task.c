@@ -517,12 +517,10 @@ static FRESULT fileRead(fileOperation_t *fileOp) {
  */
 static APP_MSG_DEST_T handleEventForUninit(APP_MSG_T rxMessage) {
 	APP_MSG_EVENT_E event;
-	FRESULT res;
 	fileOperation_t *fileOp;
 	static APP_MSG_DEST_T sendMsg;
 
 	sendMsg.destination = NULL;
-	res = FR_OK;
 
 	event = rxMessage.msg_event;
 
@@ -580,14 +578,14 @@ static APP_MSG_DEST_T handleEventForUninit(APP_MSG_T rxMessage) {
 		break;
 
 	case APP_MSG_FATFSTASK_SAVE_STATE:
-		// Return an error in this state
+		// No card, so nothing to save on it. But the settings go to flash, so a setop or BLE change
+		// survives the sleep. The NN is not running (the image task is in its save-state state)
+		xip_state_saveFastStart();
 
-		sendMsg.message.msg_data = (uint32_t)FR_NO_FILESYSTEM;
-
-		// Signal to the caller that it may enter DPD.
+		// Signal to the caller that it may enter DPD, with an error as there is no card
 		sendMsg.destination = xImageTaskQueue; // fileOp->senderQueue;
 		sendMsg.message.msg_event = APP_MSG_IMAGETASK_DISK_WRITE_COMPLETE;
-		sendMsg.message.msg_data = (uint32_t)res;
+		sendMsg.message.msg_data = (uint32_t)FR_NO_FILESYSTEM;
 
 		break;
 
@@ -778,11 +776,11 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 				xprintf("Saved state to SD card. Image sequence number = %d\n",
 						fatfs_getImageSequenceNumber());
 			}
-
-			// And the settings the first photo needs, to flash if they have changed. The NN is not
-			// running (the image task is in its save-state state), so XIP can be switched off
-			xip_state_saveFastStart();
 		}
+
+		// And the settings the first photo needs, to flash if they have changed, card or not. The NN is
+		// not running (the image task is in its save-state state), so XIP can be switched off
+		xip_state_saveFastStart();
 
 		// Signal to the caller that it may enter DPD.
 		sendMsg.destination = xImageTaskQueue; // fileOp->senderQueue;

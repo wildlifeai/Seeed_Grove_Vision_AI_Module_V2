@@ -46,7 +46,7 @@
 
 typedef struct {
 	uint32_t magic;					// RECORD_MAGIC
-	uint8_t  version;				// XIP_STATE_FORMAT_VERSION
+	uint8_t  version;				// XIP_STATE_FORMAT_VERSION, or XIP_STATE_BOARD_VERSION for a board record
 	uint8_t  type;					// XIP_STATE_TYPE_E
 	uint16_t dataLen;				// payload bytes used
 	uint32_t sequence;				// one more than the newest valid record when written
@@ -87,6 +87,8 @@ typedef struct {
 } FastStartPayload_t;
 
 _Static_assert(sizeof(FastStartPayload_t) <= XIP_STATE_DATA_MAX, "fast-start payload too big for a record");
+
+_Static_assert(sizeof(XipStateBoard_t) <= XIP_STATE_DATA_MAX, "board payload too big for a record");
 
 // xip_state_test()'s buffers, from the heap too: the CLI task's stack is small
 typedef struct {
@@ -150,6 +152,7 @@ static bool cardStateSeen[FAST_START_NUM_OPS];
 /*********************************************** Local Function Declarations *********************************/
 
 static uint32_t sectorAddr(XIP_STATE_TYPE_E type);
+static uint8_t formatVersion(XIP_STATE_TYPE_E type);
 static bool slotIsBlank(const XipStateRecord_t *rec);
 static uint16_t recordCrc(const XipStateRecord_t *rec);
 static bool recordIsValid(const XipStateRecord_t *rec, XIP_STATE_TYPE_E type);
@@ -173,6 +176,18 @@ static bool isStateOp(uint8_t op);
  */
 static uint32_t sectorAddr(XIP_STATE_TYPE_E type) {
 	return XIP_STATE_AREA_ADDR + ((type == XIP_STATE_TYPE_BOARD) ? SECTOR_SIZE : 0);
+}
+
+/**
+ * @brief The format version a record of this type must carry.
+ *
+ * The board record has its own, so raising the fast-start format never loses a board's calibration.
+ *
+ * @param type  the record type
+ * @return XIP_STATE_BOARD_VERSION for a board record, otherwise XIP_STATE_FORMAT_VERSION
+ */
+static uint8_t formatVersion(XIP_STATE_TYPE_E type) {
+	return (type == XIP_STATE_TYPE_BOARD) ? XIP_STATE_BOARD_VERSION : XIP_STATE_FORMAT_VERSION;
 }
 
 /**
@@ -217,7 +232,7 @@ static uint16_t recordCrc(const XipStateRecord_t *rec) {
  */
 static bool recordIsValid(const XipStateRecord_t *rec, XIP_STATE_TYPE_E type) {
 	return ((rec->magic == RECORD_MAGIC)
-			&& (rec->version == XIP_STATE_FORMAT_VERSION)
+			&& (rec->version == formatVersion(type))
 			&& (rec->type == (uint8_t)type)
 			&& (rec->dataLen <= XIP_STATE_DATA_MAX)
 			&& (rec->crc == recordCrc(rec)));
@@ -299,7 +314,7 @@ static int writeRecord(XIP_STATE_TYPE_E type, const uint8_t *data, uint16_t len,
 	XipStateRecord_t *rec = &work->record;
 	memset(rec, 0, sizeof(*rec));
 	rec->magic = RECORD_MAGIC;
-	rec->version = XIP_STATE_FORMAT_VERSION;
+	rec->version = formatVersion(type);
 	rec->type = (uint8_t)type;
 	rec->dataLen = len;
 	rec->sequence = (scan.newest < 0) ? 1 : (scan.newestSeq + 1);
@@ -498,8 +513,7 @@ bool xip_state_read(XIP_STATE_TYPE_E type, uint8_t *data, uint16_t *len) {
 /**
  * @brief Append a record, erasing the sector first if it is full, and check it by reading it back.
  *
- * Only XIP_STATE_TYPE_FAST_START is written for now: the board record is reserved for the
- * clock calibration work.
+ * Both types: the fast-start record at sleep, the board record by the RTC calibration (rtc_cal.c).
  *
  * @param type  the record type
  * @param data  the payload
@@ -511,7 +525,7 @@ int xip_state_write(XIP_STATE_TYPE_E type, const uint8_t *data, uint16_t len) {
 	bool erased;
 	int ret;
 
-	if (type != XIP_STATE_TYPE_FAST_START) {
+	if ((type != XIP_STATE_TYPE_FAST_START) && (type != XIP_STATE_TYPE_BOARD)) {
 		return -1;
 	}
 
@@ -550,7 +564,7 @@ void xip_state_dump(void) {
 		}
 		xprintf("%s sector 0x%08x (format version %d):\n",
 				(type == XIP_STATE_TYPE_BOARD) ? "Board" : "Fast-start",
-				(unsigned)sectorAddr(type), XIP_STATE_FORMAT_VERSION);
+				(unsigned)sectorAddr(type), formatVersion(type));
 
 		for (uint8_t i = 0; i < SLOTS_PER_SECTOR; i++) {
 			const XipStateRecord_t *rec = &work->slot[i];
@@ -590,6 +604,18 @@ void xip_state_dump(void) {
 				xprintf(" %d=%d", fastStartOps[k], payload->op[k]);
 			}
 			xprintf(", %d extra camera registers (camera %d)\n", payload->regCount, payload->regCamera);
+		}
+		else if ((type == XIP_STATE_TYPE_BOARD)
+				&& (work->slot[scan.newest].dataLen == sizeof(XipStateBoard_t))) {
+			const XipStateBoard_t *board = (const XipStateBoard_t *)work->slot[scan.newest].data;
+
+			if (board->rtcCalValid) {
+				xprintf("  Newest: RTC calibration %ld ppm, measured at RTC %lu s%s\n", (long) board->rtcPpm,
+						(unsigned long) board->rtcMeasuredAt, board->rtcCalOff ? " (off)" : "");
+			}
+			else {
+				xprintf("  Newest: RTC calibration not measured%s\n", board->rtcCalOff ? " (off)" : "");
+			}
 		}
 	}
 	vPortFree(work);
@@ -940,4 +966,37 @@ bool xip_state_keepStateOp(uint8_t op, uint16_t cardValue) {
 		}
 	}
 	return true;
+}
+
+/**
+ * @brief Read the newest board record.
+ *
+ * @param board  output: the payload, all zero (nothing set) if there is no valid record
+ * @return true if a valid board record was found
+ */
+bool xip_state_readBoard(XipStateBoard_t *board) {
+	uint8_t data[XIP_STATE_DATA_MAX];
+	uint16_t len = 0;
+
+	memset(board, 0, sizeof(*board));
+	if (!xip_state_read(XIP_STATE_TYPE_BOARD, data, &len) || (len != sizeof(XipStateBoard_t))) {
+		return false;
+	}
+	memcpy(board, data, sizeof(*board));
+	return true;
+}
+
+/**
+ * @brief Write the board record, if it differs from the newest one in flash.
+ *
+ * @param board  the payload to save
+ * @return 0 if saved or unchanged, negative on failure
+ */
+int xip_state_writeBoard(const XipStateBoard_t *board) {
+	XipStateBoard_t current;
+
+	if (xip_state_readBoard(&current) && (memcmp(&current, board, sizeof(current)) == 0)) {
+		return 0;
+	}
+	return xip_state_write(XIP_STATE_TYPE_BOARD, (const uint8_t *)board, sizeof(*board));
 }

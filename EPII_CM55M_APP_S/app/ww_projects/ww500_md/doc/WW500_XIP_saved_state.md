@@ -10,12 +10,15 @@ without waiting for the SD card. How the work was done, and the bench results, a
 
 ## In short
 
-- At sleep the AI processor writes a **fast-start record** to flash if any setting has changed.
+- At sleep the AI processor writes a **fast-start record** to flash if any setting has changed,
+  with or without an SD card.
 - At the next wake it reads the record (about 5 ms after the scheduler starts) and the camera
   starts at once. The SD card mounts at the same time, and nothing waits for it until it is
   needed: the file name, the EXIF values, the counters and the photo itself.
 - **CONFIG.TXT stays the master.** When it loads, it overrides the record's settings, and the
   console reports any difference. The record is only a cache to save time.
+- **With no card,** the record is all there is: a `setop` or BLE change survives sleeps (since
+  31 October 2026). When a card goes back in, its CONFIG.TXT wins.
 - With no valid record (new board, new record format) the C defaults are used and the camera
   waits for CONFIG.TXT, as before.
 
@@ -24,7 +27,7 @@ without waiting for the SD card. How the work was done, and the bench results, a
 | Physical address | Contents |
 |---|---|
 | 0x00F00000 to 0x00F00FFF | Fast-start records: 16 slots of 256 bytes |
-| 0x00F01000 to 0x00F01FFF | Board record (for the clock calibration): reserved, not written yet |
+| 0x00F01000 to 0x00F01FFF | Board record: the RTC calibration (see below), 16 slots of 256 bytes |
 
 The full flash map is in `xip_manager.h`. Records are only ever written through
 `xip_state_area_read/write/erase()` in `xip_manager.c`, which refuse any address outside this area.
@@ -52,6 +55,18 @@ The full flash map is in `xip_manager.h`. Records are only ever written through
 To change the record layout, raise `XIP_STATE_FORMAT_VERSION`. Older records are then ignored
 and the first wake uses the C defaults.
 
+## The board record
+
+Values that belong to this board, with their own format version (`XIP_STATE_BOARD_VERSION`), so a
+change to the fast-start record never loses them. It holds the **RTC calibration** (`rtc_cal.c`,
+#245): the RC32K oscillator's error, which is 2 to 5 % fast and differs from board to board.
+- Before sleep, on a cold boot, when there is no saved value, and once a day of RTC time, the board
+  times one RTC second between two RTC alarm interrupts against the crystal (core busy 2 to 3 s) and
+  saves the result in ppm. About one write a day.
+- Each DPD alarm is then set to more RTC seconds, so the sleep lasts the time asked for. The console
+  prints `RTC correction N ppm` and `Sleep Ns = M RTC s` before each sleep.
+- Only the sleep is corrected: the RTC's time of day still runs fast between `setutc`s.
+
 ## The order of a wake
 
 1. `app_main()` creates the tasks. The image task runs above the FatFS task (priorities 2 and 1),
@@ -64,7 +79,8 @@ and the first wake uses the C defaults.
 5. The image task then waits for the card (`fatfs_waitForSdReady()`), adds the NN result to the
    counters and saves the photo. If CONFIG.TXT says the camera is off (op 10 = 0), the frame is
    not saved.
-6. At sleep the FatFS task saves CONFIG.TXT and writes a new record if anything has changed.
+6. At sleep the FatFS task saves CONFIG.TXT (if there is a card) and writes a new record if anything
+   has changed (card or not).
 
 Each wake prints its timings once the first photo is queued, in ms since `app_main()`:
 
@@ -100,11 +116,13 @@ time. The cause is not known.
 ## Commands
 
 - `xipstate`: lists every slot of both sectors and the newest record's values.
+- `rtccal`: shows the RTC calibration. `rtccal measure` measures and saves it now; `rtccal off`
+  stops the correction and the measuring (to time the uncorrected sleep), `rtccal on` restores them.
 - `xipstate test`: the bench test of the record module. It fills the fast-start sector twice
   (33 writes, 2 erases), checks a bad CRC is skipped, and ends by writing back the record that was
   there. Needed only after a change to `xip_state.c`.
 
-Both are refused while the camera is busy, since flash access switches XIP off.
+All are refused while the camera is busy, since flash access switches XIP off.
 
 ## Code
 
@@ -115,3 +133,5 @@ Both are refused while the camera is busy, since flash access switches XIP off.
 | `fatfs_task.c` | Reads the record at start-up, compares after CONFIG.TXT, writes at sleep; `fatfs_waitForSettings()`, `fatfs_waitForSdReady()` |
 | `image_task.c` | Waits for the card only where it needs it; `initNN()`, `countNNResult()` |
 | `boot_timing.c` | The `Boot timing` line |
+| `rtc_cal.c/.h` | The RTC calibration: measurement, when it is due, the alarm correction |
+| `sleep_mode.c` | Applies the alarm correction at DPD entry |

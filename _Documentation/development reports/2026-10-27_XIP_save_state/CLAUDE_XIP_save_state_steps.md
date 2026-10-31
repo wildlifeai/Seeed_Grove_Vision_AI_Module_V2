@@ -1169,3 +1169,28 @@ afternoon got darker:
 - **The HM0360 result stands:** its integration time was 376 lines in log19 and in log26/27, so
   the light was the same, and its capture still grew by exactly the 15 ms saved.
 - Comparisons of `frame ready` between logs must check the RP3's restored exposure.
+
+### Fast-start record saved with no card (31 October 2026, coded, not built)
+
+Found while timing sleeps without a card: `setop 7 300` gave one 300 s sleep, then the wake
+loaded op 7 from the old record (or the C default 0) and set no timer. The image task skipped the
+save step when no card was mounted, so the record was never written. Charles: save it anyway.
+- `image_task.c`: `sdMountedForSave()` replaced by `saveStateBeforeSleep()`, which waits for the
+  card's start-up and always sends `APP_MSG_FATFSTASK_SAVE_STATE` (three places).
+- `fatfs_task.c`: the no-card handler calls `xip_state_saveFastStart()` and replies
+  `FR_NO_FILESYSTEM` (it used to overwrite that with an unrelated `res`). In the card handler the
+  record is written even if the card is no longer mounted.
+- A card put back later still wins: CONFIG.TXT overrides the record's settings.
+- Bench: no card, `setop 7 300`; expect `Fast-start record: written` before DPD, and the
+  timelapse to keep going after the first wake.
+
+### Bench result, record saved with no card (`logs/cmss-sdfix.txt`, WILD-CMSS, 31 October 2026)
+
+Works. Cold boot with no card, record seq 78 had op 7 = 300; `setop 7 120`.
+- First sleep: `Fast-start record: written, seq 79` (no card), then `Sleep 120s = 126 RTC s`.
+- Timer wake, still no card: record seq 79 loaded, `unchanged (seq 79)`, `Sleep 120s` again. The
+  old build set no timer here. (`Image not written. Error: 13` is the missing card, as before.)
+- Card put in: `op 7: record 120, CONFIG.TXT 300`, CONFIG.TXT won, `written, seq 80`,
+  `Sleep 300s = 314 RTC s`.
+- The two 120 s sleeps lasted 120.22 and 120.10 s. The cold boot measured -45546 ppm, against
+  -45874 ppm at 14:19: 0.03 % apart, like the depopulated board's drift.

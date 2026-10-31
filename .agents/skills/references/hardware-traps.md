@@ -94,6 +94,10 @@ Verified on the bench (details and serial evidence in
   particular file parses, set the **FAT read-only attribute** on it, which the firmware
   respects, and the card survives the boot intact. Two bench runs were spent measuring the
   device's own file before this was understood.
+* **With no card, settings live only in the fast-start record in flash** (`xip_state.c`). Since
+  31 Oct 2026 it is written at every sleep, card or not; before that, a `setop` with no card was
+  lost after one sleep (a `setop 7 300` timelapse stopped at the first wake). When a card goes back
+  in, its CONFIG.TXT overrides the record, so a change made with the card out is lost.
 * **The periodic AE light check only runs if something consumes it.**
   `aeCheckRequired = lightSensor_isRequired()`, which is true when the flash mode is
   `FLASH_MODE_AE` (**op34**, not op13) or automatic camera switching (op26) is on. With
@@ -181,3 +185,11 @@ building on any of them:
   the device is lost once the warm boot reconfigures the sensor, so `app_main()` saves it right
   after reading `INT_INDIC` (`hm0360_md_saveWakeGrid()`) and the image task reports it after the
   first image. Keep work before the first capture to a minimum (wake latency). 26 Oct 2026.
+* **The RTC and the DPD alarm run 2 to 5 % fast, differently on each board, and the RC32K trim
+  register does not change the DPD alarm** (it does change the clock while awake, and its default
+  differs between chips: 31 and 28 seen). `rtc_cal.c` measures the rate while awake and lengthens
+  the alarm instead; `_Tools/sleep_timing.py` times sleeps from a Tera Term log. Timing anything
+  with the DWT cycle counter needs the core kept busy: it stops in tickless idle. The RTC alarm
+  interrupt works while awake; `hx_drv_rtc_set_alarm()` takes about 316 us. The awake rate
+  predicts the sleep: corrected 300 s sleeps lasted 298.7 to 299.7 s on three boards and both
+  images. `rtccal` shows the value, `xipstate` the board record. 31 Oct 2026, #245.

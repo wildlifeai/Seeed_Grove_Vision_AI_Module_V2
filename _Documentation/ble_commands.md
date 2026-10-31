@@ -170,6 +170,7 @@ The "Reqd?" column indicates whether the command should be implemented by the ap
 | AI slots       |               | Reports the active firmware slot and the camera variant in each slot, e.g. `Active slot 0 running 'RP3 (day/colour)'. Slot A: 'RP3 (day/colour)', Slot B: 'HM0360 (night/IR)'. Auto-switch: on` | Y, 4 |
 | AI switchslot  |               | Boots the firmware image in the other slot (day/night camera change). Response `Switched to slot n ('variant'). Reset scheduled.` — the device resets when it next sleeps | Y, 4 |
 | AI firmware    | file [0xCRC]  | Writes `/MANIFEST/<file>` to the INACTIVE firmware slot, verifies it and updates the slot selector; `AI reset` boots it. With the optional CRC16-CCITT the file is checked before flash is touched. Used twice (once per camera image) by the app's "Update both cameras" flow — see [firmware_update_and_recovery.md](firmware_update_and_recovery.md) | Y, 4 |
+| AI rtccal      | [measure \| on \| off] | `RTC calibration: N ppm (P %), measured S RTC s ago.` The RC32K clock's error, measured against the crystal and used to correct the sleep (#245). `measure` measures now (busy up to 3 s), `off` stops the correction, `on` restores it | - |
 | AI ble         | [clear]       | `BLE processor responsive`, or `BLE processor unresponsive: messages to it are not sent`. `clear` clears that flag | -, 6 |
 
 Note that there are addition commands that could be run on the AI processor, not documented here.

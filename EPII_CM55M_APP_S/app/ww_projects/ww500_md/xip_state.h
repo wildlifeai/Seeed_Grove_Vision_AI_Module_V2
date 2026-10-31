@@ -10,7 +10,7 @@
  *  Two 4 KB sectors of the saved-state area (XIP_STATE_AREA_ADDR, xip_manager.h),
  *  one per record type, so the frequent erases of one can never touch the other:
  *    0x00F00000  fast-start records (the settings the first photo needs)
- *    0x00F01000  board record (clock calibration) - reserved, not written yet
+ *    0x00F01000  board record: values that belong to this board (the RTC calibration, rtc_cal.c)
  *
  *  Each sector holds 16 records of 256 bytes (one flash page each). A new record
  *  goes into the slot after the last used one; when the sector is full it is
@@ -40,15 +40,27 @@
 
 #define XIP_STATE_RECORD_SIZE		256		// one flash page: a write never crosses a page boundary
 #define XIP_STATE_DATA_MAX			240		// payload bytes in one record
-// Raise this whenever the record or a payload layout changes: older records are then ignored
+// Raise this whenever the record or the fast-start payload changes: older fast-start records are then ignored
 #define XIP_STATE_FORMAT_VERSION	2		// 2: 32 ops (28 Oct 2026); 1 had 23
+// The board record's own version, so a new fast-start format never loses a board's calibration.
+// Raise it only when the board payload changes, and keep reading the old one if possible
+#define XIP_STATE_BOARD_VERSION		2		// 2: the RTC calibration (31 Oct 2026); 1 had the RC32K trim (no effect in DPD)
 
 /*********************************************** Global Types ************************************************/
 
 typedef enum {
 	XIP_STATE_TYPE_FAST_START	= 1,	// sector 0x00F00000
-	XIP_STATE_TYPE_BOARD		= 2,	// sector 0x00F01000: reserved for the clock calibration, not written yet
+	XIP_STATE_TYPE_BOARD		= 2,	// sector 0x00F01000: this board's values (the RTC calibration)
 } XIP_STATE_TYPE_E;
+
+// The payload of a board record: values that belong to this board. Change it only with XIP_STATE_BOARD_VERSION
+typedef struct {
+	uint8_t  rtcCalValid;		// 1: rtcPpm and rtcMeasuredAt hold a measurement
+	uint8_t  rtcCalOff;			// 1: no correction and no measuring ('rtccal off')
+	uint16_t reserved;			// 0
+	int32_t  rtcPpm;			// the RC32K clock's error, measured awake (rtc_cal.c): negative means fast (#245)
+	uint32_t rtcMeasuredAt;		// RTC seconds when it was measured
+} XipStateBoard_t;
 
 /*********************************************** Global Variables ********************************************/
 
@@ -94,5 +106,15 @@ int xip_state_saveFastStart(void);
  * @brief While CONFIG.TXT loads: whether to keep RAM's value of a state op (25, 37, 38).
  */
 bool xip_state_keepStateOp(uint8_t op, uint16_t cardValue);
+
+/**
+ * @brief Read the board record (all zero if there is none).
+ */
+bool xip_state_readBoard(XipStateBoard_t *board);
+
+/**
+ * @brief Write the board record, if it differs from the one in flash.
+ */
+int xip_state_writeBoard(const XipStateBoard_t *board);
 
 #endif /* XIP_STATE_H_ */

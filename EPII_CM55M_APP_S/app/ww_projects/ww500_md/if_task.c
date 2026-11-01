@@ -307,6 +307,12 @@ static bool bleUnresponsive = false;
 // True from sending the first message until it is read (TX_DONE) or times out (MM_TIMER, after BLE_PROBE_TIME)
 static bool bleProbePending = false;
 
+// True once the wake message has been queued, so ifTask_allTasksReady() does not queue it again. On a warm boot it
+// is queued as this task starts (#56): before the first photo's NN result, AE registers and motion grid, which the
+// BLE processor only handles once it has had the wake message, and early enough for its setutc to arrive before
+// the first photo is saved. On a cold boot it still waits for every task (and the FatFS task's 1 s wait).
+static bool wakeMessageQueued = false;
+
 // True once this task has reported to shutdownBarrier. barrier_ready() counts calls, not tasks, and the inactivity
 // detector can fire again after any activity, so the report is made at most once per boot (see reportReadyToSleep()).
 static bool readyToSleepReported = false;
@@ -963,8 +969,10 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 		break;
 
 	case APP_MSG_IFTASK_FREERTOS_INIT:
-		// Here when the last FreeRTOStask has done its one-off initialisation
-		// Time to send the wake message, with the AI processor's time, to the BLE processor.
+		// Here as this task starts (warm boot) or when the last FreeRTOS task has done its one-off initialisation
+		// (cold boot): see wakeMessageQueued. Time to send the wake message, with the AI processor's time, to the
+		// BLE processor. Early in a warm boot the RTC may still read the time at sleep: the BLE processor only logs
+		// the difference, and sends setutc every wake.
 		if (woken == APP_WAKE_REASON_MD) {
 			// Special wake message if the wake was due to motion detection
 			snprintf(message, sizeof(message), "Motion ");
@@ -1548,6 +1556,18 @@ static void vIfTask(void *pvParameters) {
 	// Clear the saved event. This means there is to be no saved message.
 	// The mechanism allows messages to be deferred till we return to IDLE. One of the handling routines might set it later.
 	savedMessage.msg_event = APP_MSG_NONE;
+
+	// Warm boot: the wake message goes first, ahead of anything the other tasks queue (see wakeMessageQueued)
+	if (woken != APP_WAKE_REASON_COLD) {
+		sendMsg.msg_event = APP_MSG_IFTASK_FREERTOS_INIT;
+		sendMsg.msg_data = 0;
+		sendMsg.msg_parameter = 0;
+		wakeMessageQueued = true;
+		if (xQueueSendToFront(xIfTaskQueue, (void *)&sendMsg, __QueueSendTicksToWait) != pdTRUE) {
+			wakeMessageQueued = false;	// ifTask_allTasksReady() sends it instead
+			xprintf("send_msg=0x%x fail\r\n", sendMsg.msg_event);
+		}
+	}
 
 	barrier_ready(&startupBarrier);
 
@@ -2253,6 +2273,11 @@ void ifTask_getDownloadTiming(ifTask_timeStat_t * aiTime, ifTask_timeStat_t * bl
  */
 void ifTask_allTasksReady(void) {
 	APP_MSG_T send_msg;
+
+	if (wakeMessageQueued) {
+		return;	// already sent as this task started (warm boot)
+	}
+	wakeMessageQueued = true;
 
 	// Send back to MKL62BA - msg_data is the string
 	send_msg.msg_data = 0;

@@ -689,6 +689,7 @@ int app_main(void){
 		//exif_utc_get_rtc_as_time_dpd(&time);	// This takes time! c. 900ms
 		// TODO sort out getting time efficiently after warm boot
 		exif_utc_get_rtc_as_time(&time);
+		exif_utc_note_boot_time(&time);	// this read may still be the time at sleep (#56)
 		exif_utc_time_to_exif_string(&time, timeString, sizeof(timeString));
 
 		xprintf("Woke at %s \n", timeString);

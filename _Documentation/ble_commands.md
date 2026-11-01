@@ -330,11 +330,16 @@ But that assumes it has LoRaWAN connectivity, which not all devices will have.
 * In the absence of either external time source the BLE processor will retain a reasonably accurate time over weeks, 
 with its accurate crystal.
 * After power-on and until the BLE processor gets the time from the app or LoRaWAN its time starts at midnight on 1 Jan 2024.  
-* The BLE processor passes its UTC time to the AI processor every few minutes. The AI processor can thus have a 
-reasonably accurate time for purposes of timestamping images.
+* The BLE processor sends `setutc` to the AI processor on every wake, after `selftest`, if it has the time (since
+1 Nov 2026, issue #56; before that only when the two clocks differed by more than 300 s). The AI processor stamps its
+photos from that time plus the ticks since it, and the file dates and `AI getutc` use it too.
 * From the app's point of view, it should send the UTC time whenever it connects, in a command like this: `setutc 2025-01-01T01:02:03Z`.
-* At present, the `setutc` command results in two responses - first from the BLE processor then from the AI processor. For some reason
-the AI processor RTC setting takes 1-2 seconds, and the response reports this duration.
+* At present, the `setutc` command results in two responses - first from the BLE processor then from the AI processor.
+* On the AI processor `setutc` no longer writes the RTC at once (the write blocks its interrupts for about 1.4 s): the RTC
+is written at the next sleep, only if more than 10 minutes out or never set. The reply is `RTC set to <time> (was out by N s)`;
+the `RTC set ` prefix is what the BLE processor matches.
+* Commands from the BLE processor that change settings (e.g. `setop`) are held on the AI processor until CONFIG.TXT has
+loaded, about 300 ms after a wake; `selftest`, `setutc`, `getutc` and `ver` run at once.
 * If the app wants to read the time back from the BLE and/or AI processor it can (no need to, I think): `getutc` will read 
 the BLE processor time and `AI getutc` will read the AI processor time.  
 * I have provided functions on the AI processor for creating the timestamp in a format suitable for inclusion in EXIF. I understand that 

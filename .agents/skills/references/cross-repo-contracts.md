@@ -20,6 +20,12 @@ contract, and land the change with the consumers in view.
 * **The motion wake is `Motion <time>`** since #260 (it was `MD <time>`). The nRF knows only
   one name, so this firmware and ww-hardware 0.30.56 release as a pair; the app accepts both
   (ww-mobile-app #421).
+* **The wake sequence and `setutc` change together with ww-hardware** (#56, 1 Nov 2026,
+  `2026-11-01_AI_RTC/CLAUDE_wake_sequence_spec.md`). The AI processor sends the wake message
+  first and holds settings commands until CONFIG.TXT has loaded; the BLE processor sends
+  `setutc` every wake after `selftest`, and handles `NN±` in WOKEN. `setutc` replies still start
+  `RTC set ` (the nRF matches it) but the AI processor writes its RTC only at sleep. The two
+  processors' firmware is always updated together.
 
 **The "Sleep" message has a size limit.** At sleep the AI processor sends every op parameter to
 the BLE processor in one "Sleep" message (`if_task.c`), at most 244 bytes. Typical is about 110

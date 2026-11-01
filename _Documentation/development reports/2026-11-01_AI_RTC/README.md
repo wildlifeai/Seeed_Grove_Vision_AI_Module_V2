@@ -29,11 +29,17 @@ this thread's starting point.
 | Document | What it is |
 |---|---|
 | [CLAUDE_BLE_time_proposal.md](CLAUDE_BLE_time_proposal.md) | Getting the time from the BLE processor early in each wake: options and questions |
+| [CLAUDE_wake_sequence_spec.md](CLAUDE_wake_sequence_spec.md) | The spec for both processors: wake message first, `setutc` every wake without the RTC write, state machine changes, tests |
 
 ## Status
 
-Open. Proposal written and its questions answered, 1 November 2026. No code yet; next is step 1, the
-three-way log.
+Open. Proposal written and its questions answered, 1 November 2026. Step 1 logs done: the RTC stopped
+in DPD whenever no alarm was set. Test 1 (RTC0 left unmasked, alarm off) keeps it running with no
+extra wakes: now permanent in `sleep_mode.c` (not yet built). Then the spec
+(`CLAUDE_wake_sequence_spec.md`): AI processor side coded 1 Nov, not yet built; the BLE processor side
+is being coded in a separate session. AI processor side benched 1 Nov (ai5/ble5): wake message first,
+held commands, fallback stamps and `setutc` (no RTC write, written at sleep when over 600 s) all pass.
+Waiting for the BLE processor side: brief for that session in `CLAUDE_BLE_processor_brief.md`.
 
 ## Outcome
 

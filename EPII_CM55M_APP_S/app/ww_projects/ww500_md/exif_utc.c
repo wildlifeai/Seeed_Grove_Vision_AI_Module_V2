@@ -40,10 +40,36 @@
 
 static int is_leap_year(int year);
 static int days_in_month(int mon, int year);
+static uint32_t timeToEpoch(const rtc_time *tm);
+static void epochToTime(uint32_t epoch, rtc_time *tm);
+static uint32_t msSince(TickType_t tick);
+static bool readRtcEpoch(uint32_t *epoch);
+static bool waitForRtcTick(uint32_t *epoch);
 
 /**************************************** Local Variables **************************************/
 
 static bool timeHasBeenSet = false;
+
+// The time reference for this wake (#56). The RTC is not used for photos directly: its first reads after a DPD wake
+// can still hold the time at sleep, and it runs 2 to 5 % fast. Instead each wake takes one reference, a UTC time and
+// the tick count at that moment, and adds the ticks (the 24 MHz crystal) to it. RAM, so it starts afresh each wake.
+static bool refValid = false;
+static bool refFromSetutc = false;	// true if from setutc (the BLE processor's clock), false if from the RTC
+static uint32_t refEpoch;			// seconds since 1970-01-01
+static TickType_t refTick;
+static bool setutcWaitDone = false;	// the first photo of the wake has waited for setutc
+
+// The RTC's first read after a DPD wake. Until the RTC reads something else it may still hold the time at sleep:
+// the register is refreshed on the RTC's next one-second tick (1 Nov 2026, CLAUDE_BLE_time_proposal.md)
+static bool bootReadValid = false;
+static uint32_t bootReadEpoch;
+
+// The RTC has ticked by this time after the scheduler starts, whatever it reads
+#define RTC_FIRST_TICK_MS			1100
+// Write the RTC at sleep if it is further than this from the setutc reference
+#define RTC_WRITE_LIMIT_S			600
+// Or if it reads earlier than this year (never set: a cold boot sets 2024)
+#define RTC_FIRST_VALID_YEAR		2025
 
 /**************************************** Local function definitions  *************************************/
 
@@ -79,6 +105,103 @@ static int days_in_month(int mon, int year) {
     if (mon == 2 && is_leap_year(year)) // February in a leap year
         return 29;
     return days[mon - 1];
+}
+
+/**
+ * Converts a date and time to seconds since 1970-01-01 (the RTC's own count)
+ *
+ * The days-from-civil algorithm (H. Hinnant), for any Gregorian date from 1970.
+ *
+ * @param tm = full 4-digit year, month 1-12
+ * @return seconds since 1970-01-01 00:00:00
+ */
+static uint32_t timeToEpoch(const rtc_time *tm) {
+	int32_t y = tm->tm_year - ((tm->tm_mon <= 2) ? 1 : 0);
+	uint32_t m = (uint32_t) tm->tm_mon;
+	int32_t era = y / 400;							// y >= 1969, so no negative case
+	uint32_t yoe = (uint32_t) (y - era * 400);		// year of era, 0-399
+	uint32_t doy = (153 * ((m > 2) ? (m - 3) : (m + 9)) + 2) / 5 + (uint32_t) tm->tm_mday - 1;
+	uint32_t doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+	uint32_t days = (uint32_t) (era * 146097 + (int32_t) doe - 719468);
+
+	return days * 86400u + (uint32_t) tm->tm_hour * 3600u + (uint32_t) tm->tm_min * 60u + (uint32_t) tm->tm_sec;
+}
+
+/**
+ * Converts seconds since 1970-01-01 to a date and time
+ *
+ * The civil-from-days algorithm (H. Hinnant), the inverse of timeToEpoch().
+ *
+ * @param epoch = seconds since 1970-01-01 00:00:00
+ * @param tm = output: full 4-digit year, month 1-12 (tm_wday and tm_yday are 0)
+ */
+static void epochToTime(uint32_t epoch, rtc_time *tm) {
+	uint32_t secs = epoch % 86400u;
+	int32_t z = (int32_t) (epoch / 86400u) + 719468;
+	int32_t era = z / 146097;
+	uint32_t doe = (uint32_t) (z - era * 146097);
+	uint32_t yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+	uint32_t doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+	uint32_t mp = (5 * doy + 2) / 153;
+	uint32_t m = (mp < 10) ? (mp + 3) : (mp - 9);
+
+	memset(tm, 0, sizeof(*tm));
+	tm->tm_year = (int) yoe + era * 400 + ((m <= 2) ? 1 : 0);
+	tm->tm_mon = (int) m;
+	tm->tm_mday = (int) (doy - (153 * mp + 2) / 5 + 1);
+	tm->tm_hour = (int) (secs / 3600);
+	tm->tm_min = (int) ((secs / 60) % 60);
+	tm->tm_sec = (int) (secs % 60);
+}
+
+/**
+ * Milliseconds since a tick count
+ *
+ * @param tick = an earlier tick count
+ * @return milliseconds since then
+ */
+static uint32_t msSince(TickType_t tick) {
+	return ((xTaskGetTickCount() - tick) * 1000) / configTICK_RATE_HZ;
+}
+
+/**
+ * Reads the RTC (the fast read) as seconds since 1970-01-01
+ *
+ * @param epoch = output
+ * @return true if read
+ */
+static bool readRtcEpoch(uint32_t *epoch) {
+	rtc_time tm;
+
+	if (exif_utc_get_rtc_as_time(&tm) != RTC_NO_ERROR) {
+		return false;
+	}
+	*epoch = timeToEpoch(&tm);
+	return true;
+}
+
+/**
+ * Reads the RTC once it can no longer hold the time at sleep
+ *
+ * After a DPD wake the RTC may read the time at sleep until its first tick. Polls until it reads something other
+ * than the first read after the wake, or until RTC_FIRST_TICK_MS after the scheduler started. Returns at once on a
+ * cold boot, or once it has ticked.
+ *
+ * @param epoch = output: the RTC time, seconds since 1970-01-01
+ * @return true if read
+ */
+static bool waitForRtcTick(uint32_t *epoch) {
+	if (!readRtcEpoch(epoch)) {
+		return false;
+	}
+	while (bootReadValid && (*epoch == bootReadEpoch) && (msSince(0) < RTC_FIRST_TICK_MS)) {
+		vTaskDelay(pdMS_TO_TICKS(10));
+		if (!readRtcEpoch(epoch)) {
+			return false;
+		}
+	}
+	bootReadValid = false;	// it has ticked: no need to check again this wake
+	return true;
 }
 
 /**************************************** Global function definitions  *************************************/
@@ -335,7 +458,7 @@ DWORD get_fattime(void) {
 	RTC_ERROR_E ret;
     rtc_time tm;
 
-    ret = exif_utc_get_rtc_as_time(&tm);
+    ret = exif_utc_get_time(&tm);	// this wake's time, as the photos (#56)
 
     if (ret == 0) {
     return  ((DWORD)(tm.tm_year - 1980) << 25)  // Years since 1980
@@ -348,6 +471,172 @@ DWORD get_fattime(void) {
     else {
     	return ((DWORD)(FF_NORTC_YEAR - 1980) << 25 | (DWORD)FF_NORTC_MON << 21 | (DWORD)FF_NORTC_MDAY << 16);
     }
+}
+
+/**
+ * Keeps the time from setutc as this wake's time reference, without writing the RTC
+ *
+ * The RTC write (hx_drv_rtc_set_time()) blocks interrupts for about 1.4 s, so it is left to
+ * exif_utc_before_sleep(), and only when the RTC is far out. Until then photos, the file date and getutc use
+ * this reference plus the ticks since it.
+ *
+ * @param str = ISO string e.g. "2026-11-01T02:42:47Z"
+ * @param rtcOutBy = output: setutc time minus the RTC, in seconds (if rtcOutByKnown)
+ * @param rtcOutByKnown = output: false if the RTC may still hold the time at sleep, so the difference is not known yet
+ * @return RTC_NO_ERROR, or RTC_ERROR_INVALID_PARAMETERS if the string is not a valid time
+ */
+RTC_ERROR_E exif_utc_set_reference(const char *str, int32_t *rtcOutBy, bool *rtcOutByKnown) {
+	rtc_time tm;
+	uint32_t rtcEpoch = 0;
+	RTC_ERROR_E ret;
+
+	ret = exif_utc_utc_string_to_time(str, &tm);
+	if (ret != RTC_NO_ERROR) {
+		return ret;
+	}
+
+	refEpoch = timeToEpoch(&tm);
+	refTick = xTaskGetTickCount();
+	refValid = true;
+	refFromSetutc = true;
+	timeHasBeenSet = true;
+
+	// Only a guide, for the reply: the RTC may still read the time at sleep (not waited for here)
+	*rtcOutByKnown = readRtcEpoch(&rtcEpoch)
+			&& !(bootReadValid && (rtcEpoch == bootReadEpoch) && (msSince(0) < RTC_FIRST_TICK_MS));
+	*rtcOutBy = (int32_t) (refEpoch - rtcEpoch);
+
+	return RTC_NO_ERROR;
+}
+
+/**
+ * The time now
+ *
+ * From this wake's reference plus the ticks since it, if there is one; else the RTC (which may still hold the
+ * time at sleep early in a wake).
+ *
+ * @param tm = output
+ * @return error code
+ */
+RTC_ERROR_E exif_utc_get_time(rtc_time * tm) {
+	return exif_utc_get_time_at_tick(xTaskGetTickCount(), tm);
+}
+
+/**
+ * The time at a tick count
+ *
+ * Used for a photo's time: the tick count when its frame was ready. From this wake's reference, to the nearest
+ * second (the tick can be before or after the reference). With no reference, the RTC now.
+ *
+ * @param tick = a tick count in this wake
+ * @param tm = output
+ * @return error code
+ */
+RTC_ERROR_E exif_utc_get_time_at_tick(uint32_t tick, rtc_time * tm) {
+	int32_t deltaMs;
+	int32_t deltaS;
+
+	if (!refValid) {
+		return exif_utc_get_rtc_as_time(tm);
+	}
+
+	deltaMs = (int32_t) (((int64_t) (int32_t) ((TickType_t) tick - refTick) * 1000) / configTICK_RATE_HZ);
+	deltaS = (deltaMs >= 0) ? ((deltaMs + 500) / 1000) : -((-deltaMs + 500) / 1000);
+	epochToTime(refEpoch + (uint32_t) deltaS, tm);
+	return RTC_NO_ERROR;
+}
+
+/**
+ * Notes the RTC's first read after a DPD wake
+ *
+ * Until the RTC reads something else it may still hold the time at sleep. Call once, on a warm boot only.
+ *
+ * @param tm = the time read
+ */
+void exif_utc_note_boot_time(rtc_time * tm) {
+	bootReadEpoch = timeToEpoch(tm);
+	bootReadValid = true;
+}
+
+/**
+ * Before a photo is stamped: makes sure this wake has a time reference
+ *
+ * Only the first photo of a wake can wait; later photos (a burst) use the same reference with their own ticks.
+ * In order:
+ *  - setutc, if it arrives within waitMs (the BLE processor sends it every wake, after selftest, if it has the time);
+ *  - else the RTC, once it can no longer hold the time at sleep (at most about 1 s after the wake);
+ *  - the RTC is used even if never set (2024): such photos are stamped as before.
+ *
+ * @param waitMs = how long to wait for setutc
+ * @param setutcExpected = false if the BLE processor is not there, so there is no point waiting
+ */
+void exif_utc_wait_for_reference(uint32_t waitMs, bool setutcExpected) {
+	TickType_t start;
+	uint32_t rtcEpoch;
+
+	if (refValid) {
+		return;
+	}
+
+	if (setutcExpected && !setutcWaitDone) {
+		setutcWaitDone = true;
+		start = xTaskGetTickCount();
+		while (!refValid && (msSince(start) < waitMs)) {
+			vTaskDelay(pdMS_TO_TICKS(10));
+		}
+		if (refValid) {
+			return;
+		}
+		xprintf("No setutc after %dms: photo time from the AI processor's RTC\n", (int) waitMs);
+	}
+
+	if (waitForRtcTick(&rtcEpoch)) {
+		refEpoch = rtcEpoch;
+		refTick = xTaskGetTickCount();
+		refValid = true;
+		refFromSetutc = false;
+	}
+}
+
+/**
+ * At sleep: writes the RTC from this wake's setutc reference, if the RTC is far out
+ *
+ * Only when out by more than RTC_WRITE_LIMIT_S, or never set (before RTC_FIRST_VALID_YEAR): the write blocks
+ * interrupts for about 1.4 s, so it is done here, after the photos, and rarely. The RTC still matters for the wake
+ * message, rtc_cal.c and photos when the BLE processor has no time.
+ *
+ * Call with the watchdog stopped and no SD card write in progress.
+ */
+void exif_utc_before_sleep(void) {
+	uint32_t rtcEpoch;
+	uint32_t trueEpoch;
+	int32_t outBy;
+	rtc_time tm;
+	char timeString[UTCSTRINGLENGTH];
+	TickType_t start;
+
+	if (!refValid || !refFromSetutc || !waitForRtcTick(&rtcEpoch)) {
+		return;
+	}
+
+	trueEpoch = refEpoch + (msSince(refTick) + 500) / 1000;
+	outBy = (int32_t) (trueEpoch - rtcEpoch);
+	epochToTime(rtcEpoch, &tm);
+
+	if ((outBy > RTC_WRITE_LIMIT_S) || (outBy < -RTC_WRITE_LIMIT_S) || (tm.tm_year < RTC_FIRST_VALID_YEAR)) {
+		epochToTime(trueEpoch, &tm);
+		exif_utc_time_to_utc_string(&tm, timeString, sizeof(timeString));
+		start = xTaskGetTickCount();
+		if (exif_utc_set_rtc_from_time(&tm) == RTC_NO_ERROR) {
+			xprintf("RTC was out by %ds: set to %s (took %dms)\n", (int) outBy, timeString, (int) msSince(start));
+		}
+		else {
+			xprintf("RTC was out by %ds: error setting it\n", (int) outBy);
+		}
+	}
+	else {
+		xprintf("RTC out by %ds: not set (limit %ds)\n", (int) outBy, RTC_WRITE_LIMIT_S);
+	}
 }
 
 /**

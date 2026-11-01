@@ -192,3 +192,13 @@ building on any of them:
   interrupt works while awake; `hx_drv_rtc_set_alarm()` takes about 316 us. The awake rate
   predicts the sleep: corrected 300 s sleeps lasted 298.7 to 299.7 s on three boards and both
   images. `rtccal` shows the value, `xipstate` the board record. 31 Oct 2026, #245.
+* **The RTC stops counting in DPD if RTC0 is masked in the PMU** (`pmu_rtc_mask`), which the code
+  did whenever no alarm was set (op 7 = 0): the clock lost the whole sleep. `sleep_mode_enter_dpd()`
+  now leaves RTC0 unmasked with its alarm interrupt off (`RTC_AIE_OFF`), so it counts and nothing
+  wakes the camera. Separately, **the first fast read after a DPD wake can return the time at sleep**
+  for part of the first second (the driver's `RTC_TIME_AFTER_DPD_1ST_READ_YES` read waits for the
+  update, about 900 ms). So photos are stamped from one time reference per wake (`setutc`, else
+  the RTC once it has ticked) plus the tick count, never from a bare RTC read (`exif_utc.c`).
+  **Writing the RTC (`hx_drv_rtc_set_time()`) blocks interrupts for about 1.4 s**: `setutc`
+  no longer does it, `exif_utc_before_sleep()` does, at sleep, only when over 10 minutes out.
+  1 Nov 2026, #56.

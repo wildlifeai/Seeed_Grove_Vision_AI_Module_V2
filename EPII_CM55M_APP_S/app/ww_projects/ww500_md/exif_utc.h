@@ -95,4 +95,18 @@ void exif_utc_clk_disable(void);
 // For FatFs timestamps
 DWORD get_fattime(void);
 
+// The time for this wake (#56): a reference time and the tick count at it, from setutc or, failing that, the RTC
+// Keeps the time from setutc without writing the RTC (the write blocks interrupts for about 1.4 s)
+RTC_ERROR_E exif_utc_set_reference(const char *str, int32_t *rtcOutBy, bool *rtcOutByKnown);
+// The time now: from the reference if there is one, else from the RTC
+RTC_ERROR_E exif_utc_get_time(rtc_time * tm);
+// The time at a tick count (e.g. when a frame was ready): from the reference if there is one, else the RTC now
+RTC_ERROR_E exif_utc_get_time_at_tick(uint32_t tick, rtc_time * tm);
+// Notes the RTC's first read after a DPD wake, which may still hold the time at sleep
+void exif_utc_note_boot_time(rtc_time * tm);
+// Before the first photo of a wake: waits for setutc, then falls back to the RTC once it has ticked
+void exif_utc_wait_for_reference(uint32_t waitMs, bool setutcExpected);
+// At sleep: writes the RTC from the setutc reference if it is far out
+void exif_utc_before_sleep(void);
+
 #endif /* EXIF_UTC_H_ */

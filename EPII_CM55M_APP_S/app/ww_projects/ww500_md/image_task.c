@@ -85,6 +85,7 @@
 #include "preview.h"
 #include "ae.h"
 #include "rtc_cal.h"	// the RTC calibration, measured if due before DPD (#245)
+#include "if_task.h"	// ifTask_isBleUnresponsive(): whether to wait for setutc (#56)
 
 /*************************************** Definitions *******************************************/
 
@@ -290,6 +291,13 @@ static volatile uint32_t pendingTimerPeriod = 0;
 static uint8_t g_capture_retries;		// in-place retries used for the current frame
 static bool g_frame_fault_seen;			// a frame fault has been handled in this capture sequence
 static TickType_t g_frame_fault_tick;	// when the most recent frame fault was handled
+
+// When the frame being saved was ready: its photo's time is this wake's time reference at this tick (#56)
+static TickType_t g_frame_ready_tick;
+
+// How long the first photo of a wake waits for setutc from the BLE processor (sent every wake, after selftest,
+// about 100 ms after the wake message), before taking its time from the RTC instead
+#define PHOTO_SETUTC_WAIT_MS 300
 
 // True when this wake exists only to sample the light level (AE registers) for
 // the flash decision: capture one frame, read the AE registers, save nothing.
@@ -939,6 +947,7 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
         // The first frame after the boot (issue #249). On a motion wake the HM0360's SEN_INT is cleared just below,
         // so a scope on it shows the whole time from motion to this point. The times are printed once the photo
         // is queued for the card (below), since the frame can now be ready before the card is
+        g_frame_ready_tick = xTaskGetTickCount();
         boot_timing_mark(BOOT_TIMING_FRAME_READY);
 
 #if defined(USE_HM0360) || defined(USE_HM0360_MD)
@@ -2614,6 +2623,10 @@ static void prepareJpegFile(int8_t * outCategories, uint8_t classCount, fileBuff
 	uint32_t jpegBuffer;
 	uint32_t jpegLength;
 	static char softwareString[64];	// string for EXIF software version
+	rtc_time photoTime;
+
+	// The photo's time: only the first photo of a wake can wait here, for setutc or the RTC's first tick (#56)
+	exif_utc_wait_for_reference(PHOTO_SETUTC_WAIT_MS, !ifTask_isBleUnresponsive());
 
 	// Take semaphore FIRST before modifying jpeg_exif_buf
 	// This prevents jpeg_exif_buf from being overwritten before previous write completes
@@ -2640,7 +2653,8 @@ static void prepareJpegFile(int8_t * outCategories, uint8_t classCount, fileBuff
 
 	exif_input.width  = (uint16_t)app_get_raw_width();
 	exif_input.height = (uint16_t)app_get_raw_height();
-	exif_utc_get_rtc_as_exif_string(exif_input.timestamp, sizeof(exif_input.timestamp));
+	exif_utc_get_time_at_tick(g_frame_ready_tick, &photoTime);
+	exif_utc_time_to_exif_string(&photoTime, exif_input.timestamp, sizeof(exif_input.timestamp));
 
 	/* Camera identity, build provenance and flash state. The Model string names
 	 * the camera variant so a photo is self-describing (colour RP3 vs mono/IR
@@ -3251,6 +3265,10 @@ void image_sleepNow(void) {
     // Here because the NN is not running (the board record is in the flash, which switches XIP off) and
     // the watchdog has been stopped
     rtc_cal_beforeSleep(woken == APP_WAKE_REASON_COLD);
+
+    // The RTC is only written from setutc here, at sleep, when far out (#56): the write blocks interrupts for
+    // about 1.4 s. After rtc_cal_beforeSleep(), whose measurement sets RTC alarms from the current RTC time
+    exif_utc_before_sleep();
 
 	// CLI command might have requested this after firmware update
 	if (app_getResetRequest()) {

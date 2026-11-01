@@ -32,7 +32,8 @@ this thread's starting point.
 
 ## Status
 
-Open. Proposal written, 1 November 2026, for review. No code yet.
+Open. Proposal written and its questions answered, 1 November 2026. No code yet; next is step 1, the
+three-way log.
 
 ## Outcome
 
@@ -59,6 +60,8 @@ Carried over from the previous thread, 1 November 2026.
   [#246](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/246),
   [#270](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/270),
   [#262](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/262): as in the table.
+- Ask Victor: with no time anywhere, leave the EXIF time out instead of the 2024 stamp? (Decisions
+  in the proposal.)
 - Not yet filed, carried over (Charles to decide):
   - a fast paste into the console hung it, then the IF task stayed in `I2C RX State` and the
     camera never slept (previous thread's step log, "Parked: console stopped responding");

@@ -107,3 +107,13 @@ watchdog reset?
    console.
 4. **BLE processor side** (ww-hardware): reply at once to every wake message.
 5. **#152:** keep a real time through a restart.
+
+## Decisions
+
+Charles, 1 November 2026:
+1. **Option A**, a new `bletime` reply. Still to agree with Victor (step 2).
+2. **With no time anywhere, keep the 2024 stamp for now.** Ask Victor later whether to leave the
+   EXIF time out instead.
+3. **Set the AI processor's clock rarely** (once a day, or when more than a few minutes out), since
+   photos no longer depend on it.
+4. **The file date follows the photo's time** (`get_fattime()` uses the same difference).

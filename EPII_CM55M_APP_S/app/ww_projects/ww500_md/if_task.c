@@ -1168,10 +1168,12 @@ static APP_MSG_DEST_T  handleEventForStateI2CTx(APP_MSG_T rxMessage) {
 			// Let's test dir_mgr_generateImageFilename() here
 			uint8_t loops = 0;
 			char imageFileName[13];
+			rtc_time testTime;
 
 			XP_LT_CYAN;
 			while (loops < 45) {
-				dir_mgr_generateImageFilename(imageFileName, IMAGEFILENAMELEN, "BMP");
+				exif_utc_get_time(&testTime);
+				dir_mgr_generateImageFilename(imageFileName, IMAGEFILENAMELEN, "BMP", exif_utc_time_to_seconds(&testTime));
 				xprintf(" %d - %s\n", loops++, imageFileName);
 
 				// delay 50ms - then we should generate 50 in a 1s interval

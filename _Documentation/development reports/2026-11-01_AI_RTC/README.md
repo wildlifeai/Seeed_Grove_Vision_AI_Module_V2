@@ -28,22 +28,46 @@ this thread's starting point.
 
 | Document | What it is |
 |---|---|
-| [CLAUDE_BLE_time_proposal.md](CLAUDE_BLE_time_proposal.md) | Getting the time from the BLE processor early in each wake: options and questions |
-| [CLAUDE_wake_sequence_spec.md](CLAUDE_wake_sequence_spec.md) | The spec for both processors: wake message first, `setutc` every wake without the RTC write, state machine changes, tests |
+| [CLAUDE_BLE_time_proposal.md](CLAUDE_BLE_time_proposal.md) | Getting the time from the BLE processor early in each wake: options, questions, the RTC findings (steps 1 and 1b, test 1) |
+| [CLAUDE_wake_sequence_spec.md](CLAUDE_wake_sequence_spec.md) | The spec for both processors, what was coded where, every bench result (ai5 to ai13) and the decisions |
+| [CLAUDE_BLE_processor_brief.md](CLAUDE_BLE_processor_brief.md) | The brief given to the ww-hardware session for the BLE processor side |
+| [logs/](logs/) | Tera Term logs, `aiN.txt` and `bleN.txt` in pairs (PC times are NZDT, UTC+13) |
+| ww-hardware, `_Documentation/development reports/2026-11-01_AI_RTC/` | The BLE processor side: its review of the brief, what it coded, and `CLAUDE_IP_INT_while_awake_brief.md` |
 
 ## Status
 
-Open. Proposal written and its questions answered, 1 November 2026. Step 1 logs done: the RTC stopped
-in DPD whenever no alarm was set. Test 1 (RTC0 left unmasked, alarm off) keeps it running with no
-extra wakes: now permanent in `sleep_mode.c` (not yet built). Then the spec
-(`CLAUDE_wake_sequence_spec.md`): AI processor side coded 1 Nov, not yet built; the BLE processor side
-is being coded in a separate session. AI processor side benched 1 Nov (ai5/ble5): wake message first,
-held commands, fallback stamps and `setutc` (no RTC write, written at sleep when over 600 s) all pass.
-Waiting for the BLE processor side: brief for that session in `CLAUDE_BLE_processor_brief.md`.
+Closed, 2 November 2026. Both processors coded and benched on branch `261101_AI_RTC` in each repo, board
+WILD-CMSS: HM0360 image for ai4 to ai11, RP3 image (with the file name fix) for ai12 and ai13. Before
+merging: build the HM0360 image with the final code, and Charles to commit both repos.
 
 ## Outcome
 
-None yet.
+Photos get the right time (#56, #152), from the BLE processor, on every wake.
+
+1. **The RTC kept counting through DPD only when an alarm was set.** With the timer off (op 7 = 0)
+   the clock lost every sleep: the main cause of #56. `sleep_mode.c` now leaves RTC0 unmasked and
+   moves the old alarm to 2020 (turning its interrupt off is not enough: an old alarm still woke the
+   camera).
+2. **The wake message goes first**, as soon as the IF task starts, so the BLE processor no longer drops
+   `NN-` and the motion messages; it also handles them in every state now (ww-hardware).
+3. **The BLE processor sends `setutc` on every wake** when it has the time (from LoRaWAN or the app).
+   The AI processor keeps it in RAM and replies at once; it writes its own RTC only at sleep, when more
+   than 10 minutes out or before 2025, because the write blocks it for 1 to 2 s. A cold boot's 2024 is
+   corrected on the first wake with `setutc` (#152).
+4. **One time reference per wake.** Photo time = reference + ticks to the frame. The first photo waits
+   up to 300 ms for `setutc` (it arrives about 110 to 160 ms after the wake message), else uses the RTC
+   once it has ticked, else 2024. The file name, file date, `getutc` and time-of-day flash use the same
+   time.
+5. **Settings commands are held** until CONFIG.TXT has loaded, so a `setop` sent while the camera slept
+   is no longer overwritten.
+6. **BLE processor (ww-hardware):** retries the WAKE pulse once after 3 s, for a pulse sent during the
+   RTC write at sleep.
+
+Decided: no new BLE command (reuse `setutc`); 10-minute RTC write limit; the 300 ms wait counts from
+when the photo is ready; no protection against overwriting a file of the same name; app commands
+during the wake handshake are still dropped (rare). Durable docs: `ble_commands.md` (`setutc`),
+`.agents/skills/references/hardware-traps.md` (the RTC entry), `cross-repo-contracts.md` (the wake
+sequence).
 
 ## The TODO list: where each item stands
 
@@ -61,15 +85,16 @@ Carried over from the previous thread, 1 November 2026.
 ## Open items
 
 - [#56](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/56),
-  [#152](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/152): this thread.
+  [#152](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/152): fixed here; close
+  when merged.
 - [#247](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/247),
   [#246](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/246),
   [#270](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/270),
   [#262](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/262): as in the table.
-- Ask Victor: with no time anywhere, leave the EXIF time out instead of the 2024 stamp? (Decisions
-  in the proposal.)
-- Not yet filed, carried over (Charles to decide):
-  - a fast paste into the console hung it, then the IF task stayed in `I2C RX State` and the
-    camera never slept (previous thread's step log, "Parked: console stopped responding");
-  - not tested with a second make of SD card since the card's settling wait was removed;
-  - ww-hardware: ops 37 and 38 in `aiProcessor.h` (an issue in that repo).
+- To file (Charles):
+  - ww-hardware: the BLE processor misses the AI processor's interrupt while busy with no phone
+    connected (ai13). Brief: ww-hardware thread, `CLAUDE_IP_INT_while_awake_brief.md`.
+  - Ask Victor: with no time anywhere, leave the EXIF time out instead of the 2024 stamp?
+  - Carried over: a fast paste into the console hung it (previous thread); not tested with a second
+    make of SD card since the card's settling wait was removed; ww-hardware ops 37 and 38 in
+    `aiProcessor.h`.

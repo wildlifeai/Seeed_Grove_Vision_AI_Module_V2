@@ -547,6 +547,16 @@ RTC_ERROR_E exif_utc_get_time_at_tick(uint32_t tick, rtc_time * tm) {
 }
 
 /**
+ * Converts a time to seconds since 1970
+ *
+ * @param tm = the time, as from exif_utc_get_time()
+ * @return seconds since 1970-01-01T00:00:00Z
+ */
+uint32_t exif_utc_time_to_seconds(const rtc_time * tm) {
+	return timeToEpoch(tm);
+}
+
+/**
  * Notes the RTC's first read after a DPD wake
  *
  * Until the RTC reads something else it may still hold the time at sleep. Call once, on a warm boot only.

@@ -102,6 +102,8 @@ RTC_ERROR_E exif_utc_set_reference(const char *str, int32_t *rtcOutBy, bool *rtc
 RTC_ERROR_E exif_utc_get_time(rtc_time * tm);
 // The time at a tick count (e.g. when a frame was ready): from the reference if there is one, else the RTC now
 RTC_ERROR_E exif_utc_get_time_at_tick(uint32_t tick, rtc_time * tm);
+// Converts a time to seconds since 1970 (e.g. for the image file name)
+uint32_t exif_utc_time_to_seconds(const rtc_time * tm);
 // Notes the RTC's first read after a DPD wake, which may still hold the time at sleep
 void exif_utc_note_boot_time(rtc_time * tm);
 // Before the first photo of a wake: waits for setutc, then falls back to the RTC once it has ticked

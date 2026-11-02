@@ -184,3 +184,136 @@ wakes less often.
 
 The first photo's 300 ms wait for `setutc` stays counted from when the photo is ready (Charles): it only
 matters when the BLE processor has no time or does not respond, both rare.
+
+## Bench, both processors, 2 November 2026 (logs/ai7.txt, ble7.txt)
+
+HM0360 image, board WILD-CMSS, BLE processor coded in ww-hardware (`261101_AI_RTC`). Power-on, then
+2 motion wakes, 2 BLE wakes (`setop 7 20`, `setop 7 0`) and 3 timer wakes.
+
+1. **BLE processor with no time (power-on):** both clocks 2024, `Can't send UTC`, IDLE. LoRaWAN then
+   joined and the BLE processor had the time.
+2. **`setutc` on every wake: passed, 7 of 7.** Sent 110 to 130 ms after the wake message (BLE log).
+   No `No setutc after 300ms`.
+3. **Photo times: passed, 5 of 5** stamped with the `setutc` time, within 1 s of the PC clock.
+   Photo queued at 342 to 344 ms after boot on motion wakes (the photo waited for `setutc`), 275 to
+   278 ms on timer wakes (no wait).
+4. **#152 in practice:** the first wake after the BLE processor had the time wrote the RTC from 2024
+   (`RTC was out by 89508573s: set to 2026-11-01T23:30:50Z (took 1821ms)`). Afterwards `RTC out by
+   -2s` to `-6s: not set` (4.5 % fast).
+5. **Messages: passed.** `NN-` arrived in SETUTC on every photo wake and went to the app. No
+   `UNHANDLED` or `Ignore this in`.
+6. **Fault, AI processor (`sleep_mode.c`): an unwanted timer wake.** The timer sleep at 23:33:14 set an
+   alarm for 23:33:35. A BLE wake at 23:33:31 set `setop 7 0`; the camera went to sleep at 23:33:34
+   with `No RTC wake: RTC kept running, alarm off`, and woke at 23:33:35 by `RTC Timer` and took a
+   photo. `hx_drv_rtc_set_alarm_int(RTC_ID_0, RTC_AIE_OFF)` does not stop the PMU wake: with RTC0
+   unmasked, the old alarm still wakes it. Happens once each time the timer is turned off before its
+   alarm. Test 1 (1 Nov) missed it because its old alarms were all in the past.
+
+Not run: the brief's burst (6), and the BLE processor's tests 8 (command during processing) and 9
+(command just after `Sleep`).
+
+### Fix for item 6, coded 2 November 2026 (not yet built)
+
+`sleep_mode_enter_dpd()`, no-RTC-wake branch: the alarm is also set to 1 January 2020 (disabled) and its
+status cleared, as well as `RTC_AIE_OFF`. The alarm fires only when the RTC equals it, and the RTC never
+reads before 2024. Bench: `AI setop 7 20`, wait for one timer wake, then `AI setop 7 0` within 20 s; no
+`RTC Timer` wake may follow.
+
+## Bench, alarm fix and burst, 2 November 2026 (logs/ai8.txt, ble8.txt)
+
+AI processor built 12:48 2 Nov with the alarm fix; same BLE processor build.
+
+1. **Alarm fix: passed.** The timer sleep at 23:52:14 set an alarm for 23:52:35. `setop 7 0` came on a
+   BLE wake at 23:52:20 (held 100 ms until the settings were loaded); the camera slept at 23:52:24 with
+   `No RTC wake`. No `RTC Timer` wake followed: the next wake was motion, 42 s later.
+2. **Burst (`setop 5 5`, `setop 6 200`): passed.** One `setutc`, no `No setutc`, 5 photos written in
+   order (photo queued at 344 ms, the first waited for `setutc`).
+3. **`setutc` on every wake: 10 of 10**, about 110 ms after the wake message. No `UNHANDLED` or
+   `Ignore this in`. After power-on the RTC was written from 2024 on the first wake with `setutc`
+   (`took 1101ms`), then `RTC out by -1s` to `-14s: not set`.
+4. **Not run:** the BLE processor with no time and a photo. LoRaWAN joined 8 s after power-on (op 32 was
+   not 0), so the BLE processor had the time before the first photo. Also not run: the BLE processor's
+   tests 8 and 9.
+
+## Bench, BLE processor with no time, 2 November 2026 (logs/ai9.txt, ble9.txt)
+
+Op 32 = 0 (no LoRaWAN), power cycle. Passed.
+
+1. **Power-on and a motion wake with no time:** `Can't send UTC` on both wakes. The photo waited the
+   300 ms, then took the RTC: `No setutc after 300ms`, photo queued at 662 ms, written `at 0:0:15
+   1/1/2024`. Nothing printed about the RTC at sleep. The RTC kept counting through DPD with op 7 = 0.
+2. **A BLE connection alone did not set the time:** connected at 13:03:34, then `AI setop 32 15` at
+   13:04:02 still gave `Can't send UTC`. Nothing on the connection sent `setutc` to the BLE processor.
+3. **LoRaWAN then joined** (13:04:12), and the next motion wake got `setutc`: photo `at 0:4:46
+   2/11/2026`, queued at 346 ms, and at sleep `RTC was out by 89510540s: set to ... (took 1014ms)`.
+
+Item 2 explained (Charles): the connection was from nRF Toolbox, a BLE terminal, which sends no
+`setutc`; the Wildlife Watcher app does. LoRaWAN joined at once because the BLE processor reads op 32
+from the AI processor's `Sleep` message. Not an issue.
+
+## Bench, time from the app, 2 November 2026 (logs/ai10.txt, ble10.txt)
+
+Op 32 = 0, power cycle, then the Wildlife Watcher app. Passed.
+
+1. Before the app: `Can't send UTC`, motion photo `at 0:0:10 1/1/2024` (fallback, queued 552 ms).
+2. The app connected and sent, in order: `selftest`, `setutc 2026-11-02T00:17:50Z` (to the BLE processor),
+   `battery`, `AI info`, `ver`, `AI ver`. `AI info` woke the camera; the wake handshake sent `setutc`
+   before `info` was passed on. So the time reaches the AI processor on the first `AI` command after
+   connecting, not from `ver` itself.
+3. At that sleep: `RTC was out by 89511445s: set to ... (took 1221ms)`. The next two motion wakes got
+   `setutc` (`was out by 0s`) and photos stamped 2/11/2026.
+4. Photos taken before the app connected keep their 2024 time.
+
+The BLE processor's test 8 (`NN±` while an app command waits for its reply) is skipped (Charles, 2 Nov):
+the window is 50 to 100 ms and `NN-` now usually arrives before IDLE. Checked in the code instead
+(`aiStateMachine.c` `handleEventsForProcessing()`: `NN±` go to `handleAiReport()` and stay in PROCESSING).
+
+## Bench, app command during the RTC write at sleep, 2 November 2026 (logs/ai11.txt, ble11.txt)
+
+The BLE processor's test 9. Passed.
+
+1. Console `setutc` 912 s ahead, then `dpd`. `Sleep` reached the BLE processor at 14:24:02.24; the AI
+   processor then wrote its RTC (`took 1273ms`).
+2. `AI ver` arrived at 14:24:02.88, during the write. The WAKE pulse was lost, as expected (the
+   AI processor wakes on the pin's level in DPD, and the 10 ms pulse ended before DPD).
+3. `No Wake after WAKE pulse: trying once more` at 14:24:05.91; the second pulse woke it, `setutc` put
+   the time right and `ver` was answered. Reply after about 3.4 s instead of about 0.2 s; no
+   `AI processor not responding`.
+4. At that sleep `RTC was out by -1103s: set to ... (took 1838ms)`.
+
+## Image file name, coded 2 November 2026 (not yet built)
+
+Found by Charles: on the first wake after a board with no time got `setutc`, a photo stamped 2/11/2026
+was named `59200DF0.JPG`, which decodes to 1 January 2024. The name came from a bare RTC read, left
+there on 1 Nov in the belief it only had to be unique; it is meant to encode the photo time.
+
+Fix: `dir_mgr_generateImageFilename()` takes the photo's time in seconds instead of reading the RTC.
+`prepareJpegFile()` passes the EXIF time (`exif_utc_time_to_seconds(&photoTime)`, new), so the name and the
+EXIF time always agree. The BMP path and the `TESTFILENAMES` test use `exif_utc_get_time()`. The name's
+format is unchanged. Not done (Charles): opening with `FA_CREATE_NEW` to avoid overwriting a file of the
+same name, which is possible after the RTC moves back.
+
+## Bench, file name fix, 2 November 2026 (logs/ai12.txt, ble12.txt, ai13.txt, ble13.txt)
+
+AI processor built 14:37 2 Nov with the file name fix.
+
+1. **File name: passed.** ai13, 14:47:43: LoRaWAN had given the BLE processor the time while the camera
+   slept; the motion wake read 2024 from the RTC and got `setutc`. The photo was `AE7EBBE0.JPG`
+   (2 Nov 2026 01:47:42, its EXIF time), not `5920....JPG`. Earlier photos with no time anywhere were
+   `592008C0` and `59200900` (1 Jan 2024), as designed.
+2. **Fault, BLE processor: a missed interrupt.** On that wake the AI processor replied `RTC set to ...`
+   and signalled it, but the BLE processor never read it. At that moment it was handling a LoRaWAN
+   downlink (`DeviceTimeAns`, two flash writes to NVM). No phone was connected, so the BLE processor
+   used its low-power PORT/SENSE interrupt for `/IP_INT`, which its own code (`aiProcessor.c`,
+   `setAiIntHighAccuracy()`, 16 Sep 2026) says can miss the AI processor's short pulse when it is busy;
+   the latched GPIOTE channel is only used while a phone is connected. Result:
+   - BLE processor: SETUTC timed out after 3 s, `AI processor not responding: woke but did not reach
+     IDLE (SETUTC)`, SLEEP; the later messages were handled in SLEEP, and `responding again` at `Sleep`.
+   - AI processor: `I2C master did not read our I2C message` after 3.75 s. Its later messages waited
+     (`I2C busy`), and the photo was saved about 4 s late. Nothing was lost but the `RTC set` reply.
+   Not new, but this work makes it likelier: one more message (`RTC set`) in every wake, and with
+   LoRaWAN on, an uplink and downlink often fall in the same second as a motion wake.
+
+Correction, 2 November 2026: ai12 and ai13 ran the RP3 image (`Camera: RP`, IMX708), not HM0360. All
+earlier logs from ai4 ran the HM0360 image. So the final code (with the file name fix) has run on
+the RP3 image; the HM0360 image still needs building with it.

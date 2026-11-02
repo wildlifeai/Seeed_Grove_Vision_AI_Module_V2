@@ -2801,7 +2801,8 @@ static void prepareJpegFile(int8_t * outCategories, uint8_t classCount, fileBuff
 	XP_WHITE;
 #endif
 
-	dir_mgr_generateImageFilename(g_imageFileName, IMAGEFILENAMELEN, "JPG");
+	// Named from the same time as the EXIF, not the RTC, which may be far out until it is written at sleep
+	dir_mgr_generateImageFilename(g_imageFileName, IMAGEFILENAMELEN, "JPG", exif_utc_time_to_seconds(&photoTime));
 
 	fileOp.fileName = g_imageFileName;	// a global
 	fileOp.senderQueue = xImageTaskQueue;
@@ -2872,7 +2873,10 @@ static void prepareBmpFile(fileBufferInfo_t * extraBlock) {
 	XP_WHITE;
 #endif
 
-	dir_mgr_generateImageFilename(g_imageFileName, IMAGEFILENAMELEN, "BMP");
+	rtc_time bmpTime;
+
+	exif_utc_get_time(&bmpTime);
+	dir_mgr_generateImageFilename(g_imageFileName, IMAGEFILENAMELEN, "BMP", exif_utc_time_to_seconds(&bmpTime));
 
 	fileOp.fileName = g_imageFileName;	// a global
 	fileOp.senderQueue = xImageTaskQueue;

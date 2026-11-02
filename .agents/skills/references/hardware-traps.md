@@ -194,11 +194,15 @@ building on any of them:
   images. `rtccal` shows the value, `xipstate` the board record. 31 Oct 2026, #245.
 * **The RTC stops counting in DPD if RTC0 is masked in the PMU** (`pmu_rtc_mask`), which the code
   did whenever no alarm was set (op 7 = 0): the clock lost the whole sleep. `sleep_mode_enter_dpd()`
-  now leaves RTC0 unmasked with its alarm interrupt off (`RTC_AIE_OFF`), so it counts and nothing
-  wakes the camera. Separately, **the first fast read after a DPD wake can return the time at sleep**
-  for part of the first second (the driver's `RTC_TIME_AFTER_DPD_1ST_READ_YES` read waits for the
+  now leaves RTC0 unmasked, so it counts. **`RTC_AIE_OFF` does not stop an old alarm waking the
+  camera** through the PMU (an alarm from a timer sleep, then `setop 7 0`: one unwanted timer photo,
+  2 Nov 2026), so the alarm is also moved to 2020; it fires only when the RTC equals it.
+  Separately, **the first fast read after a DPD wake can return the time at sleep** for part of
+  the first second (the driver's `RTC_TIME_AFTER_DPD_1ST_READ_YES` read waits for the
   update, about 900 ms). So photos are stamped from one time reference per wake (`setutc`, else
-  the RTC once it has ticked) plus the tick count, never from a bare RTC read (`exif_utc.c`).
-  **Writing the RTC (`hx_drv_rtc_set_time()`) blocks interrupts for about 1.4 s**: `setutc`
-  no longer does it, `exif_utc_before_sleep()` does, at sleep, only when over 10 minutes out.
+  the RTC once it has ticked) plus the tick count, never from a bare RTC read (`exif_utc.c`). The
+  image file name is made from the same photo time (`dir_mgr_generateImageFilename()`).
+  **Writing the RTC (`hx_drv_rtc_set_time()`) blocks interrupts for 1 to 2 s**: `setutc`
+  no longer does it, `exif_utc_before_sleep()` does, at sleep, only when over 10 minutes out or
+  before 2025. A WAKE pulse in that time is lost; the BLE processor retries after 3 s.
   1 Nov 2026, #56.

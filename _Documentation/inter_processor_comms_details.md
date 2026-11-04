@@ -74,7 +74,7 @@ On the WW500 there are two signals related to waking and interrupting the HX6538
 | Signal     | MKL62BA pin | HX6538 pin | Direction      |  Function                                  |
 |------------|-------------|-----------|-----------------|--------------------------------------------|
 | /BLE_WAKE  | P05         | PA0       | Input to HX6538 | Pulsed by MKL62BA to wake HX6538           |
-| /IP_INT    | P18         | PB11      | Bidirectional   | Pulsed by HX6538 to ask MKL62A to read I2C |
+| /IP_INT    | P18         | PB11      | Bidirectional   | Held low by HX6538 while an I2C message waits (since 3 Nov 2026) |
 |            |             |           |                 | Pulsed by MKL62BA? RFU                     |
 
 

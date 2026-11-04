@@ -438,3 +438,9 @@ too. Bench: motion wakes, phone connected; expect `NN-` (4 bytes), the AE regist
 motion ...`, and no grid text in the BLE log.
 
 Benched 4 November (Charles): the fix works, `NN-` arrives again on motion wakes.
+
+## Tidy: `unhandled event 'Awake' in 'I2C TX State'`, 4 November 2026
+
+Logged on every wake since the wake message moved to the start of the IF task: the FatFS task's `Awake`
+usually arrives while that message waits to be read. `Awake` needs no action, so `vIfTask()` now ignores it
+in every state, before the state dispatch (the IDLE case is removed). Not built.

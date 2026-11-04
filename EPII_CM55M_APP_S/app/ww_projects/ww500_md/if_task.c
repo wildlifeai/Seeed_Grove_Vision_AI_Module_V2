@@ -997,10 +997,6 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 		if_task_state = APP_IF_STATE_I2C_TX;
 		break;
 
-	case APP_MSG_IFTASK_AWAKE:
-		// Nothing to send yet: the wake message goes when APP_MSG_IFTASK_FREERTOS_INIT arrives
-		break;
-
 	case APP_MSG_IFTASK_FREERTOS_INIT:
 		// Here as this task starts (warm boot) or when the last FreeRTOS task has done its one-off initialisation
 		// (cold boot): see wakeMessageQueued. Time to send the wake message, with the AI processor's time, to the
@@ -1781,6 +1777,13 @@ static void vIfTask(void *pvParameters) {
 				xprintf("Busy (state '%s') - dropping message to master\n", ifTaskStateString[if_task_state]);
 				XP_WHITE;
 				xSemaphoreGive(xI2CTxSemaphore);
+				continue;
+			}
+
+			// 'Awake' (from the FatFS task, once the op parameters are loaded) needs nothing: the wake message goes
+			// when APP_MSG_IFTASK_FREERTOS_INIT arrives. It usually arrives while that message waits to be read, so
+			// ignore it in every state, not only IDLE (it was logged as unhandled in 'I2C TX State' every wake).
+			if (event == APP_MSG_IFTASK_AWAKE) {
 				continue;
 			}
 

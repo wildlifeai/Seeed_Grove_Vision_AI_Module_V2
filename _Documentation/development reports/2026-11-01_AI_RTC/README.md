@@ -36,9 +36,9 @@ this thread's starting point.
 
 ## Status
 
-Closed, 2 November 2026. Both processors coded and benched on branch `261101_AI_RTC` in each repo, board
-WILD-CMSS: HM0360 image for ai4 to ai11, RP3 image (with the file name fix) for ai12 and ai13. Before
-merging: build the HM0360 image with the final code, and Charles to commit both repos.
+Closed, 4 November 2026 (first closed 2 November, reopened for the `/IP_INT` handshake, see the last
+section). Both processors coded and benched on branch `261101_AI_RTC` in each repo, board WILD-CMSS:
+ai4 to ai13 for the time, ai14 to ai22 for the handshake. PR #284.
 
 ## Outcome
 
@@ -85,19 +85,16 @@ Carried over from the previous thread, 1 November 2026.
 ## Open items
 
 - [#56](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/56),
-  [#152](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/152): fixed here; close
-  when merged.
+  [#152](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/152): fixed here, closed.
+- [#285](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/285): the console hangs
+  after a fast paste, and a BLE command then leaves the camera awake.
 - [#247](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/247),
   [#246](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/246),
   [#270](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/270),
   [#262](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/262): as in the table.
-- To file (Charles):
-  - ww-hardware: the BLE processor misses the AI processor's interrupt while busy with no phone
-    connected (ai13). Brief: ww-hardware thread, `CLAUDE_IP_INT_while_awake_brief.md`.
-  - Ask Victor: with no time anywhere, leave the EXIF time out instead of the 2024 stamp?
-  - Carried over: a fast paste into the console hung it (previous thread); not tested with a second
-    make of SD card since the card's settling wait was removed; ww-hardware ops 37 and 38 in
-    `aiProcessor.h`.
+- With no time known anywhere, photos are stamped 2024-01-01: raised with Victor in a PR #284 comment
+  (a new issue if he wants the EXIF time left out).
+- BLE processor items are tracked in the ww-hardware thread of the same name.
 
 ## Reopened 3 to 4 November: the `/IP_INT` handshake
 
@@ -119,7 +116,8 @@ processor side is in [CLAUDE_wake_sequence_spec.md](CLAUDE_wake_sequence_spec.md
    anything deferred once `Sleep` is sent. Run 21: the wake completes with every interrupt missed.
 4. **`NN-` arrived as `HM0` (ai22).** `sendMsgToMaster()` passed a pointer to a buffer the image task
    reused at once, so each message carried the next one's text. It now copies the message. Benched OK.
+5. **Tidy.** `#define`s added on this branch moved to their files' Definitions sections, and the
+   harmless `unhandled event 'Awake' in 'I2C TX State'` line, logged every wake, removed.
 
 Left: a message sent from IDLE whose interrupt is missed is still lost (no 3 s check there); only
-seen with `hack 12`. ww-hardware: remove the temporary `hack` code. The ai13 item under "To file"
-above is done.
+seen with `hack 12`, so not filed. The temporary `hack` code has been removed from ww-hardware.

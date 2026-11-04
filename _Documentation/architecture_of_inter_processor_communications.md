@@ -264,23 +264,31 @@ As mentioned above, messages from the AI processor  are largely:
 * Messages mainly intended for the BLE processor - in particular "Sleep" and "Wake" messages that indicate when the AI processor
 enters and leaves DPD mode.
 
-When the the AI processor has a message to send, it prepares data for the outgoing I2C system, and generates 
-an interrupt to the BLE processor. On receipt of the interrupt the BLE processor, as the I2C master,
-initiates an I2C read operation to rectrieve the data from the AI processor.
+When the the AI processor has a message to send, it prepares data for the outgoing I2C system, and signals
+the BLE processor on `/IP_INT`. The BLE processor, as the I2C master, then reads the data from the AI processor.
 
-The AI processor code that sends a message is:
+Since 3 November 2026 (`/IP_INT` held-low handshake, ww-hardware
+`_Documentation/development reports/2026-11-01_AI_RTC/IP_INT_handshake_spec.md`), `sendI2CMessage()`:
 
-```c
-static void sendI2CMessage(uint8_t * data, aiProcessor_msg_type_t messageType, uint16_t payloadLength) {
-	interprocessor_interrupt_assert();
-	i2ccomm_write_enable(data, messageType, payloadLength);
-	interprocessor_interrupt_negate();	// MKL62BA responds on the rising edge.
-}
-``` 
+1. Waits until `/IP_INT` has been high for at least 20 ms (`IP_INT_HIGH_MIN_MS`).
+2. Builds the message (4-byte header, payload, 2-byte CRC) and arms the I2C slave (``i2ccomm_write_enable()``).
+3. Drives `/IP_INT` low. **Low means a complete message is waiting.**
 
-The ``i2ccomm_write_enable()`` function prepares the outgoing I2C data, including the 4 byte header and 2-byte CRC.
-The BLE processor receives an event as the interrupt pin goes high, with the ``aon_gpio0_drive_high()`` call. 
-It then reads the packet prepared for it. At the time of writing any message is sent to the smart phone app, 
+The pin stays low until the BLE processor has read the message: the I2C slave's read-complete interrupt
+(``i2csTxDoneEvent()``) drives it high. If the message is not read within 4 s (`MISSINGMASTERTIME`), the AI
+processor releases the pin and drops the message. The BLE processor reads on the low, so a busy BLE processor
+finds the pin still low when it gets to it. Before, the AI processor pulsed the pin and the BLE processor read
+on the rising edge, which it could miss while busy.
+
+If a low is missed anyway (on the nRF52 one interrupt pin can block the others, ww-hardware spec section 9),
+the BLE processor reads when its 3 s wait for a reply times out with the pin low. It has no such check in IDLE.
+
+While a message waits, events the IF task can't handle yet are deferred (a queue of 4, ``deferEvent()``)
+and replayed in IDLE. A deferred `Inactivity` is dropped when the BLE processor reads a message, and
+anything deferred is dropped once `Sleep` has gone.
+
+`/IP_INT` (PB11) is set up, pulled up, at the start of `app_main()` (``ifTask_ipIntInit()``): PB11 resets
+with a weak pull-down. At the time of writing any message is sent to the smart phone app, 
 and the messageType byte indicates either that the payload contains a string (terminated by '\0') or binary data. 
 In the future decisions can be made depending on the value of the messageType parameter. For example, other values 
 of this byte could indicate that the message should be processed by the BLE processor.

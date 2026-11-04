@@ -465,7 +465,7 @@ static FRESULT fileWriteImage(fileOperation_t *fileOp, fileBufferInfo_t * extraB
 	xprintf("Wrote %d byte image to SD: %s ", bwTotal, fileOp->fileName);
 	XP_WHITE;
 
-	exif_utc_get_rtc_as_time(&time);
+	exif_utc_get_time(&time);
 
 	xprintf("at %d:%d:%d %d/%d/%d\n",
 			time.tm_hour, time.tm_min, time.tm_sec,

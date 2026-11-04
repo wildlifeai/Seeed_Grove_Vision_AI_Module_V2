@@ -31,6 +31,9 @@ contract, and land the change with the consumers in view.
   processor releases it when the read completes, and keeps it high at least 20 ms before the next.
   The BLE processor reads on the low. It replaced a pulse read on the rising edge. Update the AI
   processor first, then the BLE processor.
+* **Self-test bits are one list in three places**: `selfTest.h` here and in ww-hardware, and the
+  app. AI bit 14 (`0x4000`, BLE processor missed the first message) is kept until a `selftest`
+  reply has carried it, then cleared; nothing else clears it (#246, 4 Nov 2026).
 
 **The "Sleep" message has a size limit.** At sleep the AI processor sends every op parameter to
 the BLE processor in one "Sleep" message (`if_task.c`), at most 244 bytes. Typical is about 110

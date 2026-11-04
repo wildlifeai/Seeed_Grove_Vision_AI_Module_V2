@@ -98,3 +98,28 @@ Carried over from the previous thread, 1 November 2026.
   - Carried over: a fast paste into the console hung it (previous thread); not tested with a second
     make of SD card since the card's settling wait was removed; ww-hardware ops 37 and 38 in
     `aiProcessor.h`.
+
+## Reopened 3 to 4 November: the `/IP_INT` handshake
+
+After the thread closed, ai13 showed the BLE processor missing the AI processor's interrupt while busy
+(LoRaWAN, no phone). The fix became a change to the inter-processor handshake, on both processors, on
+the same branches. Spec and bench record: ww-hardware thread `IP_INT_handshake_spec.md`; the AI
+processor side is in [CLAUDE_wake_sequence_spec.md](CLAUDE_wake_sequence_spec.md) (logs ai14 to ai21).
+
+1. **Held-low handshake.** The AI processor drives `/IP_INT` low only once a message is armed, and holds
+   it low until the message is read (or 4 s). The BLE processor reads on the low, so a busy BLE
+   processor finds it still low. Before, it was a pulse, lost if the BLE processor was busy.
+2. **A missed low (ai17).** On the nRF52 all PORT interrupt pins share one DETECT signal. The LoRa
+   radio's DIO1, set for one edge, held DETECT high during a receive, so the `/IP_INT` low gave no
+   interrupt. Fixed on the BLE processor: every PORT pin now uses both edges; and if `/IP_INT` is low at
+   its 3 s wait timeout, it reads anyway. Proven with a pin held on purpose (`hack 12`, run 20).
+3. **Events deferred while a message waits (ai20).** A late read released a stale `Inactivity`, so
+   `Sleep` went before `selftest`, and a single slot let one deferred event overwrite another.
+   `if_task.c` now keeps a queue of 4, drops a deferred `Inactivity` when a message is read, and drops
+   anything deferred once `Sleep` is sent. Run 21: the wake completes with every interrupt missed.
+4. **`NN-` arrived as `HM0` (ai22).** `sendMsgToMaster()` passed a pointer to a buffer the image task
+   reused at once, so each message carried the next one's text. It now copies the message. Benched OK.
+
+Left: a message sent from IDLE whose interrupt is missed is still lost (no 3 s check there); only
+seen with `hack 12`. ww-hardware: remove the temporary `hack` code. The ai13 item under "To file"
+above is done.

@@ -36,6 +36,15 @@
 
 #include "hx_drv_rtc.h"
 
+/**************************************** Definitions  *************************************/
+
+// The RTC has ticked by this time after the scheduler starts, whatever it reads
+#define RTC_FIRST_TICK_MS			1100
+// Write the RTC at sleep if it is further than this from the setutc reference
+#define RTC_WRITE_LIMIT_S			600
+// Or if it reads earlier than this year (never set: a cold boot sets 2024)
+#define RTC_FIRST_VALID_YEAR		2025
+
 /**************************************** Local routine declarations  *************************************/
 
 static int is_leap_year(int year);
@@ -63,13 +72,6 @@ static bool setutcWaitDone = false;	// the first photo of the wake has waited fo
 // the register is refreshed on the RTC's next one-second tick (1 Nov 2026, CLAUDE_BLE_time_proposal.md)
 static bool bootReadValid = false;
 static uint32_t bootReadEpoch;
-
-// The RTC has ticked by this time after the scheduler starts, whatever it reads
-#define RTC_FIRST_TICK_MS			1100
-// Write the RTC at sleep if it is further than this from the setutc reference
-#define RTC_WRITE_LIMIT_S			600
-// Or if it reads earlier than this year (never set: a cold boot sets 2024)
-#define RTC_FIRST_VALID_YEAR		2025
 
 /**************************************** Local function definitions  *************************************/
 

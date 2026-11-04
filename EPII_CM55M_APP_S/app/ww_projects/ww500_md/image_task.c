@@ -170,6 +170,10 @@
 // Define this to add extra EXIF field (AE gain values)
 #define EXIF_MAKER_NOTES
 
+// How long the first photo of a wake waits for setutc from the BLE processor (sent every wake, after selftest,
+// about 100 ms after the wake message), before taking its time from the RTC instead
+#define PHOTO_SETUTC_WAIT_MS 300
+
 
 /*************************************** Local Function Declarations *****************************/
 
@@ -295,10 +299,6 @@ static TickType_t g_frame_fault_tick;	// when the most recent frame fault was ha
 // When the frame being saved was ready: its photo's time is this wake's time reference at this tick (#56)
 static TickType_t g_frame_ready_tick;
 
-// How long the first photo of a wake waits for setutc from the BLE processor (sent every wake, after selftest,
-// about 100 ms after the wake message), before taking its time from the RTC instead
-#define PHOTO_SETUTC_WAIT_MS 300
-
 // True when this wake exists only to sample the light level (AE registers) for
 // the flash decision: capture one frame, read the AE registers, save nothing.
 // Cleared on the way into DPD. See _Documentation/AE_Light_Sensor_Roadmap.md
@@ -385,6 +385,12 @@ static char lastImageFileName[IMAGEFILENAMELEN] = "";
 
 // Buffer for messages to be sent via I2C to the BLE processor
 static char msgToMaster[MSGTOMASTERLEN];
+
+// sendMsgToMaster()'s copy of the message, read by the IF task when it builds the I2C message. The caller's
+// buffer (msgToMaster) is reused for the next message straight away: this task has the higher priority, so it
+// overwrote the text before the IF task copied it, and each message carried the next one's text ('NN-' arrived
+// as 'HM0', ai22, 4 Nov 2026). Free whenever xI2CTxSemaphore is taken: the previous message has gone or been dropped.
+static char msgToMasterTx[MSGTOMASTERLEN];
 
 // Not used
 // static bool nnPositive;
@@ -2542,8 +2548,11 @@ static void setupLEDFlash(void) {
 }
 
 /**
- * Send an unsolicited message to the MKL62BA.
+ * Send an unsolicited message to the BLE processor.
  *
+ * The string is copied, so the caller can reuse its buffer as soon as this returns.
+ *
+ * @param str the null-terminated message (at most MSGTOMASTERLEN - 1 characters are sent)
  */
 void sendMsgToMaster(char *str) {
     APP_MSG_T send_msg;
@@ -2556,9 +2565,13 @@ void sendMsgToMaster(char *str) {
 		return;
 	}
 
-    // Send back to MKL62BA - msg_data is the string
-    send_msg.msg_data = (uint32_t)str;
-    send_msg.msg_parameter = strnlen(str, MSGTOMASTERLEN);
+    // Copy it: see msgToMasterTx
+    strncpy(msgToMasterTx, str, MSGTOMASTERLEN - 1);
+    msgToMasterTx[MSGTOMASTERLEN - 1] = '\0';
+
+    // Send back to the BLE processor - msg_data is the string
+    send_msg.msg_data = (uint32_t)msgToMasterTx;
+    send_msg.msg_parameter = strlen(msgToMasterTx);
     send_msg.msg_event = APP_MSG_IFTASK_MSG_TO_MASTER;
 
     if (xQueueSend(xIfTaskQueue, (void *)&send_msg, __QueueSendTicksToWait) != pdTRUE) {

@@ -133,8 +133,8 @@ building on any of them:
   0.30.57 (ww-hardware #34), and Android then picks 30 ms. Both consoles are quiet for download
   packets: the BLE processor from 0.30.56, the AI processor from #264. `txfile` prints a
   `Download timing` block that splits each packet into AI processor and BLE processor time.
-  With no console output, `/IP_INT` is microseconds long during a download, so the BLE
-  processor must be 0.30.51 or later (dedicated GPIOTE channel). Before 0.30.57 the BLE
+  Since 3 Nov 2026 the AI processor keeps `/IP_INT` high at least 20 ms between packets
+  (held-low handshake, see the `/IP_INT` entry below). Before 0.30.57 the BLE
   processor's `we waited Nms` counted retries of about 3 ms, not milliseconds. See
   `2026-10-06_speedImageTx`.
 * **The bench nRF runs ww-hardware `dev`, not `main`.** `ver` reports the nRF build, `AI ver`
@@ -157,6 +157,18 @@ building on any of them:
   motion detection, and back. It is nesting-safe (`idSaveDepth`). A direct `hx_drv_cis_*` call
   to the HM0360 outside the pair talks to the wrong device or at the wrong speed. #238 cost a
   bench session and a PR round.
+* **`/IP_INT` low means "a complete message is waiting"** (3 Nov 2026, ww-hardware
+  `2026-11-01_AI_RTC/IP_INT_handshake_spec.md`). `sendI2CMessage()` arms the I2C slave, then drives
+  PB11 low; `i2csTxDoneEvent()` (ISR) releases it, or the 4 s no-read timeout. Never drive PB11
+  low without a message armed: the BLE processor reads it, and a read with nothing armed gives
+  `I2C Error: data unready` and corrupts the next message (header zeroed, ai14). That is why the
+  `int` test command was removed. PB11 resets with a weak pull-down (HX6538 datasheet), so
+  `ifTask_ipIntInit()` pulls it up at the start of `app_main()`; the boot ROM and bootloader
+  (about 50 ms after a wake) are still outside our control. Both processors must be updated
+  together, AI processor first.
+  `I2C master did not read our I2C message` with the pin low throughout: suspect the BLE processor's
+  interrupt, not the AI side. On the nRF52 one PORT pin held at its sense level blocks every other
+  (the LoRa DIO1 did, ai17; fixed 3 Nov with both edges on every pin, ww-hardware spec section 9).
 * **GPIO0, GPIO1 and GPIO2 each appear on two pins** (PB6/PB9, PB7/PB10, PB8/PB11; HX6538
   datasheet 4.5, note 3), and they are one signal each. In `ww500_md` PB7 is SENSOR_ENABLE
   (GPIO1, `rp_sensor_enable()`), so PB10 must not be made GPIO1 as well (the old blue-LED code

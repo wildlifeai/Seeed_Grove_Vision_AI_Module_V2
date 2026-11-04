@@ -217,8 +217,9 @@ __Notes:__
 6. **`ble` is a console diagnostic** (28 September 2026), for boards without a BLE processor. After each boot the AI
    processor sends its first message ("Wake ...", "Timer ..." or "Motion ...") with a 300 ms timeout (`BLE_PROBE_TIME` in
    `if_task.c`; later messages keep the 4000 ms `MISSINGMASTERTIME`). If the BLE processor does not read it, the AI
-   processor treats it as unresponsive: it sends it nothing more (no `/IP_INT` pulse, no I2C data, no "Sleep" message)
-   and enters DPD without it. The flag is cleared if the BLE processor sends a command, by `ble clear`, or at the next
+   processor treats it as unresponsive: it sends it nothing more (no `/IP_INT` signal, no I2C data, no "Sleep" message)
+   and enters DPD without it. Since 3 November 2026 the first message itself stays waiting (`/IP_INT` low) for the
+   full 4000 ms, and a late read clears the flag. The flag is cleared if the BLE processor sends a command, by `ble clear`, or at the next
    boot. Not needed by the app: an app that can send `AI ble` has a working BLE processor, so the answer is always
    "responsive". The flag is also self test bit 14 (`SELF_TEST_AI_NO_BLE`, 0x4000) in the AI processor's `selfTest.h`.
    The self test bit list is shared with the BLE processor (`ww-hardware`, `selfTest.h`) and the app, which do not have

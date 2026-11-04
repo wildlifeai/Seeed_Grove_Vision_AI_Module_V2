@@ -135,6 +135,9 @@ void ifTask_clearBleUnresponsive(void);
 // Callback for when all tasks have started and done their initialisation
 void ifTask_allTasksReady(void);
 
+// Sets up /IP_INT, pulled up and high. Call early in app_main()
+void ifTask_ipIntInit(void);
+
 // Download (txfile) timing, added 7 Oct 2026 to find where the time goes (see the 2026-10-06_speedImageTx
 // development report). One of these per part of the per-packet cycle. FreeRTOS tick resolution (1 ms), so
 // a single time is +/- 1 ms but the average over a whole download is good to a fraction of a ms.

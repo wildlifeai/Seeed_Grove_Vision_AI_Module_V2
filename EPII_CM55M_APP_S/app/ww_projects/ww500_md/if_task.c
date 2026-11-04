@@ -57,8 +57,21 @@
 // Uncomment and define to add delay to inter-processor interrupt pulse width 9MS)
 //#define INTERRUPT_PULSE_WIDTH 5
 
-// Uncomment to allow testing of the interprocessor interrupt ppin
-#define TEST_INT_PULSE
+// Uncomment to allow testing of the interprocessor interrupt ppin.
+// Off since the /IP_INT held-low handshake (3 Nov 2026): a low with no message armed now means "message waiting"
+// to the BLE processor, so this test would make it read nothing. The "int" CLI command was removed with it.
+//#define TEST_INT_PULSE
+
+#ifdef TEST_INT_PULSE
+// Time in ms that the interprocessor interrupt pin is low
+#define INTERRUPTPULSEWIDTH	120
+#endif	// TEST_INT_PULSE
+
+// /IP_INT handshake (3 Nov 2026, ww-hardware IP_INT_handshake_spec.md): the pin goes low only once a complete message
+// is armed, and stays low until the BLE processor has read it (i2csTxDoneEvent() releases it). This is the least
+// time the pin is then high before the next message takes it low, so the BLE processor sees the high in between.
+// T_HIGH_MIN in the spec.
+#define IP_INT_HIGH_MIN_MS	20
 
 // /IP_INT (PB11/GPIO2) was designed to be bidirectional - either side can drive it low
 // to interrupt the other - see interprocessor_interrupt_init()'s comment. Confirmed
@@ -91,6 +104,8 @@
 // us. Only the first message uses this short time; every later one uses MISSINGMASTERTIME, so file transfers keep
 // their long window. Added 28 Sep 2026 for boards with no BLE processor, where every message would otherwise wait
 // MISSINGMASTERTIME and the device never entered DPD.
+// Since the /IP_INT handshake (3 Nov 2026) this only sets the flag: /IP_INT stays low, and the message armed, until
+// MISSINGMASTERTIME, so a BLE processor that is busy (a flash erase) or still booting can still read the wake message.
 #define BLE_PROBE_TIME		300
 
 // Added 16 Sep 2026 while investigating BLE file-transfer round-trip time
@@ -99,6 +114,27 @@
 // otherwise-quiet g_fileRxActive session - e.g. a periodic f_sync() landing on
 // a card that happens to be busy with internal wear-levelling/GC.
 #define SLOW_DISK_OP_WARNING_MS	100
+
+// Inactivity period used while a file receive session is active. The standard
+// period (1000ms) is shorter than a slow BLE round trip, so the idle hook
+// could put the system into DPD between packets, killing the SD subsystem
+// mid-transfer (ftx err 7). Saved/restored around each session; if a session
+// dies without a CLOSE (e.g. BLE dropped), the extended period simply delays
+// the next DPD entry once — the period resets on wake from DPD.
+//
+// 15000 not 5000: iOS renegotiates the connection interval ~28-30 s into a
+// transfer, and CoreBluetooth can stall the in-flight write for >5 s (bench
+// 19 Jul 2026: LARGE.BIN died at packet 96/2125 — the HX hit "Inactive for
+// 5000ms", aborted the session and entered DPD at the exact moment the phone
+// was about to resume; Android stalls are sub-second and never exposed this).
+// The app tolerates 15 s of device silence before aborting, so the device
+// must extend the same tolerance — a renegotiation stall then becomes a
+// pause, not a death. Cost of the larger value: one delayed DPD entry after
+// an abandoned session, nothing more.
+#define FILERX_SESSION_INACTIVITY_MS 15000
+
+// Size of the deferred event queue: events we can't deal with in the current state (deferEvent())
+#define DEFERRED_EVENTS_MAX 4
 
 #define DBG_EVT_IICS_CMD_LOG 1
 #if DBG_EVT_IICS_CMD_LOG
@@ -137,6 +173,7 @@ static uint16_t app_i2ccomm_init();
 static void interprocessor_interrupt_init(void);
 static void interprocessor_interrupt_assert(void);
 static void interprocessor_interrupt_negate(void);
+static void interprocessor_interrupt_release(TickType_t now);
 #ifdef BIDIRECTIONAL_INTERRUPT
 static void interprocessor_interrupt_cb(uint8_t group, uint8_t aIndex);
 #endif // BIDIRECTIONAL_INTERRUPT
@@ -160,6 +197,10 @@ static void missingMasterExpired(xTimerHandle pxTimer);
 
 static void sendI2CMessage(uint8_t * data, aiProcessor_msg_type_t messageType, uint16_t length);
 static void reportReadyToSleep(const char *why);
+static void deferEvent(APP_MSG_T rxMessage, const char *when);
+static void discardEvent(APP_MSG_T msg, const char *why);
+static void dropDeferredInactivity(void);
+static void discardDeferredEvents(const char *why);
 
 // I2C slave address and callbacks - used for initialisation only
 I2CCOMM_CFG_T gI2CCOMM_cfg = {
@@ -199,9 +240,6 @@ xTimerHandle timerInterruptPulse;
 
 static void onInterruptTimerExpired(xTimerHandle pxTimer);
 
-// Time in ms that the interprocessor interrupt pin is low
-#define INTERRUPTPULSEWIDTH	120
-
 #endif	// TEST_INT_PULSE
 
 // Timer to case case if I2C master does not read our data
@@ -211,8 +249,10 @@ xTimerHandle timerHndlMissingMaster;
 uint8_t gWrite_buf[WW130_MAX_WBUF_SIZE];
 uint8_t gRead_buf[WW130_MAX_RBUF_SIZE];
 
-// This is used to save a message we can't deal with in the current state. Re-issued when we return to IDLE
-static APP_MSG_T savedMessage;
+// Events we can't deal with in the current state, oldest first. Re-issued one at a time when we return to IDLE.
+// See deferEvent(). Was a single slot until 3 Nov 2026, where a later event overwrote an earlier one.
+static APP_MSG_T deferredEvents[DEFERRED_EVENTS_MAX];
+static uint8_t deferredCount = 0;
 
 // Strings for each of these states. Values must match APP_TASK1_STATE_E in task1.h
 const char * ifTaskStateString[APP_IF_STATE_NUMSTATES] = {
@@ -273,23 +313,7 @@ static fileRx_result_t  fileRxPendingErr;
 static fileOperation_t  fileRxOp;
 static uint8_t          fileRxPacketNum;
 
-// Inactivity period used while a file receive session is active. The standard
-// period (1000ms) is shorter than a slow BLE round trip, so the idle hook
-// could put the system into DPD between packets, killing the SD subsystem
-// mid-transfer (ftx err 7). Saved/restored around each session; if a session
-// dies without a CLOSE (e.g. BLE dropped), the extended period simply delays
-// the next DPD entry once — the period resets on wake from DPD.
-//
-// 15000 not 5000: iOS renegotiates the connection interval ~28-30 s into a
-// transfer, and CoreBluetooth can stall the in-flight write for >5 s (bench
-// 19 Jul 2026: LARGE.BIN died at packet 96/2125 — the HX hit "Inactive for
-// 5000ms", aborted the session and entered DPD at the exact moment the phone
-// was about to resume; Android stalls are sub-second and never exposed this).
-// The app tolerates 15 s of device silence before aborting, so the device
-// must extend the same tolerance — a renegotiation stall then becomes a
-// pause, not a death. Cost of the larger value: one delayed DPD entry after
-// an abandoned session, nothing more.
-#define FILERX_SESSION_INACTIVITY_MS 15000
+// The inactivity period saved while a file receive session uses FILERX_SESSION_INACTIVITY_MS
 static uint32_t savedInactivityPeriod;
 static bool     inactivityExtended = false;
 
@@ -306,6 +330,11 @@ static bool bleUnresponsive = false;
 
 // True from sending the first message until it is read (TX_DONE) or times out (MM_TIMER, after BLE_PROBE_TIME)
 static bool bleProbePending = false;
+
+// When i2csTxDoneEvent() (or the no-read timeout) last released /IP_INT, so sendI2CMessage() keeps it high for
+// IP_INT_HIGH_MIN_MS before the next message. Written from ISR context.
+static volatile TickType_t ipIntReleaseTick;
+static volatile bool ipIntReleaseValid = false;
 
 // True once the wake message has been queued, so ifTask_allTasksReady() does not queue it again. On a warm boot it
 // is queued as this task starts (#56): before the first photo's NN result, AE registers and motion grid, which the
@@ -403,6 +432,10 @@ static void i2csTxDoneEvent(void *param) {
 	// closes that window. (Re-arm is removed from i2cTransmissionComplete() so a
 	// packet received in the meantime is not clobbered by a second enable_read.)
 	hx_lib_i2ccomm_enable_read(iic_id, (unsigned char *) gRead_buf, WW130_MAX_RBUF_SIZE);
+
+	// The BLE processor has read the message: release /IP_INT here, not in the ifTask, so it goes high as soon as
+	// possible after the read (/IP_INT handshake, 3 Nov 2026)
+	interprocessor_interrupt_release(xTaskGetTickCountFromISR());
 
 	//send_msg.msg_data = iic_info_ptr->slv_addr;
 	// The time the master read our message, for the download timing (taken here, before the ifTask's console output)
@@ -1107,10 +1140,7 @@ static APP_MSG_DEST_T  handleEventForStateI2CRx(APP_MSG_T rxMessage) {
 	case APP_MSG_IFTASK_INACTIVITY:
 		// GitHub issue #205 - see handleEventForStateI2CTx() for why this must
 		// be deferred, not dropped.
-		XP_BROWN;
-		xprintf("Deferring event 0x%04x\n", event);
-		XP_WHITE;
-		savedMessage = rxMessage;
+		deferEvent(rxMessage, "");
 		break;
 
 	case APP_MSG_IFTASK_I2CCOMM_PA0_INT_IN:
@@ -1147,6 +1177,19 @@ static APP_MSG_DEST_T  handleEventForStateI2CTx(APP_MSG_T rxMessage) {
 	case APP_MSG_IFTASK_I2CCOMM_TX_DONE:
 		bleProbePending = false;	// The BLE processor read our message, so it is there
 
+		if (bleUnresponsive) {
+			// It read the first message after BLE_PROBE_TIME, but within MISSINGMASTERTIME
+			bleUnresponsive = false;
+			selfTest_clearErrorBits(1 << SELF_TEST_AI_NO_BLE);
+			xprintf("BLE processor read the first message late: no longer treated as unresponsive\n");
+		}
+
+		if (!consoleQuiet()) {
+			XP_LT_GREEN;
+			xprintf("Inter-processor interrupt released (message read).\n");
+			XP_WHITE;
+		}
+
 		if (dlBinaryInFlight) {
 			// Download timing. Before i2cTransmissionComplete(), which releases the CLI task to send the next packet.
 			dlTxDoneTick = (TickType_t) rxMessage.msg_data;	// when the ISR saw the read
@@ -1158,8 +1201,17 @@ static APP_MSG_DEST_T  handleEventForStateI2CTx(APP_MSG_T rxMessage) {
 		i2cTransmissionComplete();
 		if_task_state = APP_IF_STATE_IDLE;
 
+		if (!lastMessageSent) {
+			// The BLE processor has just read our message, so it is active and may have more to send (after a late
+			// read, its selftest and setutc). An 'Inactivity' deferred while it was reading is stale: the detector
+			// fires again after a further idle period (ai20, 3 Nov 2026).
+			dropDeferredInactivity();
+		}
+
 		if (lastMessageSent) {
 			// special case just before entering DPD. Reported to shutdownBarrier below.
+			// The BLE processor has read "Sleep" and treats us as asleep, so nothing deferred can be handled now
+			discardDeferredEvents("the Sleep message was read");
 
 			// This might be a good place to add some tests, as results will be at the bottom of teh screen while in DPD
 //#define TESTFILENAMES
@@ -1190,12 +1242,9 @@ static APP_MSG_DEST_T  handleEventForStateI2CTx(APP_MSG_T rxMessage) {
 
 	case APP_MSG_IFTASK_I2CCOMM_MM_TIMER:
 		// Master failed to respond to our attempt to send I2C data
-		XP_LT_RED;
-		xprintf("I2C master did not read our I2C message\n");
-		XP_WHITE;
-
 		if (bleProbePending) {
-			// It was the first message after this boot: treat the BLE processor as absent until it contacts us
+			// It was the first message after this boot: treat the BLE processor as absent until it contacts us.
+			// But leave /IP_INT low and the message armed until MISSINGMASTERTIME, in case it is only late.
 			bleProbePending = false;
 			bleUnresponsive = true;
 			selfTest_setErrorBits(1 << SELF_TEST_AI_NO_BLE);
@@ -1203,7 +1252,20 @@ static APP_MSG_DEST_T  handleEventForStateI2CTx(APP_MSG_T rxMessage) {
 			xprintf("BLE processor did not read the first message within %dms: treating it as unresponsive\n",
 					BLE_PROBE_TIME);
 			XP_WHITE;
+
+			if (xTimerChangePeriod(timerHndlMissingMaster,
+					pdMS_TO_TICKS(MISSINGMASTERTIME - BLE_PROBE_TIME), pdMS_TO_TICKS(100)) != pdPASS) {
+				configASSERT(0);
+			}
+			break;	// stay in this state
 		}
+
+		XP_LT_RED;
+		xprintf("I2C master did not read our I2C message\n");
+		XP_WHITE;
+
+		// Release /IP_INT and drop the message (it stays armed in the I2C slave until the next one replaces it)
+		interprocessor_interrupt_release(xTaskGetTickCount());
 
 		// Not a time worth averaging: the next packet's AI time starts again from its own read
 		dlBinaryInFlight = false;
@@ -1215,12 +1277,14 @@ static APP_MSG_DEST_T  handleEventForStateI2CTx(APP_MSG_T rxMessage) {
 		if (lastMessageSent) {
 			// The "Sleep" message was not read. Enter DPD anyway: without this the device never sleeps when the
 			// BLE processor stops answering (TX_DONE, above, is the only other place this is done).
+			discardDeferredEvents("going to sleep");
 			reportReadyToSleep(" (the Sleep message was not read)");
 		}
 		break;
 
 	case APP_MSG_IFTASK_I2CCOMM_ERR:
-		if_task_state = APP_IF_STATE_IDLE;
+		// Stay in this state: /IP_INT is still low and our message still armed, so wait for TX_DONE or the no-read
+		// timeout, which release the pin. Going to IDLE here left the pin low with no one to release it.
 		i2cError();
 		break;
 
@@ -1254,10 +1318,7 @@ static APP_MSG_DEST_T  handleEventForStateI2CTx(APP_MSG_T rxMessage) {
 	case APP_MSG_IFTASK_I2CCOMM_CLI_STRING_RESPONSE ... APP_MSG_IFTASK_I2CCOMM_CLI_BINARY_CONTINUES:
 		// This could happen if the ifTask is still sending a previous message
 		// and APP_MSG_IFTASK_I2CCOMM_TX has not yet arrived. So save the response and process it when we return to IDLE
-		XP_BROWN;
-		xprintf("Deferring event 0x%04x\n", event);
-		XP_WHITE;
-		savedMessage = rxMessage;
+		deferEvent(rxMessage, "");
 		break;
 
 	default:
@@ -1306,10 +1367,7 @@ static APP_MSG_DEST_T  handleEventForStatePA0(APP_MSG_T rxMessage) {
 	case APP_MSG_IFTASK_INACTIVITY:
 		// GitHub issue #205 - see handleEventForStateI2CTx() for why this must
 		// be deferred, not dropped.
-		XP_BROWN;
-		xprintf("Deferring event 0x%04x\n", event);
-		XP_WHITE;
-		savedMessage = rxMessage;
+		deferEvent(rxMessage, "");
 		break;
 
 	default:
@@ -1436,10 +1494,7 @@ static APP_MSG_DEST_T  handleEventForStateDiskOp(APP_MSG_T rxMessage) {
 
 	default:
 		/* Defer non-file events while waiting for disk op — nRF52832 is blocked on ACK */
-		XP_BROWN;
-		xprintf("Deferring event 0x%04x during disk op\n", event);
-		XP_WHITE;
-		savedMessage = rxMessage;
+		deferEvent(rxMessage, " during disk op");
 		break;
 	}
 
@@ -1487,25 +1542,124 @@ static void reportReadyToSleep(const char *why) {
 }
 
 /**
- * Sends an I2C message to the WW130.
+ * Saves an event that can't be handled in the current state, to be re-issued when we return to IDLE.
  *
- * This asserts the /IP_INT pin, then prepares the message and readies the I2C module to send it,
- * then negates the /IP_INT pin.
- * The WW130 reacts to the rising edge of the /IP_INT pin and starts an I2C read.
+ * Up to DEFERRED_EVENTS_MAX are kept, oldest first. 'Inactivity' is kept at most once, as the detector repeats it.
+ * Until 3 Nov 2026 there was one slot, and a later event overwrote an earlier one: in ai20 an 'Inactivity'
+ * overwrote the BLE processor's selftest command. Holding /IP_INT low until the read makes such overlaps longer.
  *
- * When the read is completed the I2C module generates a i2cs_cb_tx() callback
+ * @param rxMessage - the event to defer
+ * @param when - text added to the log line, e.g. " during disk op"
+ */
+static void deferEvent(APP_MSG_T rxMessage, const char *when) {
+	XP_BROWN;
+	xprintf("Deferring event 0x%04x%s\n", rxMessage.msg_event, when);
+	XP_WHITE;
+
+	if (rxMessage.msg_event == APP_MSG_IFTASK_INACTIVITY) {
+		for (uint8_t i = 0; i < deferredCount; i++) {
+			if (deferredEvents[i].msg_event == APP_MSG_IFTASK_INACTIVITY) {
+				return;	// already waiting
+			}
+		}
+	}
+
+	if (deferredCount >= DEFERRED_EVENTS_MAX) {
+		discardEvent(rxMessage, "too many deferred events");
+		return;
+	}
+
+	deferredEvents[deferredCount++] = rxMessage;
+}
+
+/**
+ * Drops an event without handling it, and logs it.
+ *
+ * A message to the BLE processor (from another task, or a CLI response) is sent by a task that took xI2CTxSemaphore
+ * and waits for i2cTransmissionComplete() to give it back. Give it back here instead, or that task blocks forever.
+ *
+ * @param msg - the event dropped
+ * @param why - the reason, for the log
+ */
+static void discardEvent(APP_MSG_T msg, const char *why) {
+	APP_MSG_EVENT_E event = msg.msg_event;
+
+	XP_BROWN;
+	xprintf("Dropping event 0x%04x: %s\n", event, why);
+	XP_WHITE;
+
+	if ((event == APP_MSG_IFTASK_MSG_TO_MASTER) ||
+			((event >= APP_MSG_IFTASK_I2CCOMM_CLI_STRING_RESPONSE) && (event <= APP_MSG_IFTASK_I2CCOMM_CLI_BINARY_CONTINUES))) {
+		xSemaphoreGive(xI2CTxSemaphore);
+	}
+}
+
+/**
+ * Removes a deferred 'Inactivity', if there is one. Called when the BLE processor has read one of our messages.
+ *
+ * The inactivity detector fires again once all tasks have been idle for a further period, so this delays sleep
+ * but never prevents it.
+ */
+static void dropDeferredInactivity(void) {
+	uint8_t kept = 0;
+
+	for (uint8_t i = 0; i < deferredCount; i++) {
+		if (deferredEvents[i].msg_event == APP_MSG_IFTASK_INACTIVITY) {
+			xprintf("Deferred 'Inactivity' dropped: the BLE processor has just read our message\n");
+		}
+		else {
+			deferredEvents[kept++] = deferredEvents[i];
+		}
+	}
+	deferredCount = kept;
+}
+
+/**
+ * Drops every deferred event, logging each. Called when we are about to sleep.
+ *
+ * @param why - the reason, for the log
+ */
+static void discardDeferredEvents(const char *why) {
+	for (uint8_t i = 0; i < deferredCount; i++) {
+		discardEvent(deferredEvents[i], why);
+	}
+	deferredCount = 0;
+}
+
+/**
+ * Sends an I2C message to the BLE processor.
+ *
+ * /IP_INT handshake (3 Nov 2026, ww-hardware IP_INT_handshake_spec.md): waits until /IP_INT has been high for
+ * IP_INT_HIGH_MIN_MS, builds the message and arms the I2C slave, then drives /IP_INT low. Low means a complete
+ * message is waiting. The BLE processor reads it while the pin is low, and i2csTxDoneEvent() releases the pin
+ * when the read completes (or the no-read timeout does).
+ *
+ * When the read is completed the I2C module generates a i2csTxDoneEvent() callback
  * which is used to change the state machine and release the semaphore.
+ *
+ * @param data - the message payload
+ * @param messageType - the message type, sent in the header
+ * @param payloadLength - the number of bytes in data
  */
 static void sendI2CMessage(uint8_t * data, aiProcessor_msg_type_t messageType, uint16_t payloadLength) {
+	TickType_t sinceRelease;
 
 	// Quiet for a download packet, verbose again for the string that ends the download (or any other message)
 	binaryTxActive = (messageType == AI_PROCESSOR_MSG_RX_BINARY);
 
-	interprocessor_interrupt_assert();
-	i2ccomm_write_enable(data, messageType, payloadLength);	// Get the I2C dat ready to transmit.
+	// Keep /IP_INT high for at least IP_INT_HIGH_MIN_MS after the last release. One tick more, as the release
+	// could have been just before a tick.
+	if (ipIntReleaseValid) {
+		sinceRelease = xTaskGetTickCount() - ipIntReleaseTick;
+		if (sinceRelease <= pdMS_TO_TICKS(IP_INT_HIGH_MIN_MS)) {
+			vTaskDelay(pdMS_TO_TICKS(IP_INT_HIGH_MIN_MS) + 1 - sinceRelease);
+		}
+	}
+
+	i2ccomm_write_enable(data, messageType, payloadLength);	// Build the message and arm the I2C slave
 
 	if (messageType == AI_PROCESSOR_MSG_RX_BINARY) {
-		// Download timing: the BLE processor can start reading from the rising edge, just below
+		// Download timing: the BLE processor can start reading from the low, just below
 		dlPulseTick = xTaskGetTickCount();
 		if (dlTxDoneValid) {
 			ifTask_timeStatAdd(&dlAiTime, ((dlPulseTick - dlTxDoneTick) * 1000) / configTICK_RATE_HZ);
@@ -1513,7 +1667,7 @@ static void sendI2CMessage(uint8_t * data, aiProcessor_msg_type_t messageType, u
 		dlBinaryInFlight = true;
 	}
 
-	interprocessor_interrupt_negate();	// WW130 responds on the rising edge. It starts the I2Cread process
+	interprocessor_interrupt_assert();	// Low: a message is waiting. Held until the BLE processor reads it.
 }
 
 /********************************** FreeRTOS Task  *************************************/
@@ -1539,7 +1693,7 @@ static void vIfTask(void *pvParameters) {
     xprintf("Starting IFTask\n");
     XP_WHITE;
 
-	interprocessor_interrupt_init();
+	// /IP_INT (PB11) was set up in app_main(), by ifTask_ipIntInit()
 
 	app_i2ccomm_init();
 	dbg_printf(DBG_LESS_INFO, "I2C slave instance %d configured at address 0x%02x\n", iic_id, EVT_I2CS_0_SLV_ADDR);
@@ -1557,7 +1711,7 @@ static void vIfTask(void *pvParameters) {
 
 	// Clear the saved event. This means there is to be no saved message.
 	// The mechanism allows messages to be deferred till we return to IDLE. One of the handling routines might set it later.
-	savedMessage.msg_event = APP_MSG_NONE;
+	deferredCount = 0;
 
 	// Warm boot: the wake message goes first, ahead of anything the other tasks queue (see wakeMessageQueued)
 	if (woken != APP_WAKE_REASON_COLD) {
@@ -1607,7 +1761,7 @@ static void vIfTask(void *pvParameters) {
 			// expecting i2cTransmissionComplete() to give it back - so this event must
 			// never be silently dropped, or the CLI task and the sender block forever on
 			// the semaphore: the console dies and the device never sleeps.
-			// IDLE handles it (sends now) and I2C_TX defers it (savedMessage); in every
+			// IDLE handles it (sends now) and I2C_TX defers it (deferEvent()); in every
 			// other state drop the message (it is best-effort telemetry) and give the
 			// semaphore back ourselves so the pipeline recovers.
 			// While the BLE processor is unresponsive nothing is sent to it: drop the message and give the semaphore
@@ -1675,9 +1829,13 @@ static void vIfTask(void *pvParameters) {
 						ifTaskStateString[if_task_state], if_task_state);
 			}
 
-			// The processing functions might want us to execute a deferred message when we return to IDLE
-			if ((if_task_state == APP_IF_STATE_IDLE) && (savedMessage.msg_event != APP_MSG_NONE)) {
-				event = savedMessage.msg_event;
+			// The processing functions might want us to execute a deferred message when we return to IDLE. The oldest
+			// first, one at a time, as it may start a new exchange.
+			if ((if_task_state == APP_IF_STATE_IDLE) && (deferredCount > 0)) {
+				sendMsg = deferredEvents[0];
+				deferredCount--;
+				memmove(&deferredEvents[0], &deferredEvents[1], deferredCount * sizeof(APP_MSG_T));
+				event = sendMsg.msg_event;
 				XP_BROWN;
 				xprintf("Issuing deferred event 0x%04x", event);
 				XP_WHITE;
@@ -1688,15 +1846,12 @@ static void vIfTask(void *pvParameters) {
 				else {
 					xprintf("\n");
 				}
-				sendMsg = savedMessage;
 				if(xQueueSend( xIfTaskQueue , (void *) &sendMsg , __QueueSendTicksToWait) != pdTRUE) {
 					xprintf("IFTask sending event 0x%x failed\r\n", sendMsg.msg_event);
 				}
 				else {
 					xprintf("IFTask sending event 0x%04x. Tx data = 0x%08x\r\n", sendMsg.msg_event, sendMsg.msg_data);
 				}
-				// now clear the saved event
-				savedMessage.msg_event = APP_MSG_NONE;
 			}
 
 			// The processing functions might want us to send a message to another task
@@ -1783,16 +1938,16 @@ static void interprocessor_interrupt_init(void) {
     SCU_PAD_PULL_LIST_T pad_pull_cfg;
 	//uint8_t gpio_value;
 
-	// Initialise PB11 as an input. Expect a pull-up to take it high.
+	// PB11 resets as an input with a weak pull-down (HX6538 datasheet), which with the BLE processor's pull-up can
+	// leave /IP_INT at an undefined level. Pull it up first, then make it the GPIO2 input.
 	// This device can then set PB11 to an output at logic 0 to change the state of the pin.
-    hx_drv_gpio_set_input(GPIO2);
-    hx_drv_scu_set_PB11_pinmux(SCU_PB11_PINMUX_GPIO2, 1);
-
-	// Set PB11 PULL_UP
     hx_drv_scu_get_all_pull_cfg(&pad_pull_cfg);
 	pad_pull_cfg.pb11.pull_en = SCU_PAD_PULL_EN;
 	pad_pull_cfg.pb11.pull_sel = SCU_PAD_PULL_UP;
     hx_drv_scu_set_all_pull_cfg(&pad_pull_cfg);
+
+    hx_drv_gpio_set_input(GPIO2);
+    hx_drv_scu_set_PB11_pinmux(SCU_PB11_PINMUX_GPIO2, 1);
 
 #ifdef BIDIRECTIONAL_INTERRUPT
 	// Not used at present - see function comment above and BIDIRECTIONAL_INTERRUPT.
@@ -1805,6 +1960,21 @@ static void interprocessor_interrupt_init(void) {
 
 	//hx_drv_gpio_get_in_value(GPIO2, &gpio_value);
 	//xprintf("Initialised PB11 (GPIO2) as input. Read %d\n", gpio_value);
+}
+
+/**
+ * Releases /IP_INT at the end of a message: drives it high, then back to an input (the idle state, pulled up).
+ *
+ * ISR-safe (no console output), as i2csTxDoneEvent() calls it.
+ *
+ * @param now - the tick count now, from xTaskGetTickCountFromISR() or xTaskGetTickCount()
+ */
+static void interprocessor_interrupt_release(TickType_t now) {
+	hx_drv_gpio_set_out_value(GPIO2, GPIO_OUT_HIGH);
+	hx_drv_gpio_set_input(GPIO2);
+
+	ipIntReleaseTick = now;
+	ipIntReleaseValid = true;
 }
 
 /**
@@ -2017,7 +2187,32 @@ static void interprocessor_interrupt_negate(void) {
 	hx_drv_gpio_clr_int_status(AON_GPIO0);
 	hx_drv_gpio_set_int_enable(AON_GPIO0, 1);	// 1 means enable interrupt
 }
+
+/**
+ * Releases PA0 at the end of a message: drives it high, then back to an interrupt input.
+ *
+ * ISR-safe (no console output), as i2csTxDoneEvent() calls it.
+ *
+ * @param now - the tick count now, from xTaskGetTickCountFromISR() or xTaskGetTickCount()
+ */
+static void interprocessor_interrupt_release(TickType_t now) {
+	hx_drv_gpio_set_out_value(AON_GPIO0, GPIO_OUT_HIGH);
+	hx_drv_gpio_set_input(AON_GPIO0);
+	hx_drv_gpio_clr_int_status(AON_GPIO0);
+	hx_drv_gpio_set_int_enable(AON_GPIO0, 1);	// 1 means enable interrupt
+
+	ipIntReleaseTick = now;
+	ipIntReleaseValid = true;
+}
 #endif	// ww500
+
+/**
+ * Sets up /IP_INT, pulled up and high. Call early in app_main(), before anything slow: until then the pin is in
+ * its reset state, which the BLE processor may read as a message waiting.
+ */
+void ifTask_ipIntInit(void) {
+	interprocessor_interrupt_init();
+}
 
 
 #ifdef TEST_INT_PULSE

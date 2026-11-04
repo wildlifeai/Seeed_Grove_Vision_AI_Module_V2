@@ -589,6 +589,8 @@ int app_main(void){
 
 	initVersionString();
 	pinmux_init();
+	// /IP_INT high as soon as possible: from reset it is pulled down, which the BLE processor reads as a message
+	ifTask_ipIntInit();
 	selfTest_init();
 
 	XP_YELLOW;

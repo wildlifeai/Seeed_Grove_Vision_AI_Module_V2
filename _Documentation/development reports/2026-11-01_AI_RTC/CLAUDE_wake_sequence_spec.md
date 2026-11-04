@@ -317,3 +317,124 @@ AI processor built 14:37 2 Nov with the file name fix.
 Correction, 2 November 2026: ai12 and ai13 ran the RP3 image (`Camera: RP`, IMX708), not HM0360. All
 earlier logs from ai4 ran the HM0360 image. So the final code (with the file name fix) has run on
 the RP3 image; the HM0360 image still needs building with it.
+
+## The missed interrupt: logs 14 to 16 and the held-low handshake, 3 November 2026
+
+1. **The latched interrupt while awake failed** (ww-hardware build 16:23:45 2 Nov; logs/ai14.txt,
+   ble14.txt). On every wake with a phone connected the BLE processor started a read about 48 ms after
+   its WAKE pulse, while the AI processor was still in its bootloader. The AI processor logged
+   `I2C Error: data unready`, and the wake message arrived with its header zeroed (`CRC Failed`), so the
+   wake was lost. The previous BLE build (12:22:38) with the same AI image was clean (ai15, ble15), and
+   so was the reverted build 09:15:45 3 Nov (ai16, ble16). Report: ww-hardware thread,
+   `CLAUDE_IP_INT_early_read_report.md`.
+2. **Replaced by a held-low handshake**, agreed with Charles: ww-hardware thread,
+   `IP_INT_handshake_spec.md`, which holds the AI processor session's answers in its section 7. Low
+   means a complete message is armed; the AI processor releases the pin when the read completes, and
+   keeps it high at least 20 ms before the next. Found while answering: PB11 resets with a weak
+   pull-down (HX6538 datasheet), so until our code pulls it up the line may not read high.
+3. **AI processor side coded, 3 November (not built):**
+   - `if_task.c`: `sendI2CMessage()` waits for the 20 ms high (`IP_INT_HIGH_MIN_MS`), arms, then drives
+     the pin low; `i2csTxDoneEvent()` releases it; the 4 s no-read timeout releases it and drops the
+     message. The first message's 300 ms `BLE_PROBE_TIME` now only sets the "BLE processor unresponsive"
+     flag (a late read clears it), and the pin stays low for the full 4 s. An I2C error during a send no
+     longer returns to IDLE with the pin still low. `TEST_INT_PULSE` is off.
+   - `ifTask_ipIntInit()`, called at the start of `app_main()` (`ww500_md.c`): PB11 pulled up first.
+   - `CLI-commands.c`: the `int` test command removed (it pulled PB11 low with no message).
+   - Docs: `architecture_of_inter_processor_communications.md`, `inter_processor_comms_details.md`,
+     `txfile.md`, `ble_commands.md`, `hardware-traps.md`, `cross-repo-contracts.md`.
+
+## First run of the held-low handshake: log 17, 3 November 2026
+
+Both processors on the handshake (AI processor HM0360 image built 12:11:01; BLE processor built
+12:01:33). Phone connected, `AI ver` repeated, LoRaWAN active (logs/ai17.txt, bl17.txt). 40 messages
+were read and released, with no `data unready` and no `CRC Failed`. One reply (`RTC set`, 12:15:44) was
+never read. Its low fell on a LoRaWAN receive, and the AI processor dropped it after 4 s.
+
+The cause is in the BLE processor. The radio's DIO1 uses a rising-only PORT interrupt, so while DIO1 is
+high it holds the nRF52's shared DETECT signal, and the /IP_INT low raises no event. ai13 fits the
+same pattern. The report, with a proposed fix (toggle sense for all PORT pins, plus a level check
+that the held-low design makes safe), is in the ww-hardware thread:
+`CLAUDE_IP_INT_missed_low_report.md`. No AI processor change is needed.
+
+## The missed-low fix: logs 18 and 19, 3 November 2026
+
+The fix is in the BLE processor only (ww-hardware spec section 9, build 17:43:10): every PORT interrupt
+pin uses both edges, so no pin holds DETECT, plus a level check at the 3 s timeout. AI processor image
+unchanged (HM0360, 12:11:01). Note: logs/ai17.txt was overwritten; the 12:15 run above survives only
+as logs/bl17.txt, and the new pair was renamed ai18/ble18.
+
+- **18** (phone connected, `AI ver` x 11, LoRaWAN joined, 76 s): 56 of 56 messages read `CRC OK`. One
+  WAKE retry: `AI ver` came 2 s after `Sleep` was read, before the AI processor reached DPD (it was
+  saving the RTC calibration), and the retry woke it. No message fell near a radio event.
+- **19** (no phone, `AI setop 32 1`, waving, 18:06 to 18:14): 29 motion wakes, 232 reads `CRC OK`, no
+  `not responding`, no AI timeout, no `did not read`, no `interrupt missed`. Twice an /IP_INT low came
+  right on a radio event and was read at once: `!107` at 18:08:51.152, just after `MAC rxDone` at 51.090
+  (then FDS writes), and `!211` at 18:12:01.621, just after `MAC txDone` at 01.578. That is the case
+  missed at 12:15:44. The BLE log only times these to a few tens of ms, so whether DIO1 was still high
+  is likely, not proven.
+- Not exercised: the accelerometer interrupt, and the burst test.
+
+## The blocking test (log 20) and deferred events, 3 November 2026
+
+Run 20 (ww-hardware spec section 10) held DETECT high on a spare pin with a temporary `hack`. Under the
+fixed setting every message was read at once; under the old setting none was, which confirms the cause.
+The BLE processor's 3 s rescue read every message, but the wake did not complete, because of the AI
+processor (ai20):
+
+1. The late read of `Wake` released an `Inactivity` deferred while waiting, so `Sleep` went at once.
+2. The BLE processor's `selftest`, deferred while `Sleep` was waiting, was then overwritten by the next
+   `Inactivity`: there was one slot for deferred events.
+
+Coded in `if_task.c` (not built):
+
+- Deferred events are kept in a queue of 4 (`deferEvent()`), oldest first, replayed one at a time in
+  IDLE. `Inactivity` is kept at most once. If the queue is full the event is dropped and logged
+  (`discardEvent()`), and a sender waiting on `xI2CTxSemaphore` is released.
+- When the BLE processor reads one of our messages, a deferred `Inactivity` is dropped
+  (`dropDeferredInactivity()`). The detector fires again after a further idle period. Logs 16 to 19
+  never deferred one, so normal wakes are unchanged.
+- When `Sleep` is read, or not read before the timeout, anything still deferred is dropped and logged
+  (`discardDeferredEvents()`). The BLE processor treats us as asleep, so a late reply would confuse it.
+
+Not done: section 10's suggestion to process a command that arrives after `Sleep`, or abandon the sleep.
+The BLE processor has read `Sleep`, so its next command would start with a WAKE pulse and wait for a
+`Wake` that never comes.
+
+## Log 21: the deferred-event fix works, 4 November 2026
+
+Both images built 10:19 4 Nov (AI processor HM0360 image, deferred-event queue and the define tidy).
+Section 10 `hack 12` rerun, then a reset and three normal `AI ver`.
+
+- **`hack 12` (old setting), `AI ver` at 10:31:52: the wake completes.** No `!N` line; the BLE
+  processor's 3 s rescue read `Wake` (55.86), the `selftest` reply (58.96) and `RTC set` (02.03), each
+  `CRC OK`, then sent `ver`. AI log: each `Inactivity` deferred while a message waited was dropped at
+  the read (`Deferred 'Inactivity' dropped ...`), and `selftest` and `setutc` were both processed.
+- **As expected, the `ver` reply was lost** (sent from IDLE, no rescue there): `did not read` at
+  06.135, the deferred `Inactivity` issued, `Sleep` not read either, `Dropping event 0x070e: going to
+  sleep`, DPD at 10:32:12. The BLE processor timed out to IDLE at 12.15 and still thought the AI
+  processor awake until the reset.
+- **Normal wakes after the reset:** 10:34:00, 10:34:16 and 10:34:25 all read at once (`!3` to `!11`
+  and on), `ver` reply within 0.5 s, no `interrupt missed`, `did not read`, `Deferring` or `Dropping`.
+- Not new: `Wake 2024-...` after each cold boot (no time yet), the stale wake-message time after
+  DPD (`differ by 13s` at 10:34:16, `was out by 0s` at setutc), and `unhandled event 'Awake' in
+  'I2C TX State'`.
+
+The `hack` code and `GPIOTE_CONFIG_NUM_OF_LOW_POWER_EVENTS` 7 can now come out of the BLE processor.
+
+## Log 22: `NN-` arrives as `HM0`, 4 November 2026
+
+The handshake was clean (259 `CRC OK`, no missed lows, no `did not read`). But on all 17 motion wakes the
+BLE processor got a 4-byte `HM0` and no `NN-`; the AE registers message was lost too, and the console-only
+MD grid went to the app. `NN` messages arrived in ble15 and ble16, none from ble19 on.
+
+Cause: `sendMsgToMaster()` (`image_task.c`) passed the IF task a pointer to the shared `msgToMaster` and its
+length then. The image task has the higher priority, so it wrote the next message into the buffer before
+the IF task copied it: each message went with the next one's text and the earlier one's length. Likely
+exposed by the extra wake traffic (`selftest`, `setutc`) holding `xI2CTxSemaphore` just as `NN-` was sent.
+
+Fix (not built): `sendMsgToMaster()` copies the string into its own buffer (`msgToMasterTx`) once it has the
+semaphore, which is only free when the previous message has gone or been dropped. Covers `lightSensor.c`
+too. Bench: motion wakes, phone connected; expect `NN-` (4 bytes), the AE registers, `HM0360 woken by
+motion ...`, and no grid text in the BLE log.
+
+Benched 4 November (Charles): the fix works, `NN-` arrives again on motion wakes.

@@ -254,7 +254,7 @@ Some of these messages are documented un the table below.
 | Wake      |                               |          | Sent by AI processor when it leaves DPD.             |
 | Sleep     |                               |          | Sent by AI processor when it enters DPD.             |
 | NN+       |                               | ```NN+``` | Sent by AI processor when the NN detects its target. |
-| NN+       |                               | ```NN-``` | Sent by AI processor when the NN does not detect its target. |
+| NN-       |                               | ```NN-``` | Sent by AI processor when the NN does not detect its target. |
 | Captured  |                               | ```Captured 3 images. Last is MD000708.JPG``` | Sent by AI processor when a sequence of image captures completes. |
 | Capture failed |                          | ```Capture failed after 1 of 3 images: EDM WDT2 timeout``` | Sent by AI processor when a sequence of image captures is abandoned. `Captured` is not sent. The text after the colon is the reason. |
 | HM0360 AE regs | multi-line               | ```HM0360 AE regs:```<br>```  Integration time = 376 lines```<br>```  Analog gain = 4```<br>```  Digital gain = 192```<br>```  AE Mean = 12```<br>```  AEConverged?: N``` | Raw auto-exposure registers, sent after each capture and after each light check. The app already parses these. |

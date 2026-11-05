@@ -3010,32 +3010,43 @@ static int initNN(void) {
 /**
  * Do something with the NN output
  *
+ * The decision uses the score, class 1 minus class 0, as the rat and cat challenges do (issue #270).
+ * A negative score means the target was not found; a positive score is a detection if it is above
+ * op 16. Op 16 stays 0-127, so a negative score can never pass.
+ *
  * The result is reported at once. Adding it to the counters waits for the card (countNNResult()).
  *
  * TODO should this be in cvapp.cpp?
- * TODO this is suitable for person detection only - revisit!
  *
- * @param outCategories - array of logit values
- * @param classCount - number of classes
+ * @param outCategories - array of int8 outputs, one per class (class 0 = no target, class 1 = target)
+ * @param classCount - number of classes. Fewer than 2 is never a detection
  */
 static void processNNOutput(int8_t * outCategories, uint8_t classCount) {
-	uint8_t threshold;
+	uint16_t threshold;
+	int16_t score;
 
 	// The threshold is in the fast-start record, so the card is not needed here
 	threshold = fatfs_getOperationalParameter(OP_PARAMETER_MODEL_THRESHOLD);
 
+	if (classCount >= 2) {
+		score = (int16_t) outCategories[1] - (int16_t) outCategories[0];	// -255 to +255
+	}
+	else {
+		score = 0;	// never above the threshold
+	}
+
 	nnResultToCount = true;
-	nnResultPositive = (outCategories[1] > threshold);
+	// int32_t: op 16 is not range-checked, and a large value must not wrap negative
+	nnResultPositive = ((int32_t) score > (int32_t) threshold);
 
 	for (uint8_t i=0; i < classCount; i++) {
 		xprintf("Class %d '%s' = logit %d\n", i, cv_getLabel(i), outCategories[i]);
 	}
 
-	// TODO This only works for the person detection
 	if (nnResultPositive)  {
 		XP_LT_GREEN;
 		xprintf("TARGET OBJECT DETECTED!\n");
-
+		XP_WHITE;	// before sendMsgToMaster(), which can let other tasks print
 		// Send a message to the BLE processor so it can inform the user on the app immediately.
 		// Also can be used to flash an LED.
 		snprintf(msgToMaster, MSGTOMASTERLEN, "NN+");
@@ -3052,7 +3063,7 @@ static void processNNOutput(int8_t * outCategories, uint8_t classCount) {
 	}
 
 	XP_WHITE;
-	xprintf("Score %d/128 (Threshold %d)\n", outCategories[1], threshold);
+	xprintf("Score %d (class 1 - class 0, threshold %d)\n", score, threshold);
 }
 
 /**

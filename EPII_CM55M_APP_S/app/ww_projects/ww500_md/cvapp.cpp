@@ -885,12 +885,9 @@ static void outputAsPercentage(TfLiteTensor *output) {
     g_last_confidence_data.class_count = (num_classes > MAX_CLASSES) ? MAX_CLASSES : num_classes;
 
     for (int i = 0; i < num_classes; ++i) {
-        float confidence = probabilities[i] * 100.0f;                                     // Convert to percentage
-        int confidence_int = (int)(confidence + 0.5f);                                    // Round to nearest integer
-        int confidence_frac = (int)((confidence - (float)confidence_int) * 10.0f + 0.5f); // Get decimal part
-        if (confidence_frac < 0) {
-            confidence_frac = 0; // Handle rounding edge cases
-        }
+        float confidence = probabilities[i] * 100.0f;	// Convert to percentage
+        // Whole numbers: a decimal place would imply precision the model does not have
+        int confidence_int = (int)(confidence + 0.5f);
 
         const char * label = metaDataFlash->labels[i];
 
@@ -912,13 +909,13 @@ static void outputAsPercentage(TfLiteTensor *output) {
         }
 
         if (label)  {
-            xprintf("Class '%s': %d.%d%% (raw: %d)\n", label, confidence_int, confidence_frac, results[i]);
+            xprintf("Class '%s': %d%% (raw: %d)\n", label, confidence_int, results[i]);
         }
         else  {
-            xprintf("Class %d: %d.%d%% (raw: %d)\n", i, confidence_int, confidence_frac, results[i]);
+            xprintf("Class %d: %d%% (raw: %d)\n", i, confidence_int, results[i]);
         }
+        XP_WHITE;	// each line resets its own colour
     }
-    XP_WHITE;
 }
 
 #endif // USE_PERCENTAGE

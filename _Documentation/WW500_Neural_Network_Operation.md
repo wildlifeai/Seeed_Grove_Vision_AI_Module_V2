@@ -30,7 +30,7 @@ Three entries in CONFIG.TXT control model selection and detection behaviour.
 |-------|-----------|---------|---------|
 | 14 | `OP_PARAMETER_MODEL_PROJECT` | 0 | Model project ID. **0 means no model is loaded.** |
 | 15 | `OP_PARAMETER_MODEL_VERSION` | 0 | Model version number. |
-| 16 | `OP_PARAMETER_MODEL_THRESHOLD` | 0 | Detection logit threshold (0–127). |
+| 16 | `OP_PARAMETER_MODEL_THRESHOLD` | 18 | Detection threshold on the score, class 1 minus class 0 (0 to 127). |
 
 The project ID and version together determine the model filename using the pattern:
 
@@ -44,7 +44,7 @@ If `OP_PARAMETER_MODEL_PROJECT` is 0 the NN system is skipped entirely and no mo
 
 ### Detection threshold
 
-`OP_PARAMETER_MODEL_THRESHOLD` is compared against the raw int8 logit of class 1 (the "target" class). If the logit exceeds the threshold the target is considered detected. The default of 0 means any positive logit triggers a detection — effectively very low sensitivity. Increase this value to require higher confidence before declaring a detection.
+The decision uses the **score**, class 1 (the target) minus class 0 (no target), the same score the rat and cat challenges rank models on. A negative score is never a detection. A positive score is a detection if it is above `OP_PARAMETER_MODEL_THRESHOLD`. Op 16 = 0 is the model's own call (class 1 beats class 0); higher values need more confidence. The default of 18 is arbitrary: tune op 16 for each model. Until issue #270 (5 November 2026) the firmware compared class 1 alone with op 16, which misses most animals with the challenge models.
 
 ---
 
@@ -278,6 +278,7 @@ DEBUG: cv_run says there are 2 classes
 Class 0 'No Person?' = logit 71
 Class 1 'Person!!!' = logit -71
 Target object not detected.
+Score -142 (class 1 - class 0, threshold 18)
 ```
 
 Or if the target is detected:
@@ -286,6 +287,7 @@ Or if the target is detected:
 Class 0 'No Person?' = logit -71
 Class 1 'Person!!!' = logit 71
 TARGET OBJECT DETECTED!
+Score 142 (class 1 - class 0, threshold 18)
 ```
 
 **What each line means:**
@@ -298,23 +300,25 @@ TARGET OBJECT DETECTED!
 | `DEBUG: cv_run says there are 2 classes` | Class count from the output tensor (temporary debug print). |
 | `Class 0 'No Person?' = logit 71` | Raw int8 output score for class 0. Logits are in the range −128 to +127. Higher is more confident. Class labels come from the flash metadata. |
 | `Class 1 'Person!!!' = logit -71` | Raw int8 output score for class 1. |
-| `Target object not detected.` | Class 1 logit (−71) did not exceed `OP_PARAMETER_MODEL_THRESHOLD`. |
-| `TARGET OBJECT DETECTED!` | Class 1 logit exceeded the threshold. |
+| `Target object not detected.` | The score, class 1 minus class 0 (−71 − 71 = −142), is not above `OP_PARAMETER_MODEL_THRESHOLD`. |
+| `TARGET OBJECT DETECTED!` | The score is above the threshold. |
+| `Score -142 (class 1 - class 0, threshold 18)` | The score and op 16 that the decision used. |
 
 ### Understanding logit values
 
-Logits are the raw, unnormalised scores from the final layer of the neural network, stored as int8 (−128 to +127). For a two-class model the two logits are approximately equal in magnitude and opposite in sign — a high positive score for one class means a low (negative) score for the other.
+Logits are the raw, unnormalised scores from the final layer of the neural network, stored as int8 (−128 to +127). For the 96 px example models the two logits are about equal in magnitude and opposite in sign, so the score is about twice class 1. Other models, such as the challenges' 160 px models, do not have this property, which is why the firmware uses the difference rather than class 1 alone.
 
-The `OP_PARAMETER_MODEL_THRESHOLD` (index 16 in CONFIG.TXT) is compared against the logit of class 1 (the "target" class). Examples:
+`OP_PARAMETER_MODEL_THRESHOLD` (index 16 in CONFIG.TXT) is compared with the score, logit[1] − logit[0]. Examples:
 
-| logit[1] | threshold | result |
-|----------|-----------|--------|
-| 71 | 0 | detected |
-| −71 | 0 | not detected |
-| 40 | 50 | not detected |
-| 60 | 50 | detected |
+| logit[0] | logit[1] | score | threshold | result |
+|----------|----------|-------|-----------|--------|
+| −71 | 71 | 142 | 18 | detected |
+| 71 | −71 | −142 | 18 | not detected |
+| −30 | −2 | 28 | 18 | detected |
+| 10 | 20 | 10 | 18 | not detected |
+| 10 | 20 | 10 | 0 | detected |
 
-A threshold of 0 (default) means any positive logit counts as a detection.
+The third row is a case the old class 1 test missed: class 1 is negative, but the model still rates the target more likely than not.
 
 ---
 
@@ -324,7 +328,7 @@ After each inference the AI processor sends a short ASCII message to the BLE pro
 
 | Message | Meaning |
 |---------|---------|
-| `NN+` | Target detected (logit[1] > threshold) |
+| `NN+` | Target detected (logit[1] − logit[0] > threshold) |
 | `NN-` | Target not detected |
 
 
@@ -422,7 +426,7 @@ The 128-bit deployment UUID set by the mobile app (e.g. `12345678-0000-0000-0000
 | Function | Description |
 |----------|-------------|
 | `initNN()` | Calls `cv_init()` with ops 14 and 15, waiting for the SD card first only if the model is not in flash. Called at start-up, or just after the capture starts on a timer or motion wake. |
-| `processNNOutput(outCategories, classCount)` | Compares logit[1] against `OP_PARAMETER_MODEL_THRESHOLD`; sends `NN+` or `NN-` to the BLE processor via I2C; prints detection result. Does not wait for the SD card. |
+| `processNNOutput(outCategories, classCount)` | Compares the score, logit[1] − logit[0], with `OP_PARAMETER_MODEL_THRESHOLD` (fewer than 2 classes is never a detection); sends `NN+` or `NN-` to the BLE processor via I2C; prints detection result. Does not wait for the SD card. |
 | `countNNResult()` | Adds the result to the counters (ops 1 and 2) once the SD card is ready, since the counters are loaded from CONFIG.TXT. |
 | `prepareJpegFile(outCategories, classCount, extraBlock)` | Assembles the two-buffer JPEG+EXIF output: calls `build_exif_segment()` then queues the write request for `fatfs_task`. |
 | `build_exif_segment(outCategories, categoriesCount)` | Builds a TIFF-structured EXIF APP1 block in `exif_buffer[]`. Writes tag 0xC000 (raw logits), optionally 0x9286 (UserComment confidence string), and 0xF200 (deployment ID). |

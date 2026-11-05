@@ -43,8 +43,9 @@ the fact is not enough, the timing has to be built in.
   SD card and writes `RESULTS.CSV` (scores and ms per frame); `_Tools/nnfiles_prepare.py` makes
   the frames. Runbook `_Documentation/nn_files_bench.md`. Not while the app transfers a file.
   The rat and cat challenges' models live on the team drive, never in this public repo (some
-  trained on non-commercial photos), and the camera's detection (class 1 above op 16) is not
-  the challenges' score (class 1 minus class 0): rank on the score.
+  trained on non-commercial photos). The camera's detection is the challenges' score (class 1
+  minus class 0) above op 16 (#270, 5 Nov 2026; before that it was class 1 alone), so choose op 16
+  from the scores in `RESULTS.CSV`.
 * **For a batch of boards, use `_Tools/ww500_ship_check.py`** (runbook
   `_Documentation/pcb_batch_flashing.md`): both images, a photo from each camera, one
   button per board.

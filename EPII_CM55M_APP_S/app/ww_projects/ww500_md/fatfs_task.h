@@ -84,7 +84,7 @@ typedef enum {
 	OP_PARAMETER_FLASH_LED,			// 13 Flash LED bit mask: visible LED used = 1, infra-red LED used =2, none = 0
 	OP_PARAMETER_MODEL_PROJECT,		// 14 Model project ID used for the NN model (0 disables NN)
 	OP_PARAMETER_MODEL_VERSION,		// 15 Model version number used for the NN model
-	OP_PARAMETER_MODEL_THRESHOLD,	// 16 Logit threshold for detection (0-127)
+	OP_PARAMETER_MODEL_THRESHOLD,	// 16 Detection threshold on class 1 minus class 0 (0-127)
 	OP_PARAMETER_MD_SENSITIVITY,	// 17 Motion Detection Sensitivity: 1=low, 2=medium, 3=high (op 11 = 0 is the off switch)
 	OP_PARAMETER_TEST_MODE_BITS,	// 18 To manage test configurations: bit or bits indicate a test function
 	OP_PARAMETER_IMAGES_COUNT,		// 19 Count of images in the current image folder. Use this to decide to create a new image folder.

@@ -23,13 +23,13 @@ extern "C" {
 // Set this value to match your Edge Impulse project's last 4 digits
 #define PROJECT_ID 0
 #define PROJECT_VER 0
-// Logit value (0-127)
+// Op 16 default: detection if class 1 minus class 0 is above this (0-127). Tune it for each model
 #define MODEL_THRESHOLD 18
 
 // Enable transforming of tensor output to percentages (softmax) for the EXIF
 // UserComment ("label: pct%; ..."). The DETECTION path is unaffected either
 // way: cv_run() always returns raw logits in outCategories and the threshold
-// (OP_PARAMETER_MODEL_THRESHOLD) stays a logit comparison. Without this define
+// (OP_PARAMETER_MODEL_THRESHOLD) stays a comparison on the raw outputs. Without this define
 // the confidence data is never computed, so images carry no NN scores for the
 // website to ingest - see doc/NN_confidence_EXIF_not_written.md.
 // (image_task.c couples ENABLE_EXIF_CONFIDENCE to this define.)

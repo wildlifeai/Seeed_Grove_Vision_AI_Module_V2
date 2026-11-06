@@ -112,8 +112,8 @@ or `loadmodel 72 1` then `nnfiles CATDEMO`, or `loadmodel 93 1` then `nnfiles NN
 the model's rows in `EXPECTED.CSV`. On 200 test frames the camera made the PC's call on 196 for each cat model
 (9 October 2026), and `93V1` on 40 of 40 (6 October 2026).
 
-The camera's detection uses the challenges' score: it reports a detection when class 1 minus class 0 is above
-op 16 (`processNNOutput()` in `image_task.c`, default 18, range 0 to 127, issue #270). So op 16 is the score
-cut-off, and a negative cut-off cannot be set. `RESULTS.CSV` holds each class's output, not the decision: work the
-score out from it to choose op 16 for a model. Until 5 November 2026 the firmware tested class 1 alone, and at the
-default `93V1` detected none of the example's five rats, `71V1` one of the five cats and `72V1` four.
+The camera reports a detection when the model is at least op 16 % sure of class 1 (`processNNOutput()` in
+`image_task.c`, default 60, range 0 to 100, issue #270). That is the class 1 `pct` column of `RESULTS.CSV`, so
+choose op 16 for a model from it. The challenges' score (class 1 minus class 0) ranks frames in the same order.
+Until 5 November 2026 the firmware tested the raw class 1 value against op 16 = 18, and `93V1` detected none of
+the example's five rats, `71V1` one of the five cats and `72V1` four.

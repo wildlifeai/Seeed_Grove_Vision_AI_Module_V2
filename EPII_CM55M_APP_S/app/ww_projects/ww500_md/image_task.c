@@ -3010,9 +3010,10 @@ static int initNN(void) {
 /**
  * Do something with the NN output
  *
- * The decision uses the score, class 1 minus class 0, as the rat and cat challenges do (issue #270).
- * A negative score means the target was not found; a positive score is a detection if it is above
- * op 16. Op 16 stays 0-127, so a negative score can never pass.
+ * A detection is when the model is at least op 16 % sure of class 1, the target (issue #270). Op 16 is
+ * a percentage, 0-100, with the same meaning for every model: cvapp.cpp turns the outputs into
+ * probabilities (softmax for logit models, only dequantized for models that end in softmax). The
+ * percentage compared is the whole number printed and written to the EXIF UserComment.
  *
  * The result is reported at once. Adding it to the counters waits for the card (countNNResult()).
  *
@@ -3023,21 +3024,16 @@ static int initNN(void) {
  */
 static void processNNOutput(int8_t * outCategories, uint8_t classCount) {
 	uint16_t threshold;
-	int16_t score;
+	uint8_t targetPercent;
 
 	// The threshold is in the fast-start record, so the card is not needed here
 	threshold = fatfs_getOperationalParameter(OP_PARAMETER_MODEL_THRESHOLD);
 
-	if (classCount >= 2) {
-		score = (int16_t) outCategories[1] - (int16_t) outCategories[0];	// -255 to +255
-	}
-	else {
-		score = 0;	// never above the threshold
-	}
+	// The same whole-number percentage that is printed and written to the EXIF UserComment
+	targetPercent = cv_getTargetPercent();
 
 	nnResultToCount = true;
-	// int32_t: op 16 is not range-checked, and a large value must not wrap negative
-	nnResultPositive = ((int32_t) score > (int32_t) threshold);
+	nnResultPositive = (classCount >= 2) && (targetPercent >= threshold);
 
 	for (uint8_t i=0; i < classCount; i++) {
 		xprintf("Class %d '%s' = logit %d\n", i, cv_getLabel(i), outCategories[i]);
@@ -3063,7 +3059,12 @@ static void processNNOutput(int8_t * outCategories, uint8_t classCount) {
 	}
 
 	XP_WHITE;
-	xprintf("Score %d (class 1 - class 0, threshold %d)\n", score, threshold);
+	if (classCount >= 2) {
+		xprintf("Target '%s' %d%% (threshold %d%%)\n", cv_getLabel(1), targetPercent, threshold);
+	}
+	else {
+		xprintf("Model has %d class: no target class (threshold %d%%)\n", classCount, threshold);
+	}
 }
 
 /**

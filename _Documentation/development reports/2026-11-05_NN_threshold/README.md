@@ -14,9 +14,11 @@ Branch `261105_NN_threshold`.
 Science, decision): OP_PARAMETER_MODEL_THRESHOLD (op 16) tests neural network output vector class 1 value alone,
 while the challenges (reported by #270) and the website rank models on NN class 1 value minus class 0 value.
 
-**Result.** The firmware now detects when the score, class 1 minus class 0, is above op 16. Op 16 stays
-unsigned (0 to 127, default 18). Benched on both camera images with the person model; Victor's test with
-the challenge models is still to do.
+**Result.** Op 16 is now a percentage, 0 to 100, default 60: the camera detects when the model is at
+least op 16 % sure of the target (class 1). It means the same for every model, softmax or logits. The
+score rule of 5 Nov (class 1 minus class 0 above op 16) was a step on the way. Along the way #287 (the
+percentages were softmax applied twice) was found and fixed. Victor's test with the challenge models is
+still to do.
 
 **The problem.** The firmware reported a detection (`NN+`) when class 1's int8 output was above op 16
 (`OP_PARAMETER_MODEL_THRESHOLD`, default 18, range 0 to 127). This is `processNNOutput()` in
@@ -43,10 +45,14 @@ So with the challenge models, the camera missed most of the animals the models d
 2. **No firmware change.** The website and the challenges export models with a fixed last layer that
    makes class 0 = minus class 1; op 16 = score / 2.
 
-**Decision (Charles, 5 Nov): neither; a third option, below.** It is not yet recorded on #270 (no
-comments as of 6 Nov).
+**Decision (Charles): neither.** First (5 Nov) the score rule below; then (6 Nov), once #287 showed
+what the outputs are, op 16 as a percentage (see [The approach adopted](#the-approach-adopted-charles-6-nov-op-16-as-a-percentage)).
+Not yet recorded on #270 (no comments as of 6 Nov).
 
-## The approach chosen (Charles, 5 Nov)
+## The first approach (Charles, 5 Nov): the score rule
+
+Superseded on 6 Nov by [op 16 as a percentage](#the-approach-adopted-charles-6-nov-op-16-as-a-percentage);
+kept as the record. Bench tests 1 to 3 ran with it.
 
 A third option that keeps op 16 unsigned (0 to 127), because making op values signed would have spinoffs
 elsewhere:
@@ -77,30 +83,32 @@ is merged.
 
 ## What changed
 
+The table is the state now (6 Nov), with the percentage rule.
+
 | Where | What changes | Done |
 |---|---|---|
-| [`ww500_md/image_task.c`](../../../EPII_CM55M_APP_S/app/ww_projects/ww500_md/image_task.c), `processNNOutput()` | Score as `int16_t`, detection if `score > op16`; `Score <n> (class 1 - class 0, threshold <op 16>)` line; "person detection only" TODOs removed; colour reset before `sendMsgToMaster()` | Yes |
-| [`ww500_md/cvapp.cpp`](../../../EPII_CM55M_APP_S/app/ww_projects/ww500_md/cvapp.cpp), `outputAsPercentage()` | Whole-number percentages; each line resets its colour | Yes |
-| [`ww500_md/cvapp.h`](../../../EPII_CM55M_APP_S/app/ww_projects/ww500_md/cvapp.h) | `MODEL_THRESHOLD` and `USE_PERCENTAGE` comments (default stays 18) | Yes |
-| [`ww500_md/fatfs_task.h`](../../../EPII_CM55M_APP_S/app/ww_projects/ww500_md/fatfs_task.h) | Op 16 comment: "Detection threshold on class 1 minus class 0 (0-127)" | Yes |
+| [`ww500_md/image_task.c`](../../../EPII_CM55M_APP_S/app/ww_projects/ww500_md/image_task.c), `processNNOutput()` | Detection if class 1's percentage (`cv_getTargetPercent()`) is at least op 16; `Target '<label>' <n>% (threshold <op 16>%)` line; "person detection only" TODOs removed; colour reset before `sendMsgToMaster()` | Yes |
+| [`ww500_md/cvapp.cpp`](../../../EPII_CM55M_APP_S/app/ww_projects/ww500_md/cvapp.cpp) | `computeProbabilities()` on every run, whatever `USE_PERCENTAGE` says (dequantize for softmax models, softmax for logit models, #287); `cv_getTargetPercent()`; `outputAsPercentage()` only prints and keeps the EXIF data, whole numbers, each line resets its colour; fingerprint prints quantization and `Output values` (#287) | Yes |
+| [`ww500_md/cvapp.h`](../../../EPII_CM55M_APP_S/app/ww_projects/ww500_md/cvapp.h) | `MODEL_THRESHOLD` 60, `MODEL_THRESHOLD_MAX` 100, `cv_getTargetPercent()`, `USE_PERCENTAGE` comment | Yes |
+| [`ww500_md/fatfs_task.h`](../../../EPII_CM55M_APP_S/app/ww_projects/ww500_md/fatfs_task.h), [`fatfs_task.c`](../../../EPII_CM55M_APP_S/app/ww_projects/ww500_md/fatfs_task.c) | Op 16 comment; `setop` rejects op 16 above 100; CONFIG.TXT load replaces it by 60 | Yes |
+| [`ww500_md/MANIFEST/CONFIG.TXT`](../../../EPII_CM55M_APP_S/app/ww_projects/ww500_md/MANIFEST/CONFIG.TXT) | Op 16 = 60 | Yes |
 | [`ww500_md/MANIFEST/config_file.md`](../../../EPII_CM55M_APP_S/app/ww_projects/ww500_md/MANIFEST/config_file.md) | Op 16 row | Yes |
-| [`_Documentation/WW500_Neural_Network_Operation.md`](../../WW500_Neural_Network_Operation.md) | Op 16 row (default was wrongly 0), "Detection threshold" section, example output, worked examples, `NN+` row, `processNNOutput()` row | Yes |
-| [`_Documentation/nn_files_bench.md`](../../nn_files_bench.md) | Camera detection now uses the challenges' score | Yes |
-| [`.agents/skills/references/bench.md`](../../../.agents/skills/references/bench.md) | Same point in the `nnfiles` bullet | Yes |
-| [ww-mobile-app](https://github.com/wildlifeai/ww-mobile-app) (Victor) | Op 16 label, help text and default, if the app shows or sets it | No, #270 |
-| Website / backend (Victor) | Any op 16 recommendation or default given with a model | No, #270 |
-| [`ww-rat-challenge`](https://github.com/wildlifeai/ww-rat-challenge), [`ww-cat-challenge`](https://github.com/wildlifeai/ww-cat-challenge) (private) | Round 2 advice: op 16 = score (no longer derived via class 1) | No, #270 |
+| [`_Documentation/WW500_Neural_Network_Operation.md`](../../WW500_Neural_Network_Operation.md) | Op 16 row, "Detection threshold" section, example output, "Understanding the output values", examples, fingerprint, UserComment, `NN+` row, `processNNOutput()` and `cv_run()` rows | Yes |
+| [`_Documentation/nn_files_bench.md`](../../nn_files_bench.md) | Choose op 16 from the class 1 `pct` column of `RESULTS.CSV` | Yes |
+| [`.agents/skills/references/bench.md`](../../../.agents/skills/references/bench.md) | Same point in the `nnfiles` bullet; `tflite_inspect.py` | Yes |
+| [ww-mobile-app](https://github.com/wildlifeai/ww-mobile-app) (Victor) | Op 16 label, help text, range 0 to 100 and default 60, if the app shows or sets it | No, #270 |
+| Website / backend (Victor) | Any op 16 recommendation or default given with a model; the EXIF percentages change for softmax models (#287) | No, #270 |
+| [`ww-rat-challenge`](https://github.com/wildlifeai/ww-rat-challenge), [`ww-cat-challenge`](https://github.com/wildlifeai/ww-cat-challenge) (private) | Round 2 advice: op 16 = the probability cut-off in % | No, #270 |
 | Issue [#270](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/270) | Record the decision | No |
 
 Not affected: op 1 and 2 (the NN counters still count `nnResultPositive`), the `NN+`/`NN-` messages to
-the BLE processor, the EXIF confidence data, and `RESULTS.CSV` (it records each class's output, not the
-decision).
+the BLE processor, and the format of the EXIF data and `RESULTS.CSV`.
 
 Notes on the code:
 
 - Fewer than 2 classes is never a detection (before, class 1 was read regardless).
-- The comparison is done in `int32_t`, because op 16 is not range-checked by `setop` (any 0 to 65535
-  is accepted) and a large value must not wrap negative.
+- The score rule (5 Nov) compared in `int32_t` because op 16 was not range-checked. Now `setop`
+  rejects op 16 above 100.
 
 Found on the bench (5 Nov), also fixed:
 
@@ -111,7 +119,7 @@ Found on the bench (5 Nov), also fixed:
   `sendMsgToMaster()`, so other tasks' lines came out green. It now resets to white first, as the
   not-detected branch already did.
 
-Not fixed, confirmed 6 Nov: the percentages are softmax applied twice for `20V1` and the example
+Fixed 6 Nov, issue [#287](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/287): the percentages are softmax applied twice for `20V1` and the example
 models, which already end in softmax. Raw 94 is 87% "person", not the 68% printed. Where the model came
 from, how the model bytes show it, and the changes needed:
 [CLAUDE_person_model_softmax.md](CLAUDE_person_model_softmax.md). New tool:
@@ -170,29 +178,190 @@ give stronger scores than the HM0360's (no frame within 160 of zero).
 Both camera images pass with the person model. These tests show the change does no harm; only the
 challenge models (`93V1`, `71V1`, `72V1`), whose outputs are not mirrored, can show it fixes #270.
 
+## Bench test 3 (6 Nov): #287 fix
+
+Log [logs/ai3.txt](logs/ai3.txt): AI processor console, RP3 image (IMX708), model `20V1`, op 16 = 18, one
+cold boot then six motion wakes, with the #287 fix.
+
+The fingerprint at the cold boot recognises the model as already giving probabilities:
+
+```
+Input tensor   : i8 [1,96,96,1], scale 0.007843138, zero point -1
+                 'input'
+Output tensor  : i8 [1,2], scale 1/256, zero point -128
+                 'MobilenetV1/Predictions/Reshape_1_cpu'
+Output values  : probabilities (softmax quantization, scale 1/256, zero point -128). Percent = (value + 128) / 2.56
+```
+
+| Wake | Class 0 | Class 1 | Score | Result | Person % | Expected (class 1 + 128) / 2.56 | Before the fix |
+|---|---|---|---|---|---|---|---|
+| 1 | -46 | 46 | 92 | `NN+` | 68% | 68.0% | 59% |
+| 2 | -14 | 14 | 28 | `NN+` | 55% | 55.5% | 53% |
+| 3 | 95 | -95 | -190 | `NN-` | 13% | 12.9% | 32% |
+| 4 | 100 | -100 | -200 | `NN-` | 11% | 10.9% | 31% |
+| 5 | -99 | 99 | 198 | `NN+` | 89% | 88.7% | 68% |
+| 6 | -3 | 3 | 6 | `NN-` | 51% | 51.2% | 51% |
+
+The "before" column is what the old double softmax gives for the same
+raw values.
+
+- **Percentages are right:** each matches (raw + 128) / 2.56, and each pair sums to 100%.
+- **Detection:** all six match score > op 16. Wake 6 (score 6) is a near miss, correctly `NN-`.
+- **First frame where the #270 rule changes the result:** wake 2 has class 1 = 14, which the old rule
+  (class 1 > 18) would have called `NN-`. The new rule (score 28 > 18) calls it `NN+`, at 55% "person".
+  That is the mirrored-model range (class 1 from 9 to 18) where the new rule is the more sensitive.
+
+## Bench test 4 (6 Nov): percentage rule and #287 on the HM0360
+
+Log [logs/ai4.txt](logs/ai4.txt): AI processor console, HM0360 image, model `20V1`, op 16 = 60 (the
+percentage rule), one cold boot then six motion wakes.
+
+The fingerprint shows `Output values  : probabilities (...)`, as on the RP3 (test 3).
+
+| Wake | Raw class 1 | Person % | Expected (raw + 128) / 2.56 | Result |
+|---|---|---|---|---|
+| 1 | 28 | 61% | 60.9% | `NN+` |
+| 2 | 106 | 91% | 91.4% | `NN+` |
+| 3 | | | | no frame (see below) |
+| 4 | 87 | 84% | 84.0% | `NN+` |
+| 5 | 15 | 56% | 55.9% | `NN-` (after one frame fault and retry) |
+| 6 | -56 | 28% | 28.1% | `NN-` |
+
+- **#287 on the HM0360:** every percentage matches (raw + 128) / 2.56.
+- **Percentage rule:** each `Target 'person' <n>% (threshold 60%)` line shows the same percentage as the
+  `Class 'person'` line, and `NN+` appears exactly when it is 60 or more. Wake 1 (61%) is a near pass,
+  wake 5 (56%) a near miss.
+- **Not tested here:** `setop 16 101` being refused (checked later, see bench test 5).
+
+**Frame faults, not caused by this thread.** Two wakes had `EDM WDT2 timeout` (no frame within 5 s).
+Wake 3 failed again on its retry (`Capture failed after 0 of 1 images`); wake 5's retry worked. In both,
+`setutc` from the BLE processor arrived about 70 to 80 ms after the capture started, before the frame was
+ready. In the other four wakes, and in every wake of bench test 1 (HM0360, 5 Nov), it arrived after the
+frame (or not at all), and there was no fault. The NN code runs only after a frame, so this thread's
+changes cannot cause it; it points to `setutc` handling during an HM0360 capture. Filed as
+[#288](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/288).
+
+## Bench test 5 (6 Nov): percentage rule on the RP3
+
+Log [logs/ai5.txt](logs/ai5.txt): AI processor console, RP3 image (IMX708), model `20V1`, op 16 = 60, one
+cold boot then eight motion wakes. The fingerprint shows `Output values  : probabilities (...)`.
+
+| Wake | Raw class 1 | Person % | Expected (raw + 128) / 2.56 | Result |
+|---|---|---|---|---|
+| 1 | -37 | 36% | 35.5% | `NN-` |
+| 2 | 29 | 61% | 61.3% | `NN+` |
+| 3 | 8 | 53% | 53.1% | `NN-` |
+| 4 | 1 | 50% | 50.4% | `NN-` |
+| 5 | -98 | 12% | 11.7% | `NN-` |
+| 6 | 71 | 78% | 77.7% | `NN+` |
+| 7 | -37 | 36% | 35.5% | `NN-` |
+| 8 | 28 | 61% | 60.9% | `NN+` |
+
+Every percentage matches, each `Target` line repeats the `Class 'person'` percentage, and `NN+` appears
+exactly when it is 60 or more. No frame faults; no `setutc` arrived in this run, so it says nothing about
+#288. `setop 16 101` was checked separately afterwards: refused (Charles, 6 Nov).
+
+## The approach adopted (Charles, 6 Nov): op 16 as a percentage
+
+Proposed and adopted on 6 Nov, default 60, coded and benched the same day (tests 4 and 5). Victor to
+comment on #270.
+
+**Why.** Now that we know `20V1` gives probabilities (#287), the score-based op 16 turns out to be a
+scaled number: the raw values are `256 x p - 128`, so class 1 minus class 0 is 256 x (p(target) -
+p(no target)), and op 16 / 2.56 is the required gap in percentage points. Op 16 = 18 means "target beats
+no target by 7 points", that is target at least 53.5%. Correct, but not something a user can guess. And
+the documented maximum, 127, caps the threshold at about 75% confidence.
+
+**Proposal.** Op 16 becomes the camera's required confidence, as a percentage, 0 to 100: a detection
+when the model is at least op 16 % sure the photo shows the target (class 1). For a user that is the
+whole rule: "set op 16 to 70 to report a person only when the camera is at least 70% sure". It is the
+same percentage the console and the EXIF UserComment show for the target class. Class 0 does not come
+into it. (With two classes the two percentages add up to 100, so class 0 is then at most 100 - op 16.)
+
+What it gives:
+
+1. **A setting users can understand,** in the units they already see.
+2. **The full range, unsigned:** op 16 below 50 detects even when the model leans towards "no target",
+   the more sensitive setting the score rule could not offer (point 2 of the approach above). Above 75
+   is now possible.
+3. **It works for more than two classes** (the target's probability, not a difference of two).
+4. **The same meaning for every model, logits included.** For a logit model the firmware applies
+   softmax to the logits, after converting them with the model's own scale and zero point, which gives
+   the model's probabilities; `outputAsPercentage()` already does this. The per-model scaling that makes
+   the score rule mean different things for different models drops out. For two classes the probability
+   rises steadily with the challenges' score, so frames rank in the same order and a score cut-off
+   converts exactly to a probability. What it does not do is make models equally reliable: an
+   over-confident model's 70% is worth less than a well-calibrated one's, so op 16 is still checked per
+   model, but from a sensible starting point.
+
+How it is coded:
+
+- **Both kinds of model:** `computeProbabilities()` in `cvapp.cpp` gives each class's probability
+  (dequantized for softmax models, softmax for logit models). Detection compares class 1's.
+- **The number compared is the whole-number percentage that is printed and written to the EXIF.** The
+  proposal said to compare the exact value; using the printed number means what a user sees is what is
+  compared (a frame shown as 60% with op 16 = 60 is a detection). The rounding is half a percent.
+- **"At least":** detection when the percentage is at least op 16 (the score rule used "more than").
+- **Independent of `USE_PERCENTAGE`:** the probabilities are worked out whenever a model runs. The
+  switch now only controls printing them and writing them to the EXIF.
+- **Range:** `setop` rejects op 16 above 100; a CONFIG.TXT value above 100 is replaced by 60 at load.
+
+Decided:
+
+1. **Default 60** (Charles, 6 Nov).
+2. **Op 16 changes meaning again,** in the app, the website and `config_file.md`. #270 is not merged,
+   so this is the cheapest time. A card whose CONFIG.TXT still holds 18 will now detect at 18%, nearly
+   every frame: set op 16 again.
+3. **The challenges hand over a probability, not a score.** They know their models' scales, so they can
+   convert their best score cut-off (for softmax models, probability = 50 + score / 5.12).
+
+Bench tests 1 to 3 checked the score rule; detection needs benching again with this rule (the #287
+percentages are unaffected).
+
 ## Status
 
-Closed, 6 November 2026. The firmware and document changes in this repo are done and benched on both
-camera images (tests 1 and 2). The remaining work is in the open items.
+Closed, 6 November 2026. The percentage rule (#270) and the #287 fix are coded and benched on both
+camera images (tests 3 to 5). `setop 16 101` is refused (checked by Charles, 6 Nov). The remaining work
+is in the open items.
 
 ## Outcome
 
-The camera's detection now uses the same score the challenges and the website rank models on: a
-detection is when class 1 minus class 0 is above op 16. Op 16 keeps its type and range (unsigned, 0 to
-127, default 18), so the op parameter format is unchanged; only its meaning changed, and it is to be
-tuned for each model. Options 1 (signed op 16) and 2 (mirrored last layer in exported models) were not
-taken. On the bench with the person model `20V1` the results are unchanged, as expected for a model with
-mirrored outputs. Two console faults found on the way were fixed: percentages are whole numbers that sum
-to 100%, and the console no longer stays green after a detection. How detection works now is in
-[`WW500_Neural_Network_Operation.md`](../../WW500_Neural_Network_Operation.md) and
-[`config_file.md`](../../../EPII_CM55M_APP_S/app/ww_projects/ww500_md/MANIFEST/config_file.md).
+**Op 16 is now a percentage.** The camera reports a detection when the model is at least op 16 % sure
+that the photo shows the target (class 1): op 16 = 70 means "at least 70% sure". Range 0 to 100, default
+60; `setop` rejects values above 100 and CONFIG.TXT load replaces them by 60. The percentage compared is
+the whole number the console prints and the EXIF UserComment carries. It means the same for every model:
+the firmware turns the outputs into probabilities first. Op 16 stays unsigned, so the op parameter
+format did not change; its meaning did, which the app, the website and the challenges still have to
+follow (#270).
+
+How we got there: #270 asked for class 1 minus class 0 instead of class 1 alone. A score rule (class 1
+minus class 0 above op 16) was coded and benched first (tests 1 to 3). Looking at the percentages then
+showed that the person model `20V1`, and the `nnfiles` example models, already end in softmax, so the
+firmware applied softmax twice (#287, fixed: the percentages were squashed towards 50%). Knowing the
+outputs are probabilities made the score a scaled number with a cap at about 75%, so op 16 became a
+percentage instead.
+
+Also done: the cold boot fingerprint prints each tensor's quantization and says whether the outputs are
+probabilities or logits; the new `_Tools/tflite_inspect.py` shows the same on a PC
+([CLAUDE_person_model_softmax.md](CLAUDE_person_model_softmax.md)). Console percentages are whole numbers
+that sum to 100%, and the console no longer stays green after a detection. A CONFIG.TXT that still holds
+op 16 = 18 now means "at least 18% sure", nearly every frame: set it again.
+
+Found, not fixed: HM0360 frame faults when `setutc` arrives during a capture (#288).
+
+How detection works now is in [`WW500_Neural_Network_Operation.md`](../../WW500_Neural_Network_Operation.md)
+and [`config_file.md`](../../../EPII_CM55M_APP_S/app/ww_projects/ww500_md/MANIFEST/config_file.md).
 
 ## Open items
 
-- [#270](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/270): record the decision;
-  Victor to test with the challenge models before merge; settle point 3 (is a good cut-off at a score of
-  0 or above?) from the challenges' score results; update the app, website and challenge repos for the
-  new meaning of op 16.
-- Issue to file: the percentages (console and EXIF UserComment) are softmax applied twice for models
-  that end in softmax, such as `20V1`
-  ([CLAUDE_person_model_softmax.md](CLAUDE_person_model_softmax.md)).
+- [#270](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/270): record the decision
+  ([op 16 as a percentage](#the-approach-adopted-charles-6-nov-op-16-as-a-percentage), default 60);
+  Victor to test with the challenge models before merge; update the app, website and challenge repos
+  for the new meaning of op 16. (Point 3 of the first approach, a negative score cut-off, no longer
+  arises: op 16 below 50 covers it.)
+- [#287](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/287): the percentages
+  (console and EXIF UserComment) are softmax applied twice for models that end in softmax, such as
+  `20V1` ([CLAUDE_person_model_softmax.md](CLAUDE_person_model_softmax.md)). Fixed and benched on both
+  images; Charles to close it.
+- [#288](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/288): HM0360 frame fault
+  (`EDM WDT2 timeout`) when `setutc` arrives during a capture (bench test 4).

@@ -86,33 +86,139 @@ Output tensor  : i8 [1,2]
 ```
 
 That cannot show the softmax (Vela hid it) and does not print the quantization, so it cannot tell the
-two kinds of model apart. Adding the output's scale and zero point to it would.
+two kinds of model apart. Adding the output's scale and zero point to it would (done, see below).
 
 ## Software changes
+
+Made 6 November 2026; benched on both images (README, bench tests 3 and 4):
 
 | Where | Change |
 |---|---|
 | `outputAsPercentage()` in `cvapp.cpp` | If the output is int8 with scale 1/256 and zero point -128, the percentage is `(value + 128) / 256 x 100`, with no softmax. Otherwise dequantize and apply softmax as now. Correct the comment that says logits are typically "scale 1/256, zero_point = 0" |
-| Fingerprint in `cvapp.cpp` | Print the output tensor's scale and zero point, and whether that means probabilities or logits |
-| `WW500_Neural_Network_Operation.md` | Say the outputs are probabilities for softmax models and logits otherwise; it calls them logits throughout |
-| Website (Victor) | The EXIF UserComment percentages for these models will change (the format does not). Images already taken carry the squashed values |
+| Fingerprint in `cvapp.cpp` | Print each tensor's scale, zero point and name, the builtin number of any `OTHER` operator, and an `Output values` line: probabilities or logits. Both it and `outputAsPercentage()` use one test, `isProbabilityOutput()` |
+| `WW500_Neural_Network_Operation.md` | Fingerprint example and table, "Understanding the output values" (probabilities for softmax models, logits otherwise), UserComment section, `cv_run()` row, `USE_PERCENTAGE` row (it said the switch was commented out; it is defined) |
+| Website (Victor), not done | The EXIF UserComment percentages for these models will change (the format does not). Images already taken carry the squashed values |
 
-**Detection does not change.** For a softmax model the #270 score, class 1 minus class 0, is
-256 x (p(person) - p(no person)), so it still ranks frames correctly. Op 16 = 18 means "person" above
-about 53.5%. That makes op 16 easier to explain for these models: op 16 = 256 x (2p - 1) for a
-wanted probability p.
+What the fingerprint should now show for `20V1`:
+
+```
+Input tensor   : i8 [1,96,96,1], scale 0.007843138, zero point -1
+                 'input'
+Output tensor  : i8 [1,2], scale 1/256, zero point -128
+                 'MobilenetV1/Predictions/Reshape_1_cpu'
+Output values  : probabilities (softmax quantization, scale 1/256, zero point -128). Percent = (value + 128) / 2.56
+```
+
+And for raw 94 / -94 the percentages should be 87% "person", 13% "no person" (before: 68% / 32%). As
+each is rounded, a pair can sum to 101% (raw 32 gives 62.5% and 37.5%).
+
+**Detection.** With the score rule of 5 Nov, detection was not affected by #287: for a softmax model
+the score is 256 x (p(person) - p(no person)), so it ranked frames correctly, and op 16 = 18 meant
+"person" above about 53.5%. That finding led to op 16 becoming a percentage on 6 Nov (README, "The
+approach adopted"): detection now uses the probabilities this fix makes correct.
 
 ## Using the tool
+
+[`_Tools/tflite_inspect.py`](../../../_Tools/tflite_inspect.py) runs on a PC with only the Python
+standard library. From the repo root:
 
 ```
 python _Tools/tflite_inspect.py <model.TFL | model_data.cc> [--all]
 ```
 
-It takes a model file or a scenario app's C array, prints the layers (`--all` for every one) and the
-input and output tensors, and ends with a verdict: probabilities or logits. It needs only the Python
-standard library.
+It takes either a model file (`.TFL`, `.tflite`) or a scenario app's C array (`.cc`, `.c`, `.h`), and
+prints:
+
+- the file size and TFLite schema version;
+- the operator types the model uses;
+- the layers in order with the tensor each one writes (the first and last three; `--all` for every one);
+- the input and output tensors: name, type, shape, scale and zero point;
+- a verdict: **probabilities** (the last layer is softmax, or the output has softmax's quantization,
+  scale 1/256 and zero point -128) or **logits**.
+
+The scale prints as a decimal here (0.00390625 is 1/256), unlike the firmware's fingerprint.
+
+### The Vela version (`20V1`, as loaded on the WW500)
+
+```
+python _Tools/tflite_inspect.py 20V1.TFL
+```
+
+```
+20V1.TFL: 251568 bytes, schema version 3
+Operator types: ethos-u
+Layers (1):
+  ethos-u -> MobilenetV1/Predictions/Reshape_1_cpu
+Input : 'input' i8 [1, 96, 96, 1], scale 0.0078431377, zero point -1
+Output: 'MobilenetV1/Predictions/Reshape_1_cpu' i8 [1, 2], scale 0.00390625, zero point -128
+Verdict: the output is PROBABILITIES (softmax quantization: scale 1/256, zero point -128). Probability = (value + 128) / 256.
+```
+
+Vela has folded the whole network into one `ethos-u` layer, so the softmax cannot be seen; the verdict
+comes from the output quantization. The `_cpu` on the output name is added by Vela. Run on
+`EPII_CM55M_APP_S/app/scenario_app/allon_sensor_tflm/person_detect_model_data_vela.cc`, the output is
+the same apart from the file name, as the two are the same bytes.
+
+### The CMSIS-NN version (not compiled by Vela)
+
+```
+python _Tools/tflite_inspect.py EPII_CM55M_APP_S/app/scenario_app/allon_sensor_tflm_cmsis_nn/person_detect_model_data.cc --all
+```
+
+```
+EPII_CM55M_APP_S/app/scenario_app/allon_sensor_tflm_cmsis_nn/person_detect_model_data.cc: 300568 bytes, schema version 3
+Operator types: AVERAGE_POOL_2D, CONV_2D, DEPTHWISE_CONV_2D, RESHAPE, SOFTMAX
+Layers (31):
+  DEPTHWISE_CONV_2D -> MobilenetV1/MobilenetV1/Conv2d_0/Relu6
+  DEPTHWISE_CONV_2D -> MobilenetV1/MobilenetV1/Conv2d_1_depthwise/Relu6
+  CONV_2D -> MobilenetV1/MobilenetV1/Conv2d_1_pointwise/Relu6
+  DEPTHWISE_CONV_2D -> MobilenetV1/MobilenetV1/Conv2d_2_depthwise/Relu6
+  CONV_2D -> MobilenetV1/MobilenetV1/Conv2d_2_pointwise/Relu6
+  DEPTHWISE_CONV_2D -> MobilenetV1/MobilenetV1/Conv2d_3_depthwise/Relu6
+  CONV_2D -> MobilenetV1/MobilenetV1/Conv2d_3_pointwise/Relu6
+  DEPTHWISE_CONV_2D -> MobilenetV1/MobilenetV1/Conv2d_4_depthwise/Relu6
+  CONV_2D -> MobilenetV1/MobilenetV1/Conv2d_4_pointwise/Relu6
+  DEPTHWISE_CONV_2D -> MobilenetV1/MobilenetV1/Conv2d_5_depthwise/Relu6
+  CONV_2D -> MobilenetV1/MobilenetV1/Conv2d_5_pointwise/Relu6
+  DEPTHWISE_CONV_2D -> MobilenetV1/MobilenetV1/Conv2d_6_depthwise/Relu6
+  CONV_2D -> MobilenetV1/MobilenetV1/Conv2d_6_pointwise/Relu6
+  DEPTHWISE_CONV_2D -> MobilenetV1/MobilenetV1/Conv2d_7_depthwise/Relu6
+  CONV_2D -> MobilenetV1/MobilenetV1/Conv2d_7_pointwise/Relu6
+  DEPTHWISE_CONV_2D -> MobilenetV1/MobilenetV1/Conv2d_8_depthwise/Relu6
+  CONV_2D -> MobilenetV1/MobilenetV1/Conv2d_8_pointwise/Relu6
+  DEPTHWISE_CONV_2D -> MobilenetV1/MobilenetV1/Conv2d_9_depthwise/Relu6
+  CONV_2D -> MobilenetV1/MobilenetV1/Conv2d_9_pointwise/Relu6
+  DEPTHWISE_CONV_2D -> MobilenetV1/MobilenetV1/Conv2d_10_depthwise/Relu6
+  CONV_2D -> MobilenetV1/MobilenetV1/Conv2d_10_pointwise/Relu6
+  DEPTHWISE_CONV_2D -> MobilenetV1/MobilenetV1/Conv2d_11_depthwise/Relu6
+  CONV_2D -> MobilenetV1/MobilenetV1/Conv2d_11_pointwise/Relu6
+  DEPTHWISE_CONV_2D -> MobilenetV1/MobilenetV1/Conv2d_12_depthwise/Relu6
+  CONV_2D -> MobilenetV1/MobilenetV1/Conv2d_12_pointwise/Relu6
+  DEPTHWISE_CONV_2D -> MobilenetV1/MobilenetV1/Conv2d_13_depthwise/Relu6
+  CONV_2D -> MobilenetV1/MobilenetV1/Conv2d_13_pointwise/Relu6
+  AVERAGE_POOL_2D -> MobilenetV1/Logits/AvgPool_1a/AvgPool
+  CONV_2D -> MobilenetV1/Logits/Conv2d_1c_1x1/BiasAdd
+  RESHAPE -> MobilenetV1/Logits/SpatialSqueeze
+  SOFTMAX -> MobilenetV1/Predictions/Reshape_1
+Input : 'input' i8 [1, 96, 96, 1], scale 0.0078431377, zero point -1
+Output: 'MobilenetV1/Predictions/Reshape_1' i8 [1, 2], scale 0.00390625, zero point -128
+Verdict: the output is PROBABILITIES (the last layer is softmax). Probability = (value + 128) / 256.
+```
+
+Here every layer is visible. The tensor named `Logits` is the output of the last convolution, before
+the softmax; the model's output is the softmax's. Input and output tensors match the Vela version
+exactly, which is how we know the two are the same network.
+
+### Reading the output
+
+- **Probabilities:** `p = (value + 128) / 256`. Raw 94 is 87%. Do not apply softmax again.
+- **Logits:** apply softmax across the classes for probabilities, as `outputAsPercentage()` does.
+- **Input scale and zero point** show what the model expects: here scale 1/127.5 and zero point -1, so
+  int8 -128..127 covers about -1 to +1. The firmware feeds pixel - 128.
 
 ## Issue to post
+
+Posted as [#287](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/287), 6 November 2026.
 
 **Title:** NN confidence percentages are too close to 50% (converted twice)
 

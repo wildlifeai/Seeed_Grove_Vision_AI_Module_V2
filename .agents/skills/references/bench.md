@@ -43,8 +43,11 @@ the fact is not enough, the timing has to be built in.
   SD card and writes `RESULTS.CSV` (scores and ms per frame); `_Tools/nnfiles_prepare.py` makes
   the frames. Runbook `_Documentation/nn_files_bench.md`. Not while the app transfers a file.
   The rat and cat challenges' models live on the team drive, never in this public repo (some
-  trained on non-commercial photos), and the camera's detection (class 1 above op 16) is not
-  the challenges' score (class 1 minus class 0): rank on the score.
+  trained on non-commercial photos). The camera detects when class 1's percentage is at least op 16
+  (0 to 100, default 60; #270, 6 Nov 2026), so choose op 16 from the class 1 `pct` column of
+  `RESULTS.CSV`. To see whether a model's outputs are probabilities (it ends
+  in softmax) or logits, run `_Tools/tflite_inspect.py` on its `.TFL`: the person model `20V1` and
+  the two example models give probabilities.
 * **For a batch of boards, use `_Tools/ww500_ship_check.py`** (runbook
   `_Documentation/pcb_batch_flashing.md`): both images, a photo from each camera, one
   button per board.

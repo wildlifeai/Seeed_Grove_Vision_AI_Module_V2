@@ -273,7 +273,6 @@ static BaseType_t prvStatus(char *pcWriteBuffer, size_t xWriteBufferLen, const c
 static BaseType_t prvBle(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 
 // Pulse PA0
-static BaseType_t prvInt(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 static BaseType_t prvI2C(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 
 static BaseType_t prvEnable(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
@@ -337,6 +336,7 @@ static BaseType_t prvLedFlash(char *pcWriteBuffer, size_t xWriteBufferLen, const
 
 static void processSingleCharacter(char rxChar);
 static void processCommand(char *rxString);
+static void waitForSettingsIfNeeded(const char *rxString);
 static bool startsWith(char *a, const char *b);
 
 /********************************** Structures that define CLI commands  *************************************/
@@ -601,14 +601,6 @@ static const CLI_Command_Definition_t xI2C = {
 	"i2c", /* The command string to type. */
 	"i2c <address>:\r\n Check for I2C device at <address> (7-bit, decimal)\r\n",
 	prvI2C, /* The function to run. */
-	1		/* One parameter expected */
-};
-
-/* Structure that defines the "int" command line command. */
-static const CLI_Command_Definition_t xInt = {
-	"int", /* The command string to type. */
-	"int <pulsewidth>:\r\n Pulse interprocessor interrupt for <pulsewidth>ms\r\n",
-	prvInt, /* The function to run. */
 	1		/* One parameter expected */
 };
 
@@ -1399,7 +1391,7 @@ static BaseType_t prvGetUtc(char *pcWriteBuffer, size_t xWriteBufferLen, const c
 	(void)xWriteBufferLen;
 	configASSERT(pcWriteBuffer);
 
-    ret = exif_utc_get_rtc_as_time(&time);
+    ret = exif_utc_get_time(&time);	// this wake's time, as the photos (#56)
 
     if (ret != RTC_NO_ERROR) {
     	snprintf(pcWriteBuffer, xWriteBufferLen, "Error %d", ret);
@@ -1545,23 +1537,19 @@ static BaseType_t prvLedFlash(char *pcWriteBuffer, size_t xWriteBufferLen, const
 #endif // WW500_C00
 
 /**
- * Sets the RTC with a UTC time from a ISO 8601 string
+ * Sets the time from a UTC ISO 8601 string ("YYYY-MM-DDTHH:MM:SSZ"), e.g. setutc 2025-03-21T09:05:00Z
  *
- * The ISO 8601 format "YYYY-MM-DDTHH:MM:SSZ"
- *
- * utc 2025-03-21T09:05:00Z
+ * Since 1 Nov 2026 (#56) the time is used at once (photos, file dates, getutc) but the RTC is only written at
+ * sleep, and only when far out (exif_utc_before_sleep()): the write blocks interrupts for about 1.4 s, and the
+ * BLE processor now sends setutc on every wake. The reply keeps its "RTC set " prefix, which the BLE processor
+ * matches.
  */
 static BaseType_t prvSetUtc(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) {
 	const char *pcParameter;
 	BaseType_t lParameterStringLength;
 	RTC_ERROR_E ret;
-	rtc_time tm;
-
-	TickType_t startTime;
-	TickType_t elapsedTime;
-	uint32_t elapsedMs;
-
-	extern volatile int g_sdWriteActive;
+	int32_t rtcOutBy;
+	bool rtcOutByKnown;
 
 	(void)pcCommandString;
 	(void)xWriteBufferLen;
@@ -1571,38 +1559,20 @@ static BaseType_t prvSetUtc(char *pcWriteBuffer, size_t xWriteBufferLen, const c
 	pcParameter = FreeRTOS_CLIGetParameter(pcCommandString, 1, &lParameterStringLength);
 	if (pcParameter != NULL) {
 
-		ret = exif_utc_utc_string_to_time(pcParameter, &tm);
+		ret = exif_utc_set_reference(pcParameter, &rtcOutBy, &rtcOutByKnown);
 		if (ret != RTC_NO_ERROR) {
 			snprintf(pcWriteBuffer, xWriteBufferLen, "Error %d\n", ret);
 			return pdFALSE;
 		}
 
-		startTime = xTaskGetTickCount();
-
-		/* hx_drv_rtc_set_time() suppresses ARM interrupts for ~1s, preventing FreeRTOS from
-		 * scheduling the FatFS task. Poll until any active SD write completes before calling it. */
-
-		while (g_sdWriteActive) {
-			if ((xTaskGetTickCount() - startTime) >= pdMS_TO_TICKS(2000)) {
-				xprintf("setutc: timed out waiting for SD write\n");
-				break;
-			}
-			vTaskDelay(pdMS_TO_TICKS(10));
-		}
-
-		ret = exif_utc_set_rtc_from_time(&tm);
-		elapsedTime = xTaskGetTickCount() - startTime;
-		elapsedMs = (elapsedTime * 1000) / configTICK_RATE_HZ;
-
-
-		if (ret == RTC_NO_ERROR) {
-			// The RTC just changed - refresh the flash decision immediately if
-			// it depends on time of day, rather than waiting for the next wake.
-			ledFlash_reevaluateTimeOfDay();
-			snprintf(pcWriteBuffer, xWriteBufferLen, "RTC set to %s (this took %dms)", pcParameter, (int) elapsedMs);
+		// The time just changed - refresh the flash decision immediately if
+		// it depends on time of day, rather than waiting for the next wake.
+		ledFlash_reevaluateTimeOfDay();
+		if (rtcOutByKnown) {
+			snprintf(pcWriteBuffer, xWriteBufferLen, "RTC set to %s (was out by %ds)", pcParameter, (int) rtcOutBy);
 		}
 		else {
-			snprintf(pcWriteBuffer, xWriteBufferLen, "Error %d setting RTC", ret);
+			snprintf(pcWriteBuffer, xWriteBufferLen, "RTC set to %s", pcParameter);
 		}
 	}
 
@@ -1643,47 +1613,6 @@ static BaseType_t prvExifUtcTests(char *pcWriteBuffer, size_t xWriteBufferLen, c
 	return pdFALSE;
 }
 
-// Pulse the interprocessor interrupt pin for nms
-static BaseType_t prvInt(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString)
-{
-	const char *pcParameter;
-	BaseType_t lParameterStringLength;
-	uint16_t interval;
-	APP_MSG_T send_msg;
-
-	/* Get parameter */
-	pcParameter = FreeRTOS_CLIGetParameter(pcCommandString, 1, &lParameterStringLength);
-	if (pcParameter != NULL)
-	{
-
-		interval = atoi(pcParameter); // Consider using strtol for safer parsing and error checking.
-
-		if ((interval > 0) && (interval < 10000))
-		{
-			send_msg.msg_data = interval;
-			send_msg.msg_event = APP_MSG_IFTASK_I2CCOMM_PA0_INT_OUT;
-
-			if (xQueueSend(xIfTaskQueue, (void *)&send_msg, __QueueSendTicksToWait) != pdTRUE)
-			{
-				cli_append(&pcWriteBuffer, &xWriteBufferLen, "send 0x%x fail", send_msg.msg_event);
-			}
-			else
-			{
-				cli_append(&pcWriteBuffer, &xWriteBufferLen, "Requesting pulse of %dms", interval);
-			}
-		}
-		else
-		{
-			cli_append(&pcWriteBuffer, &xWriteBufferLen, "Must supply a time > 0ms and < 10000ms");
-		}
-	}
-	else
-	{
-		cli_append(&pcWriteBuffer, &xWriteBufferLen, "Must supply a time in ms");
-	}
-
-	return pdFALSE;
-}
 
 // Check for I2C device at an address (7-bit, decimal number)
 static BaseType_t prvI2C(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) {
@@ -2658,6 +2587,10 @@ static BaseType_t prvGetOpParam(char *pcWriteBuffer, size_t xWriteBufferLen, con
 
 /**
  * Return current self test bits
+ *
+ * Bit 14 (SELF_TEST_AI_NO_BLE) is cleared once this reply has carried it, whoever asked (#246). It records that the
+ * BLE processor missed the first message after boot; nothing else clears it, so a BLE processor that was only late
+ * still learns of it from its 'selftest' on that wake.
  */
 static BaseType_t prvGetSelfTest(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) {
 	(void)pcCommandString;
@@ -2665,6 +2598,7 @@ static BaseType_t prvGetSelfTest(char *pcWriteBuffer, size_t xWriteBufferLen, co
 	configASSERT(pcWriteBuffer);
 
 	cli_append(&pcWriteBuffer, &xWriteBufferLen, "selfTest %04x", selfTest_getErrorBits());
+	selfTest_clearErrorBits(1 << SELF_TEST_AI_NO_BLE);
 
 	/* There is no more data to return after this single string, so return pdFALSE. */
 	return pdFALSE;
@@ -3119,6 +3053,38 @@ static bool startsWith(char *a, const char *b)
 }
 
 /**
+ * Holds a command from the BLE processor until the settings are final, unless it is safe to run at once
+ *
+ * Since the wake message goes first (#56), the BLE processor sends its queued app commands (e.g. setop) while the
+ * FatFS task may still be loading CONFIG.TXT, which would then overwrite them. So everything except the commands
+ * of the wake sequence and plain reads waits until the FatFS task has finished with the card (CONFIG.TXT loaded,
+ * or no card: the fast-start record). That is about 300 ms after the boot; the BLE processor waits up to 10 s.
+ *
+ * @param rxString = the command line
+ */
+static void waitForSettingsIfNeeded(const char *rxString) {
+	static const char * const runAtOnce[] = { "selftest", "setutc", "getutc", "ver" };
+	size_t wordLength;
+	uint8_t i;
+
+	if (fatfs_isSdReady()) {
+		return;
+	}
+
+	wordLength = strcspn(rxString, " ");
+	for (i = 0; i < (sizeof(runAtOnce) / sizeof(runAtOnce[0])); i++) {
+		if ((wordLength == strlen(runAtOnce[i])) && (strncmp(rxString, runAtOnce[i], wordLength) == 0)) {
+			return;
+		}
+	}
+
+	xprintf("Holding '%s' until the settings are loaded\n", rxString);
+	while (!fatfs_isSdReady()) {
+		vTaskDelay(pdMS_TO_TICKS(10));
+	}
+}
+
+/**
  * Process a whole line of characters received from the WW130 over I2C.
  *
  * Calls FreeRTOS_CLIProcessCommand() to process the command.
@@ -3298,6 +3264,7 @@ static void vCmdLineTask(void *pvParameters) {
 			case APP_MSG_CLITASK_RXI2C:
 				// String has arrived via I2C from BLE processor (IF task)
 				// When a CLI command is dispatched it is handled by processSingleCharacter()
+				waitForSettingsIfNeeded((char *)rxData);
 				processCommand((char *)rxData);
 				break;
 
@@ -3436,7 +3403,6 @@ static void vRegisterCLICommands(void)
 	FreeRTOS_CLIRegisterCommand(&xVcm);	// Focus lens (VCM) position
 #endif // USE_RP3
 
-	FreeRTOS_CLIRegisterCommand(&xInt);
 	FreeRTOS_CLIRegisterCommand(&xWriteFile);
 	FreeRTOS_CLIRegisterCommand(&xReadFile);
 	FreeRTOS_CLIRegisterCommand(&xSend);

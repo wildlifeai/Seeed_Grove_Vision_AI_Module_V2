@@ -134,18 +134,45 @@ static ClassConfidenceData g_last_confidence_data = {0};
 
 static bool coldBoot;
 
+// Probability of class 1 (the target) from the last cv_run(), as a whole-number percentage (0-100).
+// Worked out whatever USE_PERCENTAGE says, because detection uses it (issue #270)
+static uint8_t g_targetPercent = 0;
+
 /*************************************** Local Function Declarations *****************************/
 
 static const tflite::Model *load_model_from_sd(char *filename);
 static const tflite::Model *load_model_from_flash(void);
 
+static void computeProbabilities(TfLiteTensor *output, float *probabilities, int num_classes);
+
 #ifdef USE_PERCENTAGE
-static void outputAsPercentage(TfLiteTensor *output);
+static void outputAsPercentage(const float *probabilities, int num_classes, const int8_t *results);
 #endif // USE_PERCENTAGE
 
 static void tflm_print_ethosu_fingerprint(const tflite::Model* model);
 
+static bool isProbabilityOutput(bool isInt8, float scale, int32_t zeroPoint);
+
 /*************************************** Local Function Definitions  *************************************/
+
+/**
+ * Does the model's output already hold probabilities (the model ends in softmax)?
+ *
+ * TFLite's int8 quantization spec fixes a softmax (or logistic) output at scale 1/256 and zero point
+ * -128, so values -128..127 mean probabilities 0..255/256. A model that ends in logits has a scale
+ * chosen to fit its own range. This is the only evidence for a Vela model, which folds the softmax
+ * into its single ethos-u operator (issue #287).
+ *
+ * @param isInt8 - true if the output tensor is int8
+ * @param scale - the output tensor's quantization scale
+ * @param zeroPoint - the output tensor's quantization zero point
+ * @return true if the output values are probabilities: p = (value + 128) / 256
+ */
+static bool isProbabilityOutput(bool isInt8, float scale, int32_t zeroPoint) {
+	const float softmaxScale = 1.0f / 256.0f;
+
+	return isInt8 && (zeroPoint == -128) && (fabsf(scale - softmaxScale) < (softmaxScale / 1000.0f));
+}
 
 #ifdef PRINTMODELFINGERPRINT
 #include "tensorflow/lite/schema/schema_generated.h"
@@ -174,11 +201,94 @@ static const char* BuiltinOpName(tflite::BuiltinOperator op) {
     case tflite::BuiltinOperator_MAX_POOL_2D:      return "MAXPOOL";
     case tflite::BuiltinOperator_SOFTMAX:           return "SOFTMAX";
     case tflite::BuiltinOperator_RESHAPE:           return "RESHAPE";
+    case tflite::BuiltinOperator_LOGISTIC:          return "LOGISTIC";
+    case tflite::BuiltinOperator_QUANTIZE:          return "QUANTIZE";
+    case tflite::BuiltinOperator_DEQUANTIZE:        return "DEQUANTIZE";
+    case tflite::BuiltinOperator_MEAN:              return "MEAN";
+    case tflite::BuiltinOperator_PAD:               return "PAD";
+    case tflite::BuiltinOperator_MUL:               return "MUL";
+    case tflite::BuiltinOperator_CONCATENATION:     return "CONCAT";
     default:                                        return "OTHER";
     }
 }
 
-// Enhanced Ethos-U55-aware fingerprint
+/**
+ * Prints a quantization scale without floating point (xprintf has none)
+ *
+ * A scale that is 1/N for a whole N (such as 1/256) prints as "1/N"; anything else prints with
+ * nine decimal places.
+ *
+ * @param scale - the quantization scale
+ */
+static void printScale(float scale) {
+	if (scale <= 0.0f) {
+		xprintf("%s", (scale == 0.0f) ? "0" : "negative");
+		return;
+	}
+
+	float inverse = 1.0f / scale;
+	uint32_t whole = (uint32_t) (inverse + 0.5f);
+
+	if ((inverse < 1.0e9f) && (fabsf(inverse - (float) whole) < (inverse / 10000.0f))) {
+		xprintf("1/%u", (unsigned) whole);
+	}
+	else {
+		uint32_t intPart = (uint32_t) scale;
+		uint32_t fracPart = (uint32_t) ((scale - (float) intPart) * 1.0e9f + 0.5f);
+		xprintf("%u.%09u", (unsigned) intPart, (unsigned) fracPart);
+	}
+}
+
+/**
+ * Prints one tensor of the fingerprint: name, type, shape and quantization
+ *
+ * @param label - line label, e.g. "Input tensor   : "
+ * @param t - the tensor, from the model's flatbuffer
+ * @param scale - set to the tensor's first scale (0 if it is not quantized)
+ * @param zeroPoint - set to the tensor's first zero point (0 if it is not quantized)
+ */
+static void printTensor(const char * label, const tflite::Tensor * t, float * scale, int32_t * zeroPoint) {
+	*scale = 0.0f;
+	*zeroPoint = 0;
+
+	xprintf("%s%s [", label, TfLiteTypeName(static_cast<TfLiteType>(t->type())));
+	if (t->shape()) {
+		for (uint32_t i = 0; i < t->shape()->size(); i++) {
+			xprintf("%d", t->shape()->Get(i));
+			if (i != t->shape()->size() - 1) {
+				xprintf(",");
+			}
+		}
+	}
+	xprintf("]");
+
+	const auto * q = t->quantization();
+	if (q && q->scale() && (q->scale()->size() > 0) && q->zero_point() && (q->zero_point()->size() > 0)) {
+		*scale = q->scale()->Get(0);
+		*zeroPoint = (int32_t) q->zero_point()->Get(0);
+		xprintf(", scale ");
+		printScale(*scale);
+		xprintf(", zero point %d", (int) *zeroPoint);
+	}
+	else {
+		xprintf(", not quantized");
+	}
+	xprintf("\r\n");
+
+	if (t->name()) {
+		xprintf("                 '%s'\r\n", t->name()->c_str());
+	}
+}
+
+/**
+ * Prints the model fingerprint at a cold boot
+ *
+ * Schema version, the operators (a Vela model has one CUSTOM ethos-u operator), the input and output
+ * tensors with their quantization, and what the output values are: probabilities if the model ends
+ * in softmax, otherwise logits (issue #287).
+ *
+ * @param model - the loaded model
+ */
 static void tflm_print_ethosu_fingerprint(const tflite::Model* model) {
     if (!model) {
         xprintf("TFLM: model = NULL\r\n");
@@ -234,33 +344,42 @@ static void tflm_print_ethosu_fingerprint(const tflite::Model* model) {
         // Print operator info
         xprintf("  Op %d: %s", i, op_name);
         if (custom_name) xprintf(" (%s)", custom_name);
+        if (strcmp(op_name, "OTHER") == 0) xprintf(" (builtin %d)", (int) builtin);
         xprintf(", weight bytes: %u\r\n", (unsigned)op_weight_bytes);
     }
 
+    float scale;
+    int32_t zeroPoint;
+
     // Input tensor
     if (g->inputs()->size() > 0) {
-        const auto* t = tensors->Get(g->inputs()->Get(0));
-        xprintf("Input tensor   : %s [",
-                TfLiteTypeName(static_cast<TfLiteType>(t->type())));
-        for (uint32_t i = 0; i < t->shape()->size(); i++) {
-            xprintf("%d", t->shape()->Get(i));
-            if (i != t->shape()->size() - 1) xprintf(",");
-        }
-        xprintf("]\r\n");
+        printTensor("Input tensor   : ", tensors->Get(g->inputs()->Get(0)), &scale, &zeroPoint);
     }
 
-    // Output tensor
+    // Output tensor, and what its values are
     if (g->outputs()->size() > 0) {
         const auto* t = tensors->Get(g->outputs()->Get(0));
-        xprintf("Output tensor  : %s [",
-                TfLiteTypeName(static_cast<TfLiteType>(t->type())));
-        for (uint32_t i = 0; i < t->shape()->size(); i++) {
-            xprintf("%d", t->shape()->Get(i));
-            if (i != t->shape()->size() - 1) {
-            	xprintf(",");
-            }
+        printTensor("Output tensor  : ", t, &scale, &zeroPoint);
+
+        // The last operator: a SOFTMAX here is direct evidence; a Vela model hides it in ethos-u
+        tflite::BuiltinOperator lastOp = tflite::BuiltinOperator_CUSTOM;
+        if (ops->size() > 0) {
+            lastOp = model->operator_codes()->Get(ops->Get(ops->size() - 1)->opcode_index())->builtin_code();
         }
-        xprintf("]\r\n");
+
+        bool isInt8 = (t->type() == tflite::TensorType_INT8);
+        bool lastIsSoftmax = (lastOp == tflite::BuiltinOperator_SOFTMAX) || (lastOp == tflite::BuiltinOperator_LOGISTIC);
+
+        if (isProbabilityOutput(isInt8, scale, zeroPoint)) {
+            xprintf("Output values  : probabilities (%s). Percent = (value + 128) / 2.56\r\n",
+            		lastIsSoftmax ? "last operator is softmax" : "softmax quantization, scale 1/256, zero point -128");
+        }
+        else if (lastIsSoftmax) {
+            xprintf("Output values  : last operator is softmax, but not quantized as 1/256, -128. Percentages treat them as logits\r\n");
+        }
+        else {
+            xprintf("Output values  : logits (no softmax at the end). Percentages are computed with softmax\r\n");
+        }
     }
 
     // Total weight bytes (all buffers)
@@ -828,9 +947,16 @@ TfLiteStatus cv_run(int8_t *outCategories, uint8_t *categoriesCount) {
     // See here for how TFLM can process outputs:
     // https://chatgpt.com/share/69670b6b-2034-8005-a63b-7c09e3f76cf1
 
+    // The probability of each class: detection compares class 1's with op 16 (issue #270)
+    int num_classes = (g_class_count > 0) ? g_class_count : 1;
+    float probabilities[num_classes];
+
+    computeProbabilities(output, probabilities, num_classes);
+    g_targetPercent = (g_class_count >= 2) ? (uint8_t) (probabilities[1] * 100.0f + 0.5f) : 0;
+
 #ifdef USE_PERCENTAGE
-    // Moved all of the percentage processing to its own function
-    outputAsPercentage(output);
+    // Print the percentages and keep them for the EXIF UserComment
+    outputAsPercentage(probabilities, num_classes, output->data.int8);
 #endif // USE_PERCENTAGE
 
     // Write the class count to the caller
@@ -843,54 +969,65 @@ TfLiteStatus cv_run(int8_t *outCategories, uint8_t *categoriesCount) {
     return invoke_status;
 }
 
-#ifdef USE_PERCENTAGE
 /**
- * Converts the output tensor to confidence levels expressed as percentages.
+ * Converts the output tensor to the probability of each class (0 to 1, total 1)
  *
- * Output are written to the global g_last_confidence_data
+ * If the model already ends in softmax (int8 output quantized at scale 1/256, zero point -128, see
+ * isProbabilityOutput()), the values are probabilities and are only dequantized: p = (value + 128) / 256.
+ * Otherwise they are logits: they are dequantized with the model's own scale and zero point, then softmax
+ * turns them into probabilities. Applying softmax to values that are already probabilities squashes them
+ * towards 50% (issue #287).
+ *
+ * @param output - the model's output tensor
+ * @param probabilities - array of num_classes, written with the probabilities
+ * @param num_classes - number of classes in the output tensor
  */
-static void outputAsPercentage(TfLiteTensor *output) {
-    //  For int8 output tensor
-    int8_t *results = output->data.int8;
-    // 2D data use data[1] 1D data use data[0]
-    int num_classes = (output->dims->size >= 2) ? output->dims->data[1] : output->dims->data[0];
+static void computeProbabilities(TfLiteTensor *output, float *probabilities, int num_classes) {
+    const int8_t *results = output->data.int8;
+    float values_float[num_classes];
 
-    // Use TFLite's reference softmax implementation
-    // Convert int8 logits to float for processing
-    float logits_float[num_classes];
-    float probabilities[num_classes];
-
-    // Dequantize int8 logits to float
-    // Typical quantization for logits: scale = 0.00390625 (1/256), zero_point = 0
+    // Dequantize: real = (int8 value - zero_point) x scale
     const float scale = output->params.scale;
     const int32_t zero_point = output->params.zero_point;
 
-    // Raw int8 values are in [-128, 127]
-    // To get actual logits in float, you reverse the quantization:
-    // logits_float[i]=(int8_value[i]−zero_point)×scale
-
     for (int i = 0; i < num_classes; ++i) {
-        logits_float[i] = (static_cast<float>(results[i]) - static_cast<float>(zero_point)) * scale;
+        values_float[i] = (static_cast<float>(results[i]) - static_cast<float>(zero_point)) * scale;
     }
 
-    // Apply softmax using TFLite's reference implementation
-    tflite::SoftmaxParams softmax_params;
-    softmax_params.beta = 1.0f; // Standard softmax temperature
+    if (isProbabilityOutput(output->type == kTfLiteInt8, scale, zero_point)) {
+        // Already probabilities: the model's last layer was softmax
+        for (int i = 0; i < num_classes; ++i) {
+            probabilities[i] = values_float[i];
+        }
+    }
+    else {
+        // Logits: softmax converts them into probabilities
+        tflite::SoftmaxParams softmax_params;
+        softmax_params.beta = 1.0f; // Standard softmax temperature
 
-    tflite::RuntimeShape shape({1, num_classes});
-    // Softmax() converts the dequantized logits into probabilities (0-1, total = 1)
-    tflite::reference_ops::Softmax(softmax_params, shape, logits_float, shape, probabilities);
+        tflite::RuntimeShape shape({1, num_classes});
+        tflite::reference_ops::Softmax(softmax_params, shape, values_float, shape, probabilities);
+    }
+}
 
-    // Store results and display
+#ifdef USE_PERCENTAGE
+/**
+ * Prints the probabilities as whole-number percentages and keeps them for the EXIF UserComment
+ *
+ * Output are written to the global g_last_confidence_data
+ *
+ * @param probabilities - the probability of each class, from computeProbabilities()
+ * @param num_classes - number of classes
+ * @param results - the raw int8 outputs, printed beside the percentages
+ */
+static void outputAsPercentage(const float *probabilities, int num_classes, const int8_t *results) {
     g_last_confidence_data.class_count = (num_classes > MAX_CLASSES) ? MAX_CLASSES : num_classes;
 
     for (int i = 0; i < num_classes; ++i) {
-        float confidence = probabilities[i] * 100.0f;                                     // Convert to percentage
-        int confidence_int = (int)(confidence + 0.5f);                                    // Round to nearest integer
-        int confidence_frac = (int)((confidence - (float)confidence_int) * 10.0f + 0.5f); // Get decimal part
-        if (confidence_frac < 0) {
-            confidence_frac = 0; // Handle rounding edge cases
-        }
+        float confidence = probabilities[i] * 100.0f;	// Convert to percentage
+        // Whole numbers: a decimal place would imply precision the model does not have.
+        // Rounded as g_targetPercent is, so the printed target percentage is the one compared with op 16
+        int confidence_int = (int)(confidence + 0.5f);
 
         const char * label = metaDataFlash->labels[i];
 
@@ -912,16 +1049,29 @@ static void outputAsPercentage(TfLiteTensor *output) {
         }
 
         if (label)  {
-            xprintf("Class '%s': %d.%d%% (raw: %d)\n", label, confidence_int, confidence_frac, results[i]);
+            xprintf("Class '%s': %d%% (raw: %d)\n", label, confidence_int, results[i]);
         }
         else  {
-            xprintf("Class %d: %d.%d%% (raw: %d)\n", i, confidence_int, confidence_frac, results[i]);
+            xprintf("Class %d: %d%% (raw: %d)\n", i, confidence_int, results[i]);
         }
+        XP_WHITE;	// each line resets its own colour
     }
-    XP_WHITE;
 }
 
 #endif // USE_PERCENTAGE
+
+/**
+ * Probability of class 1 (the target) from the last cv_run()
+ *
+ * Worked out on every run, whatever USE_PERCENTAGE says: softmax models are only dequantized, logit models
+ * go through softmax (computeProbabilities()). Rounded to a whole number, the same as the percentage printed
+ * and written to the EXIF UserComment.
+ *
+ * @return the percentage, 0 to 100; 0 if the model has fewer than 2 classes
+ */
+uint8_t cv_getTargetPercent(void) {
+	return g_targetPercent;
+}
 
 /**
  * Checks if a model is loaded

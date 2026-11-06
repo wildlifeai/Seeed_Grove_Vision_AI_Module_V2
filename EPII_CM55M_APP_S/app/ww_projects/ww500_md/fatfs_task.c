@@ -465,7 +465,7 @@ static FRESULT fileWriteImage(fileOperation_t *fileOp, fileBufferInfo_t * extraB
 	xprintf("Wrote %d byte image to SD: %s ", bwTotal, fileOp->fileName);
 	XP_WHITE;
 
-	exif_utc_get_rtc_as_time(&time);
+	exif_utc_get_time(&time);
 
 	xprintf("at %d:%d:%d %d/%d/%d\n",
 			time.tm_hour, time.tm_min, time.tm_sec,
@@ -1258,6 +1258,12 @@ static FRESULT load_configuration(const char *filename, directoryManager_t *dirM
 		xprintf("Op 33 (MD wake threshold) = %d is not valid: using %d\n",
 				op_parameter[OP_PARAMETER_MD_BLOCK_THRESHOLD], MD_BLOCK_THRESHOLD_DEFAULT);
 		op_parameter[OP_PARAMETER_MD_BLOCK_THRESHOLD] = MD_BLOCK_THRESHOLD_DEFAULT;
+	}
+	// Op 16 is a percentage (6 Nov 2026, issue #270)
+	if (!fatfs_isValidOperationalParameter(OP_PARAMETER_MODEL_THRESHOLD, op_parameter[OP_PARAMETER_MODEL_THRESHOLD])) {
+		xprintf("Op 16 (NN threshold) = %d is not valid: using %d\n",
+				op_parameter[OP_PARAMETER_MODEL_THRESHOLD], MODEL_THRESHOLD);
+		op_parameter[OP_PARAMETER_MODEL_THRESHOLD] = MODEL_THRESHOLD;
 	}
 	// RP camera AE state (28 Oct 2026). Out of range: forget it, so AE starts from the init table
 	if (!fatfs_isValidOperationalParameter(OP_PARAMETER_CAM_AE_EXPOSURE, op_parameter[OP_PARAMETER_CAM_AE_EXPOSURE])
@@ -2069,6 +2075,9 @@ bool fatfs_isValidOperationalParameter(OP_PARAMETERS_E parameter, uint16_t value
 
 	case OP_PARAMETER_MD_BLOCK_THRESHOLD:
 		return ((value >= MD_BLOCK_THRESHOLD_MIN) && (value <= MD_BLOCK_THRESHOLD_MAX));
+
+	case OP_PARAMETER_MODEL_THRESHOLD:
+		return (value <= MODEL_THRESHOLD_MAX);
 
 	case OP_PARAMETER_CAM_AE_EXPOSURE:
 		return ((value == 0) || ((value >= AE_EXPOSURE_MIN) && (value <= AE_EXPOSURE_MAX)));

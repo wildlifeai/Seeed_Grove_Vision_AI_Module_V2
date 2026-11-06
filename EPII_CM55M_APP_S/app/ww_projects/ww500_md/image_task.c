@@ -85,6 +85,7 @@
 #include "preview.h"
 #include "ae.h"
 #include "rtc_cal.h"	// the RTC calibration, measured if due before DPD (#245)
+#include "if_task.h"	// ifTask_isBleUnresponsive(): whether to wait for setutc (#56)
 
 /*************************************** Definitions *******************************************/
 
@@ -168,6 +169,10 @@
 
 // Define this to add extra EXIF field (AE gain values)
 #define EXIF_MAKER_NOTES
+
+// How long the first photo of a wake waits for setutc from the BLE processor (sent every wake, after selftest,
+// about 100 ms after the wake message), before taking its time from the RTC instead
+#define PHOTO_SETUTC_WAIT_MS 300
 
 
 /*************************************** Local Function Declarations *****************************/
@@ -291,6 +296,9 @@ static uint8_t g_capture_retries;		// in-place retries used for the current fram
 static bool g_frame_fault_seen;			// a frame fault has been handled in this capture sequence
 static TickType_t g_frame_fault_tick;	// when the most recent frame fault was handled
 
+// When the frame being saved was ready: its photo's time is this wake's time reference at this tick (#56)
+static TickType_t g_frame_ready_tick;
+
 // True when this wake exists only to sample the light level (AE registers) for
 // the flash decision: capture one frame, read the AE registers, save nothing.
 // Cleared on the way into DPD. See _Documentation/AE_Light_Sensor_Roadmap.md
@@ -377,6 +385,12 @@ static char lastImageFileName[IMAGEFILENAMELEN] = "";
 
 // Buffer for messages to be sent via I2C to the BLE processor
 static char msgToMaster[MSGTOMASTERLEN];
+
+// sendMsgToMaster()'s copy of the message, read by the IF task when it builds the I2C message. The caller's
+// buffer (msgToMaster) is reused for the next message straight away: this task has the higher priority, so it
+// overwrote the text before the IF task copied it, and each message carried the next one's text ('NN-' arrived
+// as 'HM0', ai22, 4 Nov 2026). Free whenever xI2CTxSemaphore is taken: the previous message has gone or been dropped.
+static char msgToMasterTx[MSGTOMASTERLEN];
 
 // Not used
 // static bool nnPositive;
@@ -939,6 +953,7 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
         // The first frame after the boot (issue #249). On a motion wake the HM0360's SEN_INT is cleared just below,
         // so a scope on it shows the whole time from motion to this point. The times are printed once the photo
         // is queued for the card (below), since the frame can now be ready before the card is
+        g_frame_ready_tick = xTaskGetTickCount();
         boot_timing_mark(BOOT_TIMING_FRAME_READY);
 
 #if defined(USE_HM0360) || defined(USE_HM0360_MD)
@@ -2533,8 +2548,11 @@ static void setupLEDFlash(void) {
 }
 
 /**
- * Send an unsolicited message to the MKL62BA.
+ * Send an unsolicited message to the BLE processor.
  *
+ * The string is copied, so the caller can reuse its buffer as soon as this returns.
+ *
+ * @param str the null-terminated message (at most MSGTOMASTERLEN - 1 characters are sent)
  */
 void sendMsgToMaster(char *str) {
     APP_MSG_T send_msg;
@@ -2547,9 +2565,13 @@ void sendMsgToMaster(char *str) {
 		return;
 	}
 
-    // Send back to MKL62BA - msg_data is the string
-    send_msg.msg_data = (uint32_t)str;
-    send_msg.msg_parameter = strnlen(str, MSGTOMASTERLEN);
+    // Copy it: see msgToMasterTx
+    strncpy(msgToMasterTx, str, MSGTOMASTERLEN - 1);
+    msgToMasterTx[MSGTOMASTERLEN - 1] = '\0';
+
+    // Send back to the BLE processor - msg_data is the string
+    send_msg.msg_data = (uint32_t)msgToMasterTx;
+    send_msg.msg_parameter = strlen(msgToMasterTx);
     send_msg.msg_event = APP_MSG_IFTASK_MSG_TO_MASTER;
 
     if (xQueueSend(xIfTaskQueue, (void *)&send_msg, __QueueSendTicksToWait) != pdTRUE) {
@@ -2614,6 +2636,10 @@ static void prepareJpegFile(int8_t * outCategories, uint8_t classCount, fileBuff
 	uint32_t jpegBuffer;
 	uint32_t jpegLength;
 	static char softwareString[64];	// string for EXIF software version
+	rtc_time photoTime;
+
+	// The photo's time: only the first photo of a wake can wait here, for setutc or the RTC's first tick (#56)
+	exif_utc_wait_for_reference(PHOTO_SETUTC_WAIT_MS, !ifTask_isBleUnresponsive());
 
 	// Take semaphore FIRST before modifying jpeg_exif_buf
 	// This prevents jpeg_exif_buf from being overwritten before previous write completes
@@ -2640,7 +2666,8 @@ static void prepareJpegFile(int8_t * outCategories, uint8_t classCount, fileBuff
 
 	exif_input.width  = (uint16_t)app_get_raw_width();
 	exif_input.height = (uint16_t)app_get_raw_height();
-	exif_utc_get_rtc_as_exif_string(exif_input.timestamp, sizeof(exif_input.timestamp));
+	exif_utc_get_time_at_tick(g_frame_ready_tick, &photoTime);
+	exif_utc_time_to_exif_string(&photoTime, exif_input.timestamp, sizeof(exif_input.timestamp));
 
 	/* Camera identity, build provenance and flash state. The Model string names
 	 * the camera variant so a photo is self-describing (colour RP3 vs mono/IR
@@ -2787,7 +2814,8 @@ static void prepareJpegFile(int8_t * outCategories, uint8_t classCount, fileBuff
 	XP_WHITE;
 #endif
 
-	dir_mgr_generateImageFilename(g_imageFileName, IMAGEFILENAMELEN, "JPG");
+	// Named from the same time as the EXIF, not the RTC, which may be far out until it is written at sleep
+	dir_mgr_generateImageFilename(g_imageFileName, IMAGEFILENAMELEN, "JPG", exif_utc_time_to_seconds(&photoTime));
 
 	fileOp.fileName = g_imageFileName;	// a global
 	fileOp.senderQueue = xImageTaskQueue;
@@ -2858,7 +2886,10 @@ static void prepareBmpFile(fileBufferInfo_t * extraBlock) {
 	XP_WHITE;
 #endif
 
-	dir_mgr_generateImageFilename(g_imageFileName, IMAGEFILENAMELEN, "BMP");
+	rtc_time bmpTime;
+
+	exif_utc_get_time(&bmpTime);
+	dir_mgr_generateImageFilename(g_imageFileName, IMAGEFILENAMELEN, "BMP", exif_utc_time_to_seconds(&bmpTime));
 
 	fileOp.fileName = g_imageFileName;	// a global
 	fileOp.senderQueue = xImageTaskQueue;
@@ -2979,32 +3010,39 @@ static int initNN(void) {
 /**
  * Do something with the NN output
  *
+ * A detection is when the model is at least op 16 % sure of class 1, the target (issue #270). Op 16 is
+ * a percentage, 0-100, with the same meaning for every model: cvapp.cpp turns the outputs into
+ * probabilities (softmax for logit models, only dequantized for models that end in softmax). The
+ * percentage compared is the whole number printed and written to the EXIF UserComment.
+ *
  * The result is reported at once. Adding it to the counters waits for the card (countNNResult()).
  *
  * TODO should this be in cvapp.cpp?
- * TODO this is suitable for person detection only - revisit!
  *
- * @param outCategories - array of logit values
- * @param classCount - number of classes
+ * @param outCategories - array of int8 outputs, one per class (class 0 = no target, class 1 = target)
+ * @param classCount - number of classes. Fewer than 2 is never a detection
  */
 static void processNNOutput(int8_t * outCategories, uint8_t classCount) {
-	uint8_t threshold;
+	uint16_t threshold;
+	uint8_t targetPercent;
 
 	// The threshold is in the fast-start record, so the card is not needed here
 	threshold = fatfs_getOperationalParameter(OP_PARAMETER_MODEL_THRESHOLD);
 
+	// The same whole-number percentage that is printed and written to the EXIF UserComment
+	targetPercent = cv_getTargetPercent();
+
 	nnResultToCount = true;
-	nnResultPositive = (outCategories[1] > threshold);
+	nnResultPositive = (classCount >= 2) && (targetPercent >= threshold);
 
 	for (uint8_t i=0; i < classCount; i++) {
 		xprintf("Class %d '%s' = logit %d\n", i, cv_getLabel(i), outCategories[i]);
 	}
 
-	// TODO This only works for the person detection
 	if (nnResultPositive)  {
 		XP_LT_GREEN;
 		xprintf("TARGET OBJECT DETECTED!\n");
-
+		XP_WHITE;	// before sendMsgToMaster(), which can let other tasks print
 		// Send a message to the BLE processor so it can inform the user on the app immediately.
 		// Also can be used to flash an LED.
 		snprintf(msgToMaster, MSGTOMASTERLEN, "NN+");
@@ -3021,7 +3059,12 @@ static void processNNOutput(int8_t * outCategories, uint8_t classCount) {
 	}
 
 	XP_WHITE;
-	xprintf("Score %d/128 (Threshold %d)\n", outCategories[1], threshold);
+	if (classCount >= 2) {
+		xprintf("Target '%s' %d%% (threshold %d%%)\n", cv_getLabel(1), targetPercent, threshold);
+	}
+	else {
+		xprintf("Model has %d class: no target class (threshold %d%%)\n", classCount, threshold);
+	}
 }
 
 /**
@@ -3251,6 +3294,10 @@ void image_sleepNow(void) {
     // Here because the NN is not running (the board record is in the flash, which switches XIP off) and
     // the watchdog has been stopped
     rtc_cal_beforeSleep(woken == APP_WAKE_REASON_COLD);
+
+    // The RTC is only written from setutc here, at sleep, when far out (#56): the write blocks interrupts for
+    // about 1.4 s. After rtc_cal_beforeSleep(), whose measurement sets RTC alarms from the current RTC time
+    exif_utc_before_sleep();
 
 	// CLI command might have requested this after firmware update
 	if (app_getResetRequest()) {

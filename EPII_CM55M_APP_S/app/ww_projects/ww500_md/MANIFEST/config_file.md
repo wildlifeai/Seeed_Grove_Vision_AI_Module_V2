@@ -55,7 +55,7 @@ captured first.
 |    13 | OP_PARAMETER_FLASH_LED                | 0             | LED bit mask: visible LED used = 1, infra-red LED used =2, none = 0              |
 |    14 | OP_PARAMETER_MODEL_PROJECT            | 0             | Model project ID used for the NN model (0 disables NN)|
 |    15 | OP_PARAMETER_MODEL_VERSION            | 0             | Model version number used for the NN model |
-|    16 | OP_PARAMETER_MODEL_THRESHOLD          | 18            | Logit threshold for detection (0-127) |
+|    16 | OP_PARAMETER_MODEL_THRESHOLD          | 60            | Detection threshold, a percentage (0-100): a detection is when the model is at least this sure of class 1, the target. The same percentage the console and EXIF show. Same meaning for every model, but worth checking per model. Values above 100 are rejected by `setop` and replaced by 60 when CONFIG.TXT is loaded (issue #270, 6 November 2026; before that it was a raw-value threshold, 0-127, default 18, and an old card's 18 now means 18%) |
 |    17 | OP_PARAMETER_MD_SENSITIVITY           | 1             | Motion Detection Sensitivity: 1=low, 2=medium, 3=high. Other values are rejected by `setop`, and replaced by 1 when CONFIG.TXT is loaded (until 24 October 2026, 0 meant off; use op 11 = 0 instead). Takes effect at once |
 |    18 | OP_PARAMETER_TEST_MODE_BITS           | 0             | To manage test configurations: bit or bits indicate a test function |
 |    19 | OP_PARAMETER_IMAGES_COUNT     		| 0             | Count of images in the current image folder. Use this to decide to create a new image folder. |

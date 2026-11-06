@@ -7,7 +7,7 @@
 
 ## Summary
 
-Branch `261105_NN_threshold`.
+Branch `261105_NN_threshold`, [PR #289](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/pull/289).
 
 **What this thread is for.** Issue
 [#270](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/270) (labels Firmware, Data
@@ -239,7 +239,9 @@ Wake 3 failed again on its retry (`Capture failed after 0 of 1 images`); wake 5'
 ready. In the other four wakes, and in every wake of bench test 1 (HM0360, 5 Nov), it arrived after the
 frame (or not at all), and there was no fault. The NN code runs only after a frame, so this thread's
 changes cannot cause it; it points to `setutc` handling during an HM0360 capture. Filed as
-[#288](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/288).
+[#288](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/288). Parked (Charles, 6 Nov): his
+finger may have been on the HM0360 connector at the time, which can disturb the signals (see thread
+`2026-10-11_camera_connector_pressure`); to be looked at only if it happens again.
 
 ## Bench test 5 (6 Nov): percentage rule on the RP3
 
@@ -347,7 +349,8 @@ probabilities or logits; the new `_Tools/tflite_inspect.py` shows the same on a 
 that sum to 100%, and the console no longer stays green after a detection. A CONFIG.TXT that still holds
 op 16 = 18 now means "at least 18% sure", nearly every frame: set it again.
 
-Found, not fixed: HM0360 frame faults when `setutc` arrives during a capture (#288).
+Found, not fixed: HM0360 frame faults that coincided with `setutc` arriving during a capture (#288),
+parked because a finger on the camera connector may have caused them.
 
 How detection works now is in [`WW500_Neural_Network_Operation.md`](../../WW500_Neural_Network_Operation.md)
 and [`config_file.md`](../../../EPII_CM55M_APP_S/app/ww_projects/ww500_md/MANIFEST/config_file.md).
@@ -364,4 +367,5 @@ and [`config_file.md`](../../../EPII_CM55M_APP_S/app/ww_projects/ww500_md/MANIFE
   `20V1` ([CLAUDE_person_model_softmax.md](CLAUDE_person_model_softmax.md)). Fixed and benched on both
   images; Charles to close it.
 - [#288](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/288): HM0360 frame fault
-  (`EDM WDT2 timeout`) when `setutc` arrives during a capture (bench test 4).
+  (`EDM WDT2 timeout`) when `setutc` arrives during a capture (bench test 4). Parked until it happens
+  again (possibly a finger on the camera connector).

@@ -306,7 +306,7 @@ Score 142 (class 1 - class 0, threshold 18)
 
 ### Understanding logit values
 
-Logits are the raw, unnormalised scores from the final layer of the neural network, stored as int8 (−128 to +127). For the 96 px example models the two logits are about equal in magnitude and opposite in sign, so the score is about twice class 1. Other models, such as the challenges' 160 px models, do not have this property, which is why the firmware uses the difference rather than class 1 alone.
+Logits are the raw, unnormalised scores from the final layer of the neural network, stored as int8 (−128 to +127). For the person detection model (`20V1`) and the `nnfiles` example models (`99V2`, `98V1`) the two logits are about equal in magnitude and opposite in sign, so the score is about twice class 1. Other models, such as the challenges' 160 px models, do not have this property, which is why the firmware uses the difference rather than class 1 alone.
 
 `OP_PARAMETER_MODEL_THRESHOLD` (index 16 in CONFIG.TXT) is compared with the score, logit[1] − logit[0]. Examples:
 

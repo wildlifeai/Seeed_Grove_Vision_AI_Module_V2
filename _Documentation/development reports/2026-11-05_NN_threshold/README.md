@@ -3,7 +3,7 @@
 #### File: `README.md`
 #### Path: `_Documentation\development reports\2026-11-05_NN_threshold\README.md`
 #### Author: Claude (Opus 5.5), for Charles Palmer
-#### Date: 5 November 2026
+#### Date: 5 November 2026, closed 6 November 2026
 
 ## Summary
 
@@ -11,15 +11,20 @@ Branch `261105_NN_threshold`.
 
 **What this thread is for.** Issue
 [#270](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/270) (labels Firmware, Data
-Science, decision): op 16 tests class 1 alone, while the challenges and the website rank models on class 1
-minus class 0.
+Science, decision): OP_PARAMETER_MODEL_THRESHOLD (op 16) tests neural network output vector class 1 value alone,
+while the challenges (reported by #270) and the website rank models on NN class 1 value minus class 0 value.
 
-**The problem.** The firmware reports a detection (`NN+`) when class 1's int8 output is above op 16
+**Result.** The firmware now detects when the score, class 1 minus class 0, is above op 16. Op 16 stays
+unsigned (0 to 127, default 18). Benched on both camera images with the person model; Victor's test with
+the challenge models is still to do.
+
+**The problem.** The firmware reported a detection (`NN+`) when class 1's int8 output was above op 16
 (`OP_PARAMETER_MODEL_THRESHOLD`, default 18, range 0 to 127). This is `processNNOutput()` in
-`image_task.c`, which carries a TODO saying it only suits person detection. The rat and cat challenges
+`image_task.c`. The rat and cat challenges
 rank models on class 1 minus class 0 (`eval/score.py`), and the rat challenge's round 2 recommends setting
 op 16 from that score. The two only agree when a model's outputs are mirror images (class 0 = minus
-class 1). The 96 px example models are. The challenges' current models are not.
+class 1). The `nnfiles` example models (`99V2` rat and `98V1` cat, 96 x 96, in `_Tools/nnfiles_example*`)
+are, and so is `20V1`, the person detection model now in the WW500. The challenges' current models are not.
 
 **Evidence in the issue** (PC run with the camera's preprocessing, 10 Oct 2026, the examples' ten frames
 from `EXPECTED.CSV` in the team drive's `Data/ww500-models`; the camera matched the PC on 196 of 200 cat
@@ -29,7 +34,7 @@ frames and 40 of 40 rat frames):
   them. Yet its score puts four of the five rats above every frame without a rat.
 - `71V1` (cat, 160 px): op 16 = 18 flags only one of the five cats.
 
-So with the challenge models deployed today, the camera misses most of the animals the models do find.
+So with the challenge models, the camera missed most of the animals the models do find.
 
 **The options in the issue.**
 
@@ -38,9 +43,10 @@ So with the challenge models deployed today, the camera misses most of the anima
 2. **No firmware change.** The website and the challenges export models with a fixed last layer that
    makes class 0 = minus class 1; op 16 = score / 2.
 
-No decision has been recorded on the issue yet (no comments as of 5 Nov).
+**Decision (Charles, 5 Nov): neither; a third option, below.** It is not yet recorded on #270 (no
+comments as of 6 Nov).
 
-## Proposed approach (Charles, 5 Nov)
+## The approach chosen (Charles, 5 Nov)
 
 A third option that keeps op 16 unsigned (0 to 127), because making op values signed would have spinoffs
 elsewhere:
@@ -55,8 +61,8 @@ change to the op 16 contract, but a smaller one than option 1.
 
 What to be aware of:
 
-1. **Existing values change meaning.** On mirrored models (the 96 px examples) the score is twice
-   class 1, so today's `class 1 > 18` is `score > 36`. **Decided (Charles, 5 Nov): the default stays
+1. **Existing values change meaning.** On mirrored models (`20V1` and the example models) the score is twice
+   class 1, so the old `class 1 > 18` is `score > 36`. **Decided (Charles, 5 Nov): the default stays
    18.** It was chosen arbitrarily, and op 16 will have to be tuned for each model anyway.
 2. **The threshold cannot go below 0.** Op 16 = 0 is "class 1 beats class 0", the model's own call. The
    camera cannot be made more sensitive than that.
@@ -65,35 +71,55 @@ What to be aware of:
    them. The challenges' `eval/score.py` results answer it.
 4. Scores above 127 cannot be used as thresholds. Unlikely to matter.
 
-**Testing.** Victor to test the change against his models (the challenge models and the 96 px
-examples), using `nnfiles` on the examples' frames and comparing with `EXPECTED.CSV`, before the change
+**Testing.** Victor to test the change against his models (the challenge models and the example
+models `99V2` and `98V1`), using `nnfiles` on the examples' frames and comparing with `EXPECTED.CSV`, before the change
 is merged.
 
-## What has to change
+## What changed
 
-The code change is small; most of the work is in documents and other repos.
-
-| Where | What changes |
-|---|---|
-| [`ww500_md/image_task.c`](../../../EPII_CM55M_APP_S/app/ww_projects/ww500_md/image_task.c), `processNNOutput()` | Compute the score as `int16_t`, test `score > op16`; print the score in the `Score ... (Threshold ...)` line; remove the "person detection only" TODOs |
-| [`ww500_md/cvapp.h`](../../../EPII_CM55M_APP_S/app/ww_projects/ww500_md/cvapp.h) | `MODEL_THRESHOLD` comment ("Logit value") and the `USE_PERCENTAGE` comment ("stays a logit comparison") (default stays 18) |
-| [`ww500_md/fatfs_task.h`](../../../EPII_CM55M_APP_S/app/ww_projects/ww500_md/fatfs_task.h) | Op 16 comment: "Score threshold (class 1 minus class 0) for detection (0-127)" |
-| [`ww500_md/MANIFEST/config_file.md`](../../../EPII_CM55M_APP_S/app/ww_projects/ww500_md/MANIFEST/config_file.md) | Op 16 row (meaning, default) |
-| [`_Documentation/WW500_Neural_Network_Operation.md`](../../WW500_Neural_Network_Operation.md) | Op 16 table row (it says default 0, which is already wrong), "Detection threshold" section, worked examples table, `NN+` row, `processNNOutput()` row |
-| [`_Documentation/nn_files_bench.md`](../../nn_files_bench.md) | Paragraph saying the camera's detection is not the challenges' score |
-| [`.agents/skills/references/bench.md`](../../../.agents/skills/references/bench.md) | Same point in the `nnfiles` bullet ("class 1 above op 16 is not the challenges' score") |
-| [ww-mobile-app](https://github.com/wildlifeai/ww-mobile-app) (Victor) | Op 16 label, help text and default, if the app shows or sets it |
-| Website / backend (Victor) | Any op 16 recommendation or default given with a model |
-| [`ww-rat-challenge`](https://github.com/wildlifeai/ww-rat-challenge), [`ww-cat-challenge`](https://github.com/wildlifeai/ww-cat-challenge) (private) | Round 2 advice: op 16 = score (no longer derived via class 1) |
-| Issue [#270](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/270) | Record the decision |
+| Where | What changes | Done |
+|---|---|---|
+| [`ww500_md/image_task.c`](../../../EPII_CM55M_APP_S/app/ww_projects/ww500_md/image_task.c), `processNNOutput()` | Score as `int16_t`, detection if `score > op16`; `Score <n> (class 1 - class 0, threshold <op 16>)` line; "person detection only" TODOs removed; colour reset before `sendMsgToMaster()` | Yes |
+| [`ww500_md/cvapp.cpp`](../../../EPII_CM55M_APP_S/app/ww_projects/ww500_md/cvapp.cpp), `outputAsPercentage()` | Whole-number percentages; each line resets its colour | Yes |
+| [`ww500_md/cvapp.h`](../../../EPII_CM55M_APP_S/app/ww_projects/ww500_md/cvapp.h) | `MODEL_THRESHOLD` and `USE_PERCENTAGE` comments (default stays 18) | Yes |
+| [`ww500_md/fatfs_task.h`](../../../EPII_CM55M_APP_S/app/ww_projects/ww500_md/fatfs_task.h) | Op 16 comment: "Detection threshold on class 1 minus class 0 (0-127)" | Yes |
+| [`ww500_md/MANIFEST/config_file.md`](../../../EPII_CM55M_APP_S/app/ww_projects/ww500_md/MANIFEST/config_file.md) | Op 16 row | Yes |
+| [`_Documentation/WW500_Neural_Network_Operation.md`](../../WW500_Neural_Network_Operation.md) | Op 16 row (default was wrongly 0), "Detection threshold" section, example output, worked examples, `NN+` row, `processNNOutput()` row | Yes |
+| [`_Documentation/nn_files_bench.md`](../../nn_files_bench.md) | Camera detection now uses the challenges' score | Yes |
+| [`.agents/skills/references/bench.md`](../../../.agents/skills/references/bench.md) | Same point in the `nnfiles` bullet | Yes |
+| [ww-mobile-app](https://github.com/wildlifeai/ww-mobile-app) (Victor) | Op 16 label, help text and default, if the app shows or sets it | No, #270 |
+| Website / backend (Victor) | Any op 16 recommendation or default given with a model | No, #270 |
+| [`ww-rat-challenge`](https://github.com/wildlifeai/ww-rat-challenge), [`ww-cat-challenge`](https://github.com/wildlifeai/ww-cat-challenge) (private) | Round 2 advice: op 16 = score (no longer derived via class 1) | No, #270 |
+| Issue [#270](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/270) | Record the decision | No |
 
 Not affected: op 1 and 2 (the NN counters still count `nnResultPositive`), the `NN+`/`NN-` messages to
 the BLE processor, the EXIF confidence data, and `RESULTS.CSV` (it records each class's output, not the
 decision).
 
+Notes on the code:
+
+- Fewer than 2 classes is never a detection (before, class 1 was read regardless).
+- The comparison is done in `int32_t`, because op 16 is not range-checked by `setop` (any 0 to 65535
+  is accepted) and a large value must not wrap negative.
+
+Found on the bench (5 Nov), also fixed:
+
+- **Percentages are whole numbers.** The decimal was computed after rounding the whole number, so 56.6%
+  printed as "57.0" and pairs summed to 100.4%. A decimal place also implied precision the model does
+  not have. The EXIF UserComment already used whole numbers.
+- **Console colour.** After `TARGET OBJECT DETECTED!` the console stayed green through
+  `sendMsgToMaster()`, so other tasks' lines came out green. It now resets to white first, as the
+  not-detected branch already did.
+
+Not fixed, confirmed 6 Nov: the percentages are softmax applied twice for `20V1` and the example
+models, which already end in softmax. Raw 94 is 87% "person", not the 68% printed. Where the model came
+from, how the model bytes show it, and the changes needed:
+[CLAUDE_person_model_softmax.md](CLAUDE_person_model_softmax.md). New tool:
+[`_Tools/tflite_inspect.py`](../../../_Tools/tflite_inspect.py).
+
 ## Bench test 1 (5 Nov)
 
-Log [logs/ai1.txt](logs/ai1.txt): AI processor console, HM0360 image, model `20V1` (96 px person), op 16
+Log [logs/ai1.txt](logs/ai1.txt): AI processor console, HM0360 image, model `20V1` (person detection, 96 x 96, the model now in the WW500), op 16
 = 18, one cold boot then ten motion wakes.
 
 | Wake | Class 0 | Class 1 | Score | Result | Percent (person) |
@@ -117,8 +143,6 @@ Log [logs/ai1.txt](logs/ai1.txt): AI processor console, HM0360 image, model `20V
 - **Percentages** are whole numbers and each pair sums to 100%.
 - **Colour:** not checkable from the log (Tera Term drops the escape codes). The log does show other
   tasks printing between `TARGET OBJECT DETECTED!` and the `Score` line, which is why the colour leaked.
-- **Double softmax:** still open. If `20V1` ends in softmax, wake 1's "person" is (94 + 128) / 256 = 87%,
-  not the 68% printed.
 
 ## Bench test 2 (5 Nov)
 
@@ -143,42 +167,32 @@ Same findings as test 1: 6 `NN+` and 5 `NN-` (each sent to the BLE processor), a
 outputs mirrored, so the old rule would have agreed; percentages whole and summing to 100%. The RP3 frames
 give stronger scores than the HM0360's (no frame within 160 of zero).
 
-Both camera variants now pass with the person model. Still needed: Victor's test with the challenge models (`93V1`, `71V1`, `72V1`), where the old and new rules
-do differ.
+Both camera images pass with the person model. These tests show the change does no harm; only the
+challenge models (`93V1`, `71V1`, `72V1`), whose outputs are not mirrored, can show it fixes #270.
 
 ## Status
 
-Open, 5 November 2026. The changes in this repo (the first seven rows of the table) are made, built and
-benched on both images with the person model (bench tests 1 and 2). Then: Victor tests against his models; the app and challenge repos; record the
-decision on #270.
-
-Notes on the code change:
-
-- Fewer than 2 classes is never a detection (before, class 1 was read regardless).
-- The comparison is done in `int32_t`, because op 16 is not range-checked by `setop` (any 0 to 65535
-  is accepted) and a large value must not wrap negative.
-- The console line after each inference is now `Score <n> (class 1 - class 0, threshold <op 16>)`.
-
-Found on the bench (5 Nov), also fixed:
-
-- **Percentages are whole numbers** (`outputAsPercentage()` in `cvapp.cpp`). The decimal was computed
-  after rounding the whole number, so 56.6% printed as "57.0" and pairs summed to 100.4%. A decimal
-  place also implied precision the model does not have. The EXIF UserComment already used whole numbers.
-- **Console colour.** After `TARGET OBJECT DETECTED!` the console stayed green through
-  `sendMsgToMaster()`, so other tasks' lines came out green. It now resets to white first, as the
-  not-detected branch already did; each percentage line also resets its own colour.
-
-Not fixed, to check: the percentages may be softmax applied twice. The 96 px model's outputs are exact
-mirrors (84 / -84), as an int8 softmax layer gives (scale 1/256, zero point -128). If so, "person" for
-raw -84 is (-84 + 128) / 256 = 17%, not the 34% printed. Printing the output tensor's scale and zero
-point at model load would settle it.
+Closed, 6 November 2026. The firmware and document changes in this repo are done and benched on both
+camera images (tests 1 and 2). The remaining work is in the open items.
 
 ## Outcome
 
-To be written.
+The camera's detection now uses the same score the challenges and the website rank models on: a
+detection is when class 1 minus class 0 is above op 16. Op 16 keeps its type and range (unsigned, 0 to
+127, default 18), so the op parameter format is unchanged; only its meaning changed, and it is to be
+tuned for each model. Options 1 (signed op 16) and 2 (mirrored last layer in exported models) were not
+taken. On the bench with the person model `20V1` the results are unchanged, as expected for a model with
+mirrored outputs. Two console faults found on the way were fixed: percentages are whole numbers that sum
+to 100%, and the console no longer stays green after a detection. How detection works now is in
+[`WW500_Neural_Network_Operation.md`](../../WW500_Neural_Network_Operation.md) and
+[`config_file.md`](../../../EPII_CM55M_APP_S/app/ww_projects/ww500_md/MANIFEST/config_file.md).
 
 ## Open items
 
-- [#270](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/270): agree the proposed
-  approach (or option 1 or 2); settle point 3 with the challenges' score results; Victor to test against
-  his models.
+- [#270](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/270): record the decision;
+  Victor to test with the challenge models before merge; settle point 3 (is a good cut-off at a score of
+  0 or above?) from the challenges' score results; update the app, website and challenge repos for the
+  new meaning of op 16.
+- Issue to file: the percentages (console and EXIF UserComment) are softmax applied twice for models
+  that end in softmax, such as `20V1`
+  ([CLAUDE_person_model_softmax.md](CLAUDE_person_model_softmax.md)).

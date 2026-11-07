@@ -69,7 +69,7 @@ final one. Change requested in ww-hardware, same thread folder, `CLAUDE_selftest
 (2 cold, 4 BLE, 4 motion; card in and out). Cold boots: one `selfTest`, no bit 15. Every warm wake: `8000`, then
 the final `0000` (card) or `0800` (no card), merged by the BLE processor in IDLE (motion) or PROCESSING (app
 command), no `UNHANDLED event`, and the app got both `Error bits` lines. A PROCESSING command still got its own
-reply afterwards. Fixed on both sides; not yet committed.
+reply afterwards. Fixed on both sides. AI processor committed in `1f900bcf`.
 
 ## Issue text
 

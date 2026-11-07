@@ -115,7 +115,7 @@ lens are for the operator's glance at the two thumbnails, which is why the photo
 
 The summary also records, without failing the board, whether the **SD card** mounted and
 the **self-test bits** (`0800` = no SD card, `0200` = HM0360 not answering, `0100` = main
-camera missing).
+camera missing, `8000` = provisional: asked before the SD card start-up had finished, a final value follows).
 
 ## What the board is left with
 

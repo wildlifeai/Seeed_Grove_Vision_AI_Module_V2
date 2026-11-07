@@ -3,11 +3,12 @@
 #### File: `README.md`
 #### Path: `_Documentation\development reports\2026-11-06_lorawanPing\README.md`
 #### Author: Claude (Opus 5.5), for Charles Palmer
-#### Date: 6 November 2026
+#### Date: 6 November 2026, updated 7 November 2026
 
 ## Status
 
-Open. Branch `261106_lorawanPing`.
+Open. AI processor part done, benched and committed (`1f900bcf`, 7 Nov 2026), branch `261106_lorawanPing`.
+Stays open, with no PR, until the BLE processor work (ww-hardware thread of the same name) is done.
 
 ## Summary
 
@@ -18,6 +19,9 @@ questions in [ww-hardware #72](https://github.com/wildlifeai/ww-hardware/issues/
 [Seeed #262](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/262).
 Downlinks ([Seeed #263](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/263))
 are out of scope.
+
+___Most of the work is in the BLE processor code. The AI code needs to provide information on how full the SD card is. 
+We also had to fix a bug that was not sending accurate selftest reports.___ 
 
 **The problem (from reading the code, not yet benched).** The ping is 12 bytes. At DR2, the data rate
 used after every join, AS923 with uplink dwell time allows 11 bytes, and the DeviceTimeReq MAC command
@@ -44,7 +48,7 @@ ww-website and ww-mobile-app.
 **AI processor (this repo) work.** Report SD card free % to the BLE processor as a new op parameter
 in the `Sleep` message (op 39, after op 0 to 38). Add it to the shared op list
 (`MANIFEST/config_file.md`), which is a cross-repo contract. The BLE processor sends 0xFF until this
-firmware is out.
+firmware is out. _(Superseded 7 Nov: an on-demand `sdused` command instead, see the 7 Nov proposal.)_
 
 **Open questions for the ww-hardware team** (from Victor's doc):
 
@@ -118,19 +122,36 @@ Replaces op 39 in Victor's design, so needs his agreement. Refines the 6 Nov dis
 - **Health byte 2** stays "SD free" as Victor defined it: the BLE processor sends 100 - n, and 255 as 255.
 - **Docs:** add `sdused` and `info` to `_Documentation/ble_commands.md`.
 
-**Coded 7 Nov 2026, not yet built or benched.** `sdused` in `CLI-commands.c`; `fatfs_getSdUsedPercent()`
-and the new `APP_MSG_FATFSTASK_GET_SD_USED` message in `fatfs_task.c` (answered in every FatFS task state,
-255 with no card); `AI sdused` added to `ble_commands.md`. Not done yet: the `info` % line, and moving
-`info`'s own `f_getfree()` into the FatFS task.
+**Coded and benched 7 Nov 2026** ([`logs/ai4.txt`](logs/ai4.txt)): `sdused 255` with no card (the request
+was held until the mount had failed), `sdused 1` with a card. `sdused` in `CLI-commands.c`;
+`fatfs_getSdUsedPercent()` and the new `APP_MSG_FATFSTASK_GET_SD_USED` message in `fatfs_task.c` (answered in
+every FatFS task state, 255 with no card); `AI sdused` added to `ble_commands.md`.
+
+**Dropped (Charles, 7 Nov):** the `info` % line. Moving `info`'s `f_getfree()` alone is not worth it: about 30
+FatFS calls in the SD commands run in the CLI task. The fix for all of them (`FF_FS_REENTRANT` with a FreeRTOS
+mutex, or inhibiting captures during transfers) is [#291](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/291).
 
 ## Outcome
 
-To be written when the thread closes.
+**AI processor side (7 Nov 2026):**
+
+- **SD card use on demand.** New command `sdused`, reply `sdused N`: % of the card used (100 = full, 255 =
+  unknown or no card). The BLE processor asks for it when it builds a health message, instead of op 39 in
+  the `Sleep` message as in Victor's design. That keeps the `Sleep` message and the op list unchanged and keeps
+  the work off the path to the first photo. Works with no card. Documented in `ble_commands.md`.
+- **#290 fixed:** on a warm boot `selftest` was answered before the SD card mount, so bit 11 (no SD card)
+  was lost. New self-test bit 15, provisional: the early reply has it set, and the AI processor sends the final
+  bits unprompted once the mount is done. The BLE processor now accepts that in every awake state (ww-hardware,
+  same thread). Benched on both processors ([`CLAUDE_selftest_SD_bit.md`](CLAUDE_selftest_SD_bit.md)).
+
+**Still to do elsewhere:** the ping and the health uplink (BLE processor), then backend, website and app. Victor
+to agree `sdused` in place of op 39, and bit 15 (app decoder and health layout show it as "checking").
 
 ## Open items
 
 - [ww-hardware #72](https://github.com/wildlifeai/ww-hardware/issues/72): BLE processor side (private repo, title not checked).
 - [Seeed #262](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/262): Decide LoRaWAN uplink message content.
 - [Seeed #263](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/263): Decide LoRaWAN downlink message content (out of scope here).
-- [Seeed #290](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/290): `selftest` misses the SD card bit after a warm boot.
-- No issue yet for `sdused` (SD card fullness on demand).
+- [Seeed #290](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/290): `selftest` misses the SD card bit after a warm boot. Fixed both sides, to be closed.
+- `sdused`: no issue (Charles, 7 Nov); Victor's agreement to use it instead of op 39 belongs with #262.
+- [Seeed #291](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/291): FatFS is called from more than one task (`FF_FS_REENTRANT` 0). Not known to cause a problem.

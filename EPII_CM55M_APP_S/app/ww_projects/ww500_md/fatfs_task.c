@@ -105,6 +105,14 @@
 // Max number of comment lines in configuration.txt
 #define MAXNUMCOMMENTS (OP_PARAMETER_NUM_ENTRIES + 5)
 
+// fatfs_getSdUsedPercent(): how long to wait for the start-up mount attempt (it takes about 720 ms when there
+// is no card), and for the FatFS task's answer (f_getfree() can scan the whole FAT, 1 to 2 s on a large card,
+// and image writes queued ahead of the request go first)
+#define SD_USED_READY_TIMEOUT_MS	3000
+#define SD_USED_REPLY_TIMEOUT_MS	5000
+// Poll interval while waiting for the mount attempt
+#define SD_USED_POLL_MS				10
+
 /*************************************** Local Function Declarations *****************************/
 
 // This is the FreeRTOS task
@@ -122,6 +130,9 @@ static APP_MSG_DEST_T flagUnexpectedEvent(APP_MSG_T rxMessage);
 
 static FRESULT fileRead(fileOperation_t *fileOp);
 static FRESULT fileWrite(fileOperation_t *fileOp);
+
+static uint8_t computeSdUsedPercent(void);
+static void replySdUsed(void);
 
 // Warning: list_dir() is in spi_fatfs.c - how to declare it and reuse it?
 //FRESULT list_dir(const char *path);
@@ -162,6 +173,11 @@ static SemaphoreHandle_t xSDInitDoneSemaphore;
 // one, from the card (fatfs_waitForSettings())
 static SemaphoreHandle_t xSettingsReadySemaphore;
 static volatile bool sdReady = false;
+
+// fatfs_getSdUsedPercent() posts APP_MSG_FATFSTASK_GET_SD_USED and waits on this; the FatFS task puts the
+// answer in sdUsedPercent, then gives it (replySdUsed())
+static SemaphoreHandle_t xSdUsedSemaphore;
+static volatile uint8_t sdUsedPercent = FATFS_SD_USED_UNKNOWN;
 
 static APP_WAKE_REASON_E woken;
 
@@ -242,6 +258,7 @@ const char *fatFsTaskEventString[APP_MSG_FATFSTASK_LAST - APP_MSG_FATFSTASK_WRIT
 	"Append file",
 	"Close file",
 	"Save config",
+	"Get SD used",
 };
 
 // Number of pictures to take after motion detect wake
@@ -525,6 +542,70 @@ static FRESULT fileRead(fileOperation_t *fileOp) {
 }
 
 /**
+ * Works out the % of the SD card in use, from its cluster counts
+ *
+ * 100 only when no free cluster is left (writes will fail), 0 only when no cluster is used. Anything between
+ * is rounded, then kept within 1 to 99, so a nearly full card never reads as full. With FF_FS_NOFSINFO = 0
+ * f_getfree() normally reads the free count from the card's FSINFO sector; if that is not valid, the first
+ * call after the mount scans the whole FAT.
+ *
+ * Call only from the FatFS task (FF_FS_REENTRANT is 0).
+ *
+ * @return 0 to 100, or FATFS_SD_USED_UNKNOWN if the card is not mounted or f_getfree() fails
+ */
+static uint8_t computeSdUsedPercent(void) {
+	FRESULT res;
+	FATFS *getFreeFs;
+	DWORD freeClusters;
+	uint32_t totalClusters;
+	uint32_t usedClusters;
+	uint32_t percent;
+
+	if (!mounted) {
+		return FATFS_SD_USED_UNKNOWN;
+	}
+
+	res = f_getfree(DRV, &freeClusters, &getFreeFs);
+	if (res != FR_OK) {
+		xprintf("f_getfree() failed (%d)\n", res);
+		return FATFS_SD_USED_UNKNOWN;
+	}
+
+	// The first two FAT entries are not clusters (ChaN's documentation for f_getfree())
+	totalClusters = getFreeFs->n_fatent - 2;
+	if ((totalClusters == 0) || (freeClusters > totalClusters)) {
+		return FATFS_SD_USED_UNKNOWN;
+	}
+	usedClusters = totalClusters - freeClusters;
+
+	if (usedClusters == 0) {
+		return 0;
+	}
+	if (freeClusters == 0) {
+		return 100;
+	}
+
+	// 64-bit: clusters x 100 can pass 32 bits on a large card with small clusters
+	percent = (uint32_t) ((((uint64_t) usedClusters * 100) + (totalClusters / 2)) / totalClusters);
+	if (percent < 1) {
+		percent = 1;
+	}
+	else if (percent > 99) {
+		percent = 99;
+	}
+
+	return (uint8_t) percent;
+}
+
+/**
+ * Answers APP_MSG_FATFSTASK_GET_SD_USED: stores the % used for fatfs_getSdUsedPercent() and releases it
+ */
+static void replySdUsed(void) {
+	sdUsedPercent = computeSdUsedPercent();
+	xSemaphoreGive(xSdUsedSemaphore);
+}
+
+/**
  * Implements state machine when in APP_FATFS_STATE_UNINIT
  *
  * If disk operation requests happen they are
@@ -591,6 +672,11 @@ static APP_MSG_DEST_T handleEventForUninit(APP_MSG_T rxMessage) {
 			sendMsg.message.msg_event = APP_MSG_CLITASK_DISK_READ_COMPLETE;
 		}
 
+		break;
+
+	case APP_MSG_FATFSTASK_GET_SD_USED:
+		// No card (the mount failed): replySdUsed() answers FATFS_SD_USED_UNKNOWN
+		replySdUsed();
 		break;
 
 	case APP_MSG_FATFSTASK_SAVE_STATE:
@@ -828,6 +914,11 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 		}
 		break;
 
+	case APP_MSG_FATFSTASK_GET_SD_USED:
+		// Here, in the FatFS task, so f_getfree() does not run alongside other FatFS calls (FF_FS_REENTRANT is 0)
+		replySdUsed();
+		break;
+
 	case APP_MSG_FATFSTASK_OPEN_FILE:
 		// 1/3 commands for sending files from the app to the SD card
 
@@ -996,6 +1087,11 @@ static APP_MSG_DEST_T handleEventForBusy(APP_MSG_T rxMessage) {
 	case APP_MSG_FATFSTASK_DONE:
 		// someone wants a file written
 		fatFs_task_state = APP_FATFS_STATE_IDLE;
+		break;
+
+	case APP_MSG_FATFSTASK_GET_SD_USED:
+		// Answer whatever the state, so the caller does not wait for its timeout
+		replySdUsed();
 		break;
 
 	default:
@@ -1823,6 +1919,19 @@ static void vFatFsTask(void *pvParameters) {
 	// record, to start at all (op_parameter[] now holds the card's values)
 	boot_timing_mark(BOOT_TIMING_SD_READY);
 	sdReady = true;
+
+	// Bit 11 (no SD card) is known now. If a 'selftest' reply went before this it was provisional (bit 15): have
+	// the IF task send the final bits (#290). Only on a warm boot in practice: a cold boot sends "Wake" after this
+	if (selfTest_setChecksDone()) {
+		APP_MSG_T selfTestMsg;
+
+		selfTestMsg.msg_event = APP_MSG_IFTASK_SELFTEST_FINAL;
+		selfTestMsg.msg_data = 0;
+		selfTestMsg.msg_parameter = 0;
+		if (xQueueSend(xIfTaskQueue, (void *) &selfTestMsg, __QueueSendTicksToWait) != pdTRUE) {
+			xprintf("send_msg=0x%x fail\r\n", selfTestMsg.msg_event);
+		}
+	}
 	xSemaphoreGive(xSDInitDoneSemaphore);
 	if (!recordLoaded) {
 		xSemaphoreGive(xSettingsReadySemaphore);
@@ -1969,8 +2078,9 @@ TaskHandle_t fatfs_createTask(int8_t priority, APP_WAKE_REASON_E wakeReason) {
 	// Semaphores that release the image task: when the settings are known, and when the card is ready
 	xSDInitDoneSemaphore = xSemaphoreCreateBinary();
 	xSettingsReadySemaphore = xSemaphoreCreateBinary();
+	xSdUsedSemaphore = xSemaphoreCreateBinary();
 
-	if ((xSDInitDoneSemaphore == NULL) || (xSettingsReadySemaphore == NULL)) {
+	if ((xSDInitDoneSemaphore == NULL) || (xSettingsReadySemaphore == NULL) || (xSdUsedSemaphore == NULL)) {
 		xprintf("Failed to create the start-up semaphores\n");
 		configASSERT(0); // TODO add debug messages?
 	}
@@ -2025,6 +2135,53 @@ void fatfs_waitForSdReady(void) {
  */
 bool fatfs_isSdReady(void) {
 	return sdReady;
+}
+
+/**
+ * The % of the SD card in use, for the 'sdused' command
+ *
+ * Waits for the start-up mount attempt if it has not finished, so the answer is never provisional (unlike an
+ * early 'selftest', #290). Then asks the FatFS task, which owns all FatFS calls, and waits for its answer. Only
+ * one caller at a time (the CLI task). Never call from the FatFS task: it would wait for itself.
+ *
+ * @return 0 to 100 (see computeSdUsedPercent()), or FATFS_SD_USED_UNKNOWN if there is no card, the mount
+ * failed, f_getfree() failed or a wait timed out
+ */
+uint8_t fatfs_getSdUsedPercent(void) {
+	APP_MSG_T sendMsg;
+	TickType_t startTime;
+
+	startTime = xTaskGetTickCount();
+	while (!sdReady) {
+		if ((xTaskGetTickCount() - startTime) > pdMS_TO_TICKS(SD_USED_READY_TIMEOUT_MS)) {
+			xprintf("sdused: SD start-up not finished after %dms\n", SD_USED_READY_TIMEOUT_MS);
+			return FATFS_SD_USED_UNKNOWN;
+		}
+		vTaskDelay(pdMS_TO_TICKS(SD_USED_POLL_MS));
+	}
+
+	if (!mounted) {
+		return FATFS_SD_USED_UNKNOWN;	// no need to ask the FatFS task
+	}
+
+	// Drop an answer that came after an earlier call timed out
+	xSemaphoreTake(xSdUsedSemaphore, 0);
+
+	sendMsg.msg_event = APP_MSG_FATFSTASK_GET_SD_USED;
+	sendMsg.msg_data = 0;
+	sendMsg.msg_parameter = 0;
+
+	if (xQueueSend(xFatTaskQueue, (void *) &sendMsg, __QueueSendTicksToWait) != pdTRUE) {
+		xprintf("Failed to send 0x%x to FatTask\r\n", sendMsg.msg_event);
+		return FATFS_SD_USED_UNKNOWN;
+	}
+
+	if (xSemaphoreTake(xSdUsedSemaphore, pdMS_TO_TICKS(SD_USED_REPLY_TIMEOUT_MS)) != pdTRUE) {
+		xprintf("sdused: no answer from the FatFS task after %dms\n", SD_USED_REPLY_TIMEOUT_MS);
+		return FATFS_SD_USED_UNKNOWN;
+	}
+
+	return sdUsedPercent;
 }
 
 /**

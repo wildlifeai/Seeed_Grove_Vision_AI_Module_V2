@@ -36,6 +36,10 @@ extern "C" {
 // default drive?
 #define DRV ""
 
+// fatfs_getSdUsedPercent() (the 'sdused' command) when the use of the card is not known: no card, mount failed,
+// or f_getfree() failed. Matches 0xFF = unknown in the LoRaWAN health message
+#define FATFS_SD_USED_UNKNOWN	255
+
 // TODO Experimental: set a limit on the name of files
 #define	FNAMELEN 16
 // required length for a 128-bit UUID (including trailing '\0')
@@ -181,6 +185,9 @@ bool fatfs_mounted(void);
 void fatfs_waitForSettings(void);
 void fatfs_waitForSdReady(void);
 bool fatfs_isSdReady(void);
+
+// % of the SD card used (0-100), or FATFS_SD_USED_UNKNOWN. Blocks. Not from the FatFS task
+uint8_t fatfs_getSdUsedPercent(void);
 
 const char * fatfs_getStateString(void);
 

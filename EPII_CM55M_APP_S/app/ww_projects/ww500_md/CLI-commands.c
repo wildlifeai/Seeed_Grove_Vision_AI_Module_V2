@@ -297,6 +297,7 @@ static BaseType_t prvExifGpsTests(char *pcWriteBuffer, size_t xWriteBufferLen, c
 static BaseType_t prvLoadModel(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 static BaseType_t prvEraseModel(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 static BaseType_t prvGetSelfTest(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
+static BaseType_t prvSdUsed(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 
 static BaseType_t prvSetOpParam(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 static BaseType_t prvGetOpParam(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
@@ -702,6 +703,14 @@ static const CLI_Command_Definition_t xGetSelfTest = {
 	"selftest", /* The command string to type. */
 	"selftest:\r\n Get Self Test bits\r\n",
 	prvGetSelfTest, /* The function to run. */
+	0			/* No parameters expected */
+};
+
+// Registered here, not with the SD card commands in CLI-FATFS-commands.c, so it answers when there is no card
+static const CLI_Command_Definition_t xSdUsed = {
+	"sdused", /* The command string to type. */
+	"sdused:\r\n % of the SD card used (0-100, 255 = unknown or no card)\r\n",
+	prvSdUsed, /* The function to run. */
 	0			/* No parameters expected */
 };
 
@@ -2588,17 +2597,43 @@ static BaseType_t prvGetOpParam(char *pcWriteBuffer, size_t xWriteBufferLen, con
 /**
  * Return current self test bits
  *
- * Bit 14 (SELF_TEST_AI_NO_BLE) is cleared once this reply has carried it, whoever asked (#246). It records that the
+ * Bit 14 (SELF_TEST_AI_NO_BLE) is cleared once a final reply has carried it, whoever asked (#246). It records that the
  * BLE processor missed the first message after boot; nothing else clears it, so a BLE processor that was only late
  * still learns of it from its 'selftest' on that wake.
+ *
+ * Bit 15 (SELF_TEST_AI_PROVISIONAL) is set if the SD card start-up has not finished, so bit 11 is not known yet
+ * (warm boot, #290). The IF task then sends the final 'selfTest' unprompted once it has.
  */
 static BaseType_t prvGetSelfTest(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) {
 	(void)pcCommandString;
 	(void)xWriteBufferLen;
 	configASSERT(pcWriteBuffer);
 
-	cli_append(&pcWriteBuffer, &xWriteBufferLen, "selfTest %04x", selfTest_getErrorBits());
-	selfTest_clearErrorBits(1 << SELF_TEST_AI_NO_BLE);
+	// Bit 15 set if the SD card start-up has not finished; bit 14 cleared only by a final reply (selfTest.c)
+	cli_append(&pcWriteBuffer, &xWriteBufferLen, "selfTest %04x", selfTest_getReplyBits());
+
+	/* There is no more data to return after this single string, so return pdFALSE. */
+	return pdFALSE;
+}
+
+/**
+ * Reply with the % of the SD card used: 'sdused <n>'
+ *
+ * n is 0 to 100, or 255 (FATFS_SD_USED_UNKNOWN) when there is no card, the mount failed or the value cannot be
+ * read. 100 means no free cluster is left. Asked for by the BLE processor for the LoRaWAN health message. Early in
+ * a wake this waits for the SD card start-up (up to about 720 ms with no card), so it is not for the path to the
+ * first photo.
+ *
+ * @param pcWriteBuffer - buffer for the reply
+ * @param xWriteBufferLen - size of the buffer
+ * @param pcCommandString - the command line (no parameters)
+ * @return pdFALSE: the reply is complete
+ */
+static BaseType_t prvSdUsed(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) {
+	(void)pcCommandString;
+	configASSERT(pcWriteBuffer);
+
+	cli_append(&pcWriteBuffer, &xWriteBufferLen, "sdused %u", (unsigned int) fatfs_getSdUsedPercent());
 
 	/* There is no more data to return after this single string, so return pdFALSE. */
 	return pdFALSE;
@@ -3427,6 +3462,7 @@ static void vRegisterCLICommands(void)
 	FreeRTOS_CLIRegisterCommand(&xSetOpParam);	// Sets an Operational Parameter
 	FreeRTOS_CLIRegisterCommand(&xGetOpParam);	// Gets an Operational Parameter
 	FreeRTOS_CLIRegisterCommand(&xGetSelfTest);	// Gets self test bits
+	FreeRTOS_CLIRegisterCommand(&xSdUsed);		// % of the SD card used (answers with no card too)
 
 	FreeRTOS_CLIRegisterCommand( &xFormat );
 

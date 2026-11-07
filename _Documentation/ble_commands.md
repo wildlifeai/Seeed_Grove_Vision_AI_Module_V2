@@ -1,6 +1,6 @@
 # WW500 BLE commands
 #### CGP - 25 November 2025
-#### Updated 25 October 2026 (`AI interval`, op range check, by Claude); 28 September 2026 (`AI ble`, by Claude); 1 September 2026 (`AI light` and the `AE light check` line) and 3 September 2026 (the gain-based wording from ee65771f, checked against e8b7feb5) by Claude, reviewed by Victor Anton
+#### Updated 7 November 2026 (`AI sdused`, `selftest` bit 15, by Claude); 25 October 2026 (`AI interval`, op range check, by Claude); 28 September 2026 (`AI ble`, by Claude); 1 September 2026 (`AI light` and the `AE light check` line) and 3 September 2026 (the gain-based wording from ee65771f, checked against e8b7feb5) by Claude, reviewed by Victor Anton
 
 When the smartphone app establishes a BLE connection to the WW500 it can send and receive messages.
 The messages that it sends are treated as commands to the WW500. The messages it receives are 
@@ -173,6 +173,7 @@ The "Reqd?" column indicates whether the command should be implemented by the ap
 | AI xipstate    | [test]        | Lists the flash records: each fast-start settings record (sequence number, ops) and the board record (RTC calibration). `test` runs a write and read-back test of the fast-start sector | - |
 | AI rtccal      | [measure \| on \| off] | `RTC calibration: N ppm (P %), measured S RTC s ago.` The RC32K clock's error, measured against the crystal and used to correct the sleep (#245). `measure` measures now (busy up to 3 s), `off` stops the correction, `on` restores it | - |
 | AI ble         | [clear]       | `BLE processor responsive`, or `BLE processor unresponsive: messages to it are not sent`. `clear` clears that flag | -, 6 |
+| AI sdused      |               | `sdused N`: % of the SD card used. 0 = nothing used, 100 = no free space left, 1 to 99 between. `sdused 255` = unknown (no card, mount failed). Works with no card, unlike the SD commands such as `AI info`. Early in a wake it waits for the SD card start-up (up to about 0.7 s with no card). For the LoRaWAN health message | - |
 
 Note that there are addition commands that could be run on the AI processor, not documented here.
 These can be seen by typing "help" at the console. 
@@ -222,10 +223,14 @@ __Notes:__
    full 4000 ms, and a late read clears the flag. The flag is cleared if the BLE processor sends a command, by `ble clear`, or at the next
    boot. Not needed by the app: an app that can send `AI ble` has a working BLE processor, so the answer is always
    "responsive". When the flag is set, self test bit 14 (`SELF_TEST_AI_NO_BLE`, 0x4000) is set too, but the bit is not
-   cleared with the flag: it stays set until a `selftest` reply has carried it (from the BLE processor or the console),
+   cleared with the flag: it stays set until a final `selftest` reply (bit 15 clear, see below) has carried it (from the BLE processor or the console),
    so a BLE processor that was only late still learns of it from its `selftest` on that wake (#246, 4 November 2026).
    `ble clear` clears only the flag. The self test bit list is shared with the BLE processor (`ww-hardware`,
    `selfTest.h`) and the app.
+7. **`selftest` bit 15 (`SELF_TEST_AI_PROVISIONAL`, 0x8000)** (7 November 2026, #290). On a warm boot "Wake" goes before the
+   SD card is mounted, so a `selftest` answered then cannot know bit 11 (no SD card). Such a reply has bit 15 set. When the
+   SD card start-up finishes (about 0.2 s after "Wake" with a card, 0.7 s without) the AI processor sends the final
+   `selfTest xxxx`, bit 15 clear, without being asked. Treat bit 15 as "checking", not a fault.
 
 __Other AI Processor Commands__
 

@@ -1,7 +1,7 @@
 # Git Branch List
 #### File: Branch_List.md
 #### Author: Charles
-#### Date: 30 September 2026, updated 7 November 2026
+#### Date: 30 September 2026, updated 25 November 2026
 
 The idea of this file is to try to document what is in git branches. It is apparent that
 I forget why I set up some branches.
@@ -31,3 +31,4 @@ Also, as an experiment, I will start naming branches with the date I create them
 | 4 Nov 2026   | 261104_selfTest     | Self-test bit 14 kept until a selftest reply has carried it (#246) |
 | 5 Nov 2026   | 261105_NN_threshold | Op 16 as a % probability, double softmax fixed (#270, #287, PR #289) |
 | 6 Nov 2026   | 261106_lorawanPing  | LoRaWAN health message: `sdused` command, selftest bit 15 provisional (#290) |
+| 25 Nov 2026  | 261125_countersLost | A variety of fixes, not new functionality: AI processor issues found during the BLE processor LoRaWAN work (counters lost after /RST, clock), and issues raised by Victor |

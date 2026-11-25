@@ -98,6 +98,12 @@ const char * image_getLastImageFile(void);
 // Returns whether the camera system is enabled
 bool image_getEnabled(void);
 
+// Returns whether this task is preparing to sleep, so it will not capture again before DPD
+bool image_isGoingToSleep(void);
+
+// Returns whether this task has finished its work before sleep, so the IF task may send "Sleep" (#296)
+bool image_isReadyToSleep(void);
+
 // Change the interval of the capture burst in progress, from its next frame ('interval' command)
 bool image_setCaptureInterval(uint32_t interval);
 

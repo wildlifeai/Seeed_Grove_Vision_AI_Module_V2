@@ -1069,7 +1069,7 @@ static BaseType_t prvCamera(char *pcWriteBuffer, size_t xWriteBufferLen, const c
 }
 
 /**
- * Refuses a capture if this is the time between a cold boot and the first DPD
+ * Refuses a capture between a cold boot and the first DPD, or when the image task is preparing to sleep
  *
  * A cold boot is meant to set things up and then enter DPD quickly. Captures are only expected
  * after a wake from DPD, so one requested before that is refused. This removes one variable:
@@ -1078,16 +1078,24 @@ static BaseType_t prvCamera(char *pcWriteBuffer, size_t xWriteBufferLen, const c
  *
  * Note that the 'reset' and 'switchslot' commands and a firmware update all end in a cold boot.
  *
+ * Once the image task is preparing to sleep it does not capture again before DPD. Since #296 that time includes
+ * the RTC work (up to about 5 s), during which the BLE processor still sends commands to us rather than waking us.
+ * Refused with a reply rather than ignored, so the app can try again after the sleep.
+ *
  * @param pcWriteBuffer - the error message is written here if the capture is refused
  * @param xWriteBufferLen - size of that buffer
  * @return true if the capture is refused
  */
 static bool captureRefused(char *pcWriteBuffer, size_t xWriteBufferLen) {
-	if (woken != APP_WAKE_REASON_COLD) {
-		return false;
+	if (woken == APP_WAKE_REASON_COLD) {
+		snprintf(pcWriteBuffer, xWriteBufferLen, "Error: no captures until after the first sleep.");
+		return true;
 	}
-	snprintf(pcWriteBuffer, xWriteBufferLen, "Error: no captures until after the first sleep.");
-	return true;
+	if (image_isGoingToSleep()) {
+		snprintf(pcWriteBuffer, xWriteBufferLen, "Error: going to sleep, try again.");
+		return true;
+	}
+	return false;
 }
 
 /**

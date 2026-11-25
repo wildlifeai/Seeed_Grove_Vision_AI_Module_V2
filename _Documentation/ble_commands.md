@@ -241,7 +241,9 @@ Some might be useful in due course, such as those for navigating the file system
    `AI light` reply `Error: no captures until after the first sleep.` if the AI processor has
    cold-booted and not yet been through DPD. A cold boot follows power-on, RESET, `AI reset`,
    `AI switchslot` and a firmware update. The AI processor sleeps by itself after the inactivity
-   period (op 8), and the next command wakes it.
+   period (op 8), and the next command wakes it. They also reply `Error: going to sleep, try again.`
+   in the few seconds between the AI processor starting to prepare for sleep and its "Sleep"
+   message (#296, 25 November 2026). Send the command again after "Sleep" and it wakes the AI processor.
 
 ## Asynchronous Messages
 

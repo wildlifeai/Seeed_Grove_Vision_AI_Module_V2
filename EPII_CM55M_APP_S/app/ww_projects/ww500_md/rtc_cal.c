@@ -246,8 +246,9 @@ bool rtc_cal_measureAndSave(int32_t *ppm) {
 /**
  * @brief Before sleep: measure if due, and load the correction for sleep_mode_enter_dpd().
  *
- * Call once per wake, just before DPD, when the camera and NN are idle (the board record is in the
- * flash) and the watchdog is stopped (a measurement keeps the core busy for 2 to 3 s).
+ * Call once per wake, before the "Sleep" message (#296), when the camera and NN are idle (the board record
+ * is in the flash) and the watchdog is stopped (a measurement keeps the core busy for 2 to 3 s). Call after
+ * exif_utc_before_sleep(), so the time of the measurement is in the corrected RTC time.
  *
  * @param coldBoot  true if this wake is a cold boot
  */

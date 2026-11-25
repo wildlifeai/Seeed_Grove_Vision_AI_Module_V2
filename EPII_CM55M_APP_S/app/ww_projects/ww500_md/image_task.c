@@ -216,6 +216,9 @@ static void setupLEDFlash(void);
 // When final activity from the FatFS Task and IF Task are complete, enter DPD
 static void sleepWhenPossible(void);
 
+// The RTC write and calibration, before the IF task sends "Sleep" (#296)
+static void rtcWorkBeforeSleep(void);
+
 // Before sleeping: wait for the card's start-up to finish, then ask the FatFS task to save state
 static APP_MSG_DEST_T saveStateBeforeSleep(void);
 
@@ -259,6 +262,13 @@ TaskHandle_t image_task_id;
 QueueHandle_t xImageTaskQueue;
 
 volatile APP_IMAGE_TASK_STATE_E image_task_state = APP_IMAGE_TASK_STATE_UNINIT;
+
+// Set when this task starts preparing to sleep (saveStateBeforeSleep()). It never goes back to capturing
+// after that, so a capture asked for now is refused (image_isGoingToSleep())
+static volatile bool goingToSleep = false;
+
+// Set when the RTC work is done and the IF task may send "Sleep" (#296): see image_isReadyToSleep()
+static volatile bool readyToSleep = false;
 
 // For the current request increments
 static uint32_t g_cur_jpegenc_frame;
@@ -1617,7 +1627,9 @@ static APP_MSG_DEST_T handleEventForSaveState(APP_MSG_T img_recv_msg)
     switch (event)  {
 
     case APP_MSG_IMAGETASK_DISK_WRITE_COMPLETE:
-        // Here when the FatFS task has saved state
+        // Here when the FatFS task has saved state. Do the slow RTC work while the BLE processor still
+        // treats us as awake, then let the IF task send "Sleep" (#296)
+        rtcWorkBeforeSleep();
         // Wait till the IF Task is also ready, then sleep
         sleepWhenPossible(); // does not return
         image_task_state = APP_IMAGE_TASK_STATE_UNINIT;
@@ -2582,12 +2594,53 @@ void sendMsgToMaster(char *str) {
 /**
  * When final activity from the FatFS Task and IF Task are complete, enter DPD
  *
- * A message has also been sent to the If Tasks asking it to send its final message.
- * When complete it will give its semaphore.
+ * Asks the IF task to send its final "Sleep" message. When the BLE processor has read it, the IF task
+ * reports to shutdownBarrier too, and image_sleepNow() enters DPD.
  */
 static void sleepWhenPossible(void) {
+	APP_MSG_T send_msg;
+
 	xprintf("Image task ready to sleep.\n");
+
+	// From now on the inactivity detector tells the IF task too (app_onInactivityDetection()). This first
+	// request is ours: the IF task sends "Sleep", which is now the last thing before DPD (#296)
+	readyToSleep = true;
+	send_msg.msg_event = APP_MSG_IFTASK_INACTIVITY;
+	send_msg.msg_data = 0;
+	send_msg.msg_parameter = 0;
+	if (xQueueSend(xIfTaskQueue, (void *)&send_msg, __QueueSendTicksToWait) != pdTRUE) {
+		xprintf("send_msg=0x%x fail\r\n", send_msg.msg_event);
+	}
+
 	barrier_ready(&shutdownBarrier);
+}
+
+/**
+ * The RTC write and the RTC calibration, done before the IF task sends "Sleep" (#296)
+ *
+ * Both are slow: the RTC write blocks interrupts for about 1.9 s, and a calibration keeps the core busy for
+ * 2 to 3 s. Until 25 Nov 2026 they were done after "Sleep", in image_sleepNow(), and the BLE processor, which
+ * treats "Sleep" as "in DPD", sent a WAKE pulse for any command in that time. The pulse was ignored and the
+ * command lost. Now a command in that time reaches an awake processor over I2C and is answered when the work
+ * ends (benched 25 Nov 2026: a command during either step was received intact).
+ *
+ * The RTC write comes first, so the calibration records its time in the corrected RTC time. The other way round,
+ * moving the RTC (from 2024 after a cold boot, or back by the drift) made the next calibration due at once.
+ *
+ * Called with the camera stopped, the NN not running (this task runs it) and the state saved. The watchdog is
+ * stopped for the RTC write, which blocks its feed, and restarted after, in case a command keeps us awake.
+ */
+static void rtcWorkBeforeSleep(void) {
+	watchdog_suspend();
+
+	// The RTC is only written from setutc here, before sleep, and only when far out (#56)
+	exif_utc_before_sleep();
+
+	// The RTC calibration (#245): measured if due, and the correction loaded for the alarm. Needs the NN stopped
+	// (the board record is in the flash, which switches XIP off)
+	rtc_cal_beforeSleep(woken == APP_WAKE_REASON_COLD);
+
+	watchdog_resume();
 }
 
 /**
@@ -2607,6 +2660,7 @@ static void sleepWhenPossible(void) {
 static APP_MSG_DEST_T saveStateBeforeSleep(void) {
 	APP_MSG_DEST_T msg;
 
+	goingToSleep = true;
 	fatfs_waitForSdReady();
 
 	msg.destination = xFatTaskQueue;
@@ -3223,6 +3277,29 @@ bool image_getEnabled(void) {
 }
 
 /**
+ * Returns whether this task is preparing to sleep: saving state, doing the RTC work, or waiting for DPD.
+ *
+ * It does not capture again before DPD, so a capture asked for now is refused (CLI-commands.c).
+ *
+ * @return true from the start of the save state before sleep
+ */
+bool image_isGoingToSleep(void) {
+	return goingToSleep;
+}
+
+/**
+ * Returns whether this task has finished its work before sleep, so the IF task may send "Sleep".
+ *
+ * Until then the inactivity detector tells only this task (app_onInactivityDetection()), so "Sleep" is not sent
+ * before the RTC work (#296).
+ *
+ * @return true once the RTC work before sleep is done
+ */
+bool image_isReadyToSleep(void) {
+	return readyToSleep;
+}
+
+/**
  * Enter DPD
  *
  * This is a separate routine from sleepWhenPossible since it is called from 2 places
@@ -3290,14 +3367,7 @@ void image_sleepNow(void) {
 
     timelapseDelay = fatfs_getOperationalParameter(OP_PARAMETER_TIMELAPSE_INTERVAL);
 
-    // The RTC calibration (#245): measured if due (2 to 3 s busy), and the correction loaded for the alarm.
-    // Here because the NN is not running (the board record is in the flash, which switches XIP off) and
-    // the watchdog has been stopped
-    rtc_cal_beforeSleep(woken == APP_WAKE_REASON_COLD);
-
-    // The RTC is only written from setutc here, at sleep, when far out (#56): the write blocks interrupts for
-    // about 1.4 s. After rtc_cal_beforeSleep(), whose measurement sets RTC alarms from the current RTC time
-    exif_utc_before_sleep();
+    // The RTC write and calibration were done before "Sleep" was sent: see rtcWorkBeforeSleep() (#296)
 
 	// CLI command might have requested this after firmware update
 	if (app_getResetRequest()) {

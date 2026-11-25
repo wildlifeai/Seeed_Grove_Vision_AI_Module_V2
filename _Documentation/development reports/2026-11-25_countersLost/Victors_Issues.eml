@@ -1,0 +1,203 @@
+X-UIDL: UID440295-1211535033
+X-Mozilla-Status: 0001
+X-Mozilla-Status2: 00000000
+X-Mozilla-Keys:                                                                                 
+Return-Path: <victor@wildlife.ai>
+Delivered-To: charles.palmer@acutetechnology.com
+Received: from gator3290.hostgator.com
+	by gator3290.hostgator.com with LMTP
+	id ZY5gHUIwAWsCHAoA0WAQ2A
+	(envelope-from <victor@wildlife.ai>)
+	for <charles.palmer@acutetechnology.com>; Fri, 20 Nov 2026 23:46:42 -0600
+Return-path: <victor@wildlife.ai>
+Envelope-to: charles.palmer@acutetechnology.com
+Delivery-date: Fri, 20 Nov 2026 23:46:42 -0600
+Received: from mail-oa1-f47.google.com ([209.85.160.47]:58597)
+	by gator3290.hostgator.com with esmtps  (TLS1.3) tls TLS_AES_128_GCM_SHA256
+	(Exim 4.100.1)
+	(envelope-from <victor@wildlife.ai>)
+	id 1xUdvu-00000002mKr-081l
+	for charles.palmer@acutetechnology.com;
+	Fri, 20 Nov 2026 23:46:42 -0600
+Received: by mail-oa1-f47.google.com with SMTP id 586e51a60fabf-483a66818edso939214fac.0
+        for <charles.palmer@acutetechnology.com>; Fri, 20 Nov 2026 21:46:41 -0800 (PST)
+ARC-Seal: i=1; a=rsa-sha256; t=1795240001; cv=none;
+        d=google.com; s=arc-20260327;
+        b=qkSQabxsPZVrRUcXYYr03C+//088K9SNJK77kgrcj/e9lA4uuDmECEjOSNeSDHEQ2b
+         OuNNQwYV+XT5il52EH0s2Cyz18nHMHYgV/t4rSSIg6Hg/nm8p/xszovj2boaXC+z1YDt
+         +ZgjI2TXdNyyr39CHrBJs0WHnR+6M3nfuVmZfeE9941Nfij7HkQdnohuSNt094Iylhem
+         U2duHqWsr76YjDLziG45eYtnLR548oKj25YU2eZHqW7DB6p9+49TTSxdvlyyow92CEpf
+         I3rKCaD21/6yG1ornzMUnzrX+VKlFxO1iWlUPnf7EKVaIU8RlJR0oCYcXni0Ux/NRIjG
+         f+fA==
+ARC-Message-Signature: i=1; a=rsa-sha256; c=relaxed/relaxed; d=google.com; s=arc-20260327;
+        h=to:subject:message-id:date:from:mime-version:dkim-signature;
+        bh=U3dzp/lAjaP13O6/Y34C2jWHz3Or5AJoA6oGpud3amE=;
+        fh=hIIWhR+bNK4XXBYgAnOX6R7QxfCpdBYw92Xurncr/X8=;
+        b=l9h7OygfsxA/bLsIE4xnLiN/VgUJk3cFrwPHg47eAOlwCcUuHh8QZBMAN9Ilt3qKpX
+         dcPoOas+wGJdjpTDXZNnK74DaueEQVEJ1vAQbwl/kHMgeQ5N5rCsUsRCYbSE7dkrHAGm
+         L7LnwgZSbR4M8P+WZe+668Mu4nqtIpDr2OTyh1AFZ0pZ7yD9ZbNJEKYEE8vSGc8Q7Tbs
+         1ng3qj3Ktft+BzK5+VGLNPGbTdmkg8KYJgUG522+jJ4jktNrahi6q9faBVk0UOqI41Cr
+         wDSQxXTQLzoROjNRmZao0nLVQa2SiusSyWs5Fh07ryT/l00CRm5V3QtA18w/PxsXitIc
+         fN/Q==;
+        darn=acutetechnology.com
+ARC-Authentication-Results: i=1; mx.google.com; arc=none
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed;
+        d=wildlife.ai; s=google; t=1795240001; x=1795844801; darn=acutetechnology.com;
+        h=content-type:to:subject:message-id:date:from:mime-version:from:to
+         :cc:subject:date:message-id:reply-to:content-type;
+        bh=U3dzp/lAjaP13O6/Y34C2jWHz3Or5AJoA6oGpud3amE=;
+        b=fG/3e25d7JuvMu2UhTYf9TUSp98aNl4hc0P3XsUaQkBSVLtfAFxQbNPFQOokPiBg5e
+         zLGBFJNr1D8GRepVfkeYIV3+8CI5BvPp0DVBjhRSEy07bnbuD/ag/x99ChopUjThIMoN
+         ZVOnVHZiXgDQOkCTgxZNymPWVTFibBZpL6kGIrpMFrD7g6hFJImGZ0lbvAsT4xH/tze6
+         avcQ7TSKZm5XxPDGxisSqpy/jlO6Q6eXyCyjMqdW3PpFIGyNBpLCKVQLUTy5/syC5ioB
+         H5piC4ooYbR5PEib8VFTTpeaRt+tpxS2Uz9AUxBIqZIZPCaZtuXzThBvU5yZIio9Xnu7
+         1v8A==
+X-Google-DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed;
+        d=1e100.net; s=20260707; t=1795240001; x=1795844801;
+        h=content-type:to:subject:message-id:date:from:mime-version:x-gm-gg
+         :x-gm-message-state:from:to:cc:subject:date:message-id:reply-to
+         :content-type;
+        bh=U3dzp/lAjaP13O6/Y34C2jWHz3Or5AJoA6oGpud3amE=;
+        b=vIUWsk5zn6j2knoz+wPrp3vmYuREwoftLQ99Hmqs/q34i3A/ULGbob2otvxN5666aI
+         XLhpVD0RV3ewwJh0wGeSb6TlF32TCm/UrhLiOVfZGnyplODwx/fSSI76EPcpmPGcrj6W
+         4FgwVbPF5cGVNRHxOMW6iqpPM/fljLnZfPNWuxM0RnBULLU4uVJ/2UzXPvI8dW5TaPC3
+         zNsuQItmSDOcsaxkyLdHDvMQrFUb7K5dbU+w+8C+CfBPauZ78FR0Bdhg2ANpXSjpaXQy
+         U8AC+mH+29o1qWxSmlq9a7Yo/ywMZ/+kJUDOvnASfHuNvCWxymVr2e0TgB73U7mZgrlt
+         TDFw==
+X-Gm-Message-State: APuU4Z/FA/SaQnFiL6pUqN5Rgv7r6JncIhcnlXjWkMeAHuaUWo1sORky
+	iUj94xjWUQ+WqwbND7gga1aYkO8YdG8FIYnVPVMTH8nLaakBa2Nzu3QpHEYs7dJKdTv0jmmri+C
+	hKealAcu4Jo2e+pQ57H2WZAN9MMFHz29lbdUyxgjUo3LHe2nGUQHraNU=
+X-Gm-Gg: AZFdTZdToHQWARfzEFoITdaY5TOStNQQjjtzEnWO9AGGTnE1YBCbejyalVeO0rWj1LK
+	cpzUmhg2Dwiq1Iqki82Y4WHSV2xk4vsoGZU/KJA+U5cfsfM6oB9J1waLW7tqTnv6w7s0LIfpD4L
+	bQ51FKi7Ju9vJBAfyM35pcbYVOxl54bIc8dkY4nCI/W4FkhygeDu6XGdEDG0lFMyWTtaiDQsysc
+	wXgZz9l8HONvQ1pKoY3cOPumuSs/bg7U5wngW/bVTlxPxbA0GsXDGt4CFasWVi+oal5U5BIjzLS
+	5LKZ2W4lRK+9FDWZLSJAutHBstS8gjWu87HH0l7XOrrBjla4IbbspJPAUz+IXjC8W9CfTzEIlOA
+	x4sCSVRini75asiZ0lwrBWedw4dDUaJkJjNpkHVZ/Y6xEmdfB/ArLtfFAtUcJIY+rE858TQ==
+X-Received: by 2002:a05:6820:c5cd:20b0:71a:ff98:172a with SMTP id
+ 006d021491bc7-71b395ea80emr3087680eaf.58.1795240000617; Fri, 20 Nov 2026
+ 21:46:40 -0800 (PST)
+MIME-Version: 1.0
+From: Victor Anton <victor@wildlife.ai>
+Date: Sat, 21 Nov 2026 18:46:28 +1300
+X-Gm-Features: Aa3M54oP5ceK_ZkEJmXDBseGRMcAOgm5kL_AGJLRuZTtcoKzYC5wqehrRh9EoZk
+Message-ID: <CAM9y6y+hWb1ckOfKpdT_0-ZSjEYLQ1NcfA3Zq0GEWoagiM+MWw@mail.gmail.com>
+Subject: PRS in seedgrove and ww-hardware
+To: Charles Palmer <charles.palmer@acutetechnology.com>
+Content-Type: multipart/alternative; boundary="000000000000860fdb0660c2e2c4"
+X-Spam-Status: No, score=-0.3
+X-Spam-Score: -3
+X-Spam-Bar: /
+X-Spam-Flag: NO
+X-Antivirus: Norton (VPS 261120-4, 11/21/2026), Inbound message
+X-Antivirus-Status: Clean
+
+--000000000000860fdb0660c2e2c4
+Content-Type: text/plain; charset="UTF-8"
+
+Kia ora Charles,
+
+I tested your four PRs (Seeed #284, #286 and #289, and ww-hardware #77) on
+the bench. With both chips on the new firmware, normal wakes were clean: no
+errors over 35 wakes, photo times right, the new threshold matches the PC,
+and photos download faster.
+
+Two problems block merging:
+
+   - After a wake without a restart, the AI chip answers the self-test
+   before it has checked the SD card, so a missing card is reported as fine
+   (your Seeed #290). Your lorawanPing branch fixes this, so I'd like it to go
+   in with the rest. When it's finished, could you open PRs for it in both
+   repos, with the Bluetooth version set to 0.30.62?
+   - Seeed #296
+   <https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/296>,
+   the himax chip says "Sleep", then spends a few seconds on its clock before
+   it really goes to sleep. This messes up with the BLE chip and mobile app.
+
+Meanwhile, a FYI I've:
+
+   - Updated the mobile app (ww-mobile-app #527). A camera with only one
+   chip updated can't receive files from the app, so the app won't offer the
+   Bluetooth update until the AI chip has been updated.
+   - Taken your own build of 0.30.60 out of ww-hardware #77, put back the
+   older images it deleted, set the version to 0.30.61, and had CI build it
+   on your branch. 0.30.60 already names your test builds, so we skip it.
+   Please pull before you commit to that branch again.
+   - Updated the mobile app for your threshold and bit 15 changes.
+
+I've also raised Seeed #295 for the photo date: please leave the date out
+when the camera doesn't know the time. And I've parked #247 and #288.
+
+On your question about bit 14: it needs to stay set because the message
+that would report it is the one that failed. One question back: the
+Bluetooth chip overwrites the AI chip's error bits at every wake, so bit 14
+only reaches the app if a phone connects before the next wake. Should the
+Bluetooth chip hold it until the mobile app has read it?
+
+Once your PRs are open, I'll bench them and merge all six together.
+
+Stay in touch,
+
+*Dr Victor Anton* | General Manager
+
+[image: wildlife.ai] <http://wildlife.ai>
+
+Watch our 1-minute video. <https://youtu.be/VQCgUqeNSsU?si=lkFMAMobQF-oDxlh>
+
+--000000000000860fdb0660c2e2c4
+Content-Type: text/html; charset="UTF-8"
+Content-Transfer-Encoding: quoted-printable
+
+<div dir=3D"ltr"><div>Kia ora Charles,<br><br>I tested your four PRs (Seeed=
+ #284, #286 and #289, and ww-hardware #77) on the bench. With both chips on=
+ the new firmware, normal wakes were clean: no errors over 35 wakes, photo =
+times right, the new threshold matches the PC, and photos download faster.<=
+br><br>Two problems block merging:</div><div><ul><li>After a wake without a=
+ restart, the AI chip answers the self-test before it has checked the SD ca=
+rd, so a missing card is reported as fine (your Seeed #290). Your lorawanPi=
+ng branch fixes this, so I&#39;d like it to go in with the rest. When it&#3=
+9;s finished, could you open PRs for it in both repos, with the Bluetooth v=
+ersion set to 0.30.62?</li><li><a href=3D"https://github.com/wildlifeai/See=
+ed_Grove_Vision_AI_Module_V2/issues/296">Seeed #296</a>, the himax chip say=
+s &quot;Sleep&quot;, then spends a few seconds on its clock before it reall=
+y goes to sleep. This messes up with the BLE chip and mobile app.</li></ul>=
+Meanwhile, a FYI I&#39;ve:</div><div><ul><li>Updated the mobile app (ww-mob=
+ile-app #527). A camera with only one chip updated can&#39;t receive files =
+from the app, so the app won&#39;t offer the Bluetooth update until the AI =
+chip has been updated.</li><li><span aria-invalid=3D"grammar" class=3D"Lm n=
+g" style=3D"border-style:none;background:none">Taken</span><span style=3D"b=
+ackground-color:transparent"> your own build of 0.30.60 out of ww-hardware =
+#77, put back the older images it deleted, set the version to 0.30.61, and =
+</span><span aria-invalid=3D"grammar" class=3D"Lm ng" style=3D"border-style=
+:none;background:none">had</span><span style=3D"background-color:transparen=
+t"> CI build it on your branch. 0.30.60 already names your test builds, so =
+we skip it. Please pull before you commit to that branch again.</span></li>=
+<li>Updated the mobile app for your threshold and bit 15 changes.</li></ul>=
+I&#39;ve also raised Seeed #295 for the photo date: please leave the date o=
+ut when the camera doesn&#39;t know the time. And I&#39;ve parked #247 and =
+#288.<br><br>On your question about bit 14: it needs to stay set because th=
+e message that would report it is the one that failed. One question back: t=
+he Bluetooth chip overwrites the AI chip&#39;s error bits at every wake, so=
+ bit 14 only reaches the app if a phone connects before the next wake. Shou=
+ld the Bluetooth chip hold it until the mobile app has read it?<br><br>Once=
+ your PRs are open, I&#39;ll bench them and merge all six together.<br><br>=
+Stay in touch,</div><div><div dir=3D"ltr" class=3D"gmail_signature" data-sm=
+artmail=3D"gmail_signature"><div dir=3D"ltr"><div dir=3D"ltr"><div dir=3D"l=
+tr"><div dir=3D"ltr"><div dir=3D"ltr"><div dir=3D"ltr"><div dir=3D"ltr"><p =
+style=3D"color:rgb(0,0,0);font-family:Helvetica;font-size:12px;font-style:n=
+ormal;letter-spacing:normal;text-align:start;text-indent:0px;text-transform=
+:none;white-space:normal;word-spacing:0px;text-decoration:none"><b>Dr Victo=
+r Anton</b> <font color=3D"#fec700">|</font>=C2=A0General Manager</p><p sty=
+le=3D"color:rgb(0,0,0);font-family:Helvetica;font-size:12px;font-style:norm=
+al;letter-spacing:normal;text-align:start;text-indent:0px;text-transform:no=
+ne;white-space:normal;word-spacing:0px;text-decoration:none"><a href=3D"htt=
+p://wildlife.ai" target=3D"_blank"><img width=3D"96" height=3D"18" alt=3D"w=
+ildlife.ai" src=3D"https://ci3.googleusercontent.com/mail-sig/AIorK4wN2lG7a=
+CO4tu23EF78D5IhvtBv1g71dOqutvAk6pNabRBV4Ow9QnB0vDNdqN5Q86fR1sXZBsyNQlao"></=
+a><br></p><p style=3D"text-align:start;text-indent:0px"><a href=3D"https://=
+youtu.be/VQCgUqeNSsU?si=3DlkFMAMobQF-oDxlh" target=3D"_blank"><font color=
+=3D"#669d34" style=3D"color:rgb(0,0,0);font-family:Helvetica;font-size:12px=
+;font-style:normal;font-weight:normal;letter-spacing:normal;text-transform:=
+none;word-spacing:0px;white-space:normal">Watch our 1-minute video.</font><=
+/a></p></div></div></div></div></div></div></div></div></div></div>
+
+--000000000000860fdb0660c2e2c4--

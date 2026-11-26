@@ -18,7 +18,7 @@
   and one /RST that was ignored.
 - **Sources.** The BLE processor's LoRaWAN work
   ([CLAUDE_note_AI_counters_lost.md](CLAUDE_note_AI_counters_lost.md)) and Victor's email of
-  21 November ([Victors_Issues.eml](Victors_Issues.eml)).
+  21 November (#296, #295).
 - **This branch is also the Seeed PR for the lorawanPing work** (Charles, 25 November).
   `261106_lorawanPing` gets no more commits.
 
@@ -36,7 +36,6 @@ Read the record of a fix for its details. The drafts are for Charles to send. Th
 | [CLAUDE_issue_83_BLE_selftest_bit12.md](CLAUDE_issue_83_BLE_selftest_bit12.md) | **ww-hardware #83**: bit 12's new meaning, and keeping AI event bits until reported. Follows #297 | Draft, to raise |
 | [CLAUDE_note_for_Victor_bit12.md](CLAUDE_note_for_Victor_bit12.md) | Note to Victor: bit 12's new meaning for the app and website | Draft, to send |
 | [CLAUDE_note_AI_counters_lost.md](CLAUDE_note_AI_counters_lost.md) | From the BLE processor Claude, 23 November: the counter loss (#297), the ignored /RST, the clock, `setop` checks. Copied unchanged from ww-hardware | Background |
-| [Victors_Issues.eml](Victors_Issues.eml) | Victor's email of 21 November: #296, #295 | Background |
 | [logs/](logs) | `ai1` to `ai6`, `ble1` to `ble5`: #296. `ai7` to `ai10`, `ble7` to `ble10`: #297. Each record describes its logs | Evidence |
 
 ## Found, not yet resolved

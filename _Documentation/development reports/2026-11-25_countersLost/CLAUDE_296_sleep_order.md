@@ -25,7 +25,7 @@
 ## 1. The fault, reproduced
 
 Reported by Victor ([#296](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/296),
-his email [Victors_Issues.eml](Victors_Issues.eml)). Logs [`logs/ai1.txt`](logs/ai1.txt) and
+and his email of 21 November). Logs [`logs/ai1.txt`](logs/ai1.txt) and
 [`logs/ble1.txt`](logs/ble1.txt), RP3 image, before the fix. `AI reset` from the app, then `AI ver` sent when the post-cold-boot "Sleep" appeared:
 
 | Time | Processor | Event |

@@ -95,6 +95,13 @@ Verified on the bench (details and serial evidence in
   particular file parses, set the **FAT read-only attribute** on it, which the firmware
   respects, and the card survives the boot intact. Two bench runs were spent measuring the
   device's own file before this was understood.
+* **The counters (ops 0 to 4) are only in CONFIG.TXT**; the settings are in the fast-start record too.
+  So a damaged CONFIG.TXT zeroes the counters while the settings survive (23 Nov 2026, #297). Since 26 Nov
+  2026 the device writes `CONFIG.TMP` and renames it, and a boot that finds only `CONFIG.TMP` uses
+  it. A CONFIG.TXT that exists but can't be read is not saved over that wake. A read-only
+  CONFIG.TXT now leaves a `CONFIG.TMP` behind at each save, deleted at the next boot. When the
+  counters are lost, self-test bit 12 is set and photos start a new `IMAGES.NNN` folder. The
+  deployment ID and GPS position are also only in CONFIG.TXT, so they are lost too.
 * **With no card, settings live only in the fast-start record in flash** (`xip_state.c`). Since
   31 Oct 2026 it is written at every sleep, card or not; before that, a `setop` with no card was
   lost after one sleep (a `setop 7 300` timelapse stopped at the first wake). When a card goes back

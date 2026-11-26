@@ -35,7 +35,8 @@ typedef enum {
     SELF_TEST_AI_NO_MD,			// 9 = HM0360 error
     SELF_TEST_AI_NO_FLASH,		// 10 = LED flash cct fail
     SELF_TEST_AI_NO_SD_CARD,	// 11 = SD card missing
-    SELF_TEST_AI_PDM_ERROR,		// 12 = PDM microphone fails
+    SELF_TEST_AI_CONFIG_DAMAGED,	// 12 = CONFIG.TXT damaged or unreadable at boot: the counters (ops 0 to 4) restarted
+								//      and a new image folder was started (26 Nov 2026; was the PDM microphone, never fitted)
     SELF_TEST_AI_NN_ERROR,		// 13 = Neural network error
     SELF_TEST_AI_NO_BLE,		// 14 = BLE processor did not read the AI processor's first message (added 28 Sep 2026); kept until a final selftest reply has carried it (#246)
     SELF_TEST_AI_PROVISIONAL,	// 15 = provisional: the SD card start-up had not finished, a final 'selfTest' follows unprompted (#290, 7 Nov 2026)

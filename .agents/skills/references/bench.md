@@ -96,8 +96,9 @@ the fact is not enough, the timing has to be built in.
   as binary.
 
 * **The device clock is not a stopwatch.** Time every measurement with the PC's clock: the
-  AI processor's clock runs about 5 % fast (#245), stops for the whole sleep after a motion
-  or BLE wake (#56), and goes back to 2024 on every restart (#152).
+  AI processor's clock runs about 5 % fast in DPD (#299; #245 measures it but only corrects the
+  sleep alarm), and goes back to 2024 on every restart (#152). Since 1 Nov 2026 (#56) it keeps
+  running through DPD; before that it stopped for the whole sleep after a motion or BLE wake.
 * **`Can't send UTC` after `BLE and AI time differ by ... too much!`** means the BLE
   processor has no time of its own, which happens after its own restart or firmware update.
   Give it one with `setutc <UTC>` from the app (no `AI ` prefix) before any test that

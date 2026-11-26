@@ -15,16 +15,18 @@
 - **The fix.** The RTC work now comes before "Sleep", which is the last thing before DPD (30 to
   90 ms later). A command during the RTC work reaches an awake processor and is answered.
   AI processor only; no change in the BLE processor or the app.
-- **Also fixed (item 7).** The RTC calibration repeated on most sleeps. The RTC write now comes
+- **Also fixed: the calibration repeating.** The RTC calibration repeated on most sleeps. The RTC write now comes
   before it.
-- **State, 25 November.** Benched on both images, every test passed. Not yet committed.
+- **State.** Benched on both images, every test passed. Committed `ae19db33`; #296 closed on
+  26 November. Thread [README](README.md).
 - **Read on** for the evidence (section 1), the options weighed (2), the change (3) and the
   bench results (4).
 
 ## 1. The fault, reproduced
 
-Logs [`logs/ai1.txt`](logs/ai1.txt) and [`logs/ble1.txt`](logs/ble1.txt), RP3 image, before the
-fix. `AI reset` from the app, then `AI ver` sent when the post-cold-boot "Sleep" appeared:
+Reported by Victor ([#296](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/296),
+his email [Victors_Issues.eml](Victors_Issues.eml)). Logs [`logs/ai1.txt`](logs/ai1.txt) and
+[`logs/ble1.txt`](logs/ble1.txt), RP3 image, before the fix. `AI reset` from the app, then `AI ver` sent when the post-cold-boot "Sleep" appeared:
 
 | Time | Processor | Event |
 |---|---|---|
@@ -40,7 +42,7 @@ Both WAKE pulses came before DPD and were lost. The BLE processor then counted a
 failure in its health uplink, so the server sees a fault as well.
 
 The same log showed a 4.7 s window on an ordinary wake (calibration due, RTC 59 minutes out), and
-the calibration running on 6 of 7 sleeps (item 7).
+the calibration running on 6 of 7 sleeps.
 
 ## 2. Options weighed
 
@@ -49,7 +51,7 @@ the calibration running on 6 of 7 sleeps (item 7).
 | A | Do the RTC work before "Sleep" (Victor's fix in #296) | **Chosen.** One repo, and a late command is answered at once |
 | B | A "Snooze" message before the RTC work, "Sleep" after it; the BLE processor holds commands in between (Charles) | Kept in reserve in case A failed its bench test. Needs both repos and a message change |
 | C | The BLE processor retries the WAKE pulse for longer | A cheap safety net for the BLE processor side; not done |
-| D | Make the RTC work rarer | Done in part: item 7 |
+| D | Make the RTC work rarer | Done in part: the calibration no longer repeats |
 
 The risk in A was a command arriving during the RTC write, thought to block interrupts. Tested
 first with today's firmware (`utctests` on the AI console, `AI ver` from the app at the same
@@ -64,7 +66,7 @@ arrived intact.
   (`image_isReadyToSleep()`).
 - **`CLI-commands.c`.** `capture` and `light` while preparing to sleep reply
   `Error: going to sleep, try again.`
-- **Item 7.** RTC write before calibration, so the calibration's time is in the corrected RTC time.
+- **The calibration repeating.** RTC write before calibration, so the calibration's time is in the corrected RTC time.
 - **Docs.** `ble_commands.md` note 7, `hardware-traps.md`.
 
 ## 4. Bench results, after the fix

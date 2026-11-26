@@ -15,6 +15,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
+#include <ctype.h>
 #include "ff.h"
 #include "xprintf.h"
 #include "fatfs_task.h"
@@ -191,6 +192,63 @@ FRESULT dir_mgr_init_image_dir(directoryManager_t *dirManager) {
 	createImageDir(path_buf, dirManager);
 
 	return dirManager->imagesRes;
+}
+
+/**
+ * After the counters were lost: point ops 19 and 20 at a new image folder, after the highest on the card.
+ *
+ * Ops 19 (images in the folder) and 20 (folder index) are kept only in CONFIG.TXT. When it is damaged they
+ * restart from 0, and new photos would go into IMAGES.000 on top of the photos already there. This finds the
+ * highest IMAGES.NNN in the deployment's folder and sets op 20 to the next one, so the photos after the damage
+ * start a folder of their own. Call before dir_mgr_init_image_dir(), which creates it.
+ *
+ * If the folder can't be read, or holds no image folder, ops 19 and 20 stay as they are.
+ */
+void dir_mgr_useNextImageDir(void) {
+	char path[DIRNAMELEN];
+	char deployment_id[UUIDLENGTH];
+	DIR dir;
+	FILINFO info;
+	FRESULT res;
+	int32_t highest = -1;
+	size_t prefixLen = strlen(CAPTURE_DIR);
+
+	fatfs_getDeploymentId(deployment_id, sizeof(deployment_id));
+	deployment_id[8] = '\0';
+	snprintf(path, sizeof(path), "%s/%s", MEDIA_DIR, deployment_id);
+
+	res = f_opendir(&dir, path);
+	if (res != FR_OK) {
+		xprintf("No image folders in '%s' (%d): starting at %s.000\n", path, res, CAPTURE_DIR);
+		return;
+	}
+
+	// Entries named IMAGES.NNN, three digits
+	while ((f_readdir(&dir, &info) == FR_OK) && (info.fname[0] != '\0')) {
+		const char *ext = &info.fname[prefixLen + 1];
+
+		if (((info.fattrib & AM_DIR) != 0)
+				&& (strncmp(info.fname, CAPTURE_DIR, prefixLen) == 0)
+				&& (info.fname[prefixLen] == '.')
+				&& isdigit((unsigned char)ext[0]) && isdigit((unsigned char)ext[1]) && isdigit((unsigned char)ext[2])
+				&& (ext[3] == '\0')) {
+			int32_t index = (ext[0] - '0') * 100 + (ext[1] - '0') * 10 + (ext[2] - '0');
+
+			if (index > highest) {
+				highest = index;
+			}
+		}
+	}
+	f_closedir(&dir);
+
+	if ((highest >= 0) && (highest < MAXIMAGEDIRECTORIES)) {
+		fatfs_setOperationalParameter(OP_PARAMETER_IMAGES_FILE_INDEX, (int16_t)(highest + 1));
+		fatfs_setOperationalParameter(OP_PARAMETER_IMAGES_COUNT, 0);
+		XP_LT_RED;
+		xprintf("Counters lost: new photos go in %s.%03d, after the highest on the card\n",
+				CAPTURE_DIR, (int)(highest + 1));
+		XP_WHITE;
+	}
 }
 
 /**

@@ -79,13 +79,13 @@ void selfTest_test(void) {
 	selfTest_setErrorBits(1 << SELF_TEST_LOW_BATTERY);
 	xprintf("Error bits = 0x%04x (expect 0x0001)\n", selfTest_getErrorBits());
 
-	selfTest_setErrorBits((1 << SELF_TEST_AI_PDM_ERROR) | (1 << SELF_TEST_AI_NO_SD_CARD)) ;
+	selfTest_setErrorBits((1 << SELF_TEST_AI_CONFIG_DAMAGED) | (1 << SELF_TEST_AI_NO_SD_CARD)) ;
 	xprintf("Error bits = 0x%04x (expect 0x1801)\n", selfTest_getErrorBits());
 
 	selfTest_clearErrorBits(1 << SELF_TEST_LOW_BATTERY);
 	xprintf("Error bits = 0x%04x (expect 0x1800)\n", selfTest_getErrorBits());
 
-	selfTest_clearErrorBits(1 << SELF_TEST_AI_PDM_ERROR);
+	selfTest_clearErrorBits(1 << SELF_TEST_AI_CONFIG_DAMAGED);
 	xprintf("Error bits = 0x%04x (expect 0x0800)\n", selfTest_getErrorBits());
 
 	selfTest_clearErrorBits(1 << SELF_TEST_AI_NO_SD_CARD);

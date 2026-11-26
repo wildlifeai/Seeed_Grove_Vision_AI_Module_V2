@@ -462,8 +462,10 @@ static void printLinkerStats(void) {
  *  - Inform the Image Task so it can ask the FatFS task to save state, and set the
  *  	HM0360 into motion detect mode, then wait for the IF Task to complete
  *
- *  - Inform the If Task to send a final "Sleep" message to the BLE processor.
- *  	It then gives a semaphore so the image task can enter DPD
+ *  - Inform the If Task to send a final "Sleep" message to the BLE processor, but only once the image task is
+ *  	ready to sleep. The image task sends the first such request itself, after its RTC work, so that "Sleep" is
+ *  	the last thing before DPD (#296). This one covers the IF task dropping that request when the BLE processor
+ *  	read a message meanwhile (dropDeferredInactivity()).
  */
 void app_onInactivityDetection(void) {
 	APP_MSG_T send_msg;
@@ -479,6 +481,10 @@ void app_onInactivityDetection(void) {
 	// Send a message to the image state machine to start the motion detection mechanism
 	if (xQueueSend(xImageTaskQueue, (void *)&send_msg, __QueueSendTicksToWait) != pdTRUE) {
 		xprintf("send_msg=0x%x fail\r\n", send_msg.msg_event);
+	}
+
+	if (!image_isReadyToSleep()) {
+		return;
 	}
 
 	send_msg.msg_event = APP_MSG_IFTASK_INACTIVITY;

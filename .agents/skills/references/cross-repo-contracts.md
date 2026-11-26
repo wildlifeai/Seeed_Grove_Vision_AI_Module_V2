@@ -32,8 +32,14 @@ contract, and land the change with the consumers in view.
   The BLE processor reads on the low. It replaced a pulse read on the rising edge. Update the AI
   processor first, then the BLE processor.
 * **Self-test bits are one list in three places**: `selfTest.h` here and in ww-hardware, and the
-  app. AI bit 14 (`0x4000`, BLE processor missed the first message) is kept until a `selftest`
-  reply has carried it, then cleared; nothing else clears it (#246, 4 Nov 2026).
+  app. AI bit 14 (`0x4000`, BLE processor missed the first message) is kept until a final
+  `selftest` reply has carried it, then cleared; nothing else clears it (#246, 4 Nov 2026). AI bit
+  15 (`0x8000`, provisional): a reply sent before the SD card start-up finished (warm boot) has it
+  set, and the AI processor then sends a final `selfTest` unprompted. The BLE processor must accept
+  that in every awake state, and ship first (#290, 7 Nov 2026). AI bit 12 (`0x1000`) was the PDM
+  microphone, never fitted; since 26 Nov 2026 it is `SELF_TEST_AI_CONFIG_DAMAGED`: CONFIG.TXT was
+  damaged or unreadable at boot, the counters restarted and a new image folder was started. Set for
+  that wake only. ww-hardware's `selfTest.h` and the app's label must follow (#297).
 
 **The "Sleep" message has a size limit.** At sleep the AI processor sends every op parameter to
 the BLE processor in one "Sleep" message (`if_task.c`), at most 244 bytes. Typical is about 110

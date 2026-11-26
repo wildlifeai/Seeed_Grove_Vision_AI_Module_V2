@@ -105,6 +105,18 @@
 // Max number of comment lines in configuration.txt
 #define MAXNUMCOMMENTS (OP_PARAMETER_NUM_ENTRIES + 5)
 
+// fatfs_getSdUsedPercent(): how long to wait for the start-up mount attempt (it takes about 720 ms when there
+// is no card), and for the FatFS task's answer (f_getfree() can scan the whole FAT, 1 to 2 s on a large card,
+// and image writes queued ahead of the request go first)
+#define SD_USED_READY_TIMEOUT_MS	3000
+#define SD_USED_REPLY_TIMEOUT_MS	5000
+// Poll interval while waiting for the mount attempt
+#define SD_USED_POLL_MS				10
+
+// CONFIG.TXT is written to this file first, then renamed (save_configuration()), so a reset part way through
+// a save never leaves CONFIG.TXT empty or half written. In the same folder as CONFIG.TXT
+#define STATE_FILE_TMP "CONFIG.TMP"
+
 /*************************************** Local Function Declarations *****************************/
 
 // This is the FreeRTOS task
@@ -123,11 +135,16 @@ static APP_MSG_DEST_T flagUnexpectedEvent(APP_MSG_T rxMessage);
 static FRESULT fileRead(fileOperation_t *fileOp);
 static FRESULT fileWrite(fileOperation_t *fileOp);
 
+static uint8_t computeSdUsedPercent(void);
+static void replySdUsed(void);
+
 // Warning: list_dir() is in spi_fatfs.c - how to declare it and reuse it?
 //FRESULT list_dir(const char *path);
 
 static FRESULT load_configuration(const char *filename, directoryManager_t *dirManager);
 FRESULT save_configuration(const char *filename, directoryManager_t *dirManager);
+static FRESULT recoverConfigTmp(const char *filename);
+static bool writeConfigLine(FIL *file, const char *line);
 
 // ZIP and label handling functions (moved from cvapp.cpp)
 static int8_t load_labels_from_sd(const char *path, char labels[][MAX_LABEL_LEN], uint8_t *label_count, uint8_t max_labels, uint8_t max_label_len);
@@ -156,12 +173,26 @@ extern Barrier_t shutdownBarrier;  // Object that calls a function when all task
 
 /*************************************** Local variables *******************************************/
 
+// Set when CONFIG.TXT exists but could not be read at boot. The counters (ops 0 to 4) are only in CONFIG.TXT, so
+// RAM holds their defaults: saving would write zeros over a file that may be good. Cleared at the next boot,
+// which tries again
+static bool configSaveBlocked = false;
+
+// Set when CONFIG.TXT exists but its counters (ops 0 to 4, 19, 20) could not be loaded: damaged or unreadable.
+// The boot then sets self-test bit 12 and starts a new image folder (dir_mgr_useNextImageDir())
+static bool countersLost = false;
+
 // Given when the start-up work with the card is finished (fatfs_waitForSdReady())
 static SemaphoreHandle_t xSDInitDoneSemaphore;
 // Given when op_parameter[] holds this boot's values: from the fast-start record, or without
 // one, from the card (fatfs_waitForSettings())
 static SemaphoreHandle_t xSettingsReadySemaphore;
 static volatile bool sdReady = false;
+
+// fatfs_getSdUsedPercent() posts APP_MSG_FATFSTASK_GET_SD_USED and waits on this; the FatFS task puts the
+// answer in sdUsedPercent, then gives it (replySdUsed())
+static SemaphoreHandle_t xSdUsedSemaphore;
+static volatile uint8_t sdUsedPercent = FATFS_SD_USED_UNKNOWN;
 
 static APP_WAKE_REASON_E woken;
 
@@ -242,6 +273,7 @@ const char *fatFsTaskEventString[APP_MSG_FATFSTASK_LAST - APP_MSG_FATFSTASK_WRIT
 	"Append file",
 	"Close file",
 	"Save config",
+	"Get SD used",
 };
 
 // Number of pictures to take after motion detect wake
@@ -525,6 +557,70 @@ static FRESULT fileRead(fileOperation_t *fileOp) {
 }
 
 /**
+ * Works out the % of the SD card in use, from its cluster counts
+ *
+ * 100 only when no free cluster is left (writes will fail), 0 only when no cluster is used. Anything between
+ * is rounded, then kept within 1 to 99, so a nearly full card never reads as full. With FF_FS_NOFSINFO = 0
+ * f_getfree() normally reads the free count from the card's FSINFO sector; if that is not valid, the first
+ * call after the mount scans the whole FAT.
+ *
+ * Call only from the FatFS task (FF_FS_REENTRANT is 0).
+ *
+ * @return 0 to 100, or FATFS_SD_USED_UNKNOWN if the card is not mounted or f_getfree() fails
+ */
+static uint8_t computeSdUsedPercent(void) {
+	FRESULT res;
+	FATFS *getFreeFs;
+	DWORD freeClusters;
+	uint32_t totalClusters;
+	uint32_t usedClusters;
+	uint32_t percent;
+
+	if (!mounted) {
+		return FATFS_SD_USED_UNKNOWN;
+	}
+
+	res = f_getfree(DRV, &freeClusters, &getFreeFs);
+	if (res != FR_OK) {
+		xprintf("f_getfree() failed (%d)\n", res);
+		return FATFS_SD_USED_UNKNOWN;
+	}
+
+	// The first two FAT entries are not clusters (ChaN's documentation for f_getfree())
+	totalClusters = getFreeFs->n_fatent - 2;
+	if ((totalClusters == 0) || (freeClusters > totalClusters)) {
+		return FATFS_SD_USED_UNKNOWN;
+	}
+	usedClusters = totalClusters - freeClusters;
+
+	if (usedClusters == 0) {
+		return 0;
+	}
+	if (freeClusters == 0) {
+		return 100;
+	}
+
+	// 64-bit: clusters x 100 can pass 32 bits on a large card with small clusters
+	percent = (uint32_t) ((((uint64_t) usedClusters * 100) + (totalClusters / 2)) / totalClusters);
+	if (percent < 1) {
+		percent = 1;
+	}
+	else if (percent > 99) {
+		percent = 99;
+	}
+
+	return (uint8_t) percent;
+}
+
+/**
+ * Answers APP_MSG_FATFSTASK_GET_SD_USED: stores the % used for fatfs_getSdUsedPercent() and releases it
+ */
+static void replySdUsed(void) {
+	sdUsedPercent = computeSdUsedPercent();
+	xSemaphoreGive(xSdUsedSemaphore);
+}
+
+/**
  * Implements state machine when in APP_FATFS_STATE_UNINIT
  *
  * If disk operation requests happen they are
@@ -591,6 +687,11 @@ static APP_MSG_DEST_T handleEventForUninit(APP_MSG_T rxMessage) {
 			sendMsg.message.msg_event = APP_MSG_CLITASK_DISK_READ_COMPLETE;
 		}
 
+		break;
+
+	case APP_MSG_FATFSTASK_GET_SD_USED:
+		// No card (the mount failed): replySdUsed() answers FATFS_SD_USED_UNKNOWN
+		replySdUsed();
 		break;
 
 	case APP_MSG_FATFSTASK_SAVE_STATE:
@@ -828,6 +929,11 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 		}
 		break;
 
+	case APP_MSG_FATFSTASK_GET_SD_USED:
+		// Here, in the FatFS task, so f_getfree() does not run alongside other FatFS calls (FF_FS_REENTRANT is 0)
+		replySdUsed();
+		break;
+
 	case APP_MSG_FATFSTASK_OPEN_FILE:
 		// 1/3 commands for sending files from the app to the SD card
 
@@ -998,6 +1104,11 @@ static APP_MSG_DEST_T handleEventForBusy(APP_MSG_T rxMessage) {
 		fatFs_task_state = APP_FATFS_STATE_IDLE;
 		break;
 
+	case APP_MSG_FATFSTASK_GET_SD_USED:
+		// Answer whatever the state, so the caller does not wait for its timeout
+		replySdUsed();
+		break;
+
 	default:
 		// Here for events that are not expected in this state.
 		flagUnexpectedEvent(rxMessage);
@@ -1144,12 +1255,66 @@ static bool isNumericToken(const char *token) {
 	return true;
 }
 
+/**
+ * Deals with a STATE_FILE_TMP left by an interrupted save_configuration(). Call in the config folder.
+ *
+ * Only STATE_FILE_TMP: the save was interrupted after deleting the file and before the rename, so
+ * STATE_FILE_TMP is complete. Rename it.
+ * Both: the save was interrupted before the delete, so the file is intact and STATE_FILE_TMP may be
+ * part written. Delete STATE_FILE_TMP.
+ *
+ * @param filename - the configuration file, CONFIG.TXT
+ * @return FR_OK, or the error from FatFS (not FR_NO_FILE)
+ */
+static FRESULT recoverConfigTmp(const char *filename) {
+	FILINFO info;
+	FRESULT res;
+
+	res = f_stat(STATE_FILE_TMP, &info);
+	if (res == FR_NO_FILE) {
+		return FR_OK;	// the usual case
+	}
+	if (res != FR_OK) {
+		return res;
+	}
+
+	res = f_stat(filename, &info);
+	if (res == FR_NO_FILE) {
+		XP_LT_RED;
+		xprintf("'%s' missing after an interrupted save: using '%s'\n", filename, STATE_FILE_TMP);
+		XP_WHITE;
+		return f_rename(STATE_FILE_TMP, filename);
+	}
+	if (res != FR_OK) {
+		return res;
+	}
+
+	xprintf("'%s' left by an interrupted save: deleted, '%s' kept\n", STATE_FILE_TMP, filename);
+	return f_unlink(STATE_FILE_TMP);
+}
+
+/**
+ * Writes a line of the configuration file.
+ *
+ * @param file - the open file
+ * @param line - the text, with its newline
+ * @return true if all of it was written
+ */
+static bool writeConfigLine(FIL *file, const char *line) {
+	UINT bytesWritten = 0;
+	UINT len = (UINT)strlen(line);
+
+	return (f_write(file, line, len, &bytesWritten) == FR_OK) && (bytesWritten == len);
+}
+
 static FRESULT load_configuration(const char *filename, directoryManager_t *dirManager) {
 	FRESULT res;
 	char line[64];
 	char *token;
 	uint8_t index;
 	uint16_t value;
+	uint8_t opLines = 0;	// op parameter lines read, to spot a file with none (a damaged save)
+	bool readError;
 
     if (!fatfs_mounted()) {
         xprintf("SD card not mounted.\n");
@@ -1160,14 +1325,31 @@ static FRESULT load_configuration(const char *filename, directoryManager_t *dirM
 		res = f_chdir(dirManager->current_config_dir);
 		if (res != FR_OK) {
 			xprintf("Failed to change to: %s\n", dirManager->current_config_dir);
+			configSaveBlocked = true;
+			countersLost = true;
 			return res;
 		}
     	xprintf("Loading configuration: ");
     	fatfs_printCwd();	// will print CWD
 
+		// A save interrupted between deleting CONFIG.TXT and renaming CONFIG.TMP leaves only CONFIG.TMP
+		res = recoverConfigTmp(filename);
+		if (res != FR_OK) {
+			configSaveBlocked = true;
+			countersLost = true;
+			xprintf("Failed to check for '%s': %d\n", STATE_FILE_TMP, res);
+			dirManager->configRes = res;
+			return dirManager->configRes;
+		}
+
 		// Open the file
 		res = f_open(&dirManager->configFile, filename, FA_READ);
 		if (res != FR_OK) {
+			if (res != FR_NO_FILE) {
+				// It may be there but unreadable this time: don't write the default counters over it
+				configSaveBlocked = true;
+				countersLost = true;
+			}
 			xprintf("Failed to open config file: %d\n", res);
 			dirManager->configRes = res;
 			return dirManager->configRes;
@@ -1233,6 +1415,7 @@ static FRESULT load_configuration(const char *filename, directoryManager_t *dirM
 				}
 
 				value = (uint16_t)atoi(token);
+				opLines++;
 
 				// Set array value if index is in range. Not the state ops when a fast-start record
 				// was loaded: RAM's values are newer than the card's (xip_state_keepStateOp())
@@ -1245,6 +1428,9 @@ static FRESULT load_configuration(const char *filename, directoryManager_t *dirM
 			}
 		}
 	}
+
+	// f_gets() returns NULL at the end of the file and on a read error alike
+	readError = (f_error(&dirManager->configFile) != 0);
 
 	// MD settings with a restricted range (24 Oct 2026). Cards written before then can hold
 	// op 17 = 0 (sensitivity 'off', no longer allowed: op 11 = 0 is the off switch) and
@@ -1281,6 +1467,21 @@ static FRESULT load_configuration(const char *filename, directoryManager_t *dirM
 	} else {
 		dirManager->configOpen = false;
 	}
+
+	if (readError) {
+		// Part of the file was read, so some counters may be missing: don't save over it this wake
+		configSaveBlocked = true;
+		countersLost = true;
+		res = FR_DISK_ERR;
+	}
+	else if ((res == FR_OK) && (opLines == 0)) {
+		// The file is there but holds no op parameters: what a reset during a save left before 26 Nov 2026.
+		// The counters (ops 0 to 4) restart from 0. The settings came from the fast-start record, if any
+		countersLost = true;
+		XP_LT_RED;
+		xprintf("'%s' has no op parameters (damaged): the counters (ops 0 to 4) restart from 0\n", filename);
+		XP_WHITE;
+	}
 	dirManager->configRes = res;
 
 	return res;
@@ -1295,13 +1496,15 @@ static FRESULT load_configuration(const char *filename, directoryManager_t *dirM
  *
  * Default values for configuration[] are set in the task initialisation.
  *
+ * Written to STATE_FILE_TMP, which then replaces the file, so a reset during the save leaves either the old file
+ * or the new one (26 Nov 2026). Refused (FR_DENIED) if the file could not be read at boot (configSaveBlocked).
+ *
  * @param filename name of the file to save to
  * @param dirManager pointer to the directoryManager_t structure
  * @return error code
  */
 FRESULT save_configuration(const char *filename, directoryManager_t *dirManager) {
 	FRESULT res;
-	UINT bytesWritten;
 	char line[MAXCOMMENTLENGTH];
 	// Static, NOT a stack local: MAXNUMCOMMENTS * MAXCOMMENTLENGTH bytes (currently
 	// ~2.6KB, growing by MAXCOMMENTLENGTH with every operational parameter added)
@@ -1311,10 +1514,20 @@ FRESULT save_configuration(const char *filename, directoryManager_t *dirManager)
 	static char comment_lines[MAXNUMCOMMENTS][MAXCOMMENTLENGTH];
 	uint16_t comment_count = 0;
 
+	bool writeOk = true;
+
     if (!fatfs_mounted()) {
         xprintf("SD card not mounted.\n");
     	return FR_NO_FILESYSTEM;
     }
+
+	if (configSaveBlocked) {
+		XP_LT_RED;
+		xprintf("Not saving '%s': it could not be read at boot, so the counters in RAM are not its values\n",
+				filename);
+		XP_WHITE;
+		return FR_DENIED;
+	}
 
 	if (!dirManager->configOpen) {
 		res = f_chdir(dirManager->current_config_dir);
@@ -1351,8 +1564,10 @@ FRESULT save_configuration(const char *filename, directoryManager_t *dirManager)
 			return res; // Error reading file (not just "file not found")
 		}
 
-		// --- Second Pass: Open for write ---
-		res = f_open(&dirManager->configFile, filename, FA_WRITE | FA_CREATE_ALWAYS);
+		// --- Second Pass: write to STATE_FILE_TMP, then replace the file with it (below) ---
+		// Until 26 Nov 2026 this opened the file itself with FA_CREATE_ALWAYS, which empties it first: a reset
+		// during the save then lost the counters (ops 0 to 4), which are in no other place
+		res = f_open(&dirManager->configFile, STATE_FILE_TMP, FA_WRITE | FA_CREATE_ALWAYS);
 		if (res != FR_OK) {
 			xprintf("Failed to open file for writing: %d\n", res);
 			dirManager->configRes = res;
@@ -1362,13 +1577,13 @@ FRESULT save_configuration(const char *filename, directoryManager_t *dirManager)
 
 		// Write comment lines
 		for (uint16_t i = 0; i < comment_count; i++) {
-			f_write(&dirManager->configFile, comment_lines[i], strlen(comment_lines[i]), &bytesWritten);
+			writeOk &= writeConfigLine(&dirManager->configFile, comment_lines[i]);
 		}
 
 		// Write parameters
 		for (uint8_t i = 0; i < OP_PARAMETER_NUM_ENTRIES; i++) {
 			snprintf(line, sizeof(line), "%d %d\n", i, op_parameter[i]);
-			f_write(&dirManager->configFile, line, strlen(line), &bytesWritten);
+			writeOk &= writeConfigLine(&dirManager->configFile, line);
 		}
 
 		// Write the GPS location
@@ -1386,11 +1601,11 @@ FRESULT save_configuration(const char *filename, directoryManager_t *dirManager)
 
 		//xprintf("Wrote GPS location to file: '%s'\n", line);
 
-		f_write(&dirManager->configFile, line, strlen(line), &bytesWritten);
+		writeOk &= writeConfigLine(&dirManager->configFile, line);
 
 		// Write the deployment ID
 		snprintf(line, sizeof(line), "I %s\n", deployment_id_string);
-		f_write(&dirManager->configFile, line, strlen(line), &bytesWritten);
+		writeOk &= writeConfigLine(&dirManager->configFile, line);
 
 		// Close file and restore original directory
 		res = f_close(&dirManager->configFile);
@@ -1398,6 +1613,26 @@ FRESULT save_configuration(const char *filename, directoryManager_t *dirManager)
 			xprintf("Failed to close config file: %d\n", res);
 		} else {
 			dirManager->configOpen = false;
+		}
+
+		if ((res == FR_OK) && !writeOk) {
+			xprintf("Failed to write '%s': '%s' left as it was\n", STATE_FILE_TMP, filename);
+			res = FR_DISK_ERR;
+		}
+
+		// Replace the file with the complete new one. A reset between the two steps leaves only STATE_FILE_TMP,
+		// which load_configuration() then renames (recoverConfigTmp())
+		if (res == FR_OK) {
+			res = f_unlink(filename);
+			if (res == FR_NO_FILE) {
+				res = FR_OK;
+			}
+			if (res == FR_OK) {
+				res = f_rename(STATE_FILE_TMP, filename);
+			}
+			if (res != FR_OK) {
+				xprintf("Failed to replace '%s' with '%s': %d\n", filename, STATE_FILE_TMP, res);
+			}
 		}
 		dirManager->configRes = res;
 	}
@@ -1762,9 +1997,23 @@ static void vFatFsTask(void *pvParameters) {
 						(enabled == 1) ? "" : "not ",
 								op_parameter[OP_PARAMETER_LED_BRIGHTNESS_PERCENT]);
 			}
-			else {
+			else if (res == FR_NO_FILE) {
 				xprintf("'%s' NOT found.\r\n", STATE_FILE);
 			}
+			else {
+				// Not saved over at sleep this wake (configSaveBlocked): the next boot tries again
+				XP_LT_RED;
+				xprintf("'%s' could not be read (error %d): counters at their defaults, file not saved over\r\n",
+						STATE_FILE, res);
+				XP_WHITE;
+			}
+			if (countersLost) {
+				// Report it (self-test bit 12, carried by this wake's selftest reply and the LoRaWAN health
+				// uplink), and keep the photos from now on apart from the earlier ones
+				selfTest_setErrorBits(1 << SELF_TEST_AI_CONFIG_DAMAGED);
+				dir_mgr_useNextImageDir();
+			}
+
 			// Phase 2: now that op_parameter[] and deployment ID are valid,
 			// determine and create the correct image directory.
 			dir_mgr_init_image_dir(&dirManager);
@@ -1823,6 +2072,19 @@ static void vFatFsTask(void *pvParameters) {
 	// record, to start at all (op_parameter[] now holds the card's values)
 	boot_timing_mark(BOOT_TIMING_SD_READY);
 	sdReady = true;
+
+	// Bit 11 (no SD card) is known now. If a 'selftest' reply went before this it was provisional (bit 15): have
+	// the IF task send the final bits (#290). Only on a warm boot in practice: a cold boot sends "Wake" after this
+	if (selfTest_setChecksDone()) {
+		APP_MSG_T selfTestMsg;
+
+		selfTestMsg.msg_event = APP_MSG_IFTASK_SELFTEST_FINAL;
+		selfTestMsg.msg_data = 0;
+		selfTestMsg.msg_parameter = 0;
+		if (xQueueSend(xIfTaskQueue, (void *) &selfTestMsg, __QueueSendTicksToWait) != pdTRUE) {
+			xprintf("send_msg=0x%x fail\r\n", selfTestMsg.msg_event);
+		}
+	}
 	xSemaphoreGive(xSDInitDoneSemaphore);
 	if (!recordLoaded) {
 		xSemaphoreGive(xSettingsReadySemaphore);
@@ -1969,8 +2231,9 @@ TaskHandle_t fatfs_createTask(int8_t priority, APP_WAKE_REASON_E wakeReason) {
 	// Semaphores that release the image task: when the settings are known, and when the card is ready
 	xSDInitDoneSemaphore = xSemaphoreCreateBinary();
 	xSettingsReadySemaphore = xSemaphoreCreateBinary();
+	xSdUsedSemaphore = xSemaphoreCreateBinary();
 
-	if ((xSDInitDoneSemaphore == NULL) || (xSettingsReadySemaphore == NULL)) {
+	if ((xSDInitDoneSemaphore == NULL) || (xSettingsReadySemaphore == NULL) || (xSdUsedSemaphore == NULL)) {
 		xprintf("Failed to create the start-up semaphores\n");
 		configASSERT(0); // TODO add debug messages?
 	}
@@ -2025,6 +2288,53 @@ void fatfs_waitForSdReady(void) {
  */
 bool fatfs_isSdReady(void) {
 	return sdReady;
+}
+
+/**
+ * The % of the SD card in use, for the 'sdused' command
+ *
+ * Waits for the start-up mount attempt if it has not finished, so the answer is never provisional (unlike an
+ * early 'selftest', #290). Then asks the FatFS task, which owns all FatFS calls, and waits for its answer. Only
+ * one caller at a time (the CLI task). Never call from the FatFS task: it would wait for itself.
+ *
+ * @return 0 to 100 (see computeSdUsedPercent()), or FATFS_SD_USED_UNKNOWN if there is no card, the mount
+ * failed, f_getfree() failed or a wait timed out
+ */
+uint8_t fatfs_getSdUsedPercent(void) {
+	APP_MSG_T sendMsg;
+	TickType_t startTime;
+
+	startTime = xTaskGetTickCount();
+	while (!sdReady) {
+		if ((xTaskGetTickCount() - startTime) > pdMS_TO_TICKS(SD_USED_READY_TIMEOUT_MS)) {
+			xprintf("sdused: SD start-up not finished after %dms\n", SD_USED_READY_TIMEOUT_MS);
+			return FATFS_SD_USED_UNKNOWN;
+		}
+		vTaskDelay(pdMS_TO_TICKS(SD_USED_POLL_MS));
+	}
+
+	if (!mounted) {
+		return FATFS_SD_USED_UNKNOWN;	// no need to ask the FatFS task
+	}
+
+	// Drop an answer that came after an earlier call timed out
+	xSemaphoreTake(xSdUsedSemaphore, 0);
+
+	sendMsg.msg_event = APP_MSG_FATFSTASK_GET_SD_USED;
+	sendMsg.msg_data = 0;
+	sendMsg.msg_parameter = 0;
+
+	if (xQueueSend(xFatTaskQueue, (void *) &sendMsg, __QueueSendTicksToWait) != pdTRUE) {
+		xprintf("Failed to send 0x%x to FatTask\r\n", sendMsg.msg_event);
+		return FATFS_SD_USED_UNKNOWN;
+	}
+
+	if (xSemaphoreTake(xSdUsedSemaphore, pdMS_TO_TICKS(SD_USED_REPLY_TIMEOUT_MS)) != pdTRUE) {
+		xprintf("sdused: no answer from the FatFS task after %dms\n", SD_USED_REPLY_TIMEOUT_MS);
+		return FATFS_SD_USED_UNKNOWN;
+	}
+
+	return sdUsedPercent;
 }
 
 /**

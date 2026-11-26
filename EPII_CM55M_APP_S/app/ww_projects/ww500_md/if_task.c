@@ -284,6 +284,7 @@ const char* ifTaskEventString[APP_MSG_IFTASK_LAST - APP_MSG_IFTASK_FIRST] = {
 		"Inactivity",
 		"Awake",
 		"FreeRTOS Initialised",
+		"Final selfTest",
 };
 
 // Strings for the events - must align with aiProcessor_msg_type_t entries
@@ -1050,6 +1051,19 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 
 		break;
 
+	case APP_MSG_IFTASK_SELFTEST_FINAL:
+		// A 'selftest' reply went before the FatFS task had mounted the card, with bit 15 (provisional) set. Now the
+		// checks are done: send the final bits unprompted, in the same form as the reply (#290). Sent by this task
+		// rather than with sendMsgToMaster(), so that it is deferred, not dropped, while an exchange is under way.
+		// Not after "Sleep": the BLE processor treats us as asleep then
+		if (bleUnresponsive || lastMessageSent) {
+			break;
+		}
+		snprintf(message, sizeof(message), "selfTest %04x", selfTest_getReplyBits());
+		sendI2CMessage((uint8_t *) message, AI_PROCESSOR_MSG_RX_STRING, strlen(message) );
+		if_task_state = APP_IF_STATE_I2C_TX;
+		break;
+
 
 #ifdef TEST_INT_PULSE
 	case APP_MSG_IFTASK_I2CCOMM_PA0_INT_OUT:
@@ -1134,6 +1148,7 @@ static APP_MSG_DEST_T  handleEventForStateI2CRx(APP_MSG_T rxMessage) {
 		// This can happen if the CLI command processor sees "int 200" or similar.
 		// We shouln't execute this right away, as we still have to send the I2C response to the ww130
 		// fall through deliberately - handled the same way as INACTIVITY below
+	case APP_MSG_IFTASK_SELFTEST_FINAL:	// sent from IDLE (#290)
 	case APP_MSG_IFTASK_INACTIVITY:
 		// GitHub issue #205 - see handleEventForStateI2CTx() for why this must
 		// be deferred, not dropped.
@@ -1288,6 +1303,7 @@ static APP_MSG_DEST_T  handleEventForStateI2CTx(APP_MSG_T rxMessage) {
 		// Not used at the moment
 		break;
 
+	case APP_MSG_IFTASK_SELFTEST_FINAL:	// sent from IDLE (#290)
 	case APP_MSG_IFTASK_INACTIVITY:
 		// GitHub issue #205: this can genuinely arrive mid-I2C-exchange - the
 		// inactivity detector (inactivity.c, USEIDLETASK) fires whenever the
@@ -1360,6 +1376,7 @@ static APP_MSG_DEST_T  handleEventForStatePA0(APP_MSG_T rxMessage) {
 		i2cError();
 		break;
 
+	case APP_MSG_IFTASK_SELFTEST_FINAL:	// sent from IDLE (#290)
 	case APP_MSG_IFTASK_INACTIVITY:
 		// GitHub issue #205 - see handleEventForStateI2CTx() for why this must
 		// be deferred, not dropped.

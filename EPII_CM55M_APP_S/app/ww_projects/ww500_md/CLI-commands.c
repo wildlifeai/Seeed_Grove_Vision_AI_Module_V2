@@ -297,6 +297,7 @@ static BaseType_t prvExifGpsTests(char *pcWriteBuffer, size_t xWriteBufferLen, c
 static BaseType_t prvLoadModel(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 static BaseType_t prvEraseModel(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 static BaseType_t prvGetSelfTest(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
+static BaseType_t prvSdUsed(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 
 static BaseType_t prvSetOpParam(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
 static BaseType_t prvGetOpParam(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString);
@@ -705,6 +706,14 @@ static const CLI_Command_Definition_t xGetSelfTest = {
 	0			/* No parameters expected */
 };
 
+// Registered here, not with the SD card commands in CLI-FATFS-commands.c, so it answers when there is no card
+static const CLI_Command_Definition_t xSdUsed = {
+	"sdused", /* The command string to type. */
+	"sdused:\r\n % of the SD card used (0-100, 255 = unknown or no card)\r\n",
+	prvSdUsed, /* The function to run. */
+	0			/* No parameters expected */
+};
+
 
 /* Structure that defines the 'format' command. */
 static const CLI_Command_Definition_t xFormat = {
@@ -1060,7 +1069,7 @@ static BaseType_t prvCamera(char *pcWriteBuffer, size_t xWriteBufferLen, const c
 }
 
 /**
- * Refuses a capture if this is the time between a cold boot and the first DPD
+ * Refuses a capture between a cold boot and the first DPD, or when the image task is preparing to sleep
  *
  * A cold boot is meant to set things up and then enter DPD quickly. Captures are only expected
  * after a wake from DPD, so one requested before that is refused. This removes one variable:
@@ -1069,16 +1078,24 @@ static BaseType_t prvCamera(char *pcWriteBuffer, size_t xWriteBufferLen, const c
  *
  * Note that the 'reset' and 'switchslot' commands and a firmware update all end in a cold boot.
  *
+ * Once the image task is preparing to sleep it does not capture again before DPD. Since #296 that time includes
+ * the RTC work (up to about 5 s), during which the BLE processor still sends commands to us rather than waking us.
+ * Refused with a reply rather than ignored, so the app can try again after the sleep.
+ *
  * @param pcWriteBuffer - the error message is written here if the capture is refused
  * @param xWriteBufferLen - size of that buffer
  * @return true if the capture is refused
  */
 static bool captureRefused(char *pcWriteBuffer, size_t xWriteBufferLen) {
-	if (woken != APP_WAKE_REASON_COLD) {
-		return false;
+	if (woken == APP_WAKE_REASON_COLD) {
+		snprintf(pcWriteBuffer, xWriteBufferLen, "Error: no captures until after the first sleep.");
+		return true;
 	}
-	snprintf(pcWriteBuffer, xWriteBufferLen, "Error: no captures until after the first sleep.");
-	return true;
+	if (image_isGoingToSleep()) {
+		snprintf(pcWriteBuffer, xWriteBufferLen, "Error: going to sleep, try again.");
+		return true;
+	}
+	return false;
 }
 
 /**
@@ -2588,17 +2605,43 @@ static BaseType_t prvGetOpParam(char *pcWriteBuffer, size_t xWriteBufferLen, con
 /**
  * Return current self test bits
  *
- * Bit 14 (SELF_TEST_AI_NO_BLE) is cleared once this reply has carried it, whoever asked (#246). It records that the
+ * Bit 14 (SELF_TEST_AI_NO_BLE) is cleared once a final reply has carried it, whoever asked (#246). It records that the
  * BLE processor missed the first message after boot; nothing else clears it, so a BLE processor that was only late
  * still learns of it from its 'selftest' on that wake.
+ *
+ * Bit 15 (SELF_TEST_AI_PROVISIONAL) is set if the SD card start-up has not finished, so bit 11 is not known yet
+ * (warm boot, #290). The IF task then sends the final 'selfTest' unprompted once it has.
  */
 static BaseType_t prvGetSelfTest(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) {
 	(void)pcCommandString;
 	(void)xWriteBufferLen;
 	configASSERT(pcWriteBuffer);
 
-	cli_append(&pcWriteBuffer, &xWriteBufferLen, "selfTest %04x", selfTest_getErrorBits());
-	selfTest_clearErrorBits(1 << SELF_TEST_AI_NO_BLE);
+	// Bit 15 set if the SD card start-up has not finished; bit 14 cleared only by a final reply (selfTest.c)
+	cli_append(&pcWriteBuffer, &xWriteBufferLen, "selfTest %04x", selfTest_getReplyBits());
+
+	/* There is no more data to return after this single string, so return pdFALSE. */
+	return pdFALSE;
+}
+
+/**
+ * Reply with the % of the SD card used: 'sdused <n>'
+ *
+ * n is 0 to 100, or 255 (FATFS_SD_USED_UNKNOWN) when there is no card, the mount failed or the value cannot be
+ * read. 100 means no free cluster is left. Asked for by the BLE processor for the LoRaWAN health message. Early in
+ * a wake this waits for the SD card start-up (up to about 720 ms with no card), so it is not for the path to the
+ * first photo.
+ *
+ * @param pcWriteBuffer - buffer for the reply
+ * @param xWriteBufferLen - size of the buffer
+ * @param pcCommandString - the command line (no parameters)
+ * @return pdFALSE: the reply is complete
+ */
+static BaseType_t prvSdUsed(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) {
+	(void)pcCommandString;
+	configASSERT(pcWriteBuffer);
+
+	cli_append(&pcWriteBuffer, &xWriteBufferLen, "sdused %u", (unsigned int) fatfs_getSdUsedPercent());
 
 	/* There is no more data to return after this single string, so return pdFALSE. */
 	return pdFALSE;
@@ -3427,6 +3470,7 @@ static void vRegisterCLICommands(void)
 	FreeRTOS_CLIRegisterCommand(&xSetOpParam);	// Sets an Operational Parameter
 	FreeRTOS_CLIRegisterCommand(&xGetOpParam);	// Gets an Operational Parameter
 	FreeRTOS_CLIRegisterCommand(&xGetSelfTest);	// Gets self test bits
+	FreeRTOS_CLIRegisterCommand(&xSdUsed);		// % of the SD card used (answers with no card too)
 
 	FreeRTOS_CLIRegisterCommand( &xFormat );
 

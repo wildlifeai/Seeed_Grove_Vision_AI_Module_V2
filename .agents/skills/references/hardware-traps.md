@@ -73,7 +73,8 @@ Verified on the bench (details and serial evidence in
   `reset`, `switchslot` and a firmware update. To capture from a script: let the board sleep
   (`setop 7 5` then `dpd` gives a timer wake 5 s later), then send the command. The first frame
   after a cold boot sometimes never arrived, on both cameras, so this was ruled out
-  (`development reports/2026-10-12_cameraErrors/`).
+  (`development reports/2026-10-12_cameraErrors/`). They are also refused
+  (`Error: going to sleep, try again.`) once the image task has started preparing to sleep (#296).
 * **Cold-boot IMX708 first captures fail on images built before 30 Sep 2026**. Every
   in-place retry times out (`Frame timed out - restarting sensor, retry n/5`) and the image
   task then goes Uninitialised. The cause was the I2C address left on the HM0360 by nested
@@ -94,6 +95,13 @@ Verified on the bench (details and serial evidence in
   particular file parses, set the **FAT read-only attribute** on it, which the firmware
   respects, and the card survives the boot intact. Two bench runs were spent measuring the
   device's own file before this was understood.
+* **The counters (ops 0 to 4) are only in CONFIG.TXT**; the settings are in the fast-start record too.
+  So a damaged CONFIG.TXT zeroes the counters while the settings survive (23 Nov 2026, #297). Since 26 Nov
+  2026 the device writes `CONFIG.TMP` and renames it, and a boot that finds only `CONFIG.TMP` uses
+  it. A CONFIG.TXT that exists but can't be read is not saved over that wake. A read-only
+  CONFIG.TXT now leaves a `CONFIG.TMP` behind at each save, deleted at the next boot. When the
+  counters are lost, self-test bit 12 is set and photos start a new `IMAGES.NNN` folder. The
+  deployment ID and GPS position are also only in CONFIG.TXT, so they are lost too.
 * **With no card, settings live only in the fast-start record in flash** (`xip_state.c`). Since
   31 Oct 2026 it is written at every sleep, card or not; before that, a `setop` with no card was
   lost after one sleep (a `setop 7 300` timelapse stopped at the first wake). When a card goes back
@@ -216,5 +224,7 @@ building on any of them:
   image file name is made from the same photo time (`dir_mgr_generateImageFilename()`).
   **Writing the RTC (`hx_drv_rtc_set_time()`) blocks interrupts for 1 to 2 s**: `setutc`
   no longer does it, `exif_utc_before_sleep()` does, at sleep, only when over 10 minutes out or
-  before 2025. A WAKE pulse in that time is lost; the BLE processor retries after 3 s.
-  1 Nov 2026, #56.
+  before 2025. 1 Nov 2026, #56. Since 25 Nov 2026 (#296) the RTC write and calibration come
+  **before** the "Sleep" message (`rtcWorkBeforeSleep()`, image task): the BLE processor treats
+  "Sleep" as "in DPD" and its WAKE pulse is ignored until DPD, so "Sleep" must be the last thing
+  before DPD. An I2C command during the write or the calibration waits and arrives intact.

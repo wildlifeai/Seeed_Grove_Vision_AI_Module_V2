@@ -23,15 +23,17 @@ extern "C" {
 // Set this value to match your Edge Impulse project's last 4 digits
 #define PROJECT_ID 0
 #define PROJECT_VER 0
-// Logit value (0-127)
-#define MODEL_THRESHOLD 18
+// Op 16: detection if the model is at least this sure (%) of class 1, the target (issue #270).
+// Same meaning for every model; still worth checking per model
+#define MODEL_THRESHOLD 60
+#define MODEL_THRESHOLD_MAX 100
 
-// Enable transforming of tensor output to percentages (softmax) for the EXIF
+// Enable printing the class percentages and writing them to the EXIF
 // UserComment ("label: pct%; ..."). The DETECTION path is unaffected either
-// way: cv_run() always returns raw logits in outCategories and the threshold
-// (OP_PARAMETER_MODEL_THRESHOLD) stays a logit comparison. Without this define
-// the confidence data is never computed, so images carry no NN scores for the
-// website to ingest - see doc/NN_confidence_EXIF_not_written.md.
+// way: cv_run() always works out the target's probability (cv_getTargetPercent()),
+// which is compared with OP_PARAMETER_MODEL_THRESHOLD. Without this define
+// images carry no NN scores for the website to ingest - see
+// doc/NN_confidence_EXIF_not_written.md.
 // (image_task.c couples ENABLE_EXIF_CONFIDENCE to this define.)
 #define USE_PERCENTAGE
 
@@ -75,6 +77,9 @@ TfLiteStatus cv_run(int8_t *outCategories, uint8_t *categoriesCount) ;
 // Get the most recent confidence scores with labels
 bool cv_get_confidence_data(ClassConfidenceData *data);
 #endif // USE_PERCENTAGE
+
+// Probability of class 1 (the target) from the last cv_run(), whole-number percent; detection uses it
+uint8_t cv_getTargetPercent(void);
 
 // Label accessor - used by the detection path (processNNOutput) regardless of
 // percentage mode, so it is available unconditionally.

@@ -3010,32 +3010,39 @@ static int initNN(void) {
 /**
  * Do something with the NN output
  *
+ * A detection is when the model is at least op 16 % sure of class 1, the target (issue #270). Op 16 is
+ * a percentage, 0-100, with the same meaning for every model: cvapp.cpp turns the outputs into
+ * probabilities (softmax for logit models, only dequantized for models that end in softmax). The
+ * percentage compared is the whole number printed and written to the EXIF UserComment.
+ *
  * The result is reported at once. Adding it to the counters waits for the card (countNNResult()).
  *
  * TODO should this be in cvapp.cpp?
- * TODO this is suitable for person detection only - revisit!
  *
- * @param outCategories - array of logit values
- * @param classCount - number of classes
+ * @param outCategories - array of int8 outputs, one per class (class 0 = no target, class 1 = target)
+ * @param classCount - number of classes. Fewer than 2 is never a detection
  */
 static void processNNOutput(int8_t * outCategories, uint8_t classCount) {
-	uint8_t threshold;
+	uint16_t threshold;
+	uint8_t targetPercent;
 
 	// The threshold is in the fast-start record, so the card is not needed here
 	threshold = fatfs_getOperationalParameter(OP_PARAMETER_MODEL_THRESHOLD);
 
+	// The same whole-number percentage that is printed and written to the EXIF UserComment
+	targetPercent = cv_getTargetPercent();
+
 	nnResultToCount = true;
-	nnResultPositive = (outCategories[1] > threshold);
+	nnResultPositive = (classCount >= 2) && (targetPercent >= threshold);
 
 	for (uint8_t i=0; i < classCount; i++) {
 		xprintf("Class %d '%s' = logit %d\n", i, cv_getLabel(i), outCategories[i]);
 	}
 
-	// TODO This only works for the person detection
 	if (nnResultPositive)  {
 		XP_LT_GREEN;
 		xprintf("TARGET OBJECT DETECTED!\n");
-
+		XP_WHITE;	// before sendMsgToMaster(), which can let other tasks print
 		// Send a message to the BLE processor so it can inform the user on the app immediately.
 		// Also can be used to flash an LED.
 		snprintf(msgToMaster, MSGTOMASTERLEN, "NN+");
@@ -3052,7 +3059,12 @@ static void processNNOutput(int8_t * outCategories, uint8_t classCount) {
 	}
 
 	XP_WHITE;
-	xprintf("Score %d/128 (Threshold %d)\n", outCategories[1], threshold);
+	if (classCount >= 2) {
+		xprintf("Target '%s' %d%% (threshold %d%%)\n", cv_getLabel(1), targetPercent, threshold);
+	}
+	else {
+		xprintf("Model has %d class: no target class (threshold %d%%)\n", classCount, threshold);
+	}
 }
 
 /**

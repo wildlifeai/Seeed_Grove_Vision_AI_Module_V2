@@ -30,7 +30,7 @@ Three entries in CONFIG.TXT control model selection and detection behaviour.
 |-------|-----------|---------|---------|
 | 14 | `OP_PARAMETER_MODEL_PROJECT` | 0 | Model project ID. **0 means no model is loaded.** |
 | 15 | `OP_PARAMETER_MODEL_VERSION` | 0 | Model version number. |
-| 16 | `OP_PARAMETER_MODEL_THRESHOLD` | 0 | Detection logit threshold (0–127). |
+| 16 | `OP_PARAMETER_MODEL_THRESHOLD` | 60 | Detection threshold: how sure (%) the model must be of class 1, the target (0 to 100). |
 
 The project ID and version together determine the model filename using the pattern:
 
@@ -44,7 +44,11 @@ If `OP_PARAMETER_MODEL_PROJECT` is 0 the NN system is skipped entirely and no mo
 
 ### Detection threshold
 
-`OP_PARAMETER_MODEL_THRESHOLD` is compared against the raw int8 logit of class 1 (the "target" class). If the logit exceeds the threshold the target is considered detected. The default of 0 means any positive logit triggers a detection — effectively very low sensitivity. Increase this value to require higher confidence before declaring a detection.
+A detection is when the model is at least `OP_PARAMETER_MODEL_THRESHOLD` % sure that the photo shows the target (class 1). For example, op 16 = 70 reports a person only when the camera is at least 70% sure. The percentage is the one the console prints and the EXIF UserComment carries for class 1, a whole number. The default is 60.
+
+Op 16 means the same for every model: the firmware turns the model's outputs into probabilities first (see "Understanding the output values" below). It is still worth checking for each model, because some models are over-confident or under-confident. With two classes, op 16 = 50 is the model's own call (target more likely than not); below 50 detects even when the model leans towards "no target"; op 16 = 0 makes every frame a detection. Values above 100 are rejected by `setop` and replaced by 60 when CONFIG.TXT is loaded.
+
+History (issue #270): until 5 November 2026 the firmware compared the raw class 1 value with op 16 (0 to 127, default 18), which missed most animals with the challenge models. On 5 and 6 November it briefly compared class 1 minus class 0 instead. Since 6 November op 16 is a percentage. A CONFIG.TXT written before then may still hold 18, which now means "at least 18% sure", so nearly every frame is a detection: set it again.
 
 ---
 
@@ -172,8 +176,11 @@ Schema version : 3 (expected 3)
 Subgraphs      : 1
 Operators      : 1
   Op 0: CUSTOM (ethos-u), weight bytes: 250576
-Input tensor   : i8 [1,96,96,1]
-Output tensor  : i8 [1,2]
+Input tensor   : i8 [1,96,96,1], scale 0.007843138, zero point -1
+                 'input'
+Output tensor  : i8 [1,2], scale 1/256, zero point -128
+                 'MobilenetV1/Predictions/Reshape_1_cpu'
+Output values  : probabilities (softmax quantization, scale 1/256, zero point -128). Percent = (value + 128) / 2.56
 Total weight bytes : 250612
 ---------------------------------
 There are 2 classes (2)
@@ -197,8 +204,9 @@ NN Initialisation took 57ms
 | `TFLM Ethos-U55 Model Fingerprint` | Model structure decoded from the FlatBuffers schema. |
 | `Schema version : 3` | TFLite schema version — must match the library. |
 | `Op 0: CUSTOM (ethos-u)` | The model contains one operator delegated to the Ethos-U55 NPU. |
-| `Input tensor : i8 [1,96,96,1]` | The model expects a batch of 1, 96×96 grayscale image, int8. |
-| `Output tensor : i8 [1,2]` | Two int8 class scores (logits) are produced per image. |
+| `Input tensor : i8 [1,96,96,1], scale ..., zero point ...` | The model expects a batch of 1, 96×96 grayscale image, int8. The scale and zero point turn an int8 value into a real number: real = scale × (value − zero point). The next line is the tensor's name. |
+| `Output tensor : i8 [1,2], scale 1/256, zero point -128` | Two int8 class values per image, with their quantization and name. |
+| `Output values : probabilities ...` | The model already ends in softmax, so the values are probabilities: p = (value + 128) / 256. A Vela model hides its softmax inside the one ethos-u operator, so the firmware recognises it from the output quantization (scale 1/256, zero point -128 is what TFLite fixes for an int8 softmax). Otherwise `logits`: raw scores, and the percentages are computed with softmax. Issue #287. `_Tools/tflite_inspect.py` shows the same on a PC. |
 | `There are 2 classes (2)` | Count from the output tensor matches the metadata label count. A mismatch here is printed in red as a warning. |
 | `NN Initialisation took 57ms` | Time from start of `cv_init()` to completion (model already in flash is fast; writing from SD can take several seconds — see section 6). |
 
@@ -275,17 +283,25 @@ Input image is 640 x 480 (460800 bytes)
 Input tensor is 96 x 96 (1 channels)
 Model invoked.
 DEBUG: cv_run says there are 2 classes
+Class 'No Person?': 78% (raw: 71)
+Class 'Person!!!': 22% (raw: -71)
+DEBUG: cv_run says there are 2 classes
 Class 0 'No Person?' = logit 71
 Class 1 'Person!!!' = logit -71
 Target object not detected.
+Target 'Person!!!' 22% (threshold 60%)
 ```
 
 Or if the target is detected:
 
 ```
+Class 'No Person?': 22% (raw: -71)
+Class 'Person!!!': 78% (raw: 71)
+DEBUG: cv_run says there are 2 classes
 Class 0 'No Person?' = logit -71
 Class 1 'Person!!!' = logit 71
 TARGET OBJECT DETECTED!
+Target 'Person!!!' 78% (threshold 60%)
 ```
 
 **What each line means:**
@@ -295,26 +311,30 @@ TARGET OBJECT DETECTED!
 | `Input image is 640 x 480` | Dimensions and byte size of the raw camera image. |
 | `Input tensor is 96 x 96 (1 channels)` | The model requires a 96×96 single-channel (grayscale) image. The raw image is rescaled using bilinear interpolation and converted to int8. |
 | `Model invoked.` | The Ethos-U55 NPU has completed the inference. |
+| `Class 'Person!!!': 22% (raw: -71)` | How sure the model is of each class, as a whole-number percentage, with the raw int8 output. Printed when `USE_PERCENTAGE` is defined (it is). |
 | `DEBUG: cv_run says there are 2 classes` | Class count from the output tensor (temporary debug print). |
 | `Class 0 'No Person?' = logit 71` | Raw int8 output score for class 0. Logits are in the range −128 to +127. Higher is more confident. Class labels come from the flash metadata. |
 | `Class 1 'Person!!!' = logit -71` | Raw int8 output score for class 1. |
-| `Target object not detected.` | Class 1 logit (−71) did not exceed `OP_PARAMETER_MODEL_THRESHOLD`. |
-| `TARGET OBJECT DETECTED!` | Class 1 logit exceeded the threshold. |
+| `Target object not detected.` | Class 1's percentage (22%) is below `OP_PARAMETER_MODEL_THRESHOLD`. |
+| `TARGET OBJECT DETECTED!` | Class 1's percentage is at least the threshold. |
+| `Target 'Person!!!' 22% (threshold 60%)` | The percentage and op 16 that the decision used. |
 
-### Understanding logit values
+### Understanding the output values
 
-Logits are the raw, unnormalised scores from the final layer of the neural network, stored as int8 (−128 to +127). For a two-class model the two logits are approximately equal in magnitude and opposite in sign — a high positive score for one class means a low (negative) score for the other.
+The console calls them logits, but what they are depends on the model. Either way they are int8 (−128 to +127), one per class, and higher means more likely.
 
-The `OP_PARAMETER_MODEL_THRESHOLD` (index 16 in CONFIG.TXT) is compared against the logit of class 1 (the "target" class). Examples:
+- **Probabilities**, if the model ends in softmax, as the person detection model (`20V1`) and the `nnfiles` example models (`99V2`, `98V1`) do: p = (value + 128) / 256. The class values add up to 0 for two classes (the probabilities add up to 1), so class 0 is exactly minus class 1. The firmware only dequantizes these.
+- **Logits**, otherwise: raw, unnormalised scores from the final layer. The firmware dequantizes them with the model's own scale and zero point, then applies softmax, which gives the model's probabilities. The challenges' 160 px models are probably of this kind (their outputs are not mirrored).
 
-| logit[1] | threshold | result |
-|----------|-----------|--------|
-| 71 | 0 | detected |
-| −71 | 0 | not detected |
-| 40 | 50 | not detected |
-| 60 | 50 | detected |
+The cold boot fingerprint says which (`Output values`). Either way, `OP_PARAMETER_MODEL_THRESHOLD` (index 16 in CONFIG.TXT) is compared with the probability of class 1, so it means the same for both kinds. Examples for a softmax model:
 
-A threshold of 0 (default) means any positive logit counts as a detection.
+| raw class 1 | class 1 % | threshold | result |
+|-------------|-----------|-----------|--------|
+| 71 | 78 | 60 | detected |
+| −71 | 22 | 60 | not detected |
+| 26 | 60 | 60 | detected (at least the threshold) |
+| 20 | 58 | 60 | not detected |
+| 20 | 58 | 50 | detected |
 
 ---
 
@@ -324,7 +344,7 @@ After each inference the AI processor sends a short ASCII message to the BLE pro
 
 | Message | Meaning |
 |---------|---------|
-| `NN+` | Target detected (logit[1] > threshold) |
+| `NN+` | Target detected (class 1 at least op 16 %) |
 | `NN-` | Target not detected |
 
 
@@ -358,13 +378,13 @@ This tag is always written and exists for backwards compatibility with earlier f
 
 A human-readable ASCII summary of the NN result. The format depends on the `USE_PERCENTAGE` build switch in `cvapp.h`:
 
-**`USE_PERCENTAGE` disabled (current build)** — raw logit values, one per class:
+**`USE_PERCENTAGE` disabled**: raw int8 values, one per class:
 
 ```
 No Person?: 71; Person!!!: -71;
 ```
 
-**`USE_PERCENTAGE` enabled** — softmax-normalised confidence percentages (computed by `outputAsPercentage()` in `cvapp.cpp` using `tflite::reference_ops::Softmax()`), up to 4 classes:
+**`USE_PERCENTAGE` enabled (current build)**: confidence percentages, whole numbers, up to 4 classes, computed by `outputAsPercentage()` in `cvapp.cpp`. For a model that ends in softmax the values are only dequantized; otherwise `tflite::reference_ops::Softmax()` is applied. Before issue #287 (6 November 2026) softmax was always applied, which squashed softmax models' percentages towards 50%:
 
 ```
 No Person?: 98%; Person!!!: 2%;
@@ -396,12 +416,12 @@ The 128-bit deployment UUID set by the mobile app (e.g. `12345678-0000-0000-0000
 | Function | Signature | Description |
 |----------|-----------|-------------|
 | `cv_init()` | `int cv_init(bool sec, bool priv, uint16_t project_id, uint16_t deploy_version, APP_WAKE_REASON_E woken)` | Initialises the NPU and loads the model. Returns 0 on success, −1 if no model is available. Verbose diagnostics are printed only when `woken == APP_WAKE_REASON_COLD`. |
-| `cv_run()` | `TfLiteStatus cv_run(int8_t *outCategories, uint8_t *categoriesCount)` | Rescales the current camera image, runs inference, and returns the int8 logit array. If `USE_PERCENTAGE` is defined, also applies softmax and prints confidence percentages. |
+| `cv_run()` | `TfLiteStatus cv_run(int8_t *outCategories, uint8_t *categoriesCount)` | Rescales the current camera image, runs inference, and returns the int8 output array. If `USE_PERCENTAGE` is defined, also prints confidence percentages (softmax applied only if the model does not already end in softmax). |
 | `cv_deinit()` | `int cv_deinit(void)` | Frees the TFLM interpreter and op resolver; clears the tensor arena. Called before a model reload. |
 | `cv_modelLoaded()` | `bool cv_modelLoaded(void)` | Returns true if a model is ready for inference. |
 | `cv_newModel()` | `void cv_newModel(uint16_t project_id, uint16_t deploy_version)` | Called by image_task when a model update is requested via BLE. Internally calls `cv_init()` then updates CONFIG.TXT. |
 | `cv_eraseModel()` | `void cv_eraseModel(void)` | Erases the model from flash. Useful for testing or starting fresh. |
-| `cv_get_confidence_data()` | `bool cv_get_confidence_data(ClassConfidenceData *data)` | Copies the most recent softmax confidence percentages and labels (populated when `USE_PERCENTAGE` is defined). Used by `image_task.c` to write EXIF UserComment. |
+| `cv_get_confidence_data()` | `bool cv_get_confidence_data(ClassConfidenceData *data)` | Copies the most recent confidence percentages and labels (populated when `USE_PERCENTAGE` is defined). Used by `image_task.c` to write EXIF UserComment. |
 | `cv_getLabel()` | `const char *cv_getLabel(uint8_t index)` | Returns the class label string from flash metadata. Available when `USE_PERCENTAGE` is not defined. |
 | `img_rescale()` | `void img_rescale(...)` | Bilinear interpolation: resizes raw camera image (e.g. 640×480) to model input size (96×96) and converts to int8 (zero-centred at 128). |
 
@@ -422,7 +442,7 @@ The 128-bit deployment UUID set by the mobile app (e.g. `12345678-0000-0000-0000
 | Function | Description |
 |----------|-------------|
 | `initNN()` | Calls `cv_init()` with ops 14 and 15, waiting for the SD card first only if the model is not in flash. Called at start-up, or just after the capture starts on a timer or motion wake. |
-| `processNNOutput(outCategories, classCount)` | Compares logit[1] against `OP_PARAMETER_MODEL_THRESHOLD`; sends `NN+` or `NN-` to the BLE processor via I2C; prints detection result. Does not wait for the SD card. |
+| `processNNOutput(outCategories, classCount)` | Compares class 1's percentage (`cv_getTargetPercent()`) with `OP_PARAMETER_MODEL_THRESHOLD` (fewer than 2 classes is never a detection); sends `NN+` or `NN-` to the BLE processor via I2C; prints detection result. Does not wait for the SD card. |
 | `countNNResult()` | Adds the result to the counters (ops 1 and 2) once the SD card is ready, since the counters are loaded from CONFIG.TXT. |
 | `prepareJpegFile(outCategories, classCount, extraBlock)` | Assembles the two-buffer JPEG+EXIF output: calls `build_exif_segment()` then queues the write request for `fatfs_task`. |
 | `build_exif_segment(outCategories, categoriesCount)` | Builds a TIFF-structured EXIF APP1 block in `exif_buffer[]`. Writes tag 0xC000 (raw logits), optionally 0x9286 (UserComment confidence string), and 0xF200 (deployment ID). |
@@ -436,8 +456,8 @@ All SPI flash accesses (XIP enable/disable, read, write, erase) are serialised b
 
 | Switch | File | Effect |
 |--------|------|--------|
-| `USE_PERCENTAGE` | `cvapp.h` (currently commented out) | Enables softmax confidence calculation in `cv_run()` and percentage-format UserComment EXIF data. When disabled, the UserComment tag contains raw logits instead. |
-| `PRINTMODELFINGERPRINT` | `cvapp.cpp` | Enables the TFLM model structure summary at cold boot (schema version, operators, tensor shapes). Enabled by default. |
+| `USE_PERCENTAGE` | `cvapp.h` (defined) | Enables softmax confidence calculation in `cv_run()` and percentage-format UserComment EXIF data. When disabled, the UserComment tag contains raw logits instead. |
+| `PRINTMODELFINGERPRINT` | `cvapp.cpp` | Enables the TFLM model structure summary at cold boot (schema version, operators, tensor shapes and quantization, and whether the outputs are probabilities or logits). Enabled by default. |
 | `TFLM_2412` | Makefile | Selects the newer TFLM 2412 / Ethos-U 2411 library with a slightly different `MicroInterpreter` API. |
 | `EXTRARESOLVERS` | `cvapp.cpp` | Registers additional op resolvers (Pad, Transpose, BatchMatMul) for models that require them beyond the basic EthosU delegate. |
 

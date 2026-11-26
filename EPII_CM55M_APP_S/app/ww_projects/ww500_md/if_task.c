@@ -325,7 +325,9 @@ bool lastMessageSent = false;
 // True if the BLE processor did not read the first message after this boot. While set, nothing is sent to it (no
 // interrupt pulse, no I2C data): messages to it are dropped and the "Sleep" message is skipped. Cleared when the BLE
 // processor sends us a command (it is evidently there), or by the 'ble clear' CLI command. RAM only, so every boot
-// tries again. Mirrored in the self test bits as SELF_TEST_AI_NO_BLE (bit 14).
+// tries again.
+// Self test bit SELF_TEST_AI_NO_BLE (bit 14) is set with this flag but not cleared with it: it is a record that the
+// probe failed, kept until a 'selftest' reply has carried it (prvGetSelfTest() in CLI-commands.c clears it, #246).
 static bool bleUnresponsive = false;
 
 // True from sending the first message until it is read (TX_DONE) or times out (MM_TIMER, after BLE_PROBE_TIME)
@@ -941,8 +943,7 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 		// Here when I2C message arrived
 		if (bleUnresponsive) {
 			// The BLE processor has sent us a command, so it is there after all
-			bleUnresponsive = false;
-			selfTest_clearErrorBits(1 << SELF_TEST_AI_NO_BLE);
+			bleUnresponsive = false;	// Self test bit 14 stays set until a 'selftest' reply carries it (#246)
 			XP_LT_GREEN;
 			xprintf("BLE processor has contacted us: messages to it resumed\n");
 			XP_WHITE;
@@ -1175,8 +1176,7 @@ static APP_MSG_DEST_T  handleEventForStateI2CTx(APP_MSG_T rxMessage) {
 
 		if (bleUnresponsive) {
 			// It read the first message after BLE_PROBE_TIME, but within MISSINGMASTERTIME
-			bleUnresponsive = false;
-			selfTest_clearErrorBits(1 << SELF_TEST_AI_NO_BLE);
+			bleUnresponsive = false;	// Self test bit 14 stays set until a 'selftest' reply carries it (#246)
 			xprintf("BLE processor read the first message late: no longer treated as unresponsive\n");
 		}
 
@@ -2418,10 +2418,10 @@ bool ifTask_isBleUnresponsive(void) {
 /**
  * Clears the "BLE processor unresponsive" flag, so that messages are sent to it again (the 'ble clear' CLI command).
  * If it still does not answer, each message waits MISSINGMASTERTIME, and the flag is not set again until the next boot.
+ * Self test bit 14 is left set: only a 'selftest' reply clears it (#246).
  */
 void ifTask_clearBleUnresponsive(void) {
 	bleUnresponsive = false;
-	selfTest_clearErrorBits(1 << SELF_TEST_AI_NO_BLE);
 }
 
 /**

@@ -2587,6 +2587,10 @@ static BaseType_t prvGetOpParam(char *pcWriteBuffer, size_t xWriteBufferLen, con
 
 /**
  * Return current self test bits
+ *
+ * Bit 14 (SELF_TEST_AI_NO_BLE) is cleared once this reply has carried it, whoever asked (#246). It records that the
+ * BLE processor missed the first message after boot; nothing else clears it, so a BLE processor that was only late
+ * still learns of it from its 'selftest' on that wake.
  */
 static BaseType_t prvGetSelfTest(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString) {
 	(void)pcCommandString;
@@ -2594,6 +2598,7 @@ static BaseType_t prvGetSelfTest(char *pcWriteBuffer, size_t xWriteBufferLen, co
 	configASSERT(pcWriteBuffer);
 
 	cli_append(&pcWriteBuffer, &xWriteBufferLen, "selfTest %04x", selfTest_getErrorBits());
+	selfTest_clearErrorBits(1 << SELF_TEST_AI_NO_BLE);
 
 	/* There is no more data to return after this single string, so return pdFALSE. */
 	return pdFALSE;

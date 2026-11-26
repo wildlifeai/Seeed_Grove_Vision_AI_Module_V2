@@ -221,9 +221,11 @@ __Notes:__
    and enters DPD without it. Since 3 November 2026 the first message itself stays waiting (`/IP_INT` low) for the
    full 4000 ms, and a late read clears the flag. The flag is cleared if the BLE processor sends a command, by `ble clear`, or at the next
    boot. Not needed by the app: an app that can send `AI ble` has a working BLE processor, so the answer is always
-   "responsive". The flag is also self test bit 14 (`SELF_TEST_AI_NO_BLE`, 0x4000) in the AI processor's `selfTest.h`.
-   The self test bit list is shared with the BLE processor (`ww-hardware`, `selfTest.h`) and the app, which do not have
-   bit 14 yet.
+   "responsive". When the flag is set, self test bit 14 (`SELF_TEST_AI_NO_BLE`, 0x4000) is set too, but the bit is not
+   cleared with the flag: it stays set until a `selftest` reply has carried it (from the BLE processor or the console),
+   so a BLE processor that was only late still learns of it from its `selftest` on that wake (#246, 4 November 2026).
+   `ble clear` clears only the flag. The self test bit list is shared with the BLE processor (`ww-hardware`,
+   `selfTest.h`) and the app.
 
 __Other AI Processor Commands__
 

@@ -91,7 +91,8 @@ FRESULT dir_mgr_init_config(directoryManager_t *dirManager);
 // Determines and creates the correct image directory.
 FRESULT dir_mgr_init_image_dir(directoryManager_t *dirManager);
 
-void dir_mgr_generateImageFilename(char *imageFileName, uint8_t filenameLen, char *type);
+// Image file name from the photo's time, in seconds since 1970 (exif_utc_time_to_seconds())
+void dir_mgr_generateImageFilename(char *imageFileName, uint8_t filenameLen, char *type, uint32_t seconds);
 
 
 #endif /* APP_WW_PROJECTS_WW500_MD_DIRECTORY_MANAGER_H_ */

@@ -23,7 +23,7 @@
 #include "ledFlash.h"
 #include "lightSensor.h"
 #include "pca9574.h"
-#include "exif_utc.h"	// exif_utc_get_rtc_as_time() for FLASH_MODE_TIME_OF_DAY
+#include "exif_utc.h"	// exif_utc_get_time() for FLASH_MODE_TIME_OF_DAY
 
 #include "hx_drv_rtc.h"
 
@@ -388,7 +388,7 @@ static void evaluateTimeOfDay(void) {
 	uint16_t start;
 	uint16_t duration;
 
-	if (exif_utc_get_rtc_as_time(&now) != RTC_NO_ERROR) {
+	if (exif_utc_get_time(&now) != RTC_NO_ERROR) {
 		return;	// no fresh time available - leave flashActive as it was
 	}
 

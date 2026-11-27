@@ -8,7 +8,7 @@
 ## In short
 
 - **Goal.** Fix AI processor faults found while testing other work. No new features.
-- **Fixed: three faults.**
+- **Fixed: four faults.**
   - [#296](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/296), commands
     lost between "Sleep" and DPD. Committed `ae19db33`, issue closed. The same change stopped the RTC
     calibration repeating on most sleeps.
@@ -16,8 +16,10 @@
     parameter counters lost from CONFIG.TXT. Benched on both images, committed `52e69958`.
   - [#298](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/298), deployment ID and GPS position lost if CONFIG.TXT
     is damaged. Benched on both images, committed `e483dc7b`, issue closed.
-- **Found, not yet resolved:** six more (table below): #207 (next), #295, #299, #300,
-  ww-hardware #83, and one /RST that was ignored.
+  - [#207](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/207), a `setop` after Save State replied OK but was not saved (made
+    likelier by #296). Benched, not yet committed.
+- **Found, not yet resolved:** five more (table below): #295, #299, #300, ww-hardware #83, and
+  one /RST that was ignored.
 - **Sources.** The BLE processor's LoRaWAN work
   ([CLAUDE_note_AI_counters_lost.md](CLAUDE_note_AI_counters_lost.md)) and Victor's email of
   21 November ([Victors_Issues.eml](Victors_Issues.eml)).
@@ -34,6 +36,7 @@ Read the record of a fix for its details. The drafts are for Charles to send. Th
 |---|---|---|
 | [CLAUDE_296_sleep_order.md](CLAUDE_296_sleep_order.md) | **#296**: commands lost between "Sleep" and DPD. The fault, the options, the change, the bench results | Fixed, committed `ae19db33` |
 | [CLAUDE_297_counters_lost.md](CLAUDE_297_counters_lost.md) | **#297**: operational parameter counters lost from CONFIG.TXT. The cause, the fix, self-test bit 12, the new image folder, the bench results | Fixed, committed `52e69958` |
+| [CLAUDE_207_setop_after_save_state.md](CLAUDE_207_setop_after_save_state.md) | **#207**: a `setop` after Save State replies OK but is not saved. The fault, why #296 made it likelier, the fix, the bench results | Fixed, not committed |
 | [CLAUDE_298_deployment_id_flash.md](CLAUDE_298_deployment_id_flash.md) | **#298**: deployment ID and GPS position are lost if CONFIG.TXT is damaged. Found with #297. The issue text and the fix | Fixed, committed `e483dc7b`, closed |
 | [CLAUDE_issue_83_BLE_selftest_bit12.md](CLAUDE_issue_83_BLE_selftest_bit12.md) | **ww-hardware #83**: bit 12's new meaning, and keeping AI event bits until reported. Follows #297 | Draft, to raise |
 | [CLAUDE_note_for_Victor_bit12.md](CLAUDE_note_for_Victor_bit12.md) | Note to Victor: bit 12's new meaning for the app and website | Draft, to send |
@@ -45,7 +48,6 @@ Read the record of a fix for its details. The drafts are for Charles to send. Th
 
 | Fault | Source | Issue | State |
 |---|---|---|---|
-| A `setop` after Save State replies OK but is not saved. Made more likely by #296 (the RTC work now sits after Save State) | Found checking `hardware-traps.md` | [#207](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/207) | Next. Plan: RTC work before Save State; refuse `setop` once Save State has started |
 | BLE processor: rename bit 12, keep AI event bits (12, 14) until reported | Follows #297; Victor's bit 14 question | [ww-hardware #83](https://github.com/wildlifeai/ww-hardware/issues/83) | Not started |
 | No EXIF date when the camera does not know the time | Victor | [#295](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/295) | Rule decided, not coded |
 | The AI processor's RTC runs about 5 % fast in DPD | BLE note, section 6 | [#299](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/299) | Not started |
@@ -75,12 +77,12 @@ than 10 minutes out.
 
 **Question for Victor:** "merge all six together": presumably Seeed #284, #286, #289,
 ww-hardware #77 and the two lorawanPing PRs. Tell him the Seeed one is `261125_countersLost`,
-including #296, #297 and #298.
+including #296, #297, #298 and #207.
 
 ## Open items
 
 - [#297](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/297), [#298](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/298): fixed and committed, to merge.
-- [#207](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/207): next.
+- [#207](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/207): fixed and benched, to commit.
 - [#295](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/295): to code, with the overwrite guard.
 - [ww-hardware #83](https://github.com/wildlifeai/ww-hardware/issues/83): for the BLE processor side.
 - [#299](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/299): the RTC drift, to decide the approach.

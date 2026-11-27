@@ -132,10 +132,12 @@ building on any of them:
   waiting for a frame is idle. A multi-image capture with a gap above op8 is abandoned in
   DPD and `Captured` never comes; the IF task sends `Sleep` and completes the shutdown
   barrier on its own, because the barrier counts calls, not tasks (#208).
-* **A command that reaches the Himax between Save State and DPD strands it awake** until a
-  power cycle (#205): the IF task drops the inactivity event while transmitting. An ordinary
-  wake-then-command can do it. In that state the nRF parks in SELFTEST and drops every app
-  command. A `setop` in the same window is acknowledged and never saved (#207).
+* **A command that reaches the AI processor between Save State and DPD** used to strand it awake
+  until a power cycle (#205, fixed 4 Sep 2026: the IF task now defers the inactivity event). A
+  settings change in that window was acknowledged and never saved (#207). Since 27 Nov 2026
+  `setop`, `setdid`, `setgps` and `md` reply `Error: going to sleep, try again.` from the start of
+  Save State, as `capture` and `light` do. The window is up to about 5 s when RTC work is due
+  (#296).
 * **The nRF forwards any command mid-`txfile` and restarts its packet counter** (ww-hardware
   #33); **`Failed to send` on its console is normal back-pressure** (#35); **the app's
   loopback benchmark never echoes** (#36).

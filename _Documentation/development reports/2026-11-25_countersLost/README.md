@@ -33,7 +33,7 @@ Branch `261125_countersLost`, from `261106_lorawanPing` at `d8690d72`.
 
 ## Documents
 
-Read the record of a fix for its details. The drafts are for Charles to send. The rest is background.
+Read the record of a fix for its details. The rest is background.
 
 | Document | What it is | State |
 |---|---|---|
@@ -42,8 +42,8 @@ Read the record of a fix for its details. The drafts are for Charles to send. Th
 | [CLAUDE_295_no_exif_date.md](CLAUDE_295_no_exif_date.md) | **#295**: no EXIF date when the time is unknown, no image overwrite, and moving the photo EXIF code to `exif_photo.c` | Fixed, committed `da5f974b` |
 | [CLAUDE_207_setop_after_save_state.md](CLAUDE_207_setop_after_save_state.md) | **#207**: a `setop` after Save State replies OK but is not saved. The fault, why #296 made it likelier, the fix, the bench results | Fixed, committed `6917be6d`, closed |
 | [CLAUDE_298_deployment_id_flash.md](CLAUDE_298_deployment_id_flash.md) | **#298**: deployment ID and GPS position are lost if CONFIG.TXT is damaged. Found with #297. The issue text and the fix | Fixed, committed `e483dc7b`, closed |
-| [CLAUDE_issue_83_BLE_selftest_bit12.md](CLAUDE_issue_83_BLE_selftest_bit12.md) | **ww-hardware #83**: bit 12's new meaning, and keeping AI event bits until reported. Follows #297 | Draft, to raise |
-| [CLAUDE_note_for_Victor_bit12.md](CLAUDE_note_for_Victor_bit12.md) | Note to Victor: bit 12's new meaning for the app and website | Draft, to send |
+| [CLAUDE_issue_83_BLE_selftest_bit12.md](CLAUDE_issue_83_BLE_selftest_bit12.md) | **ww-hardware #83**: bit 12's new meaning, and keeping AI event bits until reported. Follows #297 | Raised; for the BLE processor side |
+| [CLAUDE_note_for_Victor_bit12.md](CLAUDE_note_for_Victor_bit12.md) | Note to Victor: bit 12's new meaning for the app and website, and ops 19 and 20 | Sent, 28 November |
 | [CLAUDE_note_AI_counters_lost.md](CLAUDE_note_AI_counters_lost.md) | From the BLE processor Claude, 23 November: the counter loss (#297), the ignored /RST, the clock, `setop` checks. Copied unchanged from ww-hardware | Background |
 | [logs/](logs) | `ai1` to `ai6`, `ble1` to `ble5`: #296. `ai7` to `ai10`, `ble7` to `ble10`: #297. `ai11` to `ai17`, `ble11` to `ble15`: #298. Each record describes its logs | Evidence |
 
@@ -68,10 +68,11 @@ than 10 minutes out.
 
 ## Open items
 
-- **A second PR to `dev`** for #298, #207 and #295: the first, #301, was merged on 26 November
-  with the lorawanPing work, #296 and #297 (Victor merged it with #284, #286 and #289).
+- **[PR #304](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/pull/304)** to `dev`,
+  for #298, #207 and #295 (opened 28 November). The first, #301, was merged on 26 November with the
+  lorawanPing work, #296 and #297 (Victor merged it with #284, #286 and #289).
 - **The note to Victor** ([CLAUDE_note_for_Victor_bit12.md](CLAUDE_note_for_Victor_bit12.md)): bit 12,
-  and ops 19 and 20 with a new deployment ID. To send.
+  and ops 19 and 20 with a new deployment ID. Sent by email, 28 November.
 - [ww-hardware #83](https://github.com/wildlifeai/ww-hardware/issues/83): bit 12 and AI event bits,
   for the BLE processor side.
 - [#299](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/299): the RTC drift, to decide the approach.

@@ -1099,6 +1099,28 @@ static bool captureRefused(char *pcWriteBuffer, size_t xWriteBufferLen) {
 }
 
 /**
+ * Refuses a change to a saved setting once the image task is preparing to sleep (#207)
+ *
+ * From then on the state is being saved, or has been: CONFIG.TXT written and the card unmounted, the flash
+ * records written. A change made now would be acknowledged but lost at the next wake (issue #207). Since #296
+ * this time includes the RTC work, up to about 5 s, during which commands reach us. Refused with an error, so
+ * the sender knows to try again: after "Sleep" the command wakes us and is saved as usual.
+ *
+ * Used by the commands that change what is saved: setop, setdid, setgps and md.
+ *
+ * @param pcWriteBuffer - the error message is written here if the change is refused
+ * @param xWriteBufferLen - size of that buffer
+ * @return true if the change is refused
+ */
+static bool settingRefused(char *pcWriteBuffer, size_t xWriteBufferLen) {
+	if (image_isGoingToSleep()) {
+		snprintf(pcWriteBuffer, xWriteBufferLen, "Error: going to sleep, try again.");
+		return true;
+	}
+	return false;
+}
+
+/**
  * Implements "light" command.
  *
  * Triggers a fresh light-sensor reading on demand (ignoring whether the AE
@@ -2489,6 +2511,10 @@ static BaseType_t prvSetOpParam(char *pcWriteBuffer, size_t xWriteBufferLen, con
 	uint16_t index = 0;
 	uint16_t value = 0;
 
+	if (settingRefused(pcWriteBuffer, xWriteBufferLen)) {
+		return pdFALSE;
+	}
+
 	/* Get the first parameter */
 	pcParameter1 = FreeRTOS_CLIGetParameter(pcCommandString, 1, &xParameter1StringLength);
 	if (pcParameter1 != NULL) {
@@ -2666,19 +2692,23 @@ static BaseType_t prvSetgps(char *pcWriteBuffer, size_t writeBufferLen, const ch
     (void)pcWriteBuffer;
     (void)writeBufferLen;
 
+    if (settingRefused(pcWriteBuffer, writeBufferLen)) {
+        return pdFALSE;
+    }
+
     const char *param;
     BaseType_t paramLen;
 
     // Extract the first parameter (expected to be a quoted string)
     param = FreeRTOS_CLIGetParameter(pcCommandString, 1, &paramLen);
     if (!param || paramLen == 0) {
-        snprintf(pcWriteBuffer, writeBufferLen, "Error: No GPS string provided.\r\n");
+        snprintf(pcWriteBuffer, writeBufferLen, "Error: No GPS string provided.");
         return pdFALSE;
     }
 
     // Copy extracted parameter into a null-terminated buffer
     if (paramLen >= sizeof(gpsString)) {
-        snprintf(pcWriteBuffer, writeBufferLen, "Error: GPS string too long.\r\n");
+        snprintf(pcWriteBuffer, writeBufferLen, "Error: GPS string too long.");
         return pdFALSE;
     }
 
@@ -2733,7 +2763,7 @@ static BaseType_t prvGetgps(char *pcWriteBuffer, size_t xWriteBufferLen, const c
 	cli_append(&pcWriteBuffer, &xWriteBufferLen, "%s ", str);
 
 	exif_gps_get_altitude_as_string(&exif_gps_deviceAlt, str, sizeof(str));
-	cli_append(&pcWriteBuffer, &xWriteBufferLen, "%s\n", str);
+	cli_append(&pcWriteBuffer, &xWriteBufferLen, "%s", str);
 
 	/* There is no more data to return after this single string, so return pdFALSE. */
 	return pdFALSE;
@@ -2747,14 +2777,18 @@ static BaseType_t prvSetdid(char *pcWriteBuffer, size_t xWriteBufferLen, const c
     const char *param;
     BaseType_t paramLen;
 
+    if (settingRefused(pcWriteBuffer, xWriteBufferLen)) {
+        return pdFALSE;
+    }
+
     param = FreeRTOS_CLIGetParameter(pcCommandString, 1, &paramLen);
     if (!param || paramLen == 0) {
-        snprintf(pcWriteBuffer, xWriteBufferLen, "Error: No UUID string provided.\r\n");
+        snprintf(pcWriteBuffer, xWriteBufferLen, "Error: No UUID string provided.");
         return pdFALSE;
     }
     if (paramLen != UUIDLENGTH - 1) {
         snprintf(pcWriteBuffer, xWriteBufferLen,
-                 "Error: UUID must be %d characters (got %d).\r\n",
+                 "Error: UUID must be %d characters (got %d).",
                  UUIDLENGTH - 1, (int)paramLen);
         return pdFALSE;
     }
@@ -2777,7 +2811,7 @@ static BaseType_t prvGetdid(char *pcWriteBuffer, size_t xWriteBufferLen, const c
     (void)pcCommandString;
     char uuid[UUIDLENGTH];
     fatfs_getDeploymentId(uuid, sizeof(uuid));
-    cli_append(&pcWriteBuffer, &xWriteBufferLen, "Deployment ID: %s\n", uuid);
+    cli_append(&pcWriteBuffer, &xWriteBufferLen, "Deployment ID: %s", uuid);
     return pdFALSE;
 }
 
@@ -2885,6 +2919,10 @@ static BaseType_t prvMd(char *pcWriteBuffer, size_t xWriteBufferLen, const char 
 	const char *pcParameter;
 	BaseType_t lParameterStringLength;
 	uint16_t sensitivity;
+
+	if (settingRefused(pcWriteBuffer, xWriteBufferLen)) {
+		return pdFALSE;
+	}
 
 	/* Get parameter */
 	pcParameter = FreeRTOS_CLIGetParameter(pcCommandString, 1, &lParameterStringLength);

@@ -7,10 +7,13 @@
  *  Saved state in the XIP flash: small records that survive DPD and power cycles
  *  without the SD card. See _Documentation/development reports/2026-10-27_XIP_save_state/.
  *
- *  Two 4 KB sectors of the saved-state area (XIP_STATE_AREA_ADDR, xip_manager.h),
+ *  Three 4 KB sectors of the saved-state area (XIP_STATE_AREA_ADDR, xip_manager.h),
  *  one per record type, so the frequent erases of one can never touch the other:
  *    0x00F00000  fast-start records (the settings the first photo needs)
  *    0x00F01000  board record: values that belong to this board (the RTC calibration, rtc_cal.c)
+ *    0x00F02000  deployment record: the deployment ID and GPS position, a copy of CONFIG.TXT's 'I' and
+ *                'G' lines, used for whichever of them CONFIG.TXT didn't give: no card, no file,
+ *                damaged, or the line missing (#298, 27 Nov 2026)
  *
  *  Each sector holds 16 records of 256 bytes (one flash page each). A new record
  *  goes into the slot after the last used one; when the sector is full it is
@@ -45,12 +48,15 @@
 // The board record's own version, so a new fast-start format never loses a board's calibration.
 // Raise it only when the board payload changes, and keep reading the old one if possible
 #define XIP_STATE_BOARD_VERSION		2		// 2: the RTC calibration (31 Oct 2026); 1 had the RC32K trim (no effect in DPD)
+// The deployment record's own version. Raise it only when its payload changes
+#define XIP_STATE_DEPLOYMENT_VERSION	1		// 1: deployment ID and GPS position (27 Nov 2026, #298)
 
 /*********************************************** Global Types ************************************************/
 
 typedef enum {
 	XIP_STATE_TYPE_FAST_START	= 1,	// sector 0x00F00000
 	XIP_STATE_TYPE_BOARD		= 2,	// sector 0x00F01000: this board's values (the RTC calibration)
+	XIP_STATE_TYPE_DEPLOYMENT	= 3,	// sector 0x00F02000: the deployment ID and GPS position (#298)
 } XIP_STATE_TYPE_E;
 
 // The payload of a board record: values that belong to this board. Change it only with XIP_STATE_BOARD_VERSION
@@ -78,7 +84,7 @@ bool xip_state_read(XIP_STATE_TYPE_E type, uint8_t *data, uint16_t *len);
 int xip_state_write(XIP_STATE_TYPE_E type, const uint8_t *data, uint16_t len);
 
 /**
- * @brief Print every slot of both sectors on the console (the 'xipstate' command).
+ * @brief Print every slot of every sector on the console (the 'xipstate' command).
  */
 void xip_state_dump(void);
 
@@ -116,5 +122,20 @@ bool xip_state_readBoard(XipStateBoard_t *board);
  * @brief Write the board record, if it differs from the one in flash.
  */
 int xip_state_writeBoard(const XipStateBoard_t *board);
+
+/**
+ * @brief At boot, with the fast-start record: read the deployment record into RAM (#298).
+ */
+bool xip_state_loadDeployment(void);
+
+/**
+ * @brief When CONFIG.TXT didn't give them: set the deployment ID and/or GPS position from the record read at boot.
+ */
+bool xip_state_applyDeployment(bool id, bool gps);
+
+/**
+ * @brief At sleep: write the deployment record if the deployment ID or GPS position has changed.
+ */
+int xip_state_saveDeployment(void);
 
 #endif /* XIP_STATE_H_ */

@@ -21,6 +21,9 @@ without waiting for the SD card. How the work was done, and the bench results, a
   31 October 2026). When a card goes back in, its CONFIG.TXT wins.
 - With no valid record (new board, new record format) the C defaults are used and the camera
   waits for CONFIG.TXT, as before.
+- A separate **deployment record** keeps a copy of the deployment ID and GPS position, used for
+  whichever of them CONFIG.TXT doesn't give: no card, a blank card, a damaged file, or a missing `I`
+  or `G` line (#298, 27 November 2026).
 
 ## The flash area
 
@@ -28,6 +31,7 @@ without waiting for the SD card. How the work was done, and the bench results, a
 |---|---|
 | 0x00F00000 to 0x00F00FFF | Fast-start records: 16 slots of 256 bytes |
 | 0x00F01000 to 0x00F01FFF | Board record: the RTC calibration (see below), 16 slots of 256 bytes |
+| 0x00F02000 to 0x00F02FFF | Deployment record: the deployment ID and GPS position (see below), 16 slots of 256 bytes |
 
 The full flash map is in `xip_manager.h`. Records are only ever written through
 `xip_state_area_read/write/erase()` in `xip_manager.c`, which refuse any address outside this area.
@@ -65,13 +69,30 @@ change to the fast-start record never loses them. It holds the **RTC calibration
   saves the result in ppm. About one write a day.
 - Each DPD alarm is then set to more RTC seconds, so the sleep lasts the time asked for. The console
   prints `RTC correction N ppm` and `Sleep Ns = M RTC s` before each sleep.
-- Only the sleep is corrected: the RTC's time of day still runs fast between `setutc`s.
+- Only the sleep is corrected: the RTC's time of day still runs fast between `setutc`s (#299).
+
+## The deployment record
+
+A copy of CONFIG.TXT's `I` (deployment ID) and `G` (GPS position) lines, with its own format
+version (`XIP_STATE_DEPLOYMENT_VERSION`). Added for #298.
+- **Read** at every wake with the fast-start record, into RAM (`xip_state_loadDeployment()`). It is
+  read then because the flash can't be read once the NN may be running.
+- **Used for whatever CONFIG.TXT doesn't give** (`xip_state_applyDeployment()`): everything when
+  there is no SD card, no CONFIG.TXT (a blank card swapped in during a deployment) or a damaged or
+  unreadable one (the #297 case); and just the deployment ID or the GPS position when a readable
+  CONFIG.TXT lacks its `I` or `G` line. An `I` or `G` line always wins. The camera writes both lines
+  whenever it saves, so a line is missing only if removed by hand. So the save at sleep never
+  overwrites the copy with defaults. A new deployment is set by the app (`setdid`, with ops 19 and
+  20). A change made with no card is overwritten by the next card's `I`/`G` lines.
+- **Written** at sleep only when the deployment ID or GPS position has changed (`setdid`, `setgps`,
+  or a new CONFIG.TXT), so rarely.
 
 ## The order of a wake
 
 1. `app_main()` creates the tasks. The image task runs above the FatFS task (priorities 2 and 1),
    so the camera is not held up by the card's start-up.
-2. The FatFS task reads the record (`xip_state_loadFastStart()`) and releases the image task
+2. The FatFS task reads the record (`xip_state_loadFastStart()`), and the deployment record into RAM,
+   then releases the image task
    (`fatfs_waitForSettings()`), then mounts the card and loads CONFIG.TXT.
 3. The image task initialises the sensor and starts the capture. On a timer or motion wake the NN
    starts just after the capture has started, when the model is already in flash.

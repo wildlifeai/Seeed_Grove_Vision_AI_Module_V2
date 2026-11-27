@@ -113,9 +113,7 @@
 // Poll interval while waiting for the mount attempt
 #define SD_USED_POLL_MS				10
 
-// CONFIG.TXT is written to this file first, then renamed (save_configuration()), so a reset part way through
-// a save never leaves CONFIG.TXT empty or half written. In the same folder as CONFIG.TXT
-#define STATE_FILE_TMP "CONFIG.TMP"
+
 
 /*************************************** Local Function Declarations *****************************/
 
@@ -144,6 +142,7 @@ static void replySdUsed(void);
 static FRESULT load_configuration(const char *filename, directoryManager_t *dirManager);
 FRESULT save_configuration(const char *filename, directoryManager_t *dirManager);
 static FRESULT recoverConfigTmp(const char *filename);
+static void deploymentFromFlash(const char *why, bool damaged);
 static bool writeConfigLine(FIL *file, const char *line);
 
 // ZIP and label handling functions (moved from cvapp.cpp)
@@ -181,6 +180,11 @@ static bool configSaveBlocked = false;
 // Set when CONFIG.TXT exists but its counters (ops 0 to 4, 19, 20) could not be loaded: damaged or unreadable.
 // The boot then sets self-test bit 12 and starts a new image folder (dir_mgr_useNextImageDir())
 static bool countersLost = false;
+
+// Whether the CONFIG.TXT loaded at boot had an 'I' (deployment ID) and a 'G' (GPS) line. A missing one is taken
+// from the flash copy (#298, xip_state_applyDeployment())
+static bool configHadId = false;
+static bool configHadGps = false;
 
 // Given when the start-up work with the card is finished (fatfs_waitForSdReady())
 static SemaphoreHandle_t xSDInitDoneSemaphore;
@@ -698,6 +702,7 @@ static APP_MSG_DEST_T handleEventForUninit(APP_MSG_T rxMessage) {
 		// No card, so nothing to save on it. But the settings go to flash, so a setop or BLE change
 		// survives the sleep. The NN is not running (the image task is in its save-state state)
 		xip_state_saveFastStart();
+		xip_state_saveDeployment();
 
 		// Signal to the caller that it may enter DPD, with an error as there is no card
 		sendMsg.destination = xImageTaskQueue; // fileOp->senderQueue;
@@ -898,8 +903,10 @@ static APP_MSG_DEST_T handleEventForIdle(APP_MSG_T rxMessage) {
 		}
 
 		// And the settings the first photo needs, to flash if they have changed, card or not. The NN is
-		// not running (the image task is in its save-state state), so XIP can be switched off
+		// not running (the image task is in its save-state state), so XIP can be switched off.
+		// Likewise the deployment ID and GPS position (#298)
 		xip_state_saveFastStart();
+		xip_state_saveDeployment();
 
 		// Signal to the caller that it may enter DPD.
 		sendMsg.destination = xImageTaskQueue; // fileOp->senderQueue;
@@ -1307,6 +1314,34 @@ static bool writeConfigLine(FIL *file, const char *line) {
 	return (f_write(file, line, len, &bytesWritten) == FR_OK) && (bytesWritten == len);
 }
 
+/**
+ * Takes the deployment ID and GPS position from the flash copy, when no readable CONFIG.TXT was loaded (#298)
+ *
+ * No card, no CONFIG.TXT (a blank card), or a damaged or unreadable one: the copy read at boot is then the best
+ * there is. It also means the save at sleep can't write the defaults over the copy. A readable CONFIG.TXT's 'I'
+ * and 'G' lines win; one that lacks a line gets that item from the copy (see the boot code).
+ *
+ * @param why - the reason, for the console
+ * @param damaged - true if CONFIG.TXT was damaged or unreadable: printed in red
+ */
+static void deploymentFromFlash(const char *why, bool damaged) {
+	char id[UUIDLENGTH];
+
+	if (damaged) {
+		XP_LT_RED;
+	}
+	if (xip_state_applyDeployment(true, true)) {
+		fatfs_getDeploymentId(id, sizeof(id));
+		xprintf("%s: deployment ID %s and GPS position from flash\n", why, id);
+	}
+	else {
+		xprintf("%s: no deployment record in flash, deployment ID and GPS position at their defaults\n", why);
+	}
+	if (damaged) {
+		XP_WHITE;
+	}
+}
+
 static FRESULT load_configuration(const char *filename, directoryManager_t *dirManager) {
 	FRESULT res;
 	char line[64];
@@ -1382,9 +1417,11 @@ static FRESULT load_configuration(const char *filename, directoryManager_t *dirM
 			// Special case if the first 2 characters are 'G ' for GPS
 			if ((line[0] == 'G') && (line[1] == ' ')) {
 				processGPS(&line[2]);
+				configHadGps = true;
 			}
 			// Special case if the first 2 characters are 'I ' for deployment ID
 			else if ((line[0] == 'I') && (line[1] == ' ')) {
+				configHadId = true;
 				strncpy(deployment_id_string, &line[2], UUIDLENGTH - 1);
 				deployment_id_string[UUIDLENGTH - 1] = '\0';
 				char *nl = strchr(deployment_id_string, '\n');
@@ -1959,6 +1996,9 @@ static void vFatFsTask(void *pvParameters) {
 	// The settings saved in flash at the last sleep, if any. CONFIG.TXT, loaded below, overrides the
 	// settings but not the state ops (xip_state_keepStateOp())
 	recordLoaded = xip_state_loadFastStart();
+	// And the deployment ID and GPS position, used only if CONFIG.TXT turns out to be damaged (#298). Read now,
+	// before the camera can start, as the flash can't be read while the NN runs
+	xip_state_loadDeployment();
 	boot_timing_mark(BOOT_TIMING_RECORD_READ);
 	if (recordLoaded) {
 		// The image task can start the camera now, without waiting for the card
@@ -1999,6 +2039,8 @@ static void vFatFsTask(void *pvParameters) {
 			}
 			else if (res == FR_NO_FILE) {
 				xprintf("'%s' NOT found.\r\n", STATE_FILE);
+				// A blank card, for example one swapped in during a deployment (#298)
+				deploymentFromFlash("No CONFIG.TXT", false);
 			}
 			else {
 				// Not saved over at sleep this wake (configSaveBlocked): the next boot tries again
@@ -2007,10 +2049,26 @@ static void vFatFsTask(void *pvParameters) {
 						STATE_FILE, res);
 				XP_WHITE;
 			}
+			if ((res == FR_OK) && !countersLost && (!configHadId || !configHadGps)) {
+				// A readable CONFIG.TXT without an 'I' or 'G' line (deleted on a PC, say): that item from flash.
+				// The camera always writes both lines when it saves, so they are missing only by hand (#298)
+				char id[UUIDLENGTH];
+
+				if (xip_state_applyDeployment(!configHadId, !configHadGps)) {
+					fatfs_getDeploymentId(id, sizeof(id));
+					xprintf("'%s' has no %s line: taken from flash (deployment ID %s)\n", STATE_FILE,
+							(!configHadId && !configHadGps) ? "'I' or 'G'" : (!configHadId ? "'I'" : "'G'"), id);
+				}
+			}
 			if (countersLost) {
 				// Report it (self-test bit 12, carried by this wake's selftest reply and the LoRaWAN health
 				// uplink), and keep the photos from now on apart from the earlier ones
 				selfTest_setErrorBits(1 << SELF_TEST_AI_CONFIG_DAMAGED);
+
+				// The deployment ID and GPS position went with the file: take them from flash (#298). First,
+				// as the deployment ID chooses the folder the next image folder is looked for in
+				deploymentFromFlash("CONFIG.TXT damaged", true);
+
 				dir_mgr_useNextImageDir();
 			}
 
@@ -2019,11 +2077,17 @@ static void vFatFsTask(void *pvParameters) {
 			dir_mgr_init_image_dir(&dirManager);
 			boot_timing_mark(BOOT_TIMING_SD_IMAGE_DIR_READY);
 		}
+		else {
+			// No /MANIFEST and it couldn't be made: no CONFIG.TXT was read
+			deploymentFromFlash("No config folder", false);
+		}
 	}
 	else {
 		// Failure.
 		xprintf("SD card initialisation failed (reason %d)\r\n", res);
 		selfTest_setErrorBits(1 << SELF_TEST_AI_NO_SD_CARD);
+		// No card (perhaps being changed): keep the flash copy, so the save at sleep doesn't overwrite it (#298)
+		deploymentFromFlash("No SD card", false);
 	}
 
 	elapsedTime = xTaskGetTickCount() - startTime;

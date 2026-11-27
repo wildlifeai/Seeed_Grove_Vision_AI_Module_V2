@@ -101,7 +101,10 @@ Verified on the bench (details and serial evidence in
   it. A CONFIG.TXT that exists but can't be read is not saved over that wake. A read-only
   CONFIG.TXT now leaves a `CONFIG.TMP` behind at each save, deleted at the next boot. When the
   counters are lost, self-test bit 12 is set and photos start a new `IMAGES.NNN` folder. The
-  deployment ID and GPS position are also only in CONFIG.TXT, so they are lost too.
+  deployment ID and GPS position come from a flash copy (#298, 27 Nov 2026) whenever CONFIG.TXT
+  doesn't give them: damage, no card, a blank card, or a missing `I`/`G` line. An `I`/`G` line on
+  the card always wins and overwrites the copy at sleep, so a `setgps` made with no card is lost
+  when a card with a `G` line goes back in.
 * **With no card, settings live only in the fast-start record in flash** (`xip_state.c`). Since
   31 Oct 2026 it is written at every sleep, card or not; before that, a `setop` with no card was
   lost after one sleep (a `setop 7 300` timelapse stopped at the first wake). When a card goes back
@@ -129,10 +132,12 @@ building on any of them:
   waiting for a frame is idle. A multi-image capture with a gap above op8 is abandoned in
   DPD and `Captured` never comes; the IF task sends `Sleep` and completes the shutdown
   barrier on its own, because the barrier counts calls, not tasks (#208).
-* **A command that reaches the Himax between Save State and DPD strands it awake** until a
-  power cycle (#205): the IF task drops the inactivity event while transmitting. An ordinary
-  wake-then-command can do it. In that state the nRF parks in SELFTEST and drops every app
-  command. A `setop` in the same window is acknowledged and never saved (#207).
+* **A command that reaches the AI processor between Save State and DPD** used to strand it awake
+  until a power cycle (#205, fixed 4 Sep 2026: the IF task now defers the inactivity event). A
+  settings change in that window was acknowledged and never saved (#207). Since 27 Nov 2026
+  `setop`, `setdid`, `setgps` and `md` reply `Error: going to sleep, try again.` from the start of
+  Save State, as `capture` and `light` do. The window is up to about 5 s when RTC work is due
+  (#296).
 * **The nRF forwards any command mid-`txfile` and restarts its packet counter** (ww-hardware
   #33); **`Failed to send` on its console is normal back-pressure** (#35); **the app's
   loopback benchmark never echoes** (#36).

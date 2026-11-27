@@ -244,6 +244,8 @@ Some might be useful in due course, such as those for navigating the file system
    period (op 8), and the next command wakes it. They also reply `Error: going to sleep, try again.`
    in the few seconds between the AI processor starting to prepare for sleep and its "Sleep"
    message (#296, 25 November 2026). Send the command again after "Sleep" and it wakes the AI processor.
+   `AI setop`, `AI setdid`, `AI setgps` and `AI md` give the same reply in that time, as the settings
+   have already been saved and a change would be lost (#207, 27 November 2026).
 
 ## Asynchronous Messages
 

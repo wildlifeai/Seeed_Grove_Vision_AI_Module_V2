@@ -81,8 +81,8 @@ The external 16 MB SPI flash is partitioned as follows:
 | 0x00000000–0x000FFFFF | 1 MB | Firmware Slot A |
 | 0x00100000–0x001FFFFF | 1 MB | Firmware Slot B |
 | **0x00200000–0x00EFFFFF** | **13 MB** | **NN model area** |
-| 0x00F00000–0x00F01FFF | 8 KB | Saved state (see `ww500_md/doc/WW500_XIP_saved_state.md`) |
-| 0x00F02000–0x00FEFFFF | 1 MB | Reserved |
+| 0x00F00000–0x00F02FFF | 12 KB | Saved state (see `ww500_md/doc/WW500_XIP_saved_state.md`) |
+| 0x00F03000–0x00FEFFFF | 1 MB | Reserved |
 | 0x00FFF000–0x00FFFFFF | 4 KB | Boot-slot selector |
 
 When XIP is enabled, the model area is accessed at virtual address **0x3A200000**.

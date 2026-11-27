@@ -1,4 +1,4 @@
-# #295: leave the EXIF date out when the camera does not know the time
+# #295: leave the EXIF date out when the photo time is not plausible
 
 #### File: `CLAUDE_295_no_exif_date.md`
 #### Path: `_Documentation/development reports/2026-11-25_countersLost/CLAUDE_295_no_exif_date.md`
@@ -22,8 +22,7 @@
      `image_task.c` into a new `exif_photo.c`. Same EXIF content, apart from part 1.
 - **Agreed already:** Victor, in #295 (the website stores a photo with no date). The rule:
   Charles, 25 November, revised 27 November (below).
-- **State:** coded 27 November 2026 as proposed (Charles reviewed the proposal); benched on both
-  camera images 28 November, every check passed. Not yet committed.
+- **State: fixed.** Benched on both camera images 28 November 2026, committed `da5f974b`.
   `image_task.c` went from 3,439 to 3,309 lines.
 
 ## 1. No date unless the photo time is plausible

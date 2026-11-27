@@ -19,7 +19,8 @@
   - [#207](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/207), a `setop` after Save State replied OK but was not saved (made
     likelier by #296). Benched, committed `6917be6d`, issue closed.
   - [#295](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/295), no EXIF date when the photo time is not plausible (before 2026), and
-    image files never overwritten. Raised by Victor. Benched on both images, committed `da5f974b`.
+    image files never overwritten. Raised by Victor. Benched on both images, committed `da5f974b`,
+    issue closed.
 - **Found, not yet resolved:** four more (table below): #299, #300, ww-hardware #83, and one /RST
   that was ignored.
 - **Sources.** The BLE processor's LoRaWAN work
@@ -62,25 +63,38 @@ than 10 minutes out.
 
 ## Not for this branch
 
-- **Victor wants PRs in both repos,** BLE version 0.30.62, to merge with his four tested PRs.
 - **ww-hardware #77** was rebuilt by Victor as 0.30.61: pull before committing to it.
 - **#247 and #288** are parked by Victor.
 
-**Question for Victor:** "merge all six together": presumably Seeed #284, #286, #289,
-ww-hardware #77 and the two lorawanPing PRs. Tell him the Seeed one is `261125_countersLost`,
-including #296, #297, #298, #207 and #295.
-
 ## Open items
 
-- [#297](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/297), [#298](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/298), [#207](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/207): fixed and committed, to merge.
-- [#295](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/295): fixed, committed `da5f974b`; to close.
-- [ww-hardware #83](https://github.com/wildlifeai/ww-hardware/issues/83): for the BLE processor side.
+- **A second PR to `dev`** for #298, #207 and #295: the first, #301, was merged on 26 November
+  with the lorawanPing work, #296 and #297 (Victor merged it with #284, #286 and #289).
+- **The note to Victor** ([CLAUDE_note_for_Victor_bit12.md](CLAUDE_note_for_Victor_bit12.md)): bit 12,
+  and ops 19 and 20 with a new deployment ID. To send.
+- [ww-hardware #83](https://github.com/wildlifeai/ww-hardware/issues/83): bit 12 and AI event bits,
+  for the BLE processor side.
 - [#299](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/299): the RTC drift, to decide the approach.
-- [#300](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/300): `setop` range checks, decisions needed.
-  The app relies on setting ops 19 and 20 with a new deployment ID (27 November), so they must stay
-  settable.
+- [#300](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/300): `setop` range checks, decisions needed. The app relies on setting ops 19
+  and 20 with a new deployment ID, so they must stay settable.
 - Not an issue: the ignored /RST (not explained, not seen again).
 
 ## Outcome
 
-Not yet written.
+Five faults fixed, all benched on both camera images, all issues closed:
+
+| Issue | Fault | Fix | Commit |
+|---|---|---|---|
+| [#296](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/296) | A command just after "Sleep" was lost | The RTC work now comes before "Sleep", which is the last thing before DPD. Also stopped the RTC calibration repeating on most sleeps | `ae19db33` |
+| [#297](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/297) | Operational parameter counters lost from CONFIG.TXT | CONFIG.TXT written as `CONFIG.TMP` then renamed; an unreadable file not saved over; a loss reported by self-test bit 12 and new photos put in a new image folder | `52e69958` |
+| [#298](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/298) | Deployment ID and GPS position lost if CONFIG.TXT is damaged | A flash copy, used for whatever CONFIG.TXT doesn't give: no card, a blank card, a damaged file, a missing `I`/`G` line | `e483dc7b` |
+| [#207](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/207) | A `setop` after Save State replied OK but was not saved (made likelier by #296) | `setop`, `setdid`, `setgps` and `md` refused from Save State to DPD | `6917be6d` |
+| [#295](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/295) | Photos stamped with a wrong date after a reset | No EXIF date if the photo time is before 2026, whatever its source; image files never overwritten; the photo EXIF code moved to `exif_photo.c` | `da5f974b` |
+
+**Decisions on the way** (each explained in its record): self-test bit 12 now means "CONFIG.TXT
+damaged" (was the PDM microphone, never fitted); the flash copy of the deployment ID and GPS position
+applies per line; the EXIF date rule trusts no source; moving the RTC work before Save State was
+dropped for #207 (it could overlap an SD card write).
+
+**Handed on:** #299, #300 and ww-hardware #83 (above). The app should set ops 19 and 20 with a new
+deployment ID (note to Victor).

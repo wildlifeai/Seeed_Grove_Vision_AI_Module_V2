@@ -3,7 +3,14 @@
 #### File: `README.md`
 #### Path: `_Documentation/development reports/2026-11-25_countersLost/README.md`
 #### Author: Claude (Opus 5.5), for Charles Palmer
-#### Date: 25 November 2026, updated 26 November 2026
+#### Date: 25 November 2026, closed 28 November 2026
+
+## Status
+
+**Closed, 28 November 2026.** Five faults fixed and their issues closed (#296, #297, #298, #207,
+#295). #296 and #297 are in `dev` through #301; #298, #207 and #295 are in
+[PR #304](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/pull/304), to merge. What is
+left is tracked as issues: #299, #300, ww-hardware #83.
 
 ## In short
 
@@ -78,7 +85,9 @@ than 10 minutes out.
 - [#299](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/299): the RTC drift, to decide the approach.
 - [#300](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/300): `setop` range checks, decisions needed. The app relies on setting ops 19
   and 20 with a new deployment ID, so they must stay settable.
-- Not an issue: the ignored /RST (not explained, not seen again).
+- **No follow-up: the ignored /RST** (BLE note, section 5). Seen twice on 23 November, not since,
+  through many resets in this thread. Raise an issue if it happens again, with the AI console and a
+  scope on /RST.
 
 ## Outcome
 

@@ -13,7 +13,7 @@
     lost between "Sleep" and DPD. Committed `ae19db33`, issue closed. The same change stopped the RTC
     calibration repeating on most sleeps.
   - [#297](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/297), operational
-    parameter counters lost from CONFIG.TXT. Benched on both images, not yet committed.
+    parameter counters lost from CONFIG.TXT. Benched on both images, committed `52e69958`.
 - **Found, not yet resolved:** six more (table below): #298, #299, #300, ww-hardware #83, #295,
   and one /RST that was ignored.
 - **Sources.** The BLE processor's LoRaWAN work
@@ -31,19 +31,19 @@ Read the record of a fix for its details. The drafts are for Charles to send. Th
 | Document | What it is | State |
 |---|---|---|
 | [CLAUDE_296_sleep_order.md](CLAUDE_296_sleep_order.md) | **#296**: commands lost between "Sleep" and DPD. The fault, the options, the change, the bench results | Fixed, committed `ae19db33` |
-| [CLAUDE_297_counters_lost.md](CLAUDE_297_counters_lost.md) | **#297**: operational parameter counters lost from CONFIG.TXT. The cause, the fix, self-test bit 12, the new image folder, the bench results | Fixed, not committed |
-| [CLAUDE_298_deployment_id_flash.md](CLAUDE_298_deployment_id_flash.md) | **#298**: deployment ID and GPS position are lost if CONFIG.TXT is damaged. Found with #297 | Raised, not started |
+| [CLAUDE_297_counters_lost.md](CLAUDE_297_counters_lost.md) | **#297**: operational parameter counters lost from CONFIG.TXT. The cause, the fix, self-test bit 12, the new image folder, the bench results | Fixed, committed `52e69958` |
+| [CLAUDE_298_deployment_id_flash.md](CLAUDE_298_deployment_id_flash.md) | **#298**: deployment ID and GPS position are lost if CONFIG.TXT is damaged. Found with #297. The issue text and the fix | Coded, not built |
 | [CLAUDE_issue_83_BLE_selftest_bit12.md](CLAUDE_issue_83_BLE_selftest_bit12.md) | **ww-hardware #83**: bit 12's new meaning, and keeping AI event bits until reported. Follows #297 | Draft, to raise |
 | [CLAUDE_note_for_Victor_bit12.md](CLAUDE_note_for_Victor_bit12.md) | Note to Victor: bit 12's new meaning for the app and website | Draft, to send |
 | [CLAUDE_note_AI_counters_lost.md](CLAUDE_note_AI_counters_lost.md) | From the BLE processor Claude, 23 November: the counter loss (#297), the ignored /RST, the clock, `setop` checks. Copied unchanged from ww-hardware | Background |
 | [Victors_Issues.eml](Victors_Issues.eml) | Victor's email of 21 November: #296, #295 | Background |
-| [logs/](logs) | `ai1` to `ai6`, `ble1` to `ble5`: #296. `ai7` to `ai10`, `ble7` to `ble10`: #297. Each record describes its logs | Evidence |
+| [logs/](logs) | `ai1` to `ai6`, `ble1` to `ble5`: #296. `ai7` to `ai10`, `ble7` to `ble10`: #297. `ai11` to `ai17`, `ble11` to `ble15`: #298. Each record describes its logs | Evidence |
 
 ## Found, not yet resolved
 
 | Fault | Source | Issue | State |
 |---|---|---|---|
-| Deployment ID and GPS position lost if CONFIG.TXT is damaged | Found with #297 | [#298](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/298) | Not started |
+| Deployment ID and GPS position lost if CONFIG.TXT is damaged | Found with #297 | [#298](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/298) | Benched on both images, not committed |
 | BLE processor: rename bit 12, keep AI event bits (12, 14) until reported | Follows #297; Victor's bit 14 question | [ww-hardware #83](https://github.com/wildlifeai/ww-hardware/issues/83) | Not started |
 | No EXIF date when the camera does not know the time | Victor | [#295](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/295) | Rule decided, not coded |
 | The AI processor's RTC runs about 5 % fast in DPD | BLE note, section 6 | [#299](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/299) | Not started |
@@ -77,13 +77,14 @@ including #296 and #297.
 
 ## Open items
 
-- [#297](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/297): fixed, to commit
-  and merge.
+- [#297](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/297): fixed, committed `52e69958`, to merge.
 - [#295](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/295): to code, with the overwrite guard.
-- [#298](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/298): to code.
+- [#298](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/298): benched on both images, to commit.
 - [ww-hardware #83](https://github.com/wildlifeai/ww-hardware/issues/83): for the BLE processor side.
 - [#299](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/299): the RTC drift, to decide the approach.
 - [#300](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/300): `setop` range checks, decisions needed.
+  The app relies on setting ops 19 and 20 with a new deployment ID (27 November), so they must stay
+  settable.
 - Not an issue: the ignored /RST (not explained, not seen again).
 
 ## Outcome

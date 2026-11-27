@@ -101,7 +101,10 @@ Verified on the bench (details and serial evidence in
   it. A CONFIG.TXT that exists but can't be read is not saved over that wake. A read-only
   CONFIG.TXT now leaves a `CONFIG.TMP` behind at each save, deleted at the next boot. When the
   counters are lost, self-test bit 12 is set and photos start a new `IMAGES.NNN` folder. The
-  deployment ID and GPS position are also only in CONFIG.TXT, so they are lost too.
+  deployment ID and GPS position come from a flash copy (#298, 27 Nov 2026) whenever CONFIG.TXT
+  doesn't give them: damage, no card, a blank card, or a missing `I`/`G` line. An `I`/`G` line on
+  the card always wins and overwrites the copy at sleep, so a `setgps` made with no card is lost
+  when a card with a `G` line goes back in.
 * **With no card, settings live only in the fast-start record in flash** (`xip_state.c`). Since
   31 Oct 2026 it is written at every sleep, card or not; before that, a `setop` with no card was
   lost after one sleep (a `setop 7 300` timelapse stopped at the first wake). When a card goes back

@@ -29,6 +29,7 @@
 #include "camera_switch.h"	// cameraSwitch_thisVariant(): which image wrote the registers
 #include "xip_manager.h"
 #include "xip_state.h"
+#include "exif_gps.h"		// the GPS position, for the deployment record (#298)
 
 /*********************************************** Local Defines **********************************************/
 
@@ -90,6 +91,17 @@ _Static_assert(sizeof(FastStartPayload_t) <= XIP_STATE_DATA_MAX, "fast-start pay
 
 _Static_assert(sizeof(XipStateBoard_t) <= XIP_STATE_DATA_MAX, "board payload too big for a record");
 
+// The payload of a deployment record (#298): a copy of CONFIG.TXT's 'I' and 'G' lines. Change it only with
+// XIP_STATE_DEPLOYMENT_VERSION. Built with memset() first, so padding bytes compare equal
+typedef struct {
+	char deploymentId[UUIDLENGTH];		// as fatfs_getDeploymentId() gives it
+	GPS_Coordinate lat;
+	GPS_Coordinate lon;
+	GPS_Altitude alt;
+} DeploymentPayload_t;
+
+_Static_assert(sizeof(DeploymentPayload_t) <= XIP_STATE_DATA_MAX, "deployment payload too big for a record");
+
 // xip_state_test()'s buffers, from the heap too: the CLI task's stack is small
 typedef struct {
 	XipStateWork_t work;
@@ -97,6 +109,13 @@ typedef struct {
 	uint8_t expect[XIP_STATE_DATA_MAX];		// what the newest record should hold
 	uint8_t got[XIP_STATE_DATA_MAX];		// what it does hold
 } TestBuffers_t;
+
+/*********************************************** External Variables *****************************************/
+
+// The device's GPS position (exif_gps.c)
+extern GPS_Coordinate exif_gps_deviceLat;
+extern GPS_Coordinate exif_gps_deviceLon;
+extern GPS_Altitude exif_gps_deviceAlt;
 
 /*********************************************** Local Variables ********************************************/
 
@@ -143,6 +162,11 @@ static FastStartPayload_t bootPayload;
 static bool bootPayloadValid = false;
 static uint32_t bootSequence = 0;
 
+// The deployment record read at boot (#298). Read with the fast-start record, before the camera can start,
+// because flash can't be read while the NN runs; applied later for whatever CONFIG.TXT didn't give
+static DeploymentPayload_t bootDeployment;
+static bool bootDeploymentValid = false;
+
 // The card's values for the state ops, which load_configuration() does not apply when there is a
 // record (xip_state_keepStateOp()). Kept only for xip_state_compareFastStart().
 static uint16_t cardStateValue[FAST_START_NUM_OPS];
@@ -165,6 +189,8 @@ static void buildPayload(FastStartPayload_t *payload);
 static bool aeSimilar(uint16_t expA, uint16_t gainA, uint16_t expB, uint16_t gainB);
 static bool payloadsMatch(const FastStartPayload_t *a, const FastStartPayload_t *b);
 static bool isStateOp(uint8_t op);
+static void buildDeployment(DeploymentPayload_t *payload);
+static const char *typeName(XIP_STATE_TYPE_E type);
 
 /*********************************************** Local Function Definitions *********************************/
 
@@ -175,19 +201,26 @@ static bool isStateOp(uint8_t op);
  * @return the sector's physical flash address
  */
 static uint32_t sectorAddr(XIP_STATE_TYPE_E type) {
-	return XIP_STATE_AREA_ADDR + ((type == XIP_STATE_TYPE_BOARD) ? SECTOR_SIZE : 0);
+	// Types 1, 2, 3 in sectors 0, 1, 2
+	return XIP_STATE_AREA_ADDR + (((uint32_t)type - 1) * SECTOR_SIZE);
 }
 
 /**
  * @brief The format version a record of this type must carry.
  *
- * The board record has its own, so raising the fast-start format never loses a board's calibration.
+ * The board and deployment records have their own, so raising the fast-start format never loses them.
  *
  * @param type  the record type
- * @return XIP_STATE_BOARD_VERSION for a board record, otherwise XIP_STATE_FORMAT_VERSION
+ * @return XIP_STATE_BOARD_VERSION, XIP_STATE_DEPLOYMENT_VERSION or XIP_STATE_FORMAT_VERSION
  */
 static uint8_t formatVersion(XIP_STATE_TYPE_E type) {
-	return (type == XIP_STATE_TYPE_BOARD) ? XIP_STATE_BOARD_VERSION : XIP_STATE_FORMAT_VERSION;
+	if (type == XIP_STATE_TYPE_BOARD) {
+		return XIP_STATE_BOARD_VERSION;
+	}
+	if (type == XIP_STATE_TYPE_DEPLOYMENT) {
+		return XIP_STATE_DEPLOYMENT_VERSION;
+	}
+	return XIP_STATE_FORMAT_VERSION;
 }
 
 /**
@@ -486,6 +519,35 @@ static bool isStateOp(uint8_t op) {
 			|| (op == OP_PARAMETER_CAM_AE_GAIN));
 }
 
+/**
+ * @brief Fill a deployment payload from the deployment ID and GPS position in RAM.
+ *
+ * @param payload  output, cleared first so the padding compares equal
+ */
+static void buildDeployment(DeploymentPayload_t *payload) {
+	memset(payload, 0, sizeof(*payload));
+	fatfs_getDeploymentId(payload->deploymentId, sizeof(payload->deploymentId));
+	payload->lat = exif_gps_deviceLat;
+	payload->lon = exif_gps_deviceLon;
+	payload->alt = exif_gps_deviceAlt;
+}
+
+/**
+ * @brief A record type's name, for the console.
+ *
+ * @param type  the record type
+ * @return the name
+ */
+static const char *typeName(XIP_STATE_TYPE_E type) {
+	if (type == XIP_STATE_TYPE_BOARD) {
+		return "Board";
+	}
+	if (type == XIP_STATE_TYPE_DEPLOYMENT) {
+		return "Deployment";
+	}
+	return "Fast-start";
+}
+
 /*********************************************** Global Function Definitions *********************************/
 
 /**
@@ -513,7 +575,7 @@ bool xip_state_read(XIP_STATE_TYPE_E type, uint8_t *data, uint16_t *len) {
 /**
  * @brief Append a record, erasing the sector first if it is full, and check it by reading it back.
  *
- * Both types: the fast-start record at sleep, the board record by the RTC calibration (rtc_cal.c).
+ * The fast-start and deployment records at sleep, the board record by the RTC calibration (rtc_cal.c).
  *
  * @param type  the record type
  * @param data  the payload
@@ -525,7 +587,8 @@ int xip_state_write(XIP_STATE_TYPE_E type, const uint8_t *data, uint16_t len) {
 	bool erased;
 	int ret;
 
-	if ((type != XIP_STATE_TYPE_FAST_START) && (type != XIP_STATE_TYPE_BOARD)) {
+	if ((type != XIP_STATE_TYPE_FAST_START) && (type != XIP_STATE_TYPE_BOARD)
+			&& (type != XIP_STATE_TYPE_DEPLOYMENT)) {
 		return -1;
 	}
 
@@ -540,14 +603,15 @@ int xip_state_write(XIP_STATE_TYPE_E type, const uint8_t *data, uint16_t len) {
 }
 
 /**
- * @brief Print every slot of both sectors on the console (the 'xipstate' command).
+ * @brief Print every slot of every sector on the console (the 'xipstate' command).
  *
  * One line per used slot (valid or not, sequence, type, length, first data bytes), one line
  * for each run of blank slots, and a note when a sector has no valid record. For the
  * fast-start sector, also the op values in the newest record.
  */
 void xip_state_dump(void) {
-	static const XIP_STATE_TYPE_E types[] = { XIP_STATE_TYPE_FAST_START, XIP_STATE_TYPE_BOARD };
+	static const XIP_STATE_TYPE_E types[] = { XIP_STATE_TYPE_FAST_START, XIP_STATE_TYPE_BOARD,
+			XIP_STATE_TYPE_DEPLOYMENT };
 	SectorScan_t scan;
 
 	XipStateWork_t *work = (XipStateWork_t *)pvPortMalloc(sizeof(XipStateWork_t));
@@ -563,8 +627,7 @@ void xip_state_dump(void) {
 			break;
 		}
 		xprintf("%s sector 0x%08x (format version %d):\n",
-				(type == XIP_STATE_TYPE_BOARD) ? "Board" : "Fast-start",
-				(unsigned)sectorAddr(type), formatVersion(type));
+				typeName(type), (unsigned)sectorAddr(type), formatVersion(type));
 
 		for (uint8_t i = 0; i < SLOTS_PER_SECTOR; i++) {
 			const XipStateRecord_t *rec = &work->slot[i];
@@ -616,6 +679,19 @@ void xip_state_dump(void) {
 			else {
 				xprintf("  Newest: RTC calibration not measured%s\n", board->rtcCalOff ? " (off)" : "");
 			}
+		}
+		else if ((type == XIP_STATE_TYPE_DEPLOYMENT)
+				&& (work->slot[scan.newest].dataLen == sizeof(DeploymentPayload_t))) {
+			const DeploymentPayload_t *dep = (const DeploymentPayload_t *)work->slot[scan.newest].data;
+			char gps[64];
+
+			exif_gps_create_full_string(&dep->lat, &dep->lon, &dep->alt, gps, sizeof(gps));
+			char id[UUIDLENGTH];
+
+			// xprintf() has no precision (%.Ns): copy the ID so it is terminated
+			memcpy(id, dep->deploymentId, sizeof(id));
+			id[UUIDLENGTH - 1] = '\0';
+			xprintf("  Newest: deployment ID %s, GPS %s\n", id, gps);
 		}
 	}
 	vPortFree(work);
@@ -999,4 +1075,82 @@ int xip_state_writeBoard(const XipStateBoard_t *board) {
 		return 0;
 	}
 	return xip_state_write(XIP_STATE_TYPE_BOARD, (const uint8_t *)board, sizeof(*board));
+}
+
+/**
+ * @brief At boot, with the fast-start record: read the deployment record into RAM (#298).
+ *
+ * Call at the start of the FatFS task, before the camera can start: the flash can't be read while the NN
+ * runs. Nothing is applied here: CONFIG.TXT is the master copy, and the record is used only for what it
+ * doesn't give (xip_state_applyDeployment()).
+ *
+ * @return true if a valid record was found
+ */
+bool xip_state_loadDeployment(void) {
+	uint8_t data[XIP_STATE_DATA_MAX];
+	uint16_t len = 0;
+
+	bootDeploymentValid = xip_state_read(XIP_STATE_TYPE_DEPLOYMENT, data, &len)
+			&& (len == sizeof(DeploymentPayload_t));
+	if (bootDeploymentValid) {
+		memcpy(&bootDeployment, data, sizeof(bootDeployment));
+		bootDeployment.deploymentId[UUIDLENGTH - 1] = '\0';
+	}
+	return bootDeploymentValid;
+}
+
+/**
+ * @brief When CONFIG.TXT didn't give them: set the deployment ID and/or GPS position from the record read at boot.
+ *
+ * Used when there is no card, no CONFIG.TXT, a damaged one, or one without an 'I' or 'G' line (#298). Uses the
+ * copy in RAM, so it is safe while the NN runs. Call before the image folder is chosen, which uses the
+ * deployment ID.
+ *
+ * @param id   true to set the deployment ID
+ * @param gps  true to set the GPS position
+ * @return true if a record was there to set them from
+ */
+bool xip_state_applyDeployment(bool id, bool gps) {
+	if (!bootDeploymentValid) {
+		return false;
+	}
+	if (id) {
+		fatfs_setDeploymentId(bootDeployment.deploymentId);
+	}
+	if (gps) {
+		exif_gps_deviceLat = bootDeployment.lat;
+		exif_gps_deviceLon = bootDeployment.lon;
+		exif_gps_deviceAlt = bootDeployment.alt;
+	}
+	return true;
+}
+
+/**
+ * @brief At sleep: write the deployment record if the deployment ID or GPS position has changed (#298).
+ *
+ * Call from the FatFS task's save-state handler, when the NN is not running. Compares with the record
+ * read at boot, so a steady camera never writes it: they change only by 'setdid', 'setgps' or a new
+ * CONFIG.TXT.
+ *
+ * @return 0 if written or unchanged, negative on failure
+ */
+int xip_state_saveDeployment(void) {
+	DeploymentPayload_t now;
+	int ret;
+
+	buildDeployment(&now);
+	if (bootDeploymentValid && (memcmp(&now, &bootDeployment, sizeof(now)) == 0)) {
+		return 0;
+	}
+
+	ret = xip_state_write(XIP_STATE_TYPE_DEPLOYMENT, (const uint8_t *)&now, sizeof(now));
+	if (ret == 0) {
+		memcpy(&bootDeployment, &now, sizeof(bootDeployment));
+		bootDeploymentValid = true;
+		xprintf("Deployment record: written (deployment ID %s)\n", now.deploymentId);
+	}
+	else {
+		xprintf("Deployment record: write failed (%d)\n", ret);
+	}
+	return ret;
 }

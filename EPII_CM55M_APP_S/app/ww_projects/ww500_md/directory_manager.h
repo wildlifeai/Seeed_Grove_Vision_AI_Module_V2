@@ -27,6 +27,10 @@
 
 #define STATE_FILE "CONFIG.TXT"
 
+// CONFIG.TXT is written to this file first, then renamed (save_configuration()), so a reset part way through
+// a save never leaves CONFIG.TXT empty or half written. In the same folder as CONFIG.TXT
+#define STATE_FILE_TMP "CONFIG.TMP"
+
 #define CONFIG_DIR "/MANIFEST"
 #define CAPTURE_DIR "IMAGES"
 #define MEDIA_DIR "/MEDIA"

@@ -195,12 +195,17 @@ FRESULT dir_mgr_init_image_dir(directoryManager_t *dirManager) {
 }
 
 /**
- * After the counters were lost: point ops 19 and 20 at a new image folder, after the highest on the card.
+ * Adjust Image Directory counters so new images go into a new folder.
  *
- * Ops 19 (images in the folder) and 20 (folder index) are kept only in CONFIG.TXT. When it is damaged they
- * restart from 0, and new photos would go into IMAGES.000 on top of the photos already there. This finds the
- * highest IMAGES.NNN in the deployment's folder and sets op 20 to the next one, so the photos after the damage
- * start a folder of their own. Call before dir_mgr_init_image_dir(), which creates it.
+ * After the counters were lost: point ops 19 and 20 at a new image folder,
+ * after the highest on the card.
+ *
+ * Ops 19 (images in the folder) and 20 (folder index) are kept only in CONFIG.TXT.
+ * When it is damaged they restart from 0, and new photos would go into IMAGES.000 on top of the photos already there.
+ *
+ * This function finds the highest IMAGES.NNN in the deployment's folder and sets op 20 to the
+ * next one, so the photos after the damage start a folder of their own.
+ * Call before dir_mgr_init_image_dir(), which creates it.
  *
  * If the folder can't be read, or holds no image folder, ops 19 and 20 stay as they are.
  */

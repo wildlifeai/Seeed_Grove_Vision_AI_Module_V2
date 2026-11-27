@@ -8,8 +8,8 @@
  *   0x00000000 - 0x000FFFFF   Firmware Image Slot A  (1 MB)
  *   0x00100000 - 0x001FFFFF   Firmware Image Slot B  (1 MB)
  *   0x00200000 - 0x00EFFFFF   NN model area          (13 MB)
- *   0x00F00000 - 0x00F01FFF   Saved state (xip_state.c): fast-start records, board record
- *   0x00F02000 - 0x00FEFFFF   Reserved / unused
+ *   0x00F00000 - 0x00F02FFF   Saved state (xip_state.c): fast-start, board and deployment records
+ *   0x00F03000 - 0x00FEFFFF   Reserved / unused
  *   0x00FFF000 - 0x00FFFFFF   Slot A/B selector      (last 4 KB sector)
  *
  * The NN model area starts at physical 0x00200000, which maps to virtual
@@ -44,10 +44,10 @@ extern "C" {
 
 /*************************************** Definitions *******************************************/
 
-// Saved-state area (physical): two 4 KB sectors, used by xip_state.c. Only the
+// Saved-state area (physical): three 4 KB sectors, used by xip_state.c. Only the
 // xip_state_area_x() functions below can reach it, and they can reach nothing else.
 #define XIP_STATE_AREA_ADDR     0x00F00000
-#define XIP_STATE_AREA_SIZE     0x2000
+#define XIP_STATE_AREA_SIZE     0x3000
 
 // Virtual address at which model metadata begins (physical 0x00200000)
 #define MODEL_XIP_ADDR          0x3A200000

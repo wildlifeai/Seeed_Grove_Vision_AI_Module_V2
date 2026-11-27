@@ -2672,13 +2672,13 @@ static BaseType_t prvSetgps(char *pcWriteBuffer, size_t writeBufferLen, const ch
     // Extract the first parameter (expected to be a quoted string)
     param = FreeRTOS_CLIGetParameter(pcCommandString, 1, &paramLen);
     if (!param || paramLen == 0) {
-        snprintf(pcWriteBuffer, writeBufferLen, "Error: No GPS string provided.\r\n");
+        snprintf(pcWriteBuffer, writeBufferLen, "Error: No GPS string provided.");
         return pdFALSE;
     }
 
     // Copy extracted parameter into a null-terminated buffer
     if (paramLen >= sizeof(gpsString)) {
-        snprintf(pcWriteBuffer, writeBufferLen, "Error: GPS string too long.\r\n");
+        snprintf(pcWriteBuffer, writeBufferLen, "Error: GPS string too long.");
         return pdFALSE;
     }
 
@@ -2733,7 +2733,7 @@ static BaseType_t prvGetgps(char *pcWriteBuffer, size_t xWriteBufferLen, const c
 	cli_append(&pcWriteBuffer, &xWriteBufferLen, "%s ", str);
 
 	exif_gps_get_altitude_as_string(&exif_gps_deviceAlt, str, sizeof(str));
-	cli_append(&pcWriteBuffer, &xWriteBufferLen, "%s\n", str);
+	cli_append(&pcWriteBuffer, &xWriteBufferLen, "%s", str);
 
 	/* There is no more data to return after this single string, so return pdFALSE. */
 	return pdFALSE;
@@ -2749,12 +2749,12 @@ static BaseType_t prvSetdid(char *pcWriteBuffer, size_t xWriteBufferLen, const c
 
     param = FreeRTOS_CLIGetParameter(pcCommandString, 1, &paramLen);
     if (!param || paramLen == 0) {
-        snprintf(pcWriteBuffer, xWriteBufferLen, "Error: No UUID string provided.\r\n");
+        snprintf(pcWriteBuffer, xWriteBufferLen, "Error: No UUID string provided.");
         return pdFALSE;
     }
     if (paramLen != UUIDLENGTH - 1) {
         snprintf(pcWriteBuffer, xWriteBufferLen,
-                 "Error: UUID must be %d characters (got %d).\r\n",
+                 "Error: UUID must be %d characters (got %d).",
                  UUIDLENGTH - 1, (int)paramLen);
         return pdFALSE;
     }
@@ -2777,7 +2777,7 @@ static BaseType_t prvGetdid(char *pcWriteBuffer, size_t xWriteBufferLen, const c
     (void)pcCommandString;
     char uuid[UUIDLENGTH];
     fatfs_getDeploymentId(uuid, sizeof(uuid));
-    cli_append(&pcWriteBuffer, &xWriteBufferLen, "Deployment ID: %s\n", uuid);
+    cli_append(&pcWriteBuffer, &xWriteBufferLen, "Deployment ID: %s", uuid);
     return pdFALSE;
 }
 

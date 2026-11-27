@@ -130,8 +130,8 @@ the switch itself re-labels the slot at boot).
 | 0x00000000 to 0x000FFFFF | Firmware slot A |
 | 0x00100000 to 0x001FFFFF | Firmware slot B |
 | 0x00200000 to 0x00EFFFFF | NN model area |
-| 0x00F00000 to 0x00F01FFF | Saved state: see [WW500_XIP_saved_state.md](WW500_XIP_saved_state.md) |
-| 0x00F02000 to 0x00FFEFFF | Unused |
+| 0x00F00000 to 0x00F02FFF | Saved state: see [WW500_XIP_saved_state.md](WW500_XIP_saved_state.md) |
+| 0x00F03000 to 0x00FFEFFF | Unused |
 | 0x00FFF000 to 0x00FFFFFF | This selector sector |
 
 The authoritative map is in `xip_manager.h`. An X-Modem burn rewrites the selector sector but

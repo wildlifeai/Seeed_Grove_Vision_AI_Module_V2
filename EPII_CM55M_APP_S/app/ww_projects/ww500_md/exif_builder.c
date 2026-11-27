@@ -327,6 +327,7 @@ uint16_t exif_build_segment(const ExifInput_t *input) {
 
     /* Count IFD0 entries: start with the fixed mandatory set. */
     uint16_t dynamic_ifd_count = IFD0_ENTRY_COUNT;
+    if (!input->timestamp_known)      dynamic_ifd_count -= 2;	/* no DateTimeOriginal, CreateDate (#295) */
     if (input->user_comment  != NULL) dynamic_ifd_count++;
     if (input->maker_note    != NULL) dynamic_ifd_count++;
     if (input->deployment_id != NULL) dynamic_ifd_count++;
@@ -397,8 +398,10 @@ uint16_t exif_build_segment(const ExifInput_t *input) {
     addIFD(TAG_RESOLUTION_UNIT,  ifd_start + (entry++ * 12), &res_unit);
     addIFD(TAG_X_RESOLUTION,     ifd_start + (entry++ * 12), xres_rational);
     addIFD(TAG_Y_RESOLUTION,     ifd_start + (entry++ * 12), yres_rational);
-    addIFD(TAG_DATETIME_ORIGINAL, ifd_start + (entry++ * 12), (void *)input->timestamp);
-    addIFD(TAG_CREATE_DATE,      ifd_start + (entry++ * 12), (void *)input->timestamp);
+    if (input->timestamp_known) {
+        addIFD(TAG_DATETIME_ORIGINAL, ifd_start + (entry++ * 12), (void *)input->timestamp);
+        addIFD(TAG_CREATE_DATE,      ifd_start + (entry++ * 12), (void *)input->timestamp);
+    }
     addIFD(TAG_FLASH,            ifd_start + (entry++ * 12), &flash_value);
     addIFD(TAG_NN_DATA, ifd_start + (entry++ * 12), (void *)input->nn_data);
 

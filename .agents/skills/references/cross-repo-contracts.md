@@ -31,6 +31,10 @@ contract, and land the change with the consumers in view.
   processor releases it when the read completes, and keeps it high at least 20 ms before the next.
   The BLE processor reads on the low. It replaced a pulse read on the rising edge. Update the AI
   processor first, then the BLE processor.
+* **EXIF `DateTimeOriginal` and `CreateDate` can be absent** (#295, 27 Nov 2026): left out when
+  the photo time is before 2026, whatever its source (an RTC restarted at 2024 after a reset, or a
+  wrong `setutc`). Agreed by Victor; the website stores such a photo with no date. The file name
+  still comes from that time.
 * **Self-test bits are one list in three places**: `selfTest.h` here and in ww-hardware, and the
   app. AI bit 14 (`0x4000`, BLE processor missed the first message) is kept until a final
   `selftest` reply has carried it, then cleared; nothing else clears it (#246, 4 Nov 2026). AI bit

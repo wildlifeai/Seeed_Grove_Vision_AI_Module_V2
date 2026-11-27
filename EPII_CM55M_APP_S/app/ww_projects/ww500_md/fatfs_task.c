@@ -445,8 +445,30 @@ static FRESULT fileWriteImage(fileOperation_t *fileOp, fileBufferInfo_t * extraB
 		return res;
 	}
 
-	// (2) Open the file
-	res = f_open(&dirManager->imagesFile, (TCHAR*) fileOp->fileName,  FA_WRITE | FA_CREATE_ALWAYS);
+	// (2) Open the file, only if the name is free: never overwrite a photo. After a reset with no time the RTC
+	// restarts at 2024-01-01, so a photo at the same time after a later reset gets the same name (#295). Step the
+	// name's last hex digit (the photos-in-the-same-second digit) until it is free. The name is the caller's
+	// buffer, so the caller sees the name used
+	res = f_open(&dirManager->imagesFile, (TCHAR*) fileOp->fileName, FA_WRITE | FA_CREATE_NEW);
+	if (res == FR_EXIST) {
+		char *dot = strchr(fileOp->fileName, '.');
+		char original[IMAGEFILENAMELEN];
+
+		snprintf(original, sizeof(original), "%s", fileOp->fileName);
+		if ((dot != NULL) && (dot > fileOp->fileName)) {
+			char *digit = dot - 1;		// the last hex digit before the extension
+
+			for (uint8_t tries = 0; (res == FR_EXIST) && (tries < 15); tries++) {
+				*digit = (*digit == '9') ? 'A' : ((*digit == 'F') ? '0' : (char)(*digit + 1));
+				res = f_open(&dirManager->imagesFile, (TCHAR*) fileOp->fileName, FA_WRITE | FA_CREATE_NEW);
+			}
+		}
+		if (res == FR_OK) {
+			XP_LT_RED;
+			xprintf("'%s' exists: saved as '%s'\n", original, fileOp->fileName);
+			XP_WHITE;
+		}
+	}
 	dirManager->imagesRes = res;
 
 	if (res != FR_OK)  {

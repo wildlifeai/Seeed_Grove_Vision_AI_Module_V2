@@ -444,7 +444,7 @@ The 128-bit deployment UUID set by the mobile app (e.g. `12345678-0000-0000-0000
 | `initNN()` | Calls `cv_init()` with ops 14 and 15, waiting for the SD card first only if the model is not in flash. Called at start-up, or just after the capture starts on a timer or motion wake. |
 | `processNNOutput(outCategories, classCount)` | Compares class 1's percentage (`cv_getTargetPercent()`) with `OP_PARAMETER_MODEL_THRESHOLD` (fewer than 2 classes is never a detection); sends `NN+` or `NN-` to the BLE processor via I2C; prints detection result. Does not wait for the SD card. |
 | `countNNResult()` | Adds the result to the counters (ops 1 and 2) once the SD card is ready, since the counters are loaded from CONFIG.TXT. |
-| `prepareJpegFile(outCategories, classCount, extraBlock)` | Assembles the two-buffer JPEG+EXIF output: calls `build_exif_segment()` then queues the write request for `fatfs_task`. |
+| `prepareJpegFile(outCategories, classCount, extraBlock)` | Assembles the two-buffer JPEG+EXIF output: calls `exif_photo_build()` (`exif_photo.c`, which fills the EXIF content and calls `exif_build_segment()`) then queues the write request for `fatfs_task`. |
 | `build_exif_segment(outCategories, categoriesCount)` | Builds a TIFF-structured EXIF APP1 block in `exif_buffer[]`. Writes tag 0xC000 (raw logits), optionally 0x9286 (UserComment confidence string), and 0xF200 (deployment ID). |
 | `sendMsgToMaster(str)` | Queues an I2C message to the BLE processor via `if_task`. |
 

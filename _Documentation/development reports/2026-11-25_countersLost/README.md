@@ -13,7 +13,7 @@
     lost between "Sleep" and DPD. Committed `ae19db33`, issue closed. The same change stopped the RTC
     calibration repeating on most sleeps.
   - [#297](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/297), operational
-    parameter counters lost from CONFIG.TXT. Benched on both images, committed `52e69958`.
+    parameter counters lost from CONFIG.TXT. Benched on both images, committed `52e69958`, issue closed.
   - [#298](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/298), deployment ID and GPS position lost if CONFIG.TXT
     is damaged. Benched on both images, committed `e483dc7b`, issue closed.
   - [#207](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/207), a `setop` after Save State replied OK but was not saved (made
@@ -35,7 +35,8 @@ Read the record of a fix for its details. The drafts are for Charles to send. Th
 | Document | What it is | State |
 |---|---|---|
 | [CLAUDE_296_sleep_order.md](CLAUDE_296_sleep_order.md) | **#296**: commands lost between "Sleep" and DPD. The fault, the options, the change, the bench results | Fixed, committed `ae19db33` |
-| [CLAUDE_297_counters_lost.md](CLAUDE_297_counters_lost.md) | **#297**: operational parameter counters lost from CONFIG.TXT. The cause, the fix, self-test bit 12, the new image folder, the bench results | Fixed, committed `52e69958` |
+| [CLAUDE_297_counters_lost.md](CLAUDE_297_counters_lost.md) | **#297**: operational parameter counters lost from CONFIG.TXT. The cause, the fix, self-test bit 12, the new image folder, the bench results | Fixed, committed `52e69958`, closed |
+| [CLAUDE_295_no_exif_date.md](CLAUDE_295_no_exif_date.md) | **#295**: no EXIF date when the time is unknown, no image overwrite, and moving the photo EXIF code to `exif_photo.c` | Benched on both images, not committed |
 | [CLAUDE_207_setop_after_save_state.md](CLAUDE_207_setop_after_save_state.md) | **#207**: a `setop` after Save State replies OK but is not saved. The fault, why #296 made it likelier, the fix, the bench results | Fixed, committed `6917be6d`, closed |
 | [CLAUDE_298_deployment_id_flash.md](CLAUDE_298_deployment_id_flash.md) | **#298**: deployment ID and GPS position are lost if CONFIG.TXT is damaged. Found with #297. The issue text and the fix | Fixed, committed `e483dc7b`, closed |
 | [CLAUDE_issue_83_BLE_selftest_bit12.md](CLAUDE_issue_83_BLE_selftest_bit12.md) | **ww-hardware #83**: bit 12's new meaning, and keeping AI event bits until reported. Follows #297 | Draft, to raise |
@@ -49,17 +50,16 @@ Read the record of a fix for its details. The drafts are for Charles to send. Th
 | Fault | Source | Issue | State |
 |---|---|---|---|
 | BLE processor: rename bit 12, keep AI event bits (12, 14) until reported | Follows #297; Victor's bit 14 question | [ww-hardware #83](https://github.com/wildlifeai/ww-hardware/issues/83) | Not started |
-| No EXIF date when the camera does not know the time | Victor | [#295](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/295) | Rule decided, not coded |
+| No EXIF date when the camera does not know the time | Victor | [#295](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/295) | Benched on both images, not committed ([record](CLAUDE_295_no_exif_date.md)) |
 | The AI processor's RTC runs about 5 % fast in DPD | BLE note, section 6 | [#299](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/299) | Not started |
 | One /RST ignored | BLE note, section 5 | None | Not explained |
 | `setop` accepts any value for most op parameters | BLE note, section 7 | [#300](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/300) | Decisions needed (ranges; can counters be set) |
 
-**#295, decided 25 November (Charles).** No new flag:
+**#295, rule revised 27 November (Charles):** leave `DateTimeOriginal` and `CreateDate` out if the
+photo time is before 2026, whatever its source: the RTC (2024 after a reset) or a `setutc` (the BLE
+processor's clock could be wrong too). Replaces the 25 November rule, which trusted any `setutc`.
+Proposal: [CLAUDE_295_no_exif_date.md](CLAUDE_295_no_exif_date.md).
 
-- `setutc` this wake: date from it, as now.
-- No `setutc`, RTC year before `RTC_FIRST_VALID_YEAR` (still 2024 after a reset): no
-  `DateTimeOriginal` or `CreateDate`, and a console line saying why.
-- No `setutc`, RTC year valid: date from the RTC, as #295 asks.
 - Also: after a reset with no time, 2024 photo times can repeat, and an image file with the same
   name is overwritten (`FA_CREATE_ALWAYS`). To fix with #295: open with `FA_CREATE_NEW` and step
   the sub-second digit until the name is free (comment added to #295, 26 November).
@@ -82,7 +82,7 @@ including #296, #297, #298 and #207.
 ## Open items
 
 - [#297](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/297), [#298](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/298), [#207](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/207): fixed and committed, to merge.
-- [#295](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/295): to code, with the overwrite guard.
+- [#295](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/295): benched on both images, to commit.
 - [ww-hardware #83](https://github.com/wildlifeai/ww-hardware/issues/83): for the BLE processor side.
 - [#299](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/299): the RTC drift, to decide the approach.
 - [#300](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/300): `setop` range checks, decisions needed.

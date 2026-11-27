@@ -34,7 +34,7 @@ extern "C" {
 // which is compared with OP_PARAMETER_MODEL_THRESHOLD. Without this define
 // images carry no NN scores for the website to ingest - see
 // doc/NN_confidence_EXIF_not_written.md.
-// (image_task.c couples ENABLE_EXIF_CONFIDENCE to this define.)
+// (exif_photo.c couples ENABLE_EXIF_CONFIDENCE to this define.)
 #define USE_PERCENTAGE
 
 #ifdef USE_PERCENTAGE

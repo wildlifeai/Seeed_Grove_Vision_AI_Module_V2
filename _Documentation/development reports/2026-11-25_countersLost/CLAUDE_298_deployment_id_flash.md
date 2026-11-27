@@ -12,8 +12,8 @@
   GPS position. It supplies whichever of them CONFIG.TXT doesn't give: no card, no file (a blank
   card), a damaged file, or a missing `I` or `G` line. After damage it restores them before the new
   image folder is chosen.
-- **State:** every case benched on HM0360 (`logs/ai12.txt` to `ai16.txt`), the main ones on RP3
-  (`ai17.txt`). Not committed.
+- **State: fixed.** Every case benched on HM0360 (`logs/ai12.txt` to `ai16.txt`), the main ones on
+  RP3 (`ai17.txt`). Committed `e483dc7b`; #298 closed 27 November 2026.
 - Found while fixing [#297](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/297) ([record](CLAUDE_297_counters_lost.md), thread [README](README.md)).
 
 ---

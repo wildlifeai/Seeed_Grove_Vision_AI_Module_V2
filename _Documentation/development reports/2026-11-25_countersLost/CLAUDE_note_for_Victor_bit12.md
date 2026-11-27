@@ -37,8 +37,8 @@ each wake) applies to it too; ww-hardware #83 asks the BLE processor to keep suc
 they have been reported.
 
 Also found: the deployment ID and GPS position are kept only in CONFIG.TXT as well, so a damaged
-file loses them and new photos carry the zero deployment ID. Seeed #298 is to keep
-them in flash too.
+file loses them and new photos carry the zero deployment ID. Seeed #298 (fixed) now keeps
+them in flash too, and restores them when CONFIG.TXT is missing, damaged or lacks the lines.
 
 One more for the app: when it sets a new deployment ID (`setdid`), please also set ops 19 and 20
 (`setop 19 0`, `setop 20 0`). They count the photos in the image folder and the folder number, and

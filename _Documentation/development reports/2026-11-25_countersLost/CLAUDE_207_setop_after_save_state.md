@@ -19,7 +19,7 @@
 - **The fix.** From the start of Save State to DPD, the commands that change saved settings
   (`setop`, `setdid`, `setgps`, `md`) reply `Error: going to sleep, try again.` and change
   nothing. Sent again after "Sleep", the command wakes the AI processor and is saved as usual.
-- **State: fixed and benched** (27 November 2026). Not yet committed.
+- **State: fixed.** Benched 27 November 2026, committed `6917be6d`, #207 closed.
 
 ## 1. The change (`CLI-commands.c`)
 

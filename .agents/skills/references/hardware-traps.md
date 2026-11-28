@@ -226,7 +226,9 @@ building on any of them:
   the first second (the driver's `RTC_TIME_AFTER_DPD_1ST_READ_YES` read waits for the
   update, about 900 ms). So photos are stamped from one time reference per wake (`setutc`, else
   the RTC once it has ticked) plus the tick count, never from a bare RTC read (`exif_utc.c`). The
-  image file name is made from the same photo time (`dir_mgr_generateImageFilename()`).
+  image file name is made from the same photo time (`dir_mgr_generateImageFilename()`). A photo time
+  before 2026 gets no EXIF date (#295), and an image file is never overwritten: if the name is taken
+  (2024 times repeat after resets), its last hex digit is stepped (`fileWriteImage()`).
   **Writing the RTC (`hx_drv_rtc_set_time()`) blocks interrupts for 1 to 2 s**: `setutc`
   no longer does it, `exif_utc_before_sleep()` does, at sleep, only when over 10 minutes out or
   before 2025. 1 Nov 2026, #56. Since 25 Nov 2026 (#296) the RTC write and calibration come

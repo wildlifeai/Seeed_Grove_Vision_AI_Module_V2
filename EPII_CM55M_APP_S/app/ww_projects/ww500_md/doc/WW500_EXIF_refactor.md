@@ -1,6 +1,13 @@
 # EXIF Builder Refactor: Extracting EXIF Code from image_task.c
 #### CGP — June 2026
 
+> **Update, 27 November 2026 (#295).** The photo's EXIF content (camera model, software, NN data and
+> labels, MakerNote, deployment ID, timestamp) moved from `prepareJpegFile()` to a new
+> `exif_photo.c` (`exif_photo_build()`); `exif_builder.c` stays the generic layout code.
+> `ExifInput_t` gained `timestamp_known`: `DateTimeOriginal` and `CreateDate` are left out when the
+> photo time is before `EXIF_PHOTO_FIRST_VALID_YEAR` (2026). Record:
+> `_Documentation/development reports/2026-11-25_countersLost/CLAUDE_295_no_exif_date.md`.
+
 ## Motivation
 
 `image_task.c` is 3034 lines. Approximately 700 lines are devoted to EXIF construction:

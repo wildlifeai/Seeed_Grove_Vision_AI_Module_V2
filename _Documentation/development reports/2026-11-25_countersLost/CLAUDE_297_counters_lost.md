@@ -29,7 +29,7 @@
 - **Found on the way, now fixed.** The deployment ID and GPS position were also only in CONFIG.TXT:
   [#298](https://github.com/wildlifeai/Seeed_Grove_Vision_AI_Module_V2/issues/298) ([text](CLAUDE_298_deployment_id_flash.md)).
 - **State.** Part 1 benched on the RP3 image, parts 2 and 3 on the HM0360 image. Every test passed.
-  Committed `52e69958`, 26 November.
+  Committed `52e69958`, 26 November; #297 closed 27 November.
 
 ## 1. Evidence
 

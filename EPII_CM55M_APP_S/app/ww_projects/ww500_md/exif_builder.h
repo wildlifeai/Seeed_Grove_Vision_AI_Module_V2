@@ -15,6 +15,7 @@
 
 #include <stdint.h>
 #include <stddef.h>
+#include <stdbool.h>
 
 /*************************************** Constants *******************************************/
 
@@ -95,6 +96,7 @@ typedef struct {
     const char    *camera_model;    /* EXIF Model, e.g. "WW500 RP3"; NULL -> "WW500" */
     const char    *software;        /* EXIF Software: firmware build string, or NULL to omit */
     uint8_t       flash_fired;     /* EXIF Flash: 0 if flash is inactive. Otherwise 1 (visible) or 2 (IR)  */
+    bool          timestamp_known; /* false: leave out DateTimeOriginal and CreateDate (#295) */
 } ExifInput_t;
 
 /*************************************** Public Functions *******************************************/

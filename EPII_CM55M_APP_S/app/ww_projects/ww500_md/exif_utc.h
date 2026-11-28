@@ -33,6 +33,8 @@
 
 /********************************** Includes ******************************************/
 
+#include <stdbool.h>
+#include <stdint.h>
 #include "hx_drv_rtc.h"
 #include "time.h"
 #include "ff.h"  // FatFs types

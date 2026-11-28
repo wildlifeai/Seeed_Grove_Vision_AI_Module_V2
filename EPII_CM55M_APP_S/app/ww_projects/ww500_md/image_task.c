@@ -81,6 +81,7 @@
 #include "selfTest.h"
 #include "exif_gps.h"
 #include "exif_builder.h"
+#include "exif_photo.h"	// the photo EXIF content
 #include "img_correct.h"
 #include "preview.h"
 #include "ae.h"
@@ -89,12 +90,7 @@
 
 /*************************************** Definitions *******************************************/
 
-// Enable/disable writing per-class confidence/label EXIF tags (0xF300+)
-// CGP 24/1/26 - Disable this. All processing of NN output tensor including labels is moved to cvapp.cpp
-// When debugged, remove this code
-#ifdef USE_PERCENTAGE
-#define ENABLE_EXIF_CONFIDENCE
-#endif // USE_PERCENTAGE
+// ENABLE_EXIF_CONFIDENCE (per-class labels in the EXIF UserComment) moved to exif_photo.c, 27 Nov 2026
 
 /* Experiment in controlling multiple images captures and LED flash for the HM0360
  * using 2 compiler switches:
@@ -167,8 +163,7 @@
 // CAMERA_EXTRA_FILE (extra camera register settings) is defined in image_task.h
 // so that the 'camreg' CLI command can maintain the same file
 
-// Define this to add extra EXIF field (AE gain values)
-#define EXIF_MAKER_NOTES
+// EXIF_MAKER_NOTES (the AE gain values in the EXIF MakerNote) moved to exif_photo.c, 27 Nov 2026
 
 // How long the first photo of a wake waits for setutc from the BLE processor (sent every wake, after selftest,
 // about 100 ms after the wake message), before taking its time from the RTC instead
@@ -1407,6 +1402,8 @@ static APP_MSG_DEST_T handleEventForNNProcessing(APP_MSG_T img_recv_msg) {
         // This prevents race condition where next capture reads old sequence number
         if (diskStatus == 0)  {
             fatfs_incrementOperationalParameter(OP_PARAMETER_SEQUENCE_NUMBER);
+            // The name actually used: the FatFS task steps it if it was taken (#295)
+            snprintf(lastImageFileName, IMAGEFILENAMELEN, "%s", g_imageFileName);
         }
         else  {
             dbg_printf(DBG_LESS_INFO, "Image not written. Error: %d\n", diskStatus);
@@ -2689,7 +2686,6 @@ static void prepareJpegFile(int8_t * outCategories, uint8_t classCount, fileBuff
 	uint32_t exifLength = 0;
 	uint32_t jpegBuffer;
 	uint32_t jpegLength;
-	static char softwareString[64];	// string for EXIF software version
 	rtc_time photoTime;
 
 	// The photo's time: only the first photo of a wake can wait here, for setutc or the RTC's first tick (#56)
@@ -2713,139 +2709,16 @@ static void prepareJpegFile(int8_t * outCategories, uint8_t classCount, fileBuff
 	extraBlock->buffer = ((uint8_t *)jpegBuffer) + 2;
 	extraBlock->length = jpegLength - 2;
 
-	/* Assemble ExifInput_t from local state, then call exif_build_segment(). */
-	ExifInput_t exif_input;
-	static uint8_t nnData[MAX_CLASSES + 2];
-	char deployment_id[UUIDLENGTH];
-
-	exif_input.width  = (uint16_t)app_get_raw_width();
-	exif_input.height = (uint16_t)app_get_raw_height();
+	// The EXIF: what the photo says (exif_photo.c). The date tags are left out if the photo time is not
+	// plausible (#295). lastCaptureFlashState, not ledFlashIsActive(): see its declaration
 	exif_utc_get_time_at_tick(g_frame_ready_tick, &photoTime);
-	exif_utc_time_to_exif_string(&photoTime, exif_input.timestamp, sizeof(exif_input.timestamp));
-
-	/* Camera identity, build provenance and flash state. The Model string names
-	 * the camera variant so a photo is self-describing (colour RP3 vs mono/IR
-	 * HM0360) - the website maps this to its camera_variant. Software matches
-	 * the firmware version recorded in the firmware database. */
-#if defined(USE_RP3)
-	// Test the RP cameras first: their builds define USE_HM0360_MD as well, for motion detection. Testing that first
-	// labelled every RP3 photo "WW500 HM0360" (issue #153, fixed 2 Oct 2026)
-	exif_input.camera_model = "WW500 RP3";
-#elif defined(USE_RP2)
-	exif_input.camera_model = "WW500 RP2";
-#elif defined(USE_HM0360)
-	exif_input.camera_model = "WW500 HM0360";
+	exifLength = exif_photo_build((uint16_t)app_get_raw_width(), (uint16_t)app_get_raw_height(), &photoTime,
+			lastCaptureFlashState, outCategories, classCount,
+#if defined(USE_HM0360) || defined(USE_HM0360_MD)
+			&gain);
 #else
-	exif_input.camera_model = NULL;	/* exif_builder falls back to "WW500" */
+			NULL);
 #endif
-
-	snprintf(softwareString, sizeof(softwareString), "%s %s",
-	         app_get_board_name_string(), app_get_version_string());
-
-	exif_input.software = softwareString;
-
-	// Save info about which LED was used to illuminate the current image: none, visible or IR.
-	// lastCaptureFlashState, not a live ledFlashIsActive() call: by the time
-	// prepareJpegFile() runs, the post-capture light check (if it ran for this
-	// frame) has already updated ledFlashIsActive() with the decision for the
-	// NEXT capture - reading it live here would attach the wrong image's flash
-	// state to this one's EXIF. See lastCaptureFlashState's declaration.
-	exif_input.flash_fired = lastCaptureFlashState;
-
-	/* NN data: [total_bytes][count][score...] */
-	if (classCount > MAX_CLASSES) {
-		nnData[0] = 1;
-		nnData[1] = 0;
-	} else {
-		nnData[0] = classCount + 1u;
-		nnData[1] = classCount;
-		for (uint8_t i = 0; i < classCount; i++) {
-			nnData[i + 2] = (uint8_t)outCategories[i];
-		}
-	}
-	exif_input.nn_data = nnData;
-
-	/* UserComment — NN label summary */
-#ifdef ENABLE_EXIF_CONFIDENCE
-	static ClassConfidenceData confidence_data;
-	static char user_comment[EXIF_COMMENT_LENGTH];
-	bool has_confidence_data;
-	memset(&confidence_data, 0, sizeof(confidence_data));
-	memset(user_comment, 0, sizeof(user_comment));
-	cv_get_confidence_data(&confidence_data);
-	has_confidence_data = ((confidence_data.class_count > 0) &&
-	                       (confidence_data.class_count <= MAX_CLASSES));
-	if (has_confidence_data) {
-		char *uc_ptr   = user_comment;
-		int   uc_rem   = sizeof(user_comment) - 1;
-		for (uint8_t i = 0; i < confidence_data.class_count && i < EXIF_MAX_DYNAMIC_CLASSES; i++) {
-			const char *label = confidence_data.labels[i] ? confidence_data.labels[i] : "Unknown";
-			int written = snprintf(uc_ptr, uc_rem, "%s: %d%%; ", label,
-			                       confidence_data.confidence_percent[i]);
-			if (written > 0 && written < uc_rem) {
-				uc_ptr += written;
-				uc_rem -= written;
-			} else {
-				break;
-			}
-		}
-	}
-	exif_input.user_comment = (has_confidence_data && user_comment[0] != '\0') ? user_comment : NULL;
-#else
-	static char user_comment[EXIF_COMMENT_LENGTH];
-	user_comment[0] = '\0';
-	if (cv_modelLoaded()) {
-		size_t uc_offset = 0;
-		for (uint8_t i = 0; i < classCount; i++) {
-			int written = snprintf(user_comment + uc_offset,
-			                       EXIF_COMMENT_LENGTH - uc_offset,
-			                       "%s: %d; ", cv_getLabel(i), outCategories[i]);
-			if (written < 0) {
-				break;
-			}
-			if ((size_t)written >= EXIF_COMMENT_LENGTH - uc_offset) {
-				uc_offset = EXIF_COMMENT_LENGTH - 1u;
-				break;
-			}
-			uc_offset += (size_t)written;
-		}
-	}
-	exif_input.user_comment = (user_comment[0] != '\0') ? user_comment : NULL;
-#endif /* ENABLE_EXIF_CONFIDENCE */
-
-	/* MakerNote — capture-settings CSV (formatted here; exif_builder.c has no HM0360 types).
-	 * Fields: integration, analogGain, digitalGain, aeMean, aeConverged,
-	 *         wbRedGain, wbBlueGain, flashFired
-	 * The last three are appended (backward-compatible): the WB gains (Q8.8,
-	 * 0 = correction off) that produced this image, and whether the flash/IR
-	 * illumination fired - so field A/B tuning can be traced from the photo. */
-#ifdef EXIF_MAKER_NOTES
-#define MAKERDATALEN 64
-	char maker_note[MAKERDATALEN];
-#if defined(USE_RP2) || defined(USE_RP3)
-	uint16_t wbRedNote  = (uint16_t)fatfs_getOperationalParameter(OP_PARAMETER_WB_RED_GAIN);
-	uint16_t wbBlueNote = (uint16_t)fatfs_getOperationalParameter(OP_PARAMETER_WB_BLUE_GAIN);
-#else
-	uint16_t wbRedNote  = 0u;	/* no software WB on the mono/IR camera */
-	uint16_t wbBlueNote = 0u;
-#endif
-
-	snprintf(maker_note, sizeof(maker_note), "%d, %d, %d, %d, %c, %u, %u, %u",
-	         gain.integration, gain.analogGain, gain.digitalGain, gain.aeMean,
-	         (gain.aeConverged == 1) ? 'Y' : 'N',
-	         wbRedNote, wbBlueNote, (unsigned)exif_input.flash_fired);
-	exif_input.maker_note = maker_note;
-#else
-	exif_input.maker_note = NULL;
-#endif /* EXIF_MAKER_NOTES */
-
-	/* Deployment ID */
-	fatfs_getDeploymentId(deployment_id, sizeof(deployment_id));
-	exif_input.deployment_id =
-		(strcmp(deployment_id, DEPLOYMENT_ID_ZERO_UUID) != 0) ? deployment_id : NULL;
-
-	/* Sector-alignment COM padding is applied inside exif_build_segment(). */
-	exifLength = exif_build_segment(&exif_input);
 
 	fileOp.buffer = (uint8_t *)exif_get_buffer();
 	fileOp.length = exifLength;
@@ -2879,8 +2752,8 @@ static void prepareJpegFile(int8_t * outCategories, uint8_t classCount, fileBuff
 	dbg_printf(DBG_LESS_INFO, "Writing %d bytes (%d + %d) to '%s' from jpeg buffer of %d bytes\n",
 			(jpegLength + exifLength), jpegLength, exifLength, fileOp.fileName, JPEG_BUFSIZE);
 
-	// Save the file name as the most recent image
-	snprintf(lastImageFileName, IMAGEFILENAMELEN, "%s", fileOp.fileName);
+	// lastImageFileName is set when the write has completed (handleEventForNNProcessing()): the FatFS task
+	// may change the name if it is taken (#295)
 }
 
 #ifdef INVESTIGATE_BMP
@@ -2951,9 +2824,6 @@ static void prepareBmpFile(fileBufferInfo_t * extraBlock) {
 
 	dbg_printf(DBG_LESS_INFO, "Writing %d bytes (%d + %d) to '%s'\n",
 			(headerLength + bitMapLength), headerLength, bitMapLength, fileOp.fileName);
-
-	// Save the file name as the most recent image
-	snprintf(lastImageFileName, IMAGEFILENAMELEN, "%s", fileOp.fileName);
 }
 
 

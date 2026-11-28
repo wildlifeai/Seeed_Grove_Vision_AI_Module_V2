@@ -27,6 +27,10 @@
 
 #define STATE_FILE "CONFIG.TXT"
 
+// CONFIG.TXT is written to this file first, then renamed (save_configuration()), so a reset part way through
+// a save never leaves CONFIG.TXT empty or half written. In the same folder as CONFIG.TXT
+#define STATE_FILE_TMP "CONFIG.TMP"
+
 #define CONFIG_DIR "/MANIFEST"
 #define CAPTURE_DIR "IMAGES"
 #define MEDIA_DIR "/MEDIA"
@@ -91,7 +95,11 @@ FRESULT dir_mgr_init_config(directoryManager_t *dirManager);
 // Determines and creates the correct image directory.
 FRESULT dir_mgr_init_image_dir(directoryManager_t *dirManager);
 
-void dir_mgr_generateImageFilename(char *imageFileName, uint8_t filenameLen, char *type);
+// After the counters were lost (damaged CONFIG.TXT): start the image folder after the highest one on the card
+void dir_mgr_useNextImageDir(void);
+
+// Image file name from the photo's time, in seconds since 1970 (exif_utc_time_to_seconds())
+void dir_mgr_generateImageFilename(char *imageFileName, uint8_t filenameLen, char *type, uint32_t seconds);
 
 
 #endif /* APP_WW_PROJECTS_WW500_MD_DIRECTORY_MANAGER_H_ */

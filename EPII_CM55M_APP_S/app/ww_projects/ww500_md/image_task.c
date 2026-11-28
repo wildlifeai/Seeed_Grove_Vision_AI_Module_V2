@@ -70,6 +70,7 @@
 #include "ledFlash.h"
 #include "pinmux_cfg.h"
 #include "barrier.h"
+#include "watchdog.h"
 
 #include "selfTest.h"
 
@@ -80,21 +81,16 @@
 #include "selfTest.h"
 #include "exif_gps.h"
 #include "exif_builder.h"
+#include "exif_photo.h"	// the photo EXIF content
 #include "img_correct.h"
 #include "preview.h"
 #include "ae.h"
+#include "rtc_cal.h"	// the RTC calibration, measured if due before DPD (#245)
+#include "if_task.h"	// ifTask_isBleUnresponsive(): whether to wait for setutc (#56)
 
 /*************************************** Definitions *******************************************/
 
-// Enable/disable writing per-class confidence/label EXIF tags (0xF300+)
-// CGP 24/1/26 - Disable this. All processing of NN output tensor including labels is moved to cvapp.cpp
-// When debugged, remove this code
-#ifdef USE_PERCENTAGE
-#define ENABLE_EXIF_CONFIDENCE
-#endif // USE_PERCENTAGE
-
-// Code proposed by Claude - I don't think it works. Consider deleting it
-#define WDTIMOUTFIX
+// ENABLE_EXIF_CONFIDENCE (per-class labels in the EXIF UserComment) moved to exif_photo.c, 27 Nov 2026
 
 /* Experiment in controlling multiple images captures and LED flash for the HM0360
  * using 2 compiler switches:
@@ -127,7 +123,7 @@
  * Probably best to use option 1? Less chance that LED is stuck on.
  *
  * Known problems: sometimes there is a WDT event as 'Image Event Frame Ready' event is missing.
- * This can be detected: use g_wdt_event to force a retry
+ * This is handled by frameFault(), which restarts the sensor once.
  */
 
 #ifdef USE_HM0360
@@ -167,8 +163,11 @@
 // CAMERA_EXTRA_FILE (extra camera register settings) is defined in image_task.h
 // so that the 'camreg' CLI command can maintain the same file
 
-// Define this to add extra EXIF field (AE gain values)
-#define EXIF_MAKER_NOTES
+// EXIF_MAKER_NOTES (the AE gain values in the EXIF MakerNote) moved to exif_photo.c, 27 Nov 2026
+
+// How long the first photo of a wake waits for setutc from the BLE processor (sent every wake, after selftest,
+// about 100 ms after the wake message), before taking its time from the RTC instead
+#define PHOTO_SETUTC_WAIT_MS 300
 
 
 /*************************************** Local Function Declarations *****************************/
@@ -187,6 +186,20 @@ static APP_MSG_DEST_T handleEventForSaveState(APP_MSG_T img_recv_msg);
 // This is to process an unexpected event
 static APP_MSG_DEST_T flagUnexpectedEvent(APP_MSG_T rxMessage);
 
+// Name of a datapath event (APP_MSG_DPEVENT_xxx), for console and app messages
+static const char * dpEventString(APP_MSG_EVENT_E event);
+
+// Datapath faults that arrive when a frame is expected
+static bool isFrameFaultEvent(APP_MSG_EVENT_E event);
+static bool frameFault(APP_MSG_EVENT_E event, const char * name);
+
+// Our own timeout on each frame
+static void frameTimerStart(void);
+static void frameTimerStop(void);
+
+// Abandon the capture sequence: tell the app and stop the sensor
+static void captureFailed(const char * reason);
+
 static bool configure_image_sensor(CAMERA_CONFIG_E operation);
 
 static void setupLEDFlash(void);
@@ -198,11 +211,21 @@ static void setupLEDFlash(void);
 // When final activity from the FatFS Task and IF Task are complete, enter DPD
 static void sleepWhenPossible(void);
 
+// The RTC write and calibration, before the IF task sends "Sleep" (#296)
+static void rtcWorkBeforeSleep(void);
+
+// Before sleeping: wait for the card's start-up to finish, then ask the FatFS task to save state
+static APP_MSG_DEST_T saveStateBeforeSleep(void);
+
 static void captureSequenceComplete(uint32_t accumulatedTime);
 
 static void changeEnableState(bool setEnabled);
 
+static int initNN(void);
+
 static void processNNOutput(int8_t * outCategories, uint8_t classCount);
+
+static void countNNResult(void);
 
 static void prepareJpegFile(int8_t * outCategories, uint8_t classCount, fileBufferInfo_t * extraBlock);
 
@@ -222,7 +245,6 @@ extern QueueHandle_t xIfTaskQueue;
 extern SemaphoreHandle_t xI2CTxSemaphore;
 extern Barrier_t shutdownBarrier;
 
-extern SemaphoreHandle_t xSDInitDoneSemaphore;
 
 extern Barrier_t startupBarrier; // Object that calls a function when all tasks are ready
 
@@ -236,6 +258,13 @@ QueueHandle_t xImageTaskQueue;
 
 volatile APP_IMAGE_TASK_STATE_E image_task_state = APP_IMAGE_TASK_STATE_UNINIT;
 
+// Set when this task starts preparing to sleep (saveStateBeforeSleep()). It never goes back to capturing
+// after that, so a capture asked for now is refused (image_isGoingToSleep())
+static volatile bool goingToSleep = false;
+
+// Set when the RTC work is done and the IF task may send "Sleep" (#296): see image_isReadyToSleep()
+static volatile bool readyToSleep = false;
+
 // For the current request increments
 static uint32_t g_cur_jpegenc_frame;
 // For current request captures to take
@@ -244,18 +273,36 @@ static uint32_t g_captures_to_take;
 // TODO perhaps it should be reset at the start of each day? It is only used in filenames
 static uint32_t g_frames_total;
 static uint32_t g_timer_period; // Interval between pictures in ms
-static bool g_wdt_event; 		// A watchdog timer event occurred while waiting for FRAME_READY
 
-#ifdef WDTIMOUTFIX
+// A new interval for the burst in progress, set by image_setCaptureInterval() from the CLI task and
+// applied by the image task at its next frame-ready (0 = none). Cleared when a burst starts.
+static volatile uint32_t pendingTimerPeriod = 0;
 
-// The first frame after a fresh sensor start sometimes never arrives (a WDT
-// timeout instead of FRAME_READY - see the "Known problems" note above). Rather
-// than tear the camera down and give up (which loses the capture request and,
-// for a console 'capture', leaves the image task Uninitialised so every later
-// capture is dropped), restart the sensor in place and try again a few times.
-#define MAX_CAPTURE_RETRIES 5
-static uint8_t g_capture_retries;	// in-place retries used for the current capture
-#endif // WDTIMOUTFIX
+// A frame fault is a datapath event that arrives when a frame is expected: an EDM watchdog
+// timeout or another datapath error - see isFrameFaultEvent() and frameFault().
+// Rather than give up at the first fault (which loses the rest of the capture sequence),
+// restart the sensor in place and try again.
+// Only the first retry has ever been seen to work: see
+// _Documentation/development reports/2026-10-12_cameraErrors
+#if defined(USE_RP2) || defined(USE_RP3)
+// No in-place retry for the RP cameras: CAMERA_CONFIG_STOP takes SENSOR_ENABLE low, which powers the
+// sensor down, and CAMERA_CONFIG_RUN does not re-initialise it. So give up at the first fault.
+#define MAX_CAPTURE_RETRIES 0
+#else
+#define MAX_CAPTURE_RETRIES 1
+#endif // USE_RP2 || USE_RP3
+// Time with the sensor stopped, before it is restarted
+#define CAPTURE_RETRY_DELAY_MS 100
+// One fault usually sends two events (0x011c then 0x011b). Frame fault events within
+// this time of the first are part of the same fault and are ignored.
+#define FRAME_FAULT_FOLLOWER_MS 500
+
+static uint8_t g_capture_retries;		// in-place retries used for the current frame
+static bool g_frame_fault_seen;			// a frame fault has been handled in this capture sequence
+static TickType_t g_frame_fault_tick;	// when the most recent frame fault was handled
+
+// When the frame being saved was ready: its photo's time is this wake's time reference at this tick (#56)
+static TickType_t g_frame_ready_tick;
 
 // True when this wake exists only to sample the light level (AE registers) for
 // the flash decision: capture one frame, read the AE registers, save nothing.
@@ -280,6 +327,16 @@ static bool aeCheckCliTriggered = false;
 static uint8_t lastCaptureFlashState = 0;
 
 static TimerHandle_t captureTimer;
+
+// Our own timeout on each frame, for when neither APP_MSG_IMAGETASK_FRAME_READY nor a datapath event arrives.
+// The EDM watchdog (5s) is expected to fire first, so this is the frame interval plus this margin.
+#define FRAME_TIMEOUT_MARGIN_MS 7000
+// Set to 10 to force timeout for testing
+//#define FRAME_TIMEOUT_MARGIN_MS 10
+static TimerHandle_t frameTimer;
+// Changes each time frameTimer is started or stopped. An APP_MSG_IMAGETASK_FRAME_TIMEOUT event
+// carries the value from when the timer expired, so an event from an earlier frame can be ignored.
+static uint32_t g_frame_timer_id;
 
 static fileOperation_t fileOp;
 
@@ -321,7 +378,8 @@ const char *imageTaskEventString[APP_MSG_IMAGETASK_LAST - APP_MSG_IMAGETASK_FIRS
     "Image Event NN Erase Model",
     "Image Event NN Model Erased",
     "Image Event Flash Off",
-    "Image Event Error"
+    "Image Event Error",
+    "Image Event Frame Timeout"
 };
 
 // There is only one file name for images - this can be declared here - does not need malloc
@@ -333,6 +391,12 @@ static char lastImageFileName[IMAGEFILENAMELEN] = "";
 // Buffer for messages to be sent via I2C to the BLE processor
 static char msgToMaster[MSGTOMASTERLEN];
 
+// sendMsgToMaster()'s copy of the message, read by the IF task when it builds the I2C message. The caller's
+// buffer (msgToMaster) is reused for the next message straight away: this task has the higher priority, so it
+// overwrote the text before the IF task copied it, and each message carried the next one's text ('NN-' arrived
+// as 'HM0', ai22, 4 Nov 2026). Free whenever xI2CTxSemaphore is taken: the previous message has gone or been dropped.
+static char msgToMasterTx[MSGTOMASTERLEN];
+
 // Not used
 // static bool nnPositive;
 
@@ -342,6 +406,13 @@ static uint8_t cameraSystemEnabled = 0; // 0 = disabled 1 = enabled
 
 // Measure interval between events
 static TickType_t startTime;
+
+// True on a timer or motion wake: the NN starts just after the capture, so the frame comes sooner
+static bool nnInitAfterCapture = false;
+
+// An NN result not yet added to the counters, which wait for the card (see countNNResult())
+static bool nnResultToCount = false;
+static bool nnResultPositive = false;
 
 #if defined(USE_HM0360) || defined(USE_HM0360_MD)
 	// HM0360 AE registers
@@ -425,6 +496,50 @@ static void capture_timer_callback(TimerHandle_t xTimer) {
     if (xQueueSend(xImageTaskQueue, (void *)&send_msg, __QueueSendTicksToWait) != pdTRUE) {
         xprintf("send_msg=0x%x fail\r\n", send_msg.msg_event);
     }
+}
+
+/**
+ * This is the local callback that executes when the frameTimer expires
+ *
+ * This sends a APP_MSG_IMAGETASK_FRAME_TIMEOUT event
+ */
+static void frame_timer_callback(TimerHandle_t xTimer) {
+    APP_MSG_T send_msg;
+
+    // Send back to our own queue
+    send_msg.msg_data = g_frame_timer_id;
+    send_msg.msg_parameter = 0;
+    send_msg.msg_event = APP_MSG_IMAGETASK_FRAME_TIMEOUT;
+
+    // Timer callbacks run in the context of a task, so the non ISR version can be used
+    if (xQueueSend(xImageTaskQueue, (void *)&send_msg, __QueueSendTicksToWait) != pdTRUE) {
+        xprintf("send_msg=0x%x fail\r\n", send_msg.msg_event);
+    }
+}
+
+/**
+ * Starts (or restarts) the timeout for the frame we are now waiting for
+ *
+ * Call this each time a frame is requested.
+ */
+static void frameTimerStart(void) {
+	g_frame_timer_id++;
+	if (frameTimer != NULL) {
+		// Changing the period also starts the timer
+		xTimerChangePeriod(frameTimer, pdMS_TO_TICKS(g_timer_period + FRAME_TIMEOUT_MARGIN_MS), 0);
+	}
+}
+
+/**
+ * Stops the frame timeout
+ *
+ * Call this when the frame arrives or the capture is abandoned.
+ */
+static void frameTimerStop(void) {
+	g_frame_timer_id++;
+	if (frameTimer != NULL) {
+		xTimerStop(frameTimer, 0);
+	}
 }
 
 /*
@@ -676,9 +791,9 @@ static APP_MSG_DEST_T handleEventForInit(APP_MSG_T img_recv_msg) {
             }
             g_captures_to_take = requested_captures;
             g_timer_period = requested_period;
-#ifdef WDTIMOUTFIX
+            pendingTimerPeriod = 0;	// an 'interval' sent before this burst does not apply to it
             g_capture_retries = 0;	// fresh capture sequence
-#endif // WDTIMOUTFIX
+            g_frame_fault_seen = false;
             XP_LT_GREEN
 			xprintf("Images to capture: %d\n", g_captures_to_take);
             xprintf("Interval: %dms\n", g_timer_period);
@@ -709,6 +824,14 @@ static APP_MSG_DEST_T handleEventForInit(APP_MSG_T img_recv_msg) {
             boot_timing_mark(BOOT_TIMING_CAPTURE_START);
             // Record image capture start time.
             startTime = xTaskGetTickCount();
+            frameTimerStart();
+
+            // On a timer or motion wake the NN starts now, while the sensor takes the frame (issue #249).
+            // FRAME_READY waits in the queue until this returns
+            if (nnInitAfterCapture) {
+            	nnInitAfterCapture = false;
+            	initNN();
+            }
 
             // The next thing we expect is a frame ready message: APP_MSG_IMAGETASK_FRAME_READY
             image_task_state = APP_IMAGE_TASK_STATE_CAPTURING;
@@ -736,20 +859,8 @@ static APP_MSG_DEST_T handleEventForInit(APP_MSG_T img_recv_msg) {
     case APP_MSG_IMAGETASK_INACTIVITY:
         // Inactivity detected. Prepare to enter DPD, saving state if possible.
 
-        if (fatfs_mounted())  {
-            // TODO - can we call this without the if() and expect fatfs_task to handle it?
-            // Ask the FatFS task to save state onto the SD card
-            send_msg.destination = xFatTaskQueue;
-            send_msg.message.msg_event = APP_MSG_FATFSTASK_SAVE_STATE;
-            send_msg.message.msg_data = 0;
-            image_task_state = APP_IMAGE_TASK_STATE_SAVE_STATE;
-        }
-        else {
-            // No SD card therefore can't save state
-            // Wait till the IF Task is also ready, then sleep
-            sleepWhenPossible(); // does not return
-            image_task_state = APP_IMAGE_TASK_STATE_UNINIT;
-        }
+        // Save state, with or without a card: the FatFS task replies when done
+        send_msg = saveStateBeforeSleep();
 
         break;
 
@@ -804,6 +915,7 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
     TfLiteStatus ret;
     bool setEnabled;
     bool skip_nn = false;
+    bool abandoned = false;	// set if a frame fault ends the capture sequence
     // Signed integers
     // Can we use a pointer to the output tensor instead?
     uint8_t classCount;
@@ -816,9 +928,8 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
 
     case APP_MSG_IMAGETASK_FRAME_READY:
         // Here when the image sub-system has captured an image - via os_app_dplib_cb() callback.
-#ifdef WDTIMOUTFIX
         g_capture_retries = 0;	// a frame arrived: clear the in-place retry counter
-#endif // WDTIMOUTFIX
+        frameTimerStop();
         g_cur_jpegenc_frame++; // The number in this sequence
         g_frames_total++;      // The number since the start of time.
 
@@ -830,15 +941,36 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
         }
 #endif // USE_HM0360_CAPTURE_TIMER
 
-        // The first frame after the boot: print how long each stage took (issue #249). On a motion wake the HM0360's
-        // SEN_INT is cleared just below, so a scope on it shows the whole time from motion to this point.
+        // A new interval for this burst ('interval' command, e.g. from the live viewer). The RP camera's
+        // captureTimer reads g_timer_period before each frame. The HM0360 times the burst itself, so it is
+        // restarted with the new sleep time, the same call that starts a burst (configure_image_sensor()).
+        if (pendingTimerPeriod != 0) {
+        	g_timer_period = pendingTimerPeriod;
+        	pendingTimerPeriod = 0;
+        	xprintf("Interval: %dms from the next frame\n", g_timer_period);
+#ifdef USE_HM0360_CAPTURE_TIMER
+        	if (g_cur_jpegenc_frame < g_captures_to_take) {
+        		hm0360_md_setMode(CONTEXT_A, MODE_SW_NFRAMES_SLEEP, 1, g_timer_period);
+        	}
+#endif // USE_HM0360_CAPTURE_TIMER
+        }
+
+        // The first frame after the boot (issue #249). On a motion wake the HM0360's SEN_INT is cleared just below,
+        // so a scope on it shows the whole time from motion to this point. The times are printed once the photo
+        // is queued for the card (below), since the frame can now be ready before the card is
+        g_frame_ready_tick = xTaskGetTickCount();
         boot_timing_mark(BOOT_TIMING_FRAME_READY);
-        boot_timing_report((woken == APP_WAKE_REASON_MD) ? "motion" :
-        		(woken == APP_WAKE_REASON_TIMER) ? "timer" :
-        		(woken == APP_WAKE_REASON_COLD) ? "cold" :
-        		(woken == APP_WAKE_REASON_BLE) ? "BLE" : "other");
 
 #if defined(USE_HM0360) || defined(USE_HM0360_MD)
+        if (preview_isActive() && !aeCheckOnlyWake) {
+        	// Live preview: send the MD interrupt status with this frame, read before the clear below
+        	HM0360_MD_STATUS_T mdStatus;
+
+        	if (hm0360_md_getMDStatus(&mdStatus) == HX_CIS_NO_ERROR) {
+        		preview_setMdStatus(&mdStatus);
+        	}
+        }
+
         // By deferring the clearing of the interrupt till here we can measure the latency of interrupt to image captured.
         // This writes to register 0x2065 - we could put this into the big config file?
         hm0360_md_clearInterrupt(0xff); // clear all bits
@@ -983,36 +1115,82 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
 
 		mdBlocks = hm0360_md_getMDOutput(roiOut, ROIOUTENTRIES);
 
-		offset += snprintf(msgToMaster + offset,
-		                   MSGTOMASTERLEN - offset,
-		                   "HM0360 motion in %d blocks:\n",
-		                   mdBlocks);
-
-		for (uint8_t i = 0; i < ROIOUTENTRIES; i++) {
-		    offset += snprintf(msgToMaster + offset,
-		                       MSGTOMASTERLEN - offset,
-		                       "%02x ",
-		                       roiOut[i]);
-
-		    if (offset >= MSGTOMASTERLEN)
-		        break;
+		if (hm0360_md_isHM0360Present() && !aeCheckOnlyWake) {
+			// Live preview: send these bits with this frame (see preview.c).
+			// Without an HM0360, roiOut was not filled in; AE-check frames
+			// are not streamed, so their bits must not reach the next frame.
+			preview_setMdBits(roiOut, ROIOUTENTRIES);
 		}
 
-        XP_LT_GREY;
-        // print to console
-        xprintf("%s\n", msgToMaster);
+		uint8_t wakeRoiOut[ROIOUTENTRIES];
+		uint16_t wakeBlocks;
 
-        // and send to BLE
-        sendMsgToMaster(msgToMaster);
+		if (hm0360_md_takeWakeGrid(wakeRoiOut, ROIOUTENTRIES, &wakeBlocks)) {
+			// Motion wake: the cells that woke the device, read at boot (hm0360_md_saveWakeGrid()) and
+			// reported only now, so nothing delays the first image. That image's own grid (below) is
+			// empty: the HM0360 has no earlier frame to compare it with
+			offset += snprintf(msgToMaster + offset,
+			                   MSGTOMASTERLEN - offset,
+			                   "HM0360 woken by motion in %d blocks:\n",
+			                   wakeBlocks);
 
-        // Now re-use msgToMaster to print (locally) a 16x16 grid
-        // We will do this in two chunks as MSGTOMASTERLEN is too small for all characters
-        hm0360_md_printGrid(roiOut, 128, msgToMaster, MSGTOMASTERLEN);
-        xprintf("%s", msgToMaster);
-        hm0360_md_printGrid(&roiOut[16], 128, msgToMaster, MSGTOMASTERLEN);
-        xprintf("%s\n", msgToMaster);
+			for (uint8_t i = 0; i < ROIOUTENTRIES; i++) {
+			    offset += snprintf(msgToMaster + offset,
+			                       MSGTOMASTERLEN - offset,
+			                       "%02x ",
+			                       wakeRoiOut[i]);
 
-        XP_WHITE;
+			    if (offset >= MSGTOMASTERLEN)
+			        break;
+			}
+
+			XP_LT_GREY;
+			xprintf("%s\n", msgToMaster);
+			sendMsgToMaster(msgToMaster);
+
+			hm0360_md_printGrid(wakeRoiOut, 128, msgToMaster, MSGTOMASTERLEN);
+			xprintf("%s", msgToMaster);
+			hm0360_md_printGrid(&wakeRoiOut[16], 128, msgToMaster, MSGTOMASTERLEN);
+			xprintf("%s\n", msgToMaster);
+			XP_WHITE;
+
+			offset = 0;
+		}
+
+		// The first image of a burst has no earlier frame to compare with, so its grid is always empty:
+		// report from the second image on. After a motion wake the wake grid above takes its place
+		if (g_cur_jpegenc_frame > 1) {
+			offset += snprintf(msgToMaster + offset,
+			                   MSGTOMASTERLEN - offset,
+			                   "HM0360 motion in %d blocks:\n",
+			                   mdBlocks);
+
+			for (uint8_t i = 0; i < ROIOUTENTRIES; i++) {
+			    offset += snprintf(msgToMaster + offset,
+			                       MSGTOMASTERLEN - offset,
+			                       "%02x ",
+			                       roiOut[i]);
+
+			    if (offset >= MSGTOMASTERLEN)
+			        break;
+			}
+
+			XP_LT_GREY;
+			// print to console
+			xprintf("%s\n", msgToMaster);
+
+			// and send to BLE
+			sendMsgToMaster(msgToMaster);
+
+			// Now re-use msgToMaster to print (locally) a 16x16 grid
+			// We will do this in two chunks as MSGTOMASTERLEN is too small for all characters
+			hm0360_md_printGrid(roiOut, 128, msgToMaster, MSGTOMASTERLEN);
+			xprintf("%s", msgToMaster);
+			hm0360_md_printGrid(&roiOut[16], 128, msgToMaster, MSGTOMASTERLEN);
+			xprintf("%s\n", msgToMaster);
+
+			XP_WHITE;
+		}
 
 //		XP_LT_GREY;
 //		xprintf("HM0360 motion in %d: \n", mdBlocks);
@@ -1042,7 +1220,17 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
         // AE-check wakes are not streamed - they are brief housekeeping captures.
         bool previewFrame = preview_isActive() && !aeCheckOnlyWake;
 
+        // The file name, folder, sequence number, deployment ID and GPS all come from the card, so
+        // from here on wait for it (at once if it is ready). The frame and the NN result wait in RAM.
+        // After this op_parameter[] holds the card's settings: if the card says the camera is off
+        // (op 10 = 0), this frame is not saved
+        fatfs_waitForSdReady();
+
+        // Now the card's counters are loaded, add this frame's NN result to them
+        countNNResult();
+
         if (aeCheckOnlyWake
+        		|| (fatfs_getOperationalParameter(OP_PARAMETER_CAMERA_ENABLED) == 0)
         		|| (fatfs_getOperationalParameter(OP_PARAMETER_TEST_MODE_BITS) & TEST_BIT_SKIP_FILE_CREATION)
         		|| (previewFrame && preview_skipsFileSave())) {
         	// Don't save to a file. This allows faster streaming of MD and AE data to the app
@@ -1124,6 +1312,13 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
         // Proceed to write the jpeg file, even if there is no SD card
         // since the fatfs_task will handle that.
 
+        // Print how long each stage of the boot took, up to here (once per boot)
+        boot_timing_mark(BOOT_TIMING_PHOTO_QUEUED);
+        boot_timing_report((woken == APP_WAKE_REASON_MD) ? "motion" :
+        		(woken == APP_WAKE_REASON_TIMER) ? "timer" :
+        		(woken == APP_WAKE_REASON_COLD) ? "cold" :
+        		(woken == APP_WAKE_REASON_BLE) ? "BLE" : "other");
+
     	send_msg.message.msg_data = (uint32_t)&fileOp;
         send_msg.destination = xFatTaskQueue;
         send_msg.message.msg_event = APP_MSG_FATFSTASK_WRITE_IMAGE;
@@ -1150,95 +1345,30 @@ static APP_MSG_DEST_T handleEventForCapturing(APP_MSG_T img_recv_msg) {
     	XP_WHITE;
     	break;
 
-    case APP_MSG_DPEVENT_EDM_WDT1_TIMEOUT:   // 0x011d
-    case APP_MSG_DPEVENT_EDM_WDT2_TIMEOUT:   // 0x011c
-    case APP_MSG_DPEVENT_EDM_WDT3_TIMEOUT:   // 0x011b
-    case APP_MSG_DPEVENT_SENSORCTRL_WDT_OUT: // 0x011e
-        // Unfortunately I see this sometimes: APP_MSG_DPEVENT_EDM_WDT2_TIMEOUT (0x011c) followed by APP_MSG_DPEVENT_EDM_WDT3_TIMEOUT (0x011b)
-        // APP_MSG_IMAGETASK_FRAME_READY does not arrive. timeout WDT_TIMEOUT_PERIOD seems to be 5s
-    	XP_RED;
-        dbg_printf(DBG_LESS_INFO, ">>>> Received a timeout event 0x%04x after %dms <<<<\n",
-        		event, app_getElapsedMs(startTime));
-        XP_WHITE;
-
-#ifdef WDTIMOUTFIX
-        // A single frame timeout fires two events in quick succession (WDT2 then
-        // WDT3). After a retry restart resets startTime, the trailing event
-        // arrives with a tiny elapsed time - ignore it so it does not consume a
-        // retry or restart the just-started sensor. A real timeout is ~5s.
-        if (app_getElapsedMs(startTime) < 1000) {
-            break;
-        }
-
-        // The first frame after a fresh sensor start sometimes never arrives.
-        // Restart the sensor in place and retry, up to MAX_CAPTURE_RETRIES,
-        // before giving up. This keeps the current capture request alive
-        // (important for console 'capture' and for not dropping a field capture
-        // on a transient MIPI hiccup) instead of tearing the camera down.
-        if (g_capture_retries < MAX_CAPTURE_RETRIES) {
-            g_capture_retries++;
-            XP_YELLOW;
-            xprintf(">>>> Frame timed out - restarting sensor, retry %d/%d\n",
-            		g_capture_retries, MAX_CAPTURE_RETRIES);
-            XP_WHITE;
-
-            // Stop then restart the datapath/sensor to re-arm the capture.
-            // Dwell progressively longer with the sensor powered down before
-            // each restart: the MIPI bring-up is timing-marginal and
-            // back-to-back restarts can fail identically (bench 10-11 Jul:
-            // 15 instant retries failed where a later boot succeeded first
-            // try). Varying the dwell samples different phase alignments.
-            configure_image_sensor(CAMERA_CONFIG_STOP);
-            vTaskDelay(pdMS_TO_TICKS(100u * g_capture_retries));
-            if (configure_image_sensor(CAMERA_CONFIG_RUN)) {
-                // Restart the timeout clock and keep waiting for FRAME_READY
-                startTime = xTaskGetTickCount();
-                // stay in APP_IMAGE_TASK_STATE_CAPTURING
-                break;
-            }
-            // If the restart itself failed, fall through to the give-up path
-            XP_RED;
-            xprintf(">>>> Sensor restart failed - giving up on this capture\n");
-            XP_WHITE;
-        }
-        else {
-            XP_RED;
-            xprintf(">>>> Frame timed out after %d retries - giving up\n", MAX_CAPTURE_RETRIES);
-            XP_WHITE;
-        }
-
-        // Retries exhausted (or restart failed). Prepare to enter DPD.
-        // g_wdt_event asks the DPD path to schedule a quick 1s re-wake as a
-        // last-resort retry (see the g_wdt_event handling before sleep).
-    	g_wdt_event = true;
-    	g_capture_retries = 0;
-#else
-    	// Fault detected. Prepare to enter DPD
-        dbg_printf(DBG_LESS_INFO, ">>>> TODO - re-initialise camera? <<<<\n", event);
-        g_wdt_event = true;
-#endif	// WDTIMOUTFIX
-
-        configure_image_sensor(CAMERA_CONFIG_STOP); // run some sensordplib_stop functions then run HM0360_stream_off commands to the HM0360
-
-        if (fatfs_mounted())  {
-            // TODO - can we call this without the if() and expect fatfs_task to handle it?
-            // Ask the FatFS task to save state onto the SD card
-            send_msg.destination = xFatTaskQueue;
-            send_msg.message.msg_event = APP_MSG_FATFSTASK_SAVE_STATE;
-            send_msg.message.msg_data = 0;
-            image_task_state = APP_IMAGE_TASK_STATE_SAVE_STATE;
-        }
-        else  {
-        	// No SD card therefore can't save state
-        	// Wait till the IF Task is also ready, then sleep
-        	sleepWhenPossible(); // does not return
-            image_task_state = APP_IMAGE_TASK_STATE_UNINIT;
-        }
-        break;
+    case APP_MSG_IMAGETASK_FRAME_TIMEOUT:
+    	// Here when the frameTimer expires: no frame and no datapath event.
+    	// msg_data says which frame the timer was for. Ignore one that is left over from an earlier frame.
+    	if (img_recv_msg.msg_data == g_frame_timer_id) {
+    		abandoned = frameFault(event, "No frame");
+    	}
+    	break;
 
     default:
-    	flagUnexpectedEvent(img_recv_msg);
+    	if (isFrameFaultEvent(event)) {
+    		// A timeout or other datapath error instead of APP_MSG_IMAGETASK_FRAME_READY
+    		abandoned = frameFault(event, dpEventString(event));
+    	}
+    	else {
+    		flagUnexpectedEvent(img_recv_msg);
+    	}
+    	break;
     }
+
+    if (abandoned) {
+    	// A frame fault has ended the capture sequence. Prepare to enter DPD, saving state if possible.
+    	send_msg = saveStateBeforeSleep();
+    }
+    // else stay in APP_IMAGE_TASK_STATE_CAPTURING, or the state set above
 
     return send_msg;
 }
@@ -1272,6 +1402,8 @@ static APP_MSG_DEST_T handleEventForNNProcessing(APP_MSG_T img_recv_msg) {
         // This prevents race condition where next capture reads old sequence number
         if (diskStatus == 0)  {
             fatfs_incrementOperationalParameter(OP_PARAMETER_SEQUENCE_NUMBER);
+            // The name actually used: the FatFS task steps it if it was taken (#295)
+            snprintf(lastImageFileName, IMAGEFILENAMELEN, "%s", g_imageFileName);
         }
         else  {
             dbg_printf(DBG_LESS_INFO, "Image not written. Error: %d\n", diskStatus);
@@ -1300,6 +1432,7 @@ static APP_MSG_DEST_T handleEventForNNProcessing(APP_MSG_T img_recv_msg) {
         	// The HM0360 uses an internal timer to determine the time for the next image
         	// Re-start the image sensor.
         	configure_image_sensor(CAMERA_CONFIG_CONTINUE);
+        	frameTimerStart();
         	// Expect another frame ready event
         	image_task_state = APP_IMAGE_TASK_STATE_CAPTURING;
 #else
@@ -1433,6 +1566,7 @@ static APP_MSG_DEST_T handleEventForWaitForTimer(APP_MSG_T img_recv_msg) {
 
     	// Record image capture start time
     	startTime = xTaskGetTickCount();
+    	frameTimerStart();
 
         image_task_state = APP_IMAGE_TASK_STATE_CAPTURING;
         break;
@@ -1447,20 +1581,8 @@ static APP_MSG_DEST_T handleEventForWaitForTimer(APP_MSG_T img_recv_msg) {
     	// run some sensordplib_stop functions then run HM0360_stream_off commands to the HM0360
         configure_image_sensor(CAMERA_CONFIG_STOP);
 
-        if (fatfs_mounted())  {
-            // TODO - can we call this without the if() and expect fatfs_task to handle it?
-            // Ask the FatFS task to save state onto the SD card
-            send_msg.destination = xFatTaskQueue;
-            send_msg.message.msg_event = APP_MSG_FATFSTASK_SAVE_STATE;
-            send_msg.message.msg_data = 0;
-            image_task_state = APP_IMAGE_TASK_STATE_SAVE_STATE;
-        }
-        else {
-            // No SD card therefore can't save state
-            // Wait till the IF Task is also ready, then sleep
-            sleepWhenPossible(); // does not return
-            image_task_state = APP_IMAGE_TASK_STATE_UNINIT;
-        }
+        // Save state, with or without a card: the FatFS task replies when done
+        send_msg = saveStateBeforeSleep();
 
     	break;
 
@@ -1502,7 +1624,9 @@ static APP_MSG_DEST_T handleEventForSaveState(APP_MSG_T img_recv_msg)
     switch (event)  {
 
     case APP_MSG_IMAGETASK_DISK_WRITE_COMPLETE:
-        // Here when the FatFS task has saved state
+        // Here when the FatFS task has saved state. Do the slow RTC work while the BLE processor still
+        // treats us as awake, then let the IF task send "Sleep" (#296)
+        rtcWorkBeforeSleep();
         // Wait till the IF Task is also ready, then sleep
         sleepWhenPossible(); // does not return
         image_task_state = APP_IMAGE_TASK_STATE_UNINIT;
@@ -1532,6 +1656,225 @@ static APP_MSG_DEST_T handleEventForSaveState(APP_MSG_T img_recv_msg)
 
 
 /**
+ * Name of a datapath event, for console and app messages
+ *
+ * These are the APP_MSG_DPEVENT_xxx events in app_msg.h (0x0100 up), sent to the image task
+ * by os_app_dplib_cb(). The image task's own events are named by imageTaskEventString[].
+ *
+ * @param event the event
+ * @return a short name, or "Unrecognised" if this is not a datapath event
+ */
+static const char * dpEventString(APP_MSG_EVENT_E event) {
+	switch (event) {
+	case APP_MSG_DPEVENT_ERR_FS_HVSIZE: return "Parser frame start size error";
+	case APP_MSG_DPEVENT_ERR_FE_TOGGLE: return "Parser frame end toggle error";
+	case APP_MSG_DPEVENT_ERR_FD_TOGGLE: return "Parser frame data toggle error";
+	case APP_MSG_DPEVENT_ERR_FS_TOGGLE: return "Parser frame start toggle error";
+	case APP_MSG_DPEVENT_ERR_BLANK_ERR: return "Parser blanking error";
+	case APP_MSG_DPEVENT_ERR_CRC_ERR: return "Parser CRC error";
+	case APP_MSG_DPEVENT_ERR_FE_ERR: return "Parser frame end cycle error";
+	case APP_MSG_DPEVENT_ERR_HSIZE_ERR: return "Parser hsize error";
+	case APP_MSG_DPEVENT_ERR_FS_ERR: return "Parser frame start cycle error";
+	case APP_MSG_DPEVENT_VSYNC: return "EDM vsync error";
+	case APP_MSG_DPEVENT_HSYNC: return "EDM hsync error";
+	case APP_MSG_DPEVENT_OVERLAP_VH: return "EDM overlap VH error";
+	case APP_MSG_DPEVENT_OVERLAP_HD: return "EDM overlap HD error";
+	case APP_MSG_DPEVENT_OVERLAP_DF: return "EDM overlap DF error";
+	case APP_MSG_DPEVENT_HSYNC_FP: return "EDM hsync front porch error";
+	case APP_MSG_DPEVENT_HSYNC_BP: return "EDM hsync back porch error";
+	case APP_MSG_DPEVENT_FE: return "EDM frame end timing error";
+	case APP_MSG_DPEVENT_CON_VSYNC: return "EDM con vsync error";
+	case APP_MSG_DPEVENT_CON_HSYNC: return "EDM con hsync error";
+	case APP_MSG_DPEVENT_CH0_DE_LESS: return "EDM ch0 DE less error";
+	case APP_MSG_DPEVENT_CH0_DE_MORE: return "EDM ch0 DE more error";
+	case APP_MSG_DPEVENT_CH1_DE_LESS: return "EDM ch1 DE less error";
+	case APP_MSG_DPEVENT_CH1_DE_MORE: return "EDM ch1 DE more error";
+	case APP_MSG_DPEVENT_CH2_DE_LESS: return "EDM ch2 DE less error";
+	case APP_MSG_DPEVENT_CH2_DE_MORE: return "EDM ch2 DE more error";
+	case APP_MSG_DPEVENT_CONV_DE_LESS: return "EDM con DE less error";
+	case APP_MSG_DPEVENT_CONV_DE_MORE: return "EDM con DE more error";
+	case APP_MSG_DPEVENT_EDM_WDT3_TIMEOUT: return "EDM WDT3 timeout";
+	case APP_MSG_DPEVENT_EDM_WDT2_TIMEOUT: return "EDM WDT2 timeout";
+	case APP_MSG_DPEVENT_EDM_WDT1_TIMEOUT: return "EDM WDT1 timeout";
+	case APP_MSG_DPEVENT_SENSORCTRL_WDT_OUT: return "Sensor control timeout";
+	case APP_MSG_DPEVENT_CDM_FIFO_OVERFLOW: return "CDM FIFO overflow";
+	case APP_MSG_DPEVENT_CDM_FIFO_UNDERFLOW: return "CDM FIFO underflow";
+	case APP_MSG_DPEVENT_XDMA_WDMA1_ABNORMAL1: return "WDMA1 frame end count not reached";
+	case APP_MSG_DPEVENT_XDMA_WDMA1_ABNORMAL2: return "WDMA1 disabled before finish";
+	case APP_MSG_DPEVENT_XDMA_WDMA1_ABNORMAL3: return "WDMA1 FIFO ch1 mismatch";
+	case APP_MSG_DPEVENT_XDMA_WDMA1_ABNORMAL4: return "WDMA1 FIFO ch2 mismatch";
+	case APP_MSG_DPEVENT_XDMA_WDMA1_ABNORMAL5: return "WDMA1 FIFO ch3 mismatch";
+	case APP_MSG_DPEVENT_XDMA_WDMA1_ABNORMAL6: return "WDMA1 FIFO ch1 overflow";
+	case APP_MSG_DPEVENT_XDMA_WDMA1_ABNORMAL7: return "WDMA1 FIFO ch2 overflow";
+	case APP_MSG_DPEVENT_XDMA_WDMA1_ABNORMAL8: return "WDMA1 FIFO ch3 overflow";
+	case APP_MSG_DPEVENT_XDMA_WDMA1_ABNORMAL9: return "WDMA1 bus error";
+	case APP_MSG_DPEVENT_XDMA_WDMA2_ABNORMAL1: return "WDMA2 frame end count not reached";
+	case APP_MSG_DPEVENT_XDMA_WDMA2_ABNORMAL2: return "WDMA2 disabled before finish";
+	case APP_MSG_DPEVENT_XDMA_WDMA2_ABNORMAL3: return "WDMA2 FIFO mismatch";
+	case APP_MSG_DPEVENT_XDMA_WDMA2_ABNORMAL4: return "WDMA2 FIFO overflow";
+	case APP_MSG_DPEVENT_XDMA_WDMA2_ABNORMAL5: return "WDMA2 bus error";
+	case APP_MSG_DPEVENT_XDMA_WDMA2_ABNORMAL6: return "WDMA2 abnormal case 6";
+	case APP_MSG_DPEVENT_XDMA_WDMA2_ABNORMAL7: return "WDMA2 abnormal case 7";
+	case APP_MSG_DPEVENT_XDMA_WDMA3_ABNORMAL1: return "WDMA3 frame end count not reached";
+	case APP_MSG_DPEVENT_XDMA_WDMA3_ABNORMAL2: return "WDMA3 disabled before finish";
+	case APP_MSG_DPEVENT_XDMA_WDMA3_ABNORMAL3: return "WDMA3 FIFO ch1 mismatch";
+	case APP_MSG_DPEVENT_XDMA_WDMA3_ABNORMAL4: return "WDMA3 FIFO ch2 mismatch";
+	case APP_MSG_DPEVENT_XDMA_WDMA3_ABNORMAL5: return "WDMA3 FIFO ch3 mismatch";
+	case APP_MSG_DPEVENT_XDMA_WDMA3_ABNORMAL6: return "WDMA3 FIFO ch1 overflow";
+	case APP_MSG_DPEVENT_XDMA_WDMA3_ABNORMAL7: return "WDMA3 FIFO ch2 overflow";
+	case APP_MSG_DPEVENT_XDMA_WDMA3_ABNORMAL8: return "WDMA3 FIFO ch3 overflow";
+	case APP_MSG_DPEVENT_XDMA_WDMA3_ABNORMAL9: return "WDMA3 bus error";
+	case APP_MSG_DPEVENT_XDMA_RDMA_ABNORMAL1: return "RDMA disabled before finish";
+	case APP_MSG_DPEVENT_XDMA_RDMA_ABNORMAL2: return "RDMA bus error";
+	case APP_MSG_DPEVENT_XDMA_RDMA_ABNORMAL3: return "RDMA abnormal case 3";
+	case APP_MSG_DPEVENT_XDMA_RDMA_ABNORMAL4: return "RDMA abnormal case 4";
+	case APP_MSG_DPEVENT_XDMA_RDMA_ABNORMAL5: return "RDMA abnormal case 5";
+	case APP_MSG_DPEVENT_CDM_MOTION_DETECT: return "CDM motion detect";
+	case APP_MSG_DPEVENT_XDMA_WDMA1_FINISH: return "WDMA1 finish";
+	case APP_MSG_DPEVENT_XDMA_WDMA2_FINISH: return "WDMA2 finish";
+	case APP_MSG_DPEVENT_XDMA_WDMA3_FINISH: return "WDMA3 finish";
+	case APP_MSG_DPEVENT_XDMA_RDMA_FINISH: return "RDMA finish";
+	case APP_MSG_DPEVENT_XDMA_FRAME_READY: return "Datapath frame ready";
+	case APP_MSG_DPEVENT_TIMER_FIRE_APP_NOTREADY: return "Timer fired, app not ready";
+	case APP_MSG_DPEVENT_TIMER_FIRE_APP_READY: return "Timer fired, app ready";
+	case APP_MSG_DPEVENT_UNKOWN: return "Datapath unknown";
+	case APP_MSG_DPEVENT_STARTCAPTURE: return "Datapath start capture";
+	case APP_MSG_DPEVENT_STOPCAPTURE: return "Datapath stop capture";
+	case APP_MSG_DPEVENT_RECAPTURE: return "Datapath recapture";
+	case APP_MSG_DPEVENT_1BITPARSER_ERR: return "1-bit parser error";
+	case APP_MSG_DPEVENT_CHANGE_STATE: return "Datapath change state";
+	default: return "Unrecognised";
+	}
+}
+
+/**
+ * Is this a datapath event that means a frame has been lost?
+ *
+ * These are the error events that os_app_dplib_cb() can send: the EDM watchdog timeouts,
+ * the CDM FIFO errors, the WDMA and RDMA errors and the parser error.
+ *
+ * @param event the event
+ * @return true if it is a frame fault
+ */
+static bool isFrameFaultEvent(APP_MSG_EVENT_E event) {
+	// 0x011b to 0x013e: timeouts, CDM FIFO errors, WDMA and RDMA errors
+	if ((event >= APP_MSG_DPEVENT_EDM_WDT3_TIMEOUT) && (event <= APP_MSG_DPEVENT_XDMA_RDMA_ABNORMAL5)) {
+		return true;
+	}
+	return (event == APP_MSG_DPEVENT_1BITPARSER_ERR);
+}
+
+/**
+ * Handles a frame fault in APP_IMAGE_TASK_STATE_CAPTURING
+ *
+ * Here when a timeout or other datapath error arrives and not APP_MSG_IMAGETASK_FRAME_READY,
+ * or when our own frameTimer expires because nothing arrived at all.
+ * I see this sometimes: APP_MSG_DPEVENT_EDM_WDT2_TIMEOUT (0x011c) followed by
+ * APP_MSG_DPEVENT_EDM_WDT3_TIMEOUT (0x011b), 5s after the frame was requested (WDT_TIMEOUT_PERIOD).
+ *
+ * The first event of a fault is acted on. Frame fault events within FRAME_FAULT_FOLLOWER_MS
+ * of that are part of the same fault and are ignored.
+ *
+ * The sensor is restarted in place, up to MAX_CAPTURE_RETRIES times for each frame
+ * (HM0360 only: there is no in-place retry for the RP cameras).
+ * After that the capture sequence is abandoned - see captureFailed().
+ *
+ * This does not change image_task_state: the caller does that if the capture is abandoned.
+ *
+ * @param event the frame fault event
+ * @param name its name, for the console and the app
+ * @return true if the capture sequence has been abandoned, false if we are still waiting for a frame
+ */
+static bool frameFault(APP_MSG_EVENT_E event, const char * name) {
+
+    // Our own frame timeout is never a follower: the frameTimer is restarted with the sensor,
+    // so if it expires again the restart has not produced a frame.
+    if ((event != APP_MSG_IMAGETASK_FRAME_TIMEOUT)
+    		&& g_frame_fault_seen && (app_getElapsedMs(g_frame_fault_tick) < FRAME_FAULT_FOLLOWER_MS)) {
+    	// Part of the fault we have just handled. It must not use a retry or restart the just-started sensor.
+    	xprintf(">>>> '%s' (0x%04x) follows the frame fault - ignored\n", name, event);
+    	return false;
+    }
+
+    XP_RED;
+    xprintf(">>>> Frame fault '%s' (0x%04x) after %dms <<<<\n",
+    		name, event, app_getElapsedMs(startTime));
+    XP_WHITE;
+
+#if (MAX_CAPTURE_RETRIES > 0)
+    if (g_capture_retries < MAX_CAPTURE_RETRIES) {
+    	g_capture_retries++;
+    	XP_YELLOW;
+    	xprintf(">>>> Frame fault - restarting sensor, retry %d/%d\n", g_capture_retries, MAX_CAPTURE_RETRIES);
+    	XP_WHITE;
+
+    	// Stop then restart the datapath/sensor to re-arm the capture.
+    	configure_image_sensor(CAMERA_CONFIG_STOP);
+    	vTaskDelay(pdMS_TO_TICKS(CAPTURE_RETRY_DELAY_MS));
+    	if (configure_image_sensor(CAMERA_CONFIG_RUN)) {
+    		// Restart the capture clock and keep waiting for APP_MSG_IMAGETASK_FRAME_READY
+    		startTime = xTaskGetTickCount();
+    		frameTimerStart();
+    		g_frame_fault_tick = startTime;
+    		g_frame_fault_seen = true;
+    		// stay in APP_IMAGE_TASK_STATE_CAPTURING
+    		return false;
+    	}
+    	// The restart itself failed
+    	XP_RED;
+    	xprintf(">>>> Sensor restart failed - giving up on this capture\n");
+    	XP_WHITE;
+    }
+    else {
+    	XP_RED;
+    	xprintf(">>>> Frame fault after %d retries - giving up\n", MAX_CAPTURE_RETRIES);
+    	XP_WHITE;
+    }
+#else
+    // No in-place retry for this camera
+    XP_RED;
+    xprintf(">>>> Frame fault - giving up\n");
+    XP_WHITE;
+#endif // MAX_CAPTURE_RETRIES > 0
+
+    // Retries exhausted (or restart failed, or no retry for this camera).
+    g_capture_retries = 0;
+    captureFailed(name);
+
+    // Events that follow this fault arrive in the next state
+    g_frame_fault_tick = xTaskGetTickCount();
+    g_frame_fault_seen = true;
+
+    return true;
+}
+
+/**
+ * Abandons the capture sequence
+ *
+ * Called when a frame can't be captured. It tells the console and the app, and stops the sensor.
+ *
+ * This does not change image_task_state: the caller must then prepare to enter DPD.
+ *
+ * There is no automatic retry: it is for the app to ask again if it wants to.
+ *
+ * @param reason short text for the console and the app
+ */
+static void captureFailed(const char * reason) {
+
+    // g_cur_jpegenc_frame counts the frames that arrived
+    snprintf(msgToMaster, MSGTOMASTERLEN, "Capture failed after %d of %d images: %s",
+    		(int) g_cur_jpegenc_frame, (int) g_captures_to_take, reason);
+    // Send to console:
+    XP_RED; xprintf("%s\n", msgToMaster); XP_WHITE;
+    // and to app
+    sendMsgToMaster(msgToMaster);
+
+    frameTimerStop();
+
+    configure_image_sensor(CAMERA_CONFIG_STOP); // run some sensordplib_stop functions then run HM0360_stream_off commands to the HM0360
+}
+
+/**
  * For state machine: Print a red message to see if there are unhandled events we should manage
  *
  * TODO - what should we really do in this case?
@@ -1546,13 +1889,33 @@ static APP_MSG_DEST_T flagUnexpectedEvent(APP_MSG_T img_recv_msg) {
     event = img_recv_msg.msg_event;
     send_msg.destination = NULL;
 
+    if (event == APP_MSG_IMAGETASK_FRAME_TIMEOUT) {
+    	// Left over from a frame that has since arrived. Nothing to do.
+    	return send_msg;
+    }
+
+    if (event == APP_MSG_IMAGETASK_INACTIVITY) {
+    	// The inactivity detector has fired in a state that can't act on it: for example Save State,
+    	// or Uninitialised when we are ready to sleep and waiting for the IF task.
+    	// It fires again later if we are still awake, so there is nothing to do, and nothing to tell the app.
+    	return send_msg;
+    }
+
+    if (isFrameFaultEvent(event)) {
+    	// Left over from a capture that has ended (frameFault() handles these in the Capturing state).
+    	// Console only: the app can't do anything about it.
+    	xprintf("IMAGE task ignored datapath event '%s' (0x%04x) in '%s'\n",
+    			dpEventString(event), event, imageTaskStateString[image_task_state]);
+    	return send_msg;
+    }
+
     if ((event >= APP_MSG_IMAGETASK_FIRST) && (event < APP_MSG_IMAGETASK_LAST)) {
     	snprintf(msgToMaster, MSGTOMASTERLEN,
     		"IMAGE task unhandled event '%s' in '%s'", imageTaskEventString[event - APP_MSG_IMAGETASK_FIRST], imageTaskStateString[image_task_state]);
     }
     else  {
     	snprintf(msgToMaster, MSGTOMASTERLEN,
-    		"IMAGE task unhandled event 0x%04x in '%s'", event, imageTaskStateString[image_task_state]);
+    		"IMAGE task unhandled event '%s' (0x%04x) in '%s'", dpEventString(event), event, imageTaskStateString[image_task_state]);
     }
 
     // print to console
@@ -1649,13 +2012,14 @@ static void vImageTask(void *pvParameters) {
     #error "Unsupported JPEG quality setting"
 #endif
 
-    g_wdt_event = false;
 
     int  nnStatus = -1;	// -1 means disabled
     uint16_t interval;
 
-    // Don't proceed until the SD initialisation is done.
-    xSemaphoreTake(xSDInitDoneSemaphore, portMAX_DELAY);
+    // Don't proceed until op_parameter[] holds this boot's values: from the fast-start record in
+    // flash (so the camera can start before the SD card is ready), or without one, from the card.
+    // Anything that needs the card waits for it later (fatfs_waitForSdReady())
+    fatfs_waitForSettings();
 
     // True means we capture images and run NN processing and report results.
     cameraSystemEnabled = fatfs_getOperationalParameter(OP_PARAMETER_CAMERA_ENABLED);
@@ -1767,24 +2131,18 @@ static void vImageTask(void *pvParameters) {
 	// Initialise NN but only if the camera system is enabled and this isn't a
 	// throwaway light-check wake (which never runs NN inference - see
 	// aeCheckOnlyWake's handling in handleEventForNNProcessing()).
-	startTime = xTaskGetTickCount();
-
 	if (cameraSystemEnabled && !aeCheckOnlyWake) {
-		nnStatus = cv_init(true, true,
-				fatfs_getOperationalParameter(OP_PARAMETER_MODEL_PROJECT),
-				fatfs_getOperationalParameter(OP_PARAMETER_MODEL_VERSION),
-				woken);
-
-		if (nnStatus < 0) {
-			xprintf("No model found.\n");
-			// TODO - do we do this?
-			//selfTest_setErrorBits(1 << SELF_TEST_AI_NN_ERROR);
+		// A timer or motion wake starts a capture below: start the NN after the capture has started, so
+		// the frame comes sooner. Not if the model must come from the card: that can take seconds
+		if (cameraInitialised
+				&& ((woken == APP_WAKE_REASON_MD) || (woken == APP_WAKE_REASON_TIMER))
+				&& !cv_modelNeedsCard(fatfs_getOperationalParameter(OP_PARAMETER_MODEL_PROJECT),
+						fatfs_getOperationalParameter(OP_PARAMETER_MODEL_VERSION))) {
+			nnInitAfterCapture = true;
 		}
 		else {
-			xprintf("Initialised neural network.\n");
+			nnStatus = initNN();
 		}
-
-		xprintf("NN Initialisation took %dms TODO - consider doing this after taking the picture!\n\n", app_getElapsedMs(startTime));
 	}
 	else if (aeCheckOnlyWake) {
 		XP_CYAN xprintf("[LS] Skipping NN initialisation (light-check-only wake).\n\n"); XP_WHITE
@@ -1807,7 +2165,12 @@ static void vImageTask(void *pvParameters) {
 #endif	// USE_HM0360
 
     xprintf("  Camera system %s.\n", (cameraSystemEnabled > 0) ? "enabled": "disabled");
-    xprintf("  Neural network %s.\n", (nnStatus < 0) ? "disabled" : "enabled");
+    if (nnInitAfterCapture) {
+    	xprintf("  Neural network starts after the capture.\n");
+    }
+    else {
+    	xprintf("  Neural network %s.\n", (nnStatus < 0) ? "disabled" : "enabled");
+    }
     xprintf("  Flash LED(s) in use: %d\n", fatfs_getOperationalParameter(OP_PARAMETER_FLASH_LED));
     xprintf("  Flash brightness: %d%%\n", (uint8_t) fatfs_getOperationalParameter(OP_PARAMETER_LED_BRIGHTNESS_PERCENT));
     xprintf("  Flash is currently %s.\n", ledFlashIsActive() ? "armed" : "not armed");
@@ -1874,7 +2237,8 @@ static void vImageTask(void *pvParameters) {
     			event_string = imageTaskEventString[event - APP_MSG_IMAGETASK_FIRST];
     		}
     		else   {
-    			event_string = "Unrecognised";
+    			// A datapath event, or "Unrecognised"
+    			event_string = dpEventString(event);
     		}
 
     		XP_LT_CYAN
@@ -2013,12 +2377,20 @@ static bool configure_image_sensor(CAMERA_CONFIG_E operation) {
         }
         else  {
 #ifdef USE_HM0360
-        	// cisdp_sensor_init() has just reloaded the HM0360's register table, so re-apply op 17. HM0360 build only:
-        	// in the RP builds this is the RP camera's init, and image_sleepNow() applies op 17 to the HM0360 (#211)
-        	hm0360_md_setSensitivity(fatfs_getOperationalParameter(OP_PARAMETER_MD_SENSITIVITY));
+        	// cisdp_sensor_init() has just reloaded the HM0360's register table, so re-apply op 17 and op 33. HM0360
+        	// build only: in the RP builds this is the RP camera's init, and image_sleepNow() applies them to the
+        	// HM0360 (#211)
+        	hm0360_md_applyMDSettings();
 #endif // USE_HM0360
-        	// Initialise extra registers from file
-        	cis_file_process(CAMERA_EXTRA_FILE);
+        	// Initialise extra registers: from the file once the card is ready, otherwise (card not
+        	// ready yet, or none) from the staged table filled from the fast-start record. FatFS is
+        	// not re-entrant: until it is ready the FatFS task may be using the card
+        	if (fatfs_isSdReady() && fatfs_mounted()) {
+        		cis_file_process(CAMERA_EXTRA_FILE);
+        	}
+        	else {
+        		cis_file_applyStaged();
+        	}
 
 #if defined(USE_RP2) || defined(USE_RP3)
         	// Sensor registers just reverted to the tables (+ staged file):
@@ -2050,7 +2422,7 @@ static bool configure_image_sensor(CAMERA_CONFIG_E operation) {
         else  {
 #ifdef USE_HM0360
         	// Only reached in the HM0360 build (see above)
-        	hm0360_md_setSensitivity(fatfs_getOperationalParameter(OP_PARAMETER_MD_SENSITIVITY));
+        	hm0360_md_applyMDSettings();
 #endif // USE_HM0360
         	// if wdma variable is zero when not init yet, then this step is a must be to retrieve wdma address
             //  Datapath events give callbacks to os_app_dplib_cb() in dp_task
@@ -2185,8 +2557,11 @@ static void setupLEDFlash(void) {
 }
 
 /**
- * Send an unsolicited message to the MKL62BA.
+ * Send an unsolicited message to the BLE processor.
  *
+ * The string is copied, so the caller can reuse its buffer as soon as this returns.
+ *
+ * @param str the null-terminated message (at most MSGTOMASTERLEN - 1 characters are sent)
  */
 void sendMsgToMaster(char *str) {
     APP_MSG_T send_msg;
@@ -2199,9 +2574,13 @@ void sendMsgToMaster(char *str) {
 		return;
 	}
 
-    // Send back to MKL62BA - msg_data is the string
-    send_msg.msg_data = (uint32_t)str;
-    send_msg.msg_parameter = strnlen(str, MSGTOMASTERLEN);
+    // Copy it: see msgToMasterTx
+    strncpy(msgToMasterTx, str, MSGTOMASTERLEN - 1);
+    msgToMasterTx[MSGTOMASTERLEN - 1] = '\0';
+
+    // Send back to the BLE processor - msg_data is the string
+    send_msg.msg_data = (uint32_t)msgToMasterTx;
+    send_msg.msg_parameter = strlen(msgToMasterTx);
     send_msg.msg_event = APP_MSG_IFTASK_MSG_TO_MASTER;
 
     if (xQueueSend(xIfTaskQueue, (void *)&send_msg, __QueueSendTicksToWait) != pdTRUE) {
@@ -2212,12 +2591,80 @@ void sendMsgToMaster(char *str) {
 /**
  * When final activity from the FatFS Task and IF Task are complete, enter DPD
  *
- * A message has also been sent to the If Tasks asking it to send its final message.
- * When complete it will give its semaphore.
+ * Asks the IF task to send its final "Sleep" message. When the BLE processor has read it, the IF task
+ * reports to shutdownBarrier too, and image_sleepNow() enters DPD.
  */
 static void sleepWhenPossible(void) {
+	APP_MSG_T send_msg;
+
 	xprintf("Image task ready to sleep.\n");
+
+	// From now on the inactivity detector tells the IF task too (app_onInactivityDetection()). This first
+	// request is ours: the IF task sends "Sleep", which is now the last thing before DPD (#296)
+	readyToSleep = true;
+	send_msg.msg_event = APP_MSG_IFTASK_INACTIVITY;
+	send_msg.msg_data = 0;
+	send_msg.msg_parameter = 0;
+	if (xQueueSend(xIfTaskQueue, (void *)&send_msg, __QueueSendTicksToWait) != pdTRUE) {
+		xprintf("send_msg=0x%x fail\r\n", send_msg.msg_event);
+	}
+
 	barrier_ready(&shutdownBarrier);
+}
+
+/**
+ * The RTC write and the RTC calibration, done before the IF task sends "Sleep" (#296)
+ *
+ * Both are slow: the RTC write blocks interrupts for about 1.9 s, and a calibration keeps the core busy for
+ * 2 to 3 s. Until 25 Nov 2026 they were done after "Sleep", in image_sleepNow(), and the BLE processor, which
+ * treats "Sleep" as "in DPD", sent a WAKE pulse for any command in that time. The pulse was ignored and the
+ * command lost. Now a command in that time reaches an awake processor over I2C and is answered when the work
+ * ends (benched 25 Nov 2026: a command during either step was received intact).
+ *
+ * The RTC write comes first, so the calibration records its time in the corrected RTC time. The other way round,
+ * moving the RTC (from 2024 after a cold boot, or back by the drift) made the next calibration due at once.
+ *
+ * Called with the camera stopped, the NN not running (this task runs it) and the state saved. The watchdog is
+ * stopped for the RTC write, which blocks its feed, and restarted after, in case a command keeps us awake.
+ */
+static void rtcWorkBeforeSleep(void) {
+	watchdog_suspend();
+
+	// The RTC is only written from setutc here, before sleep, and only when far out (#56)
+	exif_utc_before_sleep();
+
+	// The RTC calibration (#245): measured if due, and the correction loaded for the alarm. Needs the NN stopped
+	// (the board record is in the flash, which switches XIP off)
+	rtc_cal_beforeSleep(woken == APP_WAKE_REASON_COLD);
+
+	watchdog_resume();
+}
+
+/**
+ * Before sleeping: wait for the card's start-up to finish, then ask the FatFS task to save state
+ *
+ * The camera can now finish before the FatFS task has finished with the card (a frame fault
+ * early in the wake, for example). Going to sleep part way through mounting it, or without
+ * saving state, would lose the counters and settings.
+ *
+ * Sent with or without a card: the FatFS task saves the counters and CONFIG.TXT to the card if
+ * there is one, and the fast-start record to flash either way, so settings changed with no card
+ * (setop, BLE) survive the sleep. It replies APP_MSG_IMAGETASK_DISK_WRITE_COMPLETE, and
+ * handleEventForSaveState() then sleeps.
+ *
+ * @return the message for the FatFS task
+ */
+static APP_MSG_DEST_T saveStateBeforeSleep(void) {
+	APP_MSG_DEST_T msg;
+
+	goingToSleep = true;
+	fatfs_waitForSdReady();
+
+	msg.destination = xFatTaskQueue;
+	msg.message.msg_event = APP_MSG_FATFSTASK_SAVE_STATE;
+	msg.message.msg_data = 0;
+	image_task_state = APP_IMAGE_TASK_STATE_SAVE_STATE;
+	return msg;
 }
 
 /**
@@ -2239,7 +2686,10 @@ static void prepareJpegFile(int8_t * outCategories, uint8_t classCount, fileBuff
 	uint32_t exifLength = 0;
 	uint32_t jpegBuffer;
 	uint32_t jpegLength;
-	static char softwareString[64];	// string for EXIF software version
+	rtc_time photoTime;
+
+	// The photo's time: only the first photo of a wake can wait here, for setutc or the RTC's first tick (#56)
+	exif_utc_wait_for_reference(PHOTO_SETUTC_WAIT_MS, !ifTask_isBleUnresponsive());
 
 	// Take semaphore FIRST before modifying jpeg_exif_buf
 	// This prevents jpeg_exif_buf from being overwritten before previous write completes
@@ -2259,138 +2709,16 @@ static void prepareJpegFile(int8_t * outCategories, uint8_t classCount, fileBuff
 	extraBlock->buffer = ((uint8_t *)jpegBuffer) + 2;
 	extraBlock->length = jpegLength - 2;
 
-	/* Assemble ExifInput_t from local state, then call exif_build_segment(). */
-	ExifInput_t exif_input;
-	static uint8_t nnData[MAX_CLASSES + 2];
-	char deployment_id[UUIDLENGTH];
-
-	exif_input.width  = (uint16_t)app_get_raw_width();
-	exif_input.height = (uint16_t)app_get_raw_height();
-	exif_utc_get_rtc_as_exif_string(exif_input.timestamp, sizeof(exif_input.timestamp));
-
-	/* Camera identity, build provenance and flash state. The Model string names
-	 * the camera variant so a photo is self-describing (colour RP3 vs mono/IR
-	 * HM0360) - the website maps this to its camera_variant. Software matches
-	 * the firmware version recorded in the firmware database. */
-#if defined(USE_RP3)
-	// Test the RP cameras first: their builds define USE_HM0360_MD as well, for motion detection. Testing that first
-	// labelled every RP3 photo "WW500 HM0360" (issue #153, fixed 2 Oct 2026)
-	exif_input.camera_model = "WW500 RP3";
-#elif defined(USE_RP2)
-	exif_input.camera_model = "WW500 RP2";
-#elif defined(USE_HM0360)
-	exif_input.camera_model = "WW500 HM0360";
+	// The EXIF: what the photo says (exif_photo.c). The date tags are left out if the photo time is not
+	// plausible (#295). lastCaptureFlashState, not ledFlashIsActive(): see its declaration
+	exif_utc_get_time_at_tick(g_frame_ready_tick, &photoTime);
+	exifLength = exif_photo_build((uint16_t)app_get_raw_width(), (uint16_t)app_get_raw_height(), &photoTime,
+			lastCaptureFlashState, outCategories, classCount,
+#if defined(USE_HM0360) || defined(USE_HM0360_MD)
+			&gain);
 #else
-	exif_input.camera_model = NULL;	/* exif_builder falls back to "WW500" */
+			NULL);
 #endif
-
-	snprintf(softwareString, sizeof(softwareString), "%s %s",
-	         app_get_board_name_string(), app_get_version_string());
-
-	exif_input.software = softwareString;
-
-	// Save info about which LED was used to illuminate the current image: none, visible or IR.
-	// lastCaptureFlashState, not a live ledFlashIsActive() call: by the time
-	// prepareJpegFile() runs, the post-capture light check (if it ran for this
-	// frame) has already updated ledFlashIsActive() with the decision for the
-	// NEXT capture - reading it live here would attach the wrong image's flash
-	// state to this one's EXIF. See lastCaptureFlashState's declaration.
-	exif_input.flash_fired = lastCaptureFlashState;
-
-	/* NN data: [total_bytes][count][score...] */
-	if (classCount > MAX_CLASSES) {
-		nnData[0] = 1;
-		nnData[1] = 0;
-	} else {
-		nnData[0] = classCount + 1u;
-		nnData[1] = classCount;
-		for (uint8_t i = 0; i < classCount; i++) {
-			nnData[i + 2] = (uint8_t)outCategories[i];
-		}
-	}
-	exif_input.nn_data = nnData;
-
-	/* UserComment — NN label summary */
-#ifdef ENABLE_EXIF_CONFIDENCE
-	static ClassConfidenceData confidence_data;
-	static char user_comment[EXIF_COMMENT_LENGTH];
-	bool has_confidence_data;
-	memset(&confidence_data, 0, sizeof(confidence_data));
-	memset(user_comment, 0, sizeof(user_comment));
-	cv_get_confidence_data(&confidence_data);
-	has_confidence_data = ((confidence_data.class_count > 0) &&
-	                       (confidence_data.class_count <= MAX_CLASSES));
-	if (has_confidence_data) {
-		char *uc_ptr   = user_comment;
-		int   uc_rem   = sizeof(user_comment) - 1;
-		for (uint8_t i = 0; i < confidence_data.class_count && i < EXIF_MAX_DYNAMIC_CLASSES; i++) {
-			const char *label = confidence_data.labels[i] ? confidence_data.labels[i] : "Unknown";
-			int written = snprintf(uc_ptr, uc_rem, "%s: %d%%; ", label,
-			                       confidence_data.confidence_percent[i]);
-			if (written > 0 && written < uc_rem) {
-				uc_ptr += written;
-				uc_rem -= written;
-			} else {
-				break;
-			}
-		}
-	}
-	exif_input.user_comment = (has_confidence_data && user_comment[0] != '\0') ? user_comment : NULL;
-#else
-	static char user_comment[EXIF_COMMENT_LENGTH];
-	user_comment[0] = '\0';
-	if (cv_modelLoaded()) {
-		size_t uc_offset = 0;
-		for (uint8_t i = 0; i < classCount; i++) {
-			int written = snprintf(user_comment + uc_offset,
-			                       EXIF_COMMENT_LENGTH - uc_offset,
-			                       "%s: %d; ", cv_getLabel(i), outCategories[i]);
-			if (written < 0) {
-				break;
-			}
-			if ((size_t)written >= EXIF_COMMENT_LENGTH - uc_offset) {
-				uc_offset = EXIF_COMMENT_LENGTH - 1u;
-				break;
-			}
-			uc_offset += (size_t)written;
-		}
-	}
-	exif_input.user_comment = (user_comment[0] != '\0') ? user_comment : NULL;
-#endif /* ENABLE_EXIF_CONFIDENCE */
-
-	/* MakerNote — capture-settings CSV (formatted here; exif_builder.c has no HM0360 types).
-	 * Fields: integration, analogGain, digitalGain, aeMean, aeConverged,
-	 *         wbRedGain, wbBlueGain, flashFired
-	 * The last three are appended (backward-compatible): the WB gains (Q8.8,
-	 * 0 = correction off) that produced this image, and whether the flash/IR
-	 * illumination fired - so field A/B tuning can be traced from the photo. */
-#ifdef EXIF_MAKER_NOTES
-#define MAKERDATALEN 64
-	char maker_note[MAKERDATALEN];
-#if defined(USE_RP2) || defined(USE_RP3)
-	uint16_t wbRedNote  = (uint16_t)fatfs_getOperationalParameter(OP_PARAMETER_WB_RED_GAIN);
-	uint16_t wbBlueNote = (uint16_t)fatfs_getOperationalParameter(OP_PARAMETER_WB_BLUE_GAIN);
-#else
-	uint16_t wbRedNote  = 0u;	/* no software WB on the mono/IR camera */
-	uint16_t wbBlueNote = 0u;
-#endif
-
-	snprintf(maker_note, sizeof(maker_note), "%d, %d, %d, %d, %c, %u, %u, %u",
-	         gain.integration, gain.analogGain, gain.digitalGain, gain.aeMean,
-	         (gain.aeConverged == 1) ? 'Y' : 'N',
-	         wbRedNote, wbBlueNote, (unsigned)exif_input.flash_fired);
-	exif_input.maker_note = maker_note;
-#else
-	exif_input.maker_note = NULL;
-#endif /* EXIF_MAKER_NOTES */
-
-	/* Deployment ID */
-	fatfs_getDeploymentId(deployment_id, sizeof(deployment_id));
-	exif_input.deployment_id =
-		(strcmp(deployment_id, DEPLOYMENT_ID_ZERO_UUID) != 0) ? deployment_id : NULL;
-
-	/* Sector-alignment COM padding is applied inside exif_build_segment(). */
-	exifLength = exif_build_segment(&exif_input);
 
 	fileOp.buffer = (uint8_t *)exif_get_buffer();
 	fileOp.length = exifLength;
@@ -2413,7 +2741,8 @@ static void prepareJpegFile(int8_t * outCategories, uint8_t classCount, fileBuff
 	XP_WHITE;
 #endif
 
-	dir_mgr_generateImageFilename(g_imageFileName, IMAGEFILENAMELEN, "JPG");
+	// Named from the same time as the EXIF, not the RTC, which may be far out until it is written at sleep
+	dir_mgr_generateImageFilename(g_imageFileName, IMAGEFILENAMELEN, "JPG", exif_utc_time_to_seconds(&photoTime));
 
 	fileOp.fileName = g_imageFileName;	// a global
 	fileOp.senderQueue = xImageTaskQueue;
@@ -2423,8 +2752,8 @@ static void prepareJpegFile(int8_t * outCategories, uint8_t classCount, fileBuff
 	dbg_printf(DBG_LESS_INFO, "Writing %d bytes (%d + %d) to '%s' from jpeg buffer of %d bytes\n",
 			(jpegLength + exifLength), jpegLength, exifLength, fileOp.fileName, JPEG_BUFSIZE);
 
-	// Save the file name as the most recent image
-	snprintf(lastImageFileName, IMAGEFILENAMELEN, "%s", fileOp.fileName);
+	// lastImageFileName is set when the write has completed (handleEventForNNProcessing()): the FatFS task
+	// may change the name if it is taken (#295)
 }
 
 #ifdef INVESTIGATE_BMP
@@ -2484,7 +2813,10 @@ static void prepareBmpFile(fileBufferInfo_t * extraBlock) {
 	XP_WHITE;
 #endif
 
-	dir_mgr_generateImageFilename(g_imageFileName, IMAGEFILENAMELEN, "BMP");
+	rtc_time bmpTime;
+
+	exif_utc_get_time(&bmpTime);
+	dir_mgr_generateImageFilename(g_imageFileName, IMAGEFILENAMELEN, "BMP", exif_utc_time_to_seconds(&bmpTime));
 
 	fileOp.fileName = g_imageFileName;	// a global
 	fileOp.senderQueue = xImageTaskQueue;
@@ -2492,9 +2824,6 @@ static void prepareBmpFile(fileBufferInfo_t * extraBlock) {
 
 	dbg_printf(DBG_LESS_INFO, "Writing %d bytes (%d + %d) to '%s'\n",
 			(headerLength + bitMapLength), headerLength, bitMapLength, fileOp.fileName);
-
-	// Save the file name as the most recent image
-	snprintf(lastImageFileName, IMAGEFILENAMELEN, "%s", fileOp.fileName);
 }
 
 
@@ -2567,32 +2896,77 @@ uint32_t bmp_create_gray8_header(uint8_t *buf,  uint32_t width, uint32_t height)
 #endif // INVESTIGATE_BMP
 
 /**
+ * Start the neural network for this wake
+ *
+ * Usually the model is in flash. If not, cv_init() looks for it on the card, so this waits for the card
+ * first. Called during the image task's start-up, or on a timer or motion wake just after the capture
+ * starts (nnInitAfterCapture).
+ *
+ * @return 0 if the NN is ready, -1 if it is not used (no model, or project ID 0)
+ */
+static int initNN(void) {
+	TickType_t nnStartTime = xTaskGetTickCount();
+	int nnStatus;
+
+	if (cv_modelNeedsCard(fatfs_getOperationalParameter(OP_PARAMETER_MODEL_PROJECT),
+			fatfs_getOperationalParameter(OP_PARAMETER_MODEL_VERSION))) {
+		fatfs_waitForSdReady();
+	}
+	nnStatus = cv_init(true, true,
+			fatfs_getOperationalParameter(OP_PARAMETER_MODEL_PROJECT),
+			fatfs_getOperationalParameter(OP_PARAMETER_MODEL_VERSION),
+			woken);
+
+	if (nnStatus < 0) {
+		xprintf("No model found.\n");
+		// TODO - do we do this?
+		//selfTest_setErrorBits(1 << SELF_TEST_AI_NN_ERROR);
+	}
+	else {
+		xprintf("Initialised neural network.\n");
+	}
+
+	xprintf("NN Initialisation took %dms\n\n", app_getElapsedMs(nnStartTime));
+
+	return nnStatus;
+}
+
+/**
  * Do something with the NN output
  *
- * TODO should this be in cvapp.cpp?
- * TODO this is suitable for person detection only - revisit!
+ * A detection is when the model is at least op 16 % sure of class 1, the target (issue #270). Op 16 is
+ * a percentage, 0-100, with the same meaning for every model: cvapp.cpp turns the outputs into
+ * probabilities (softmax for logit models, only dequantized for models that end in softmax). The
+ * percentage compared is the whole number printed and written to the EXIF UserComment.
  *
- * @param outCategories - array of logit values
- * @param classCount - number of classes
+ * The result is reported at once. Adding it to the counters waits for the card (countNNResult()).
+ *
+ * TODO should this be in cvapp.cpp?
+ *
+ * @param outCategories - array of int8 outputs, one per class (class 0 = no target, class 1 = target)
+ * @param classCount - number of classes. Fewer than 2 is never a detection
  */
 static void processNNOutput(int8_t * outCategories, uint8_t classCount) {
-	uint8_t threshold;
+	uint16_t threshold;
+	uint8_t targetPercent;
 
+	// The threshold is in the fast-start record, so the card is not needed here
 	threshold = fatfs_getOperationalParameter(OP_PARAMETER_MODEL_THRESHOLD);
 
-	fatfs_incrementOperationalParameter(OP_PARAMETER_NUM_NN_ANALYSES);
+	// The same whole-number percentage that is printed and written to the EXIF UserComment
+	targetPercent = cv_getTargetPercent();
+
+	nnResultToCount = true;
+	nnResultPositive = (classCount >= 2) && (targetPercent >= threshold);
 
 	for (uint8_t i=0; i < classCount; i++) {
 		xprintf("Class %d '%s' = logit %d\n", i, cv_getLabel(i), outCategories[i]);
 	}
 
-	// TODO This only works for the person detection
-	if (outCategories[1] > threshold)  {
+	if (nnResultPositive)  {
 		XP_LT_GREEN;
 		xprintf("TARGET OBJECT DETECTED!\n");
-
-		fatfs_incrementOperationalParameter(OP_PARAMETER_NUM_POSITIVE_NN_ANALYSES);
-
+		XP_WHITE;	// before sendMsgToMaster(), which can let other tasks print
 		// Send a message to the BLE processor so it can inform the user on the app immediately.
 		// Also can be used to flash an LED.
 		snprintf(msgToMaster, MSGTOMASTERLEN, "NN+");
@@ -2609,7 +2983,31 @@ static void processNNOutput(int8_t * outCategories, uint8_t classCount) {
 	}
 
 	XP_WHITE;
-	xprintf("Score %d/128 (Threshold %d)\n", outCategories[1], threshold);
+	if (classCount >= 2) {
+		xprintf("Target '%s' %d%% (threshold %d%%)\n", cv_getLabel(1), targetPercent, threshold);
+	}
+	else {
+		xprintf("Model has %d class: no target class (threshold %d%%)\n", classCount, threshold);
+	}
+}
+
+/**
+ * Add the last NN result to the counters (ops 1 and 2)
+ *
+ * Call only once the card is ready (fatfs_waitForSdReady()): the counters are loaded from CONFIG.TXT,
+ * and loading it after counting would undo the count. Does nothing if there is no result to count.
+ */
+static void countNNResult(void) {
+	if (!nnResultToCount) {
+		return;
+	}
+	nnResultToCount = false;
+
+	fatfs_incrementOperationalParameter(OP_PARAMETER_NUM_NN_ANALYSES);
+
+	if (nnResultPositive) {
+		fatfs_incrementOperationalParameter(OP_PARAMETER_NUM_POSITIVE_NN_ANALYSES);
+	}
 }
 
 /********************************** Public Functions  *************************************/
@@ -2658,6 +3056,17 @@ TaskHandle_t image_createTask(int8_t priority, APP_WAKE_REASON_E wakeReason) {
         configASSERT(0); // TODO add debug messages?
     }
 
+    frameTimer = xTimerCreate("FrameTimer",
+                                pdMS_TO_TICKS(FRAME_TIMEOUT_MARGIN_MS), // initial dummy period
+                                pdFALSE,             // one-shot timer
+                                NULL,                // timer ID (optional)
+                                frame_timer_callback);
+
+    if (frameTimer == NULL) {
+        xprintf("Failed to create frameTimer\n");
+        configASSERT(0);
+    }
+
     if (xTaskCreate(vImageTask, /*(const char *)*/ "IMAGE",
                     3 * configMINIMAL_STACK_SIZE,
                     NULL, priority,
@@ -2701,6 +3110,26 @@ const char *image_getLastImageFile(void)
 //}
 
 /**
+ * Changes the interval of the capture burst in progress, from its next frame.
+ *
+ * Called from the CLI task ('interval' command); the image task applies the value at its next
+ * frame-ready, so the sensor is only ever accessed from the image task. A later 'capture'
+ * command sets its own interval as usual.
+ *
+ * @param interval - the new interval in ms (checked by the caller)
+ * @return true if a burst is in progress, so the interval will change; false if not
+ */
+bool image_setCaptureInterval(uint32_t interval) {
+	bool burstRunning = (g_captures_to_take > 0) && (g_cur_jpegenc_frame < g_captures_to_take);
+
+	if (burstRunning) {
+		pendingTimerPeriod = interval;
+	}
+
+	return burstRunning;
+}
+
+/**
  * Returns whether the camera system is enabled.
  *
  * This is the "getter".
@@ -2715,6 +3144,29 @@ bool image_getEnabled(void) {
     else {
         return true;
     }
+}
+
+/**
+ * Returns whether this task is preparing to sleep: saving state, doing the RTC work, or waiting for DPD.
+ *
+ * It does not capture again before DPD, so a capture asked for now is refused (CLI-commands.c).
+ *
+ * @return true from the start of the save state before sleep
+ */
+bool image_isGoingToSleep(void) {
+	return goingToSleep;
+}
+
+/**
+ * Returns whether this task has finished its work before sleep, so the IF task may send "Sleep".
+ *
+ * Until then the inactivity detector tells only this task (app_onInactivityDetection()), so "Sleep" is not sent
+ * before the RTC work (#296).
+ *
+ * @return true once the RTC work before sleep is done
+ */
+bool image_isReadyToSleep(void) {
+	return readyToSleep;
 }
 
 /**
@@ -2735,6 +3187,10 @@ void image_sleepNow(void) {
 	uint32_t aeCheckDelay = 0;	// seconds
     uint16_t mdInterval;
 
+    // We are about to enter DPD (or reset, which uses the hardware watchdog itself - see below).
+    // DPD stops the watchdog anyway (tested 13 Oct 2026), but stop it and its feed timer here to be sure.
+    watchdog_stop();
+
     // This wake is over - the next one starts fresh
     aeCheckOnlyWake = false;
 
@@ -2746,11 +3202,11 @@ void image_sleepNow(void) {
 #if defined(USE_HM0360) || defined(USE_HM0360_MD)
     // HM0360 as main camera
     if (hm0360_md_isHM0360Present()) {
-    	// Apply the MD sensitivity (op 17) now, not only at boot (configure_image_sensor()), so that a change made
-    	// while awake (setop 17, AI setop over BLE) takes effect for this DPD rather than after the next wake, and so
-    	// matches the message hm0360_md_prepare() prints (28 Sep 2026). In every build, including the RP builds where
-    	// the HM0360 is only the motion detector: before 2 Oct 2026 op 17 had no effect there (issue #211)
-    	hm0360_md_setSensitivity(fatfs_getOperationalParameter(OP_PARAMETER_MD_SENSITIVITY));
+    	// Apply the MD sensitivity (op 17) and wake threshold (op 33) now, not only at boot
+    	// (configure_image_sensor()), so the values this DPD uses are those hm0360_md_prepare() prints (28 Sep 2026).
+    	// In every build, including the RP builds where the HM0360 is only the motion detector: before 2 Oct 2026
+    	// op 17 had no effect there (issue #211). Op 33 added 24 Oct 2026.
+    	hm0360_md_applyMDSettings();
     	XP_LT_GREY;
        	xprintf("Preparing HM0360 for MD:");
     	hm0360_md_prepare(cameraSystemEnabled, mdInterval); // select CONTEXT_B registers (if enabled)
@@ -2779,16 +3235,9 @@ void image_sleepNow(void) {
     }
 #endif // USE_HM0360
 
-    // TODO - We could retry if we had a timeout?
-    if (g_wdt_event) {
-    	XP_YELLOW;
-    	xprintf(">>> RETRY due to WDT event\n\a");
-    	XP_WHITE;
-    	timelapseDelay = 1;	// 1 second delay
-    }
-    else {
-    	timelapseDelay = fatfs_getOperationalParameter(OP_PARAMETER_TIMELAPSE_INTERVAL);
-    }
+    timelapseDelay = fatfs_getOperationalParameter(OP_PARAMETER_TIMELAPSE_INTERVAL);
+
+    // The RTC write and calibration were done before "Sleep" was sent: see rtcWorkBeforeSleep() (#296)
 
 	// CLI command might have requested this after firmware update
 	if (app_getResetRequest()) {

@@ -186,7 +186,8 @@ typedef enum {
 	APP_MSG_IFTASK_INACTIVITY					=0x070e,
 	APP_MSG_IFTASK_AWAKE						=0x070f,
 	APP_MSG_IFTASK_FREERTOS_INIT				=0x0710,
-	APP_MSG_IFTASK_LAST							=0x0711,
+	APP_MSG_IFTASK_SELFTEST_FINAL				=0x0711,	// send the final 'selfTest' after a provisional one (#290)
+	APP_MSG_IFTASK_LAST							=0x0712,
 
 	// Messages directed to CLI Task
 	APP_MSG_CLITASK_FIRST						=0x0800,
@@ -207,7 +208,8 @@ typedef enum {
 	APP_MSG_FATFSTASK_APPEND_FILE				=0x0906,	// append a chunk to the open file
 	APP_MSG_FATFSTASK_CLOSE_FILE				=0x0907,	// close the file after all chunks written
 	APP_MSG_FATFSTASK_SAVE_CONFIG				=0x0908,	// persist op params to CONFIG.TXT now, without unmounting (e.g. after setop / BLE change)
-	APP_MSG_FATFSTASK_LAST		 				=0x0909,
+	APP_MSG_FATFSTASK_GET_SD_USED				=0x0909,	// work out the % of the SD card used, for fatfs_getSdUsedPercent() ('sdused')
+	APP_MSG_FATFSTASK_LAST		 				=0x090a,
 
 	// Messages directed to image task
 	// IMPORTANT! Values must have a matching string in imageTaskEventString[] in image_task.c
@@ -227,7 +229,8 @@ typedef enum {
 	APP_MSG_IMAGETASK_NN_MODEL_ERASED      		=0x0A0C, //
 	APP_MSG_IMAGETASK_FLASH_OFF      			=0x0A0D, // Timer asks to turn off the flash LED
 	APP_MSG_IMAGETASK_ERROR 					=0x0A0E, //
-	APP_MSG_IMAGETASK_LAST 						=0x0A0F,
+	APP_MSG_IMAGETASK_FRAME_TIMEOUT				=0x0A0F, // frame timer callback: no frame and no datapath event
+	APP_MSG_IMAGETASK_LAST 						=0x0A10,
 
 } APP_MSG_EVENT_E;
 

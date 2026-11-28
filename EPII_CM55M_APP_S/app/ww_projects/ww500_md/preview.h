@@ -20,6 +20,8 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#include "hm0360_md.h"	// HM0360_MD_STATUS_T
+
 /*********************************************** Global Defines **********************************************/
 
 
@@ -63,6 +65,41 @@ bool preview_isActive(void);
  * @return true if the SD card save should be skipped.
  */
 bool preview_skipsFileSave(void);
+
+/**
+ * @brief True while a frame line is being written to the console UART.
+ *
+ * A print from another task during this time lands inside the frame line and
+ * corrupts it, so tasks with chatty console output (e.g. the IF task) check
+ * this and stay quiet.
+ *
+ * @return true if preview_sendFrame() is writing a frame.
+ */
+bool preview_isSending(void);
+
+/**
+ * @brief Record the HM0360 motion detection bits for the next frame.
+ *
+ * The image task reads the 32 ROI_OUT registers once per capture; passing
+ * them here adds them to that frame's line as "md" (64 hex characters), so
+ * the viewer can draw them over the image. Ignored unless preview is on.
+ *
+ * @param roiOut the ROI_OUT register values, ROI_OUT_0 first.
+ * @param length number of bytes in roiOut (must be 32).
+ */
+void preview_setMdBits(const uint8_t *roiOut, uint8_t length);
+
+/**
+ * @brief Record the HM0360 MD interrupt status for the next frame.
+ *
+ * Read at the start of the frame handling, before the image task clears the
+ * HM0360 interrupt bits, and sent with that frame's line as "mdstat" so the
+ * viewer can compare the MD interrupt with the motion cell count. Ignored
+ * unless preview is on.
+ *
+ * @param status the registers read by hm0360_md_getMDStatus().
+ */
+void preview_setMdStatus(const HM0360_MD_STATUS_T *status);
 
 /**
  * @brief Emit the JPEG of the capture just completed as one JSON line on the

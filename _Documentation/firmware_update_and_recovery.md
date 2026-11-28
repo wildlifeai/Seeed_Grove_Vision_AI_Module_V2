@@ -14,7 +14,7 @@ architecture and flash layout: [slot_selector.md](../EPII_CM55M_APP_S/app/ww_pro
 
 Website-generated images are named `VYMDDHMM.IMG` (V = `R`/`H` variant letter,
 rest = build time) and ship in the Setup Folder's MANIFEST directory — see
-[MANIFEST/README.TXT](../EPII_CM55M_APP_S/app/ww_projects/ww500_md/MANIFEST/README.TXT).
+[MANIFEST/README.md](../EPII_CM55M_APP_S/app/ww_projects/ww500_md/MANIFEST/README.md).
 
 ## Update paths
 

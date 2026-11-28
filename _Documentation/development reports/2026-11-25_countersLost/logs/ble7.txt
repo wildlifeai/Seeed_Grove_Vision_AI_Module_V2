@@ -1,0 +1,3676 @@
+[2026-11-26 08:17:50.857] 
+[2026-11-26 08:17:50.857] <info> app: BLE Timeout: disconnecting
+[2026-11-26 08:17:51.078] 
+[2026-11-26 08:17:51.078] <info> app: Disconnected. Conn_handle: 0x0, reason: 0x16
+[2026-11-26 08:17:51.094] 
+[2026-11-26 08:17:51.094] <info> app:   local
+[2026-11-26 08:17:53.708] 
+[2026-11-26 08:17:53.708] <info> app: Advertising Fast.
+[2026-11-26 08:17:53.718] 
+[2026-11-26 08:17:53.718] <info> app: Starting advertising
+[2026-11-26 08:17:54.861] 
+[2026-11-26 08:17:54.861] <debug> nrf_ble_gatt: Requesting to update ATT MTU to 247 bytes on connection 0x0.
+[2026-11-26 08:17:54.863] 
+[2026-11-26 08:17:54.863] <debug> nrf_ble_gatt: Updating data length to 251 on connection 0x0.
+[2026-11-26 08:17:54.876] 
+[2026-11-26 08:17:54.876] <info> app: Connected
+[2026-11-26 08:17:54.876] 
+[2026-11-26 08:17:54.876] <info> app: Requesting DLE to 251 bytes
+[2026-11-26 08:17:54.960] 
+[2026-11-26 08:17:54.960] <debug> nrf_ble_gatt: ATT MTU updated to 247 bytes on connection 0x0 (response).
+[2026-11-26 08:17:54.965] 
+[2026-11-26 08:17:54.965] <info> app: ATT MTU exchange completed. MTU set to 247 bytes.
+[2026-11-26 08:17:55.010] 
+[2026-11-26 08:17:55.010] <debug> nrf_ble_gatt: Data length updated to 27 on connection 0x0.
+[2026-11-26 08:17:55.017] 
+[2026-11-26 08:17:55.017] <debug> nrf_ble_gatt: max_rx_octets: 27
+[2026-11-26 08:17:55.021] 
+[2026-11-26 08:17:55.021] <debug> nrf_ble_gatt: max_tx_octets: 27
+[2026-11-26 08:17:55.022] 
+[2026-11-26 08:17:55.022] <debug> nrf_ble_gatt: max_rx_time: 328
+[2026-11-26 08:17:55.040] 
+[2026-11-26 08:17:55.040] <debug> nrf_ble_gatt: max_tx_time: 328
+[2026-11-26 08:17:55.040] 
+[2026-11-26 08:17:55.040] <info> app: GATT data length updated to 27 bytes.
+[2026-11-26 08:17:55.040] 
+[2026-11-26 08:17:55.040] <info> app: Data length updated: TX = 27, RX = 27
+[2026-11-26 08:17:55.646] 
+[2026-11-26 08:17:55.646] <info> app: Conn params applied: interval 6 units (7ms), timeout 5000ms
+[2026-11-26 08:17:55.793] 
+[2026-11-26 08:17:55.793] <info> app: NUS start
+[2026-11-26 08:17:55.793] 
+[2026-11-26 08:17:55.793] <info> app: Conn params applied: interval 39 units (48ms), timeout 5000ms
+[2026-11-26 08:18:01.647] 
+[2026-11-26 08:18:01.647] 
+[2026-11-26 08:18:01.647] BLE in: Received   6 bytes 'hack 6'
+[2026-11-26 08:18:01.647] 
+[2026-11-26 08:18:01.647] <error> app: ERROR 4 [NRF_ERROR_NO_MEM] at ../../../ble_commands.c:998
+[2026-11-26 08:18:01.662] 
+[2026-11-26 08:18:01.662] <error> app: PC at: 0x00027155
+[2026-11-26 08:18:01.662] 
+[2026-11-26 08:18:01.662] <error> app: >>> Resetting both processors after fault (1 in a row)
+[2026-11-26 08:18:02.036] 
+[2026-11-26 08:18:02.036] <info> app: 
+[2026-11-26 08:18:02.036] 
+[2026-11-26 08:18:02.036] **** Secure Bootloader (WW500_A00) Ver: 00.01.01 Built: 19:01:29 Oct 31 2025 ****
+[2026-11-26 08:18:02.045] 
+[2026-11-26 08:18:02.045] 
+[2026-11-26 08:18:02.045] <info> nrf_dfu_settings: Backing up settings page to address 0x7E000.
+[2026-11-26 08:18:02.045] 
+[2026-11-26 08:18:02.045] 
+[2026-11-26 08:18:02.045] <info> app: No firmware to activate.
+[2026-11-26 08:18:02.056] 
+[2026-11-26 08:18:02.056] 
+[2026-11-26 08:18:02.056] <info> nrf_dfu_settings: Backing up settings page to address 0x7E000.
+[2026-11-26 08:18:02.068] 
+[2026-11-26 08:18:03.981] 
+[2026-11-26 08:18:03.981] <info> app: 
+[2026-11-26 08:18:03.981] 
+[2026-11-26 08:18:03.981] **** Wildlife Watcher 1 (WW500-C02) Ver: 00.30.62 Built: 17:28:46 Nov 24 2026 ****
+[2026-11-26 08:18:03.998] 
+[2026-11-26 08:18:03.998] <info> app: BOARDTYPE bytes: 0x04 0x22
+[2026-11-26 08:18:03.998] 
+[2026-11-26 08:18:03.998] <info> app: GCC version: 10.3.1
+[2026-11-26 08:18:03.998] 
+[2026-11-26 08:18:03.998] <info> app: Compiler Version: ARM GNU, 10.3.1 20210824 (release)
+[2026-11-26 08:18:04.015] 
+[2026-11-26 08:18:04.015] <info> app: Git branch: '261106_lorawanPing' 0862858-dirty
+[2026-11-26 08:18:04.015] 
+[2026-11-26 08:18:04.015] 
+[2026-11-26 08:18:04.015] 
+[2026-11-26 08:18:04.015] <info> app_timer: RTC: initialized.
+[2026-11-26 08:18:04.015] 
+[2026-11-26 08:18:04.015] <info> app: Watchdog already running: period 30 s (kept)
+[2026-11-26 08:18:04.015] 
+[2026-11-26 08:18:04.015] <info> app: Watchdog early warning: 2 s before the reset
+[2026-11-26 08:18:04.025] 
+[2026-11-26 08:18:04.025] <info> app: System time set successfully
+[2026-11-26 08:18:04.027] 
+[2026-11-26 08:18:04.027] <info> app: 
+[2026-11-26 08:18:04.036] 
+[2026-11-26 08:18:04.036] Initialising LoRaWAN
+[2026-11-26 08:18:04.036] 
+[2026-11-26 08:18:04.036] <info> app: Initializing fds...
+[2026-11-26 08:18:04.036] 
+[2026-11-26 08:18:04.036] <info> app: Reading flash usage statistics...
+[2026-11-26 08:18:04.036] 
+[2026-11-26 08:18:04.036] <info> app: Found 6 valid records.
+[2026-11-26 08:18:04.053] 
+[2026-11-26 08:18:04.053] <info> app: Found 5 dirty records (ready to be garbage collected).
+[2026-11-26 08:18:04.053] 
+[2026-11-26 08:18:04.053] <debug> app: Record 7902 at 6D008
+[2026-11-26 08:18:04.053] 
+[2026-11-26 08:18:04.053] <debug> app: Record 6 at 70008
+[2026-11-26 08:18:04.053] 
+[2026-11-26 08:18:04.053] <debug> app: Record 7850 at 7002C
+[2026-11-26 08:18:04.062] 
+[2026-11-26 08:18:04.062] <debug> app: Record 7855 at 701DC
+[2026-11-26 08:18:04.062] 
+[2026-11-26 08:18:04.062] <debug> app: Record 8009 at 70338
+[2026-11-26 08:18:04.062] 
+[2026-11-26 08:18:04.062] <debug> app: Record 8010 at 70378
+[2026-11-26 08:18:04.062] 
+[2026-11-26 08:18:04.062] <info> app: >>> LoraMac version = 0x01000300
+[2026-11-26 08:18:04.062] 
+[2026-11-26 08:18:04.062] <info> app: MAC parameters reset: uplink dwell time ON
+[2026-11-26 08:18:04.078] 
+[2026-11-26 08:18:04.078] <info> app: Data restored from NVM: 1064 bytes
+[2026-11-26 08:18:04.078] 
+[2026-11-26 08:18:04.078] <info> app: LoRaWAN initialised
+[2026-11-26 08:18:04.078] 
+[2026-11-26 08:18:04.078] 
+[2026-11-26 08:18:04.078] 
+[2026-11-26 08:18:04.078] <info> app: BLE initialised for WILD-CMSS - disconnect interval 60s
+[2026-11-26 08:18:04.092] 
+[2026-11-26 08:18:04.092] 
+[2026-11-26 08:18:04.092] 
+[2026-11-26 08:18:04.092] <info> app: Max BLE packet length is 244. PDU length = 251
+[2026-11-26 08:18:04.092] 
+[2026-11-26 08:18:04.092] <info> app: Reset cause:   software reset
+[2026-11-26 08:18:04.092] 
+[2026-11-26 08:18:04.092] <info> app: AI processor reset at boot (/RST 100 ms)
+[2026-11-26 08:18:04.105] 
+[2026-11-26 08:18:04.105] <info> app: Previous run ended with a fault: error check, error 0x00000004
+[2026-11-26 08:18:04.110] 
+[2026-11-26 08:18:04.110] <info> app:   at ble_commands.c:998, PC 0x00027155, LR 0x00000000
+[2026-11-26 08:18:04.110] 
+[2026-11-26 08:18:04.110] <info> app: Reset reason code 2. Resets since power-on: 9.
+[2026-11-26 08:18:04.110] 
+[2026-11-26 08:18:04.110] <info> app: Fault resets in a row: 1. Cleared after 10 minutes without a fault.
+[2026-11-26 08:18:04.141] 
+[2026-11-26 08:18:04.141] <info> app: Board name: WILD-CMSS
+[2026-11-26 08:18:04.141] 
+[2026-11-26 08:18:04.141] <info> app: Tests Wildlife Watcher BLE and LoRaWAN communications. Uses NUS
+[2026-11-26 08:18:04.141] 
+[2026-11-26 08:18:04.141] <info> app: TODO - clean up LoRaWAN processing - esp. failures, incl. failure to join.
+[2026-11-26 08:18:04.144] 
+[2026-11-26 08:18:04.144] <info> app: TODO - check RSSI outgoing vs incoming differences
+[2026-11-26 08:18:04.157] 
+[2026-11-26 08:18:04.157] <info> app: Device Addr:   99:0A:7A:67:EF:DA
+[2026-11-26 08:18:04.157] 
+[2026-11-26 08:18:04.157] <info> app: BLE address:   D9:0A:7A:67:EF:DA
+[2026-11-26 08:18:04.173] 
+[2026-11-26 08:18:04.173] <info> app: BLE Name:      WILD-CMSS
+[2026-11-26 08:18:04.173] 
+[2026-11-26 08:18:04.173] <info> app: Target DevEui: DA:EF:67:FE:FF:7A:0A:D9
+[2026-11-26 08:18:04.173] 
+[2026-11-26 08:18:04.173] <info> app: Target AppEui: TBD
+[2026-11-26 08:18:04.173] 
+[2026-11-26 08:18:04.173] <info> app: Softdevice ver: 0x00CB
+[2026-11-26 08:18:04.173] 
+[2026-11-26 08:18:04.173] <info> app: Reset reason:  0x00000004 CPU
+[2026-11-26 08:18:04.190] 
+[2026-11-26 08:18:04.190] <info> app: Firmware version 0.30.62
+[2026-11-26 08:18:04.190] 
+[2026-11-26 08:18:04.190] 
+[2026-11-26 08:18:04.190] 
+[2026-11-26 08:18:04.190] <info> app: Temperature: 22.75C
+[2026-11-26 08:18:04.190] 
+[2026-11-26 08:18:04.190] 
+[2026-11-26 08:18:04.190] 
+[2026-11-26 08:18:04.190] <info> app: Press SW1 to start BLE advertising.
+[2026-11-26 08:18:04.206] 
+[2026-11-26 08:18:04.206] <info> app: Press SW1 at power-on to reset credentials
+[2026-11-26 08:18:04.206] 
+[2026-11-26 08:18:04.206] <info> app: Press SW1 for > 10s to start Device Firmware Upgrade (DFU)
+[2026-11-26 08:18:04.206] 
+[2026-11-26 08:18:04.206] <info> app: Press SW2 - prohibited. This signal is asserted by AI processor.
+[2026-11-26 08:18:04.223] 
+[2026-11-26 08:18:04.223] <info> app: Hold magnet close at power-on to start Device Firmware Upgrade (DFU)
+[2026-11-26 08:18:04.223] 
+[2026-11-26 08:18:04.223] <info> app: Press RESET button for a software reset.
+[2026-11-26 08:18:04.223] 
+[2026-11-26 08:18:04.223] <info> app: UART RX Pin 2 is driven
+[2026-11-26 08:18:04.228] 
+[2026-11-26 08:18:04.228] <info> app: SW1 Pin 22 is not driven
+[2026-11-26 08:18:04.228] 
+[2026-11-26 08:18:04.228] <info> app: SW2 Pin 27 is not driven
+[2026-11-26 08:18:04.228] 
+[2026-11-26 08:18:04.228] <info> app: Mag sensor Pin 25 is driven
+[2026-11-26 08:18:04.236] 
+[2026-11-26 08:18:04.236] <info> app: Current DevEui is:   DA:EF:67:FE:FF:7A:0A:D9
+[2026-11-26 08:18:04.240] 
+[2026-11-26 08:18:04.240] <info> app: Current JoinEui is:  70:B3:D5:7E:D0:03:C8:D4
+[2026-11-26 08:18:04.240] 
+[2026-11-26 08:18:04.240] <info> app: Current ShortId is:   CMSS
+[2026-11-26 08:18:04.250] 
+[2026-11-26 08:18:04.252] <info> app: InitCred DevEui is:  00:80:E1:01:01:01:01:01
+[2026-11-26 08:18:04.257] 
+[2026-11-26 08:18:04.257] <info> app: InitCred JoinEui is: 70:B3:D5:7E:D0:03:C8:00
+[2026-11-26 08:18:04.257] 
+[2026-11-26 08:18:04.257] <info> app: We have no need to fetch parameters
+[2026-11-26 08:18:04.257] 
+[2026-11-26 08:18:04.257] 
+[2026-11-26 08:18:04.268] 
+[2026-11-26 08:18:04.268] <info> app: I2C link is initialised.
+[2026-11-26 08:18:04.268] 
+[2026-11-26 08:18:04.268] <info> app: Enabled I2C (instance 1) on pins 7 and 8
+[2026-11-26 08:18:04.268] 
+[2026-11-26 08:18:04.268] <info> app: I2C buffer sizes 250 and 250
+[2026-11-26 08:18:04.284] 
+[2026-11-26 08:18:04.284] <info> app: AI processor initialised.
+[2026-11-26 08:18:04.284] 
+[2026-11-26 08:18:04.284] <info> app: 
+[2026-11-26 08:18:04.284] 
+[2026-11-26 08:18:04.284] Initialisation finished! Starting state machine.
+[2026-11-26 08:18:04.290] 
+[2026-11-26 08:18:04.290] 
+[2026-11-26 08:18:04.290] 
+[2026-11-26 08:18:04.290] <info> app: Bumping state machine with 'Initialised' (Current state: RESET)
+[2026-11-26 08:18:04.304] 
+[2026-11-26 08:18:04.304] 
+[2026-11-26 08:18:04.304] 
+[2026-11-26 08:18:04.304] <info> app:  LoRaWAN waits for op parameter 32 from the AI processor.
+[2026-11-26 08:18:04.304] 
+[2026-11-26 08:18:04.304] 
+[2026-11-26 08:18:04.304] 
+[2026-11-26 08:18:04.304] <info> app: State changed from RESET to LORAWAN WAITING
+[2026-11-26 08:18:04.304] 
+[2026-11-26 08:18:04.304] 
+[2026-11-26 08:18:04.304] 
+[2026-11-26 08:18:04.304] <info> app: AI state machine bumped with 'Initialised' (Current state: RESET)
+[2026-11-26 08:18:04.316] 
+[2026-11-26 08:18:04.316] 
+[2026-11-26 08:18:04.316] 
+[2026-11-26 08:18:04.316] <info> app: AI state changed from RESET to SLEEP
+[2026-11-26 08:18:04.316] 
+[2026-11-26 08:18:04.316] 
+[2026-11-26 08:18:05.180] 
+[2026-11-26 08:18:05.180] <info> app: !0 
+[2026-11-26 08:18:05.185] 
+[2026-11-26 08:18:05.185] <info> app: I2C RX payload 25/250 bytes. Response type is 4. CRC OK (0xBF51)
+[2026-11-26 08:18:05.195] 
+[2026-11-26 08:18:05.195] 000: 80 04 19 00 57 61 6B 65  20 32 30 32 34 2D 30 31  ....Wake 2024-01
+[2026-11-26 08:18:05.203] 
+[2026-11-26 08:18:05.203] 010: 2D 30 31 54 30 30 3A 30  30 3A 30 32 5A 00 51 FF  -01T00:00:02Z.Q.
+[2026-11-26 08:18:05.212] 
+[2026-11-26 08:18:05.212] <info> app: AI state machine bumped with 'Wake' (Current state: SLEEP)
+[2026-11-26 08:18:05.212] 
+[2026-11-26 08:18:05.212] 
+[2026-11-26 08:18:05.212] 
+[2026-11-26 08:18:05.212] <info> app: BLE and AI time differ by 1s
+[2026-11-26 08:18:05.222] 
+[2026-11-26 08:18:05.222] <info> app: AI state changed from SLEEP to WOKEN
+[2026-11-26 08:18:05.224] 
+[2026-11-26 08:18:05.224] 
+[2026-11-26 08:18:05.232] 
+[2026-11-26 08:18:05.232] BLE out: Failed to send   5 bytes: 'Wake'
+[2026-11-26 08:18:05.232] 
+[2026-11-26 08:18:05.232] <info> app: AI State machine scheduler called with event 8 'Send SelfTest'
+[2026-11-26 08:18:05.242] 
+[2026-11-26 08:18:05.242] <info> app: AI state machine bumped with 'Send SelfTest' (Current state: WOKEN)
+[2026-11-26 08:18:05.242] 
+[2026-11-26 08:18:05.242] 
+[2026-11-26 08:18:05.242] 
+[2026-11-26 08:18:05.242] <info> app: I2C link is initialised.
+[2026-11-26 08:18:05.258] 
+[2026-11-26 08:18:05.258] Sending 'selftest' to AI processor (4 ctrl bytes, 8 payload, 2 CRC)<info> app: OK
+[2026-11-26 08:18:05.271] 
+[2026-11-26 08:18:05.271] <info> app: AI state changed from WOKEN to SELFTEST
+[2026-11-26 08:18:05.271] 
+[2026-11-26 08:18:05.271] 
+[2026-11-26 08:18:05.271] 
+[2026-11-26 08:18:05.271] <info> app: I2C TX complete: 14 bytes.
+[2026-11-26 08:18:05.271] 
+[2026-11-26 08:18:05.271] <info> app: !1 
+[2026-11-26 08:18:05.284] 
+[2026-11-26 08:18:05.284] 000: 80 01 08 00 73 65 6C 66  74 65 73 74 38 A9 00 00  ....selftest8...
+[2026-11-26 08:18:05.284] 
+[2026-11-26 08:18:05.284] <info> app: I2C link is initialised.
+[2026-11-26 08:18:05.300] 
+[2026-11-26 08:18:05.300] <info> app: I2C RX payload 13/250 bytes. Response type is 4. CRC OK (0x7FB8)
+[2026-11-26 08:18:05.300] 
+[2026-11-26 08:18:05.300] 000: 80 04 0D 00 73 65 6C 66  54 65 73 74 20 30 30 30  ....selfTest 000
+[2026-11-26 08:18:05.300] 
+[2026-11-26 08:18:05.300] 010: 30 00 B8 FF FF FF FF FF  FF FF FF FF FF FF FF FF  0...............
+[2026-11-26 08:18:05.312] 
+[2026-11-26 08:18:05.312] <info> app: AI state machine bumped with 'Selftest Rx' (Current state: SELFTEST)
+[2026-11-26 08:18:05.323] 
+[2026-11-26 08:18:05.323] 
+[2026-11-26 08:18:05.323] 
+[2026-11-26 08:18:05.323] <info> app: AI self test bits = 0x0000 (all bits now 0x0020)
+[2026-11-26 08:18:05.323] 
+[2026-11-26 08:18:05.323] <info> app: Can't send UTC
+[2026-11-26 08:18:05.323] 
+[2026-11-26 08:18:05.323] <info> app: AI state changed from SELFTEST to IDLE
+[2026-11-26 08:18:05.338] 
+[2026-11-26 08:18:05.338] 
+[2026-11-26 08:18:05.338] 
+[2026-11-26 08:18:05.338] BLE out: Failed to send  20 bytes: 'Error bits = 0x0020'
+[2026-11-26 08:18:05.338] 
+[2026-11-26 08:18:05.338] <info> app: AI State machine scheduler called with event 12 'Msg to AI'
+[2026-11-26 08:18:05.351] 
+[2026-11-26 08:18:05.351] <info> app: AI state machine bumped with 'Msg to AI' (Current state: IDLE)
+[2026-11-26 08:18:05.351] 
+[2026-11-26 08:18:05.351] 
+[2026-11-26 08:18:05.354] 
+[2026-11-26 08:18:05.354] <info> app: I2C link is initialised.
+[2026-11-26 08:18:05.354] 
+[2026-11-26 08:18:05.354] Sending 'sdused' to AI processor (4 ctrl bytes, 6 payload, 2 CRC)<info> app: AI state changed from IDLE to PROCESSING
+[2026-11-26 08:18:05.367] 
+[2026-11-26 08:18:05.367] 
+[2026-11-26 08:18:05.367] 
+[2026-11-26 08:18:05.367] <info> app: I2C TX complete: 12 bytes.
+[2026-11-26 08:18:05.382] 
+[2026-11-26 08:18:05.382] <info> app: !2 
+[2026-11-26 08:18:05.382] 
+[2026-11-26 08:18:05.382] 000: 80 01 06 00 73 64 75 73  65 64 B7 16 38 A9 00 00  ....sdused..8...
+[2026-11-26 08:18:05.396] 
+[2026-11-26 08:18:05.396] <info> app: I2C link is initialised.
+[2026-11-26 08:18:05.396] 
+[2026-11-26 08:18:05.396] <info> app: I2C RX payload 8/250 bytes. Response type is 4. CRC OK (0x6503)
+[2026-11-26 08:18:05.396] 
+[2026-11-26 08:18:05.396] 000: 80 04 08 00 73 64 75 73  65 64 20 31 00 03 FF FF  ....sdused 1....
+[2026-11-26 08:18:05.405] 
+[2026-11-26 08:18:05.405] <info> app: AI state machine bumped with 'Msg from AI' (Current state: PROCESSING)
+[2026-11-26 08:18:05.418] 
+[2026-11-26 08:18:05.418] 
+[2026-11-26 08:18:05.418] 
+[2026-11-26 08:18:05.418] <info> app: AI processor replies: 'sdused 1'
+[2026-11-26 08:18:05.418] 
+[2026-11-26 08:18:05.418] <info> app: AI processor: SD card 1% used
+[2026-11-26 08:18:05.418] 
+[2026-11-26 08:18:05.418] <info> app: AI state changed from PROCESSING to IDLE
+[2026-11-26 08:18:05.431] 
+[2026-11-26 08:18:05.431] 
+[2026-11-26 08:18:09.323] 
+[2026-11-26 08:18:09.323] <info> app: Advertising Fast.
+[2026-11-26 08:18:09.327] 
+[2026-11-26 08:18:09.327] <info> app: Starting advertising
+[2026-11-26 08:18:09.437] 
+[2026-11-26 08:18:09.437] <info> app: !3 
+[2026-11-26 08:18:09.444] 
+[2026-11-26 08:18:09.444] <info> app: I2C link is initialised.
+[2026-11-26 08:18:09.444] 
+[2026-11-26 08:18:09.444] <info> app: I2C RX payload 110/250 bytes. Response type is 4. CRC OK (0x8674)
+[2026-11-26 08:18:09.456] 
+[2026-11-26 08:18:09.456] 000: 80 04 6E 00 53 6C 65 65  70 20 33 20 33 20 30 20  ..n.Sleep 3 3 0 
+[2026-11-26 08:18:09.472] 
+[2026-11-26 08:18:09.472] 010: 35 35 20 33 39 20 31 20  35 30 30 20 30 20 31 30  55 39 1 500 0 10
+[2026-11-26 08:18:09.472] 
+[2026-11-26 08:18:09.472] 020: 30 30 20 35 20 31 20 31  30 30 30 20 31 30 30 20  00 5 1 1000 100 
+[2026-11-26 08:18:09.475] 
+[2026-11-26 08:18:09.475] 030: 30 20 32 30 20 31 20 36  30 20 31 20 30 20 33 20  0 20 1 60 1 0 3 
+[2026-11-26 08:18:09.475] 
+[2026-11-26 08:18:09.475] 040: 30 20 32 20 35 20 36 35  20 31 35 20 30 20 30 20  0 2 5 65 15 0 0 
+[2026-11-26 08:18:09.488] 
+[2026-11-26 08:18:09.488] 050: 32 38 36 20 33 32 36 20  31 20 31 31 30 20 31 20  286 326 1 110 1 
+[2026-11-26 08:18:09.504] 
+[2026-11-26 08:18:09.504] 060: 31 35 20 35 20 30 20 30  20 30 20 34 30 33 35 20  15 5 0 0 0 4035 
+[2026-11-26 08:18:09.504] 
+[2026-11-26 08:18:09.504] 070: 30 20 00 74 FF FF FF FF  FF FF FF FF FF FF FF FF  0 .t............
+[2026-11-26 08:18:09.515] 
+[2026-11-26 08:18:09.515] <info> app: AI state machine bumped with 'Sleep' (Current state: IDLE)
+[2026-11-26 08:18:09.515] 
+[2026-11-26 08:18:09.515] 
+[2026-11-26 08:18:09.515] 
+[2026-11-26 08:18:09.515] <info> app: AI processor sends stats: '3 3 0 55 39 1 500 0 1000 5 1 1000 100 0 20 1 60 1 0 3 0 2 5 65 15 0 0 286 326 1 110 1 15 5 0 0 0 4035 0 '
+[2026-11-26 08:18:09.519] 
+[2026-11-26 08:18:09.519] <info> app: Op parameter 32 (LoRaWAN ping minutes) = 15
+[2026-11-26 08:18:09.533] 
+[2026-11-26 08:18:09.533] <info> app: AI state changed from IDLE to SLEEP
+[2026-11-26 08:18:09.535] 
+[2026-11-26 08:18:09.535] 
+[2026-11-26 08:18:09.535] 
+[2026-11-26 08:18:09.535] BLE out: Failed to send   6 bytes: 'Sleep'
+[2026-11-26 08:18:09.551] 
+[2026-11-26 08:18:09.551] <info> app: State machine scheduler called with event 14 'LoRaWAN Config'
+[2026-11-26 08:18:09.560] 
+[2026-11-26 08:18:09.560] <info> app: Bumping state machine with 'LoRaWAN Config' (Current state: LORAWAN WAITING)
+[2026-11-26 08:18:09.567] 
+[2026-11-26 08:18:09.567] 
+[2026-11-26 08:18:09.567] 
+[2026-11-26 08:18:09.567] <info> app:  Joining now...
+[2026-11-26 08:18:09.575] 
+[2026-11-26 08:18:09.575] 
+[2026-11-26 08:18:09.575] 
+[2026-11-26 08:18:09.575] <info> app: MAC parameters reset: uplink dwell time ON
+[2026-11-26 08:18:09.583] 
+[2026-11-26 08:18:09.583] <info> app: MLME-Request: MLME_JOIN, OK
+[2026-11-26 08:18:09.583] 
+[2026-11-26 08:18:09.583] <info> app: State changed from LORAWAN WAITING to JOINING
+[2026-11-26 08:18:09.583] 
+[2026-11-26 08:18:09.583] 
+[2026-11-26 08:18:09.922] 
+[2026-11-26 08:18:09.922] <info> app: MAC txDone
+[2026-11-26 08:18:10.452] 
+[2026-11-26 08:18:10.452] <debug> nrf_ble_gatt: Requesting to update ATT MTU to 247 bytes on connection 0x0.
+[2026-11-26 08:18:10.456] 
+[2026-11-26 08:18:10.456] <debug> nrf_ble_gatt: Updating data length to 251 on connection 0x0.
+[2026-11-26 08:18:10.469] 
+[2026-11-26 08:18:10.469] <info> app: Connected
+[2026-11-26 08:18:10.469] 
+[2026-11-26 08:18:10.469] <info> app: Requesting DLE to 251 bytes
+[2026-11-26 08:18:10.562] 
+[2026-11-26 08:18:10.562] <debug> nrf_ble_gatt: ATT MTU updated to 247 bytes on connection 0x0 (response).
+[2026-11-26 08:18:10.570] 
+[2026-11-26 08:18:10.570] <info> app: ATT MTU exchange completed. MTU set to 247 bytes.
+[2026-11-26 08:18:10.710] 
+[2026-11-26 08:18:10.710] <debug> nrf_ble_gatt: Data length updated to 27 on connection 0x0.
+[2026-11-26 08:18:10.710] 
+[2026-11-26 08:18:10.710] <debug> nrf_ble_gatt: max_rx_octets: 27
+[2026-11-26 08:18:10.710] 
+[2026-11-26 08:18:10.710] <debug> nrf_ble_gatt: max_tx_octets: 27
+[2026-11-26 08:18:10.722] 
+[2026-11-26 08:18:10.722] <debug> nrf_ble_gatt: max_rx_time: 328
+[2026-11-26 08:18:10.722] 
+[2026-11-26 08:18:10.722] <debug> nrf_ble_gatt: max_tx_time: 328
+[2026-11-26 08:18:10.722] 
+[2026-11-26 08:18:10.722] <info> app: GATT data length updated to 27 bytes.
+[2026-11-26 08:18:10.722] 
+[2026-11-26 08:18:10.722] <info> app: Data length updated: TX = 27, RX = 27
+[2026-11-26 08:18:11.197] 
+[2026-11-26 08:18:11.197] <info> app: Conn params applied: interval 6 units (7ms), timeout 5000ms
+[2026-11-26 08:18:11.325] 
+[2026-11-26 08:18:11.325] <info> app: NUS start
+[2026-11-26 08:18:11.339] 
+[2026-11-26 08:18:11.339] <info> app: Conn params applied: interval 39 units (48ms), timeout 5000ms
+[2026-11-26 08:18:15.386] 
+[2026-11-26 08:18:15.386] <info> app: MAC rxDone
+[2026-11-26 08:18:15.388] 
+[2026-11-26 08:18:15.388] 
+[2026-11-26 08:18:15.388] 
+[2026-11-26 08:18:15.388] ###### ===================== JOINED = OTAA ===================== 
+[2026-11-26 08:18:15.392] 
+[2026-11-26 08:18:15.392] ###### NETWORK ID: 0x000013 DEVADDR: 0x260DDBB5
+[2026-11-26 08:18:15.405] 
+[2026-11-26 08:18:15.405] 
+[2026-11-26 08:18:15.405]  <info> app: Bumping state machine with 'Joined' (Current state: JOINING)
+[2026-11-26 08:18:15.407] 
+[2026-11-26 08:18:15.407] 
+[2026-11-26 08:18:15.407] 
+[2026-11-26 08:18:15.407] <info> app: Joined at 11954ms. Time to join: 5842ms. Credentials nonce = 0x7673
+[2026-11-26 08:18:15.422] 
+[2026-11-26 08:18:15.422] 
+[2026-11-26 08:18:15.422] 
+[2026-11-26 08:18:15.422] <info> app: Sending empty packet 1/3 to fetch MAC data. 
+[2026-11-26 08:18:15.422] 
+[2026-11-26 08:18:15.422] 
+[2026-11-26 08:18:15.427] 
+[2026-11-26 08:18:15.427] <info> app: State changed from JOINING to GETMACS
+[2026-11-26 08:18:15.427] 
+[2026-11-26 08:18:15.427] 
+[2026-11-26 08:18:15.502] 
+[2026-11-26 08:18:15.502] <debug> app: FDS update success! FileId: 0x3E8 RecKey:0x1
+[2026-11-26 08:18:15.519] 
+[2026-11-26 08:18:15.519] <debug> app: FDS update success! FileId: 0x3E8 RecKey:0x2
+[2026-11-26 08:18:15.519] 
+[2026-11-26 08:18:15.519] <debug> app: FDS update success! FileId: 0x3E8 RecKey:0x3
+[2026-11-26 08:18:15.535] 
+[2026-11-26 08:18:15.535] <debug> app: FDS update success! FileId: 0x3E8 RecKey:0x4
+[2026-11-26 08:18:15.535] 
+[2026-11-26 08:18:15.535] <debug> app: FDS update success! FileId: 0x3E8 RecKey:0x6
+[2026-11-26 08:18:15.553] 
+[2026-11-26 08:18:15.553] <info> app: Data stored on NVM: 1040 bytes
+[2026-11-26 08:18:15.553] 
+[2026-11-26 08:18:15.553] BLE out: Sent   8 bytes: 'Joined.'
+[2026-11-26 08:18:15.558] 
+[2026-11-26 08:18:15.558] <info> app: SEND EMPTY PACKET
+[2026-11-26 08:18:15.558] 
+[2026-11-26 08:18:15.558] 
+[2026-11-26 08:18:15.558] 
+[2026-11-26 08:18:15.558] <info> app:   Sending no MAC commands. FCtl = 0x80
+[2026-11-26 08:18:15.566] 
+[2026-11-26 08:18:15.566] 
+[2026-11-26 08:18:15.566] 
+[2026-11-26 08:18:15.566] <info> app: MCPS-Request: MCPS_CONFIRMED, OK
+[2026-11-26 08:18:15.584] 
+[2026-11-26 08:18:15.584] <info> app: NUS TX Ready
+[2026-11-26 08:18:15.837] 
+[2026-11-26 08:18:15.837] <info> app: MAC txDone
+[2026-11-26 08:18:21.224] 
+[2026-11-26 08:18:21.224] <info> app: MAC rxDone
+[2026-11-26 08:18:21.225] 
+[2026-11-26 08:18:21.225] <info> app:    Unconfirmed downlink.
+[2026-11-26 08:18:21.229] 
+[2026-11-26 08:18:21.229] <info> app:  AckReceived = 1, FramePending = 0, 13 bytes of MAC commands, FCtrl = 0xAD 
+[2026-11-26 08:18:21.240] 
+[2026-11-26 08:18:21.240] 
+[2026-11-26 08:18:21.240] 
+[2026-11-26 08:18:21.240]    Received Mac Command 'TxParamSetupReq'
+[2026-11-26 08:18:21.240] 
+[2026-11-26 08:18:21.240]    TxParamSetupReq accepted: uplink dwell time OFF, downlink dwell time OFF, max EIRP index 5
+[2026-11-26 08:18:21.259] 
+[2026-11-26 08:18:21.259]    Received Mac Command 'NewChannelReq', freq=922000000
+[2026-11-26 08:18:21.259] 
+[2026-11-26 08:18:21.259]    Received Mac Command 'LinkADRReq' set DR 4, txPwr = Max EIRP - 0dBm
+[2026-11-26 08:18:21.268] 
+[2026-11-26 08:18:21.268] 
+[2026-11-26 08:18:21.268] 
+[2026-11-26 08:18:21.268] ###### ===================== MCPS-Confirm ===================== 
+[2026-11-26 08:18:21.268] 
+[2026-11-26 08:18:21.268] ###### U/L FRAME:0001 | PORT:0 | DR:2 | PWR:0 | MSG TYPE: CONFIRMED [ACK]
+[2026-11-26 08:18:21.271] 
+[2026-11-26 08:18:21.271] ###### At: 00:00:17 on 2024:01:01 UTC
+[2026-11-26 08:18:21.271] 
+[2026-11-26 08:18:21.271] 
+[2026-11-26 08:18:21.271] No bytes sent.
+[2026-11-26 08:18:21.271] 
+[2026-11-26 08:18:21.271] 
+[2026-11-26 08:18:21.271] <info> app: Bumping state machine with 'Uplink_Ack' (Current state: GETMACS)
+[2026-11-26 08:18:21.293] 
+[2026-11-26 08:18:21.293] 
+[2026-11-26 08:18:21.293] 
+[2026-11-26 08:18:21.293] In OnRxData() with appData NULL
+[2026-11-26 08:18:21.293] 
+[2026-11-26 08:18:21.293] 
+[2026-11-26 08:18:21.293] 
+[2026-11-26 08:18:21.293] ###### ===================== MCPS-Indication ===================== 
+[2026-11-26 08:18:21.310] 
+[2026-11-26 08:18:21.310] ###### D/L FRAME:0000 | SLOT:1 | PORT:0 | DR:2 | RSSI:-31 | SNR:9
+[2026-11-26 08:18:21.310] 
+[2026-11-26 08:18:21.310] No downlink data received.
+[2026-11-26 08:18:21.310] 
+[2026-11-26 08:18:21.310] 
+[2026-11-26 08:18:21.310] <info> app: Bumping state machine with 'Downlink' (Current state: GETMACS)
+[2026-11-26 08:18:21.319] 
+[2026-11-26 08:18:21.319] 
+[2026-11-26 08:18:21.319] 
+[2026-11-26 08:18:21.319] <info> app: Sending empty packet to fetch MAC data. 2/3
+[2026-11-26 08:18:21.326] 
+[2026-11-26 08:18:21.326] 
+[2026-11-26 08:18:21.326] 
+[2026-11-26 08:18:21.326] <info> app: MLME-Request: MLME_DEVICE_TIME, OK
+[2026-11-26 08:18:21.364] 
+[2026-11-26 08:18:21.364] <debug> app: FDS update success! FileId: 0x3E8 RecKey:0x1
+[2026-11-26 08:18:21.371] 
+[2026-11-26 08:18:21.371] <debug> app: FDS update success! FileId: 0x3E8 RecKey:0x2
+[2026-11-26 08:18:21.383] 
+[2026-11-26 08:18:21.383] <debug> app: FDS update success! FileId: 0x3E8 RecKey:0x3
+[2026-11-26 08:18:21.383] 
+[2026-11-26 08:18:21.383] <debug> app: FDS update success! FileId: 0x3E8 RecKey:0x6
+[2026-11-26 08:18:21.383] 
+[2026-11-26 08:18:21.383] <info> app: Data stored on NVM: 620 bytes
+[2026-11-26 08:18:21.398] 
+[2026-11-26 08:18:21.398] <info> app:   Sending 6 bytes of MAC commands in FRMPayload. FCtl = 0x80
+[2026-11-26 08:18:21.399] 
+[2026-11-26 08:18:21.399] <info> app: MCPS-Request: MCPS_CONFIRMED, OK
+[2026-11-26 08:18:21.399] 
+[2026-11-26 08:18:21.399] BLE out: Sent  29 bytes: 'Uplink message acknowledged.'
+[2026-11-26 08:18:21.415] 
+[2026-11-26 08:18:21.415] BLE out: Sent  51 bytes: 'Downlink message. RSSI=-31dBm SNR=9dB. Rx 0 bytes.'
+[2026-11-26 08:18:21.415] 
+[2026-11-26 08:18:21.415] <info> app: SEND EMPTY PACKET
+[2026-11-26 08:18:21.432] 
+[2026-11-26 08:18:21.432] 
+[2026-11-26 08:18:21.432] 
+[2026-11-26 08:18:21.432] <info> app: MCPS-Request: MCPS_CONFIRMED, Busy
+[2026-11-26 08:18:21.438] 
+[2026-11-26 08:18:21.438] <info> app: NUS TX Ready
+[2026-11-26 08:18:21.471] 
+[2026-11-26 08:18:21.471] <info> app: MAC txDone
+[2026-11-26 08:18:21.489] 
+[2026-11-26 08:18:21.489] <info> app: NUS TX Ready
+[2026-11-26 08:18:24.464] 
+[2026-11-26 08:18:24.464] 
+[2026-11-26 08:18:24.464] BLE in: Received   6 bytes 'AI ver'
+[2026-11-26 08:18:24.470] 
+[2026-11-26 08:18:24.470] <info> app: AI state machine bumped with 'Msg to AI' (Current state: SLEEP)
+[2026-11-26 08:18:24.481] 
+[2026-11-26 08:18:24.481] 
+[2026-11-26 08:18:24.481] 
+[2026-11-26 08:18:24.481] <info> app: AI processor is in DPD. Waking it. (ver)
+[2026-11-26 08:18:24.560] 
+[2026-11-26 08:18:24.560] <info> app: !4 
+[2026-11-26 08:18:24.560] 
+[2026-11-26 08:18:24.560] <info> app: I2C link is initialised.
+[2026-11-26 08:18:24.560] 
+[2026-11-26 08:18:24.560] <info> app: I2C RX payload 25/250 bytes. Response type is 4. CRC OK (0xD131)
+[2026-11-26 08:18:24.584] 
+[2026-11-26 08:18:24.584] 000: 80 04 19 00 57 61 6B 65  20 32 30 32 34 2D 30 31  ....Wake 2024-01
+[2026-11-26 08:18:24.584] 
+[2026-11-26 08:18:24.584] 010: 2D 30 31 54 30 30 3A 30  30 3A 32 32 5A 00 31 FF  -01T00:00:22Z.1.
+[2026-11-26 08:18:24.599] 
+[2026-11-26 08:18:24.599] <info> app: AI state machine bumped with 'Wake' (Current state: SLEEP)
+[2026-11-26 08:18:24.601] 
+[2026-11-26 08:18:24.601] 
+[2026-11-26 08:18:24.601] 
+[2026-11-26 08:18:24.601] <info> app: BLE and AI time differ by 1s
+[2026-11-26 08:18:24.608] 
+[2026-11-26 08:18:24.608] <info> app: AI state changed from SLEEP to WOKEN
+[2026-11-26 08:18:24.608] 
+[2026-11-26 08:18:24.608] 
+[2026-11-26 08:18:24.608] 
+[2026-11-26 08:18:24.608] BLE out: Sent   5 bytes: 'Wake'
+[2026-11-26 08:18:24.624] 
+[2026-11-26 08:18:24.624] <info> app: AI State machine scheduler called with event 8 'Send SelfTest'
+[2026-11-26 08:18:24.624] 
+[2026-11-26 08:18:24.624] <info> app: AI state machine bumped with 'Send SelfTest' (Current state: WOKEN)
+[2026-11-26 08:18:24.624] 
+[2026-11-26 08:18:24.624] 
+[2026-11-26 08:18:24.624] 
+[2026-11-26 08:18:24.624] <info> app: I2C link is initialised.
+[2026-11-26 08:18:24.624] 
+[2026-11-26 08:18:24.624] Sending 'selftest' to AI processor (4 ctrl bytes, 8 payload, 2 CRC)<info> app: OK
+[2026-11-26 08:18:24.655] 
+[2026-11-26 08:18:24.655] <info> app: AI state changed from WOKEN to SELFTEST
+[2026-11-26 08:18:24.655] 
+[2026-11-26 08:18:24.655] 
+[2026-11-26 08:18:24.655] 
+[2026-11-26 08:18:24.655] <info> app: I2C TX complete: 14 bytes.
+[2026-11-26 08:18:24.655] 
+[2026-11-26 08:18:24.655] <info> app: !5 
+[2026-11-26 08:18:24.671] 
+[2026-11-26 08:18:24.671] 000: 80 01 08 00 73 65 6C 66  74 65 73 74 38 A9 00 00  ....selftest8...
+[2026-11-26 08:18:24.671] 
+[2026-11-26 08:18:24.671] <info> app: I2C link is initialised.
+[2026-11-26 08:18:24.671] 
+[2026-11-26 08:18:24.671] <info> app: I2C RX payload 13/250 bytes. Response type is 4. CRC OK (0xFA7B)
+[2026-11-26 08:18:24.685] 
+[2026-11-26 08:18:24.685] 000: 80 04 0D 00 73 65 6C 66  54 65 73 74 20 38 30 30  ....selfTest 800
+[2026-11-26 08:18:24.685] 
+[2026-11-26 08:18:24.685] 010: 30 00 7B FF FF FF FF FF  FF FF FF FF FF FF FF FF  0.{.............
+[2026-11-26 08:18:24.699] 
+[2026-11-26 08:18:24.699] <info> app: AI state machine bumped with 'Selftest Rx' (Current state: SELFTEST)
+[2026-11-26 08:18:24.703] 
+[2026-11-26 08:18:24.703] 
+[2026-11-26 08:18:24.703] 
+[2026-11-26 08:18:24.703] <info> app: AI self test bits = 0x8000 (all bits now 0x8020)
+[2026-11-26 08:18:24.703] 
+[2026-11-26 08:18:24.703] <info> app: Can't send UTC
+[2026-11-26 08:18:24.703] 
+[2026-11-26 08:18:24.703] <info> app: AI state changed from SELFTEST to IDLE
+[2026-11-26 08:18:24.703] 
+[2026-11-26 08:18:24.703] 
+[2026-11-26 08:18:24.703] 
+[2026-11-26 08:18:24.703] <info> app: NUS TX Ready
+[2026-11-26 08:18:24.728] 
+[2026-11-26 08:18:24.728] BLE out: Sent  20 bytes: 'Error bits = 0x8020'
+[2026-11-26 08:18:24.728] 
+[2026-11-26 08:18:24.728] <info> app: AI State machine scheduler called with event 12 'Msg to AI'
+[2026-11-26 08:18:24.728] 
+[2026-11-26 08:18:24.728] <info> app: AI state machine bumped with 'Msg to AI' (Current state: IDLE)
+[2026-11-26 08:18:24.735] 
+[2026-11-26 08:18:24.735] 
+[2026-11-26 08:18:24.735] 
+[2026-11-26 08:18:24.735] <info> app: I2C link is initialised.
+[2026-11-26 08:18:24.735] 
+[2026-11-26 08:18:24.735] Sending 'ver' to AI processor (4 ctrl bytes, 3 payload, 2 CRC)<info> app: AI state changed from IDLE to PROCESSING
+[2026-11-26 08:18:24.759] 
+[2026-11-26 08:18:24.759] 
+[2026-11-26 08:18:24.759] 
+[2026-11-26 08:18:24.759] <info> app: I2C TX complete: 9 bytes.
+[2026-11-26 08:18:24.768] 
+[2026-11-26 08:18:24.768] <info> app: !6 
+[2026-11-26 08:18:24.768] 
+[2026-11-26 08:18:24.768] 000: 80 01 03 00 76 65 72 D8  5B 65 73 74 38 A9 00 00  ....ver.[est8...
+[2026-11-26 08:18:24.768] 
+[2026-11-26 08:18:24.768] <info> app: I2C link is initialised.
+[2026-11-26 08:18:24.785] 
+[2026-11-26 08:18:24.785] <info> app: I2C RX payload 30/250 bytes. Response type is 4. CRC OK (0x15FA)
+[2026-11-26 08:18:24.785] 
+[2026-11-26 08:18:24.785] 000: 80 04 1E 00 57 57 35 30  30 5F 43 30 32 20 31 38  ....WW500_C02 18
+[2026-11-26 08:18:24.790] 
+[2026-11-26 08:18:24.790] 010: 3A 30 34 3A 30 33 20 4E  6F 76 20 32 35 20 32 30  :04:03 Nov 25 20
+[2026-11-26 08:18:24.790] 
+[2026-11-26 08:18:24.790] 020: 32 36 00 FA FF FF FF FF  FF FF FF FF FF FF FF FF  26..............
+[2026-11-26 08:18:24.800] 
+[2026-11-26 08:18:24.800] <info> app: !7 
+[2026-11-26 08:18:24.800] 
+[2026-11-26 08:18:24.800] <info> app: AI state machine bumped with 'Msg from AI' (Current state: PROCESSING)
+[2026-11-26 08:18:24.820] 
+[2026-11-26 08:18:24.820] 
+[2026-11-26 08:18:24.820] 
+[2026-11-26 08:18:24.820] <info> app: NUS TX Ready
+[2026-11-26 08:18:24.820] 
+[2026-11-26 08:18:24.820] <info> app: AI processor replies: 'WW500_C02 18:04:03 Nov 25 2026'
+[2026-11-26 08:18:24.825] 
+[2026-11-26 08:18:24.825] <info> app: AI state changed from PROCESSING to IDLE
+[2026-11-26 08:18:24.825] 
+[2026-11-26 08:18:24.825] 
+[2026-11-26 08:18:24.825] 
+[2026-11-26 08:18:24.825] BLE out: Sent  31 bytes: 'WW500_C02 18:04:03 Nov 25 2026'
+[2026-11-26 08:18:24.830] 
+[2026-11-26 08:18:24.830] <info> app: I2C link is initialised.
+[2026-11-26 08:18:24.846] 
+[2026-11-26 08:18:24.846] <info> app: AI State machine scheduler called with event 12 'Msg to AI'
+[2026-11-26 08:18:24.846] 
+[2026-11-26 08:18:24.846] <info> app: I2C RX payload 13/250 bytes. Response type is 4. CRC OK (0x7FB8)
+[2026-11-26 08:18:24.846] 
+[2026-11-26 08:18:24.846] <info> app: AI state machine bumped with 'Msg to AI' (Current state: IDLE)
+[2026-11-26 08:18:24.870] 
+[2026-11-26 08:18:24.870] 
+[2026-11-26 08:18:24.870] 
+[2026-11-26 08:18:24.870] <info> app: I2C link is initialised.
+[2026-11-26 08:18:24.870] 
+[2026-11-26 08:18:24.870] Sending 'sdused' to AI processor (4 ctrl bytes, 6 payload, 2 CRC)<info> app: AI state changed from IDLE to PROCESSING
+[2026-11-26 08:18:24.885] 
+[2026-11-26 08:18:24.885] 
+[2026-11-26 08:18:24.885] 
+[2026-11-26 08:18:24.885] <info> app: I2C TX complete: 12 bytes.
+[2026-11-26 08:18:24.885] 
+[2026-11-26 08:18:24.885] <info> app: !8 
+[2026-11-26 08:18:24.885] 
+[2026-11-26 08:18:24.885] 000: 80 04 0D 00 73 65 6C 66  54 65 73 74 20 30 30 30  ....selfTest 000
+[2026-11-26 08:18:24.885] 
+[2026-11-26 08:18:24.885] 010: 30 00 B8 FF FF FF FF FF  FF FF FF FF FF FF FF FF  0...............
+[2026-11-26 08:18:24.899] 
+[2026-11-26 08:18:24.899] <info> app: AI state machine bumped with 'Selftest Rx' (Current state: PROCESSING)
+[2026-11-26 08:18:24.910] 
+[2026-11-26 08:18:24.910] 
+[2026-11-26 08:18:24.910] 
+[2026-11-26 08:18:24.910] <info> app: NUS TX Ready
+[2026-11-26 08:18:24.910] 
+[2026-11-26 08:18:24.910] <info> app: AI self test bits = 0x0000 (all bits now 0x0020)
+[2026-11-26 08:18:24.910] 
+[2026-11-26 08:18:24.910] <info> app: AI state changed from PROCESSING to IDLE
+[2026-11-26 08:18:24.910] 
+[2026-11-26 08:18:24.910] 
+[2026-11-26 08:18:24.910] 
+[2026-11-26 08:18:24.910] BLE out: Sent  20 bytes: 'Error bits = 0x0020'
+[2026-11-26 08:18:24.926] 
+[2026-11-26 08:18:24.926] 000: 80 01 06 00 73 64 75 73  65 64 B7 16 38 A9 00 00  ....sdused..8...
+[2026-11-26 08:18:24.935] 
+[2026-11-26 08:18:24.935] <info> app: I2C link is initialised.
+[2026-11-26 08:18:24.942] 
+[2026-11-26 08:18:24.942] <info> app: I2C RX payload 8/250 bytes. Response type is 4. CRC OK (0x6503)
+[2026-11-26 08:18:24.942] 
+[2026-11-26 08:18:24.942] 000: 80 04 08 00 73 64 75 73  65 64 20 31 00 03 FF FF  ....sdused 1....
+[2026-11-26 08:18:24.958] 
+[2026-11-26 08:18:24.958] <info> app: AI state machine bumped with 'Msg from AI' (Current state: IDLE)
+[2026-11-26 08:18:24.958] 
+[2026-11-26 08:18:24.958] 
+[2026-11-26 08:18:24.958] 
+[2026-11-26 08:18:24.958] <info> app: AI processor: SD card 1% used
+[2026-11-26 08:18:25.000] 
+[2026-11-26 08:18:25.000] <info> app: NUS TX Ready
+[2026-11-26 08:18:26.564] 
+[2026-11-26 08:18:26.564] <info> app: MAC rxDone
+[2026-11-26 08:18:26.580] 
+[2026-11-26 08:18:26.580] <info> app:    Unconfirmed downlink.
+[2026-11-26 08:18:26.588] 
+[2026-11-26 08:18:26.588] <info> app:  AckReceived = 1, FramePending = 0, 11 bytes of MAC commands, FCtrl = 0xAB 
+[2026-11-26 08:18:26.596] 
+[2026-11-26 08:18:26.596] 
+[2026-11-26 08:18:26.596] 
+[2026-11-26 08:18:26.596]    Received Mac Command 'DeviceTimeAns' including 91567084.116s correction.
+[2026-11-26 08:18:26.599] 
+[2026-11-26 08:18:26.599]    Received Mac Command 'LinkADRReq' set DR 5, txPwr = Max EIRP - 2dBm
+[2026-11-26 08:18:26.603] 
+[2026-11-26 08:18:26.603] 
+[2026-11-26 08:18:26.603] 
+[2026-11-26 08:18:26.603] ###### ===================== MCPS-Confirm ===================== 
+[2026-11-26 08:18:26.612] 
+[2026-11-26 08:18:26.612] ###### U/L FRAME:0002 | PORT:0 | DR:4 | PWR:0 | MSG TYPE: CONFIRMED [ACK]
+[2026-11-26 08:18:26.612] 
+[2026-11-26 08:18:26.612] ###### At: 19:18:27 on 2026:11:25 UTC
+[2026-11-26 08:18:26.612] 
+[2026-11-26 08:18:26.612] 
+[2026-11-26 08:18:26.612] No bytes sent.
+[2026-11-26 08:18:26.628] 
+[2026-11-26 08:18:26.628] 
+[2026-11-26 08:18:26.628] <info> app: Bumping state machine with 'Uplink_Ack' (Current state: GETMACS)
+[2026-11-26 08:18:26.628] 
+[2026-11-26 08:18:26.628] 
+[2026-11-26 08:18:26.628] 
+[2026-11-26 08:18:26.628] 
+[2026-11-26 08:18:26.628] 
+[2026-11-26 08:18:26.628] ###### ===================== MCPS-Indication ===================== 
+[2026-11-26 08:18:26.647] 
+[2026-11-26 08:18:26.647] ###### D/L FRAME:0001 | SLOT:1 | PORT:0 | DR:4 | RSSI:-31 | SNR:16
+[2026-11-26 08:18:26.647] 
+[2026-11-26 08:18:26.647] No downlink data received.
+[2026-11-26 08:18:26.647] 
+[2026-11-26 08:18:26.647] 
+[2026-11-26 08:18:26.647] <info> app: Bumping state machine with 'Downlink' (Current state: GETMACS)
+[2026-11-26 08:18:26.647] 
+[2026-11-26 08:18:26.647] 
+[2026-11-26 08:18:26.667] 
+[2026-11-26 08:18:26.667] <info> app: Sending empty packet to fetch MAC data. 3/3
+[2026-11-26 08:18:26.667] 
+[2026-11-26 08:18:26.667] 
+[2026-11-26 08:18:26.667] 
+[2026-11-26 08:18:26.667] <info> app: MLME-Request: MLME_DEVICE_TIME, OK
+[2026-11-26 08:18:26.677] 
+[2026-11-26 08:18:26.677] <info> app: !9 
+[2026-11-26 08:18:26.677] 
+[2026-11-26 08:18:26.677] <debug> app: FDS update success! FileId: 0x3E8 RecKey:0x1
+[2026-11-26 08:18:26.677] 
+[2026-11-26 08:18:26.677] <debug> app: FDS update success! FileId: 0x3E8 RecKey:0x2
+[2026-11-26 08:18:26.677] 
+[2026-11-26 08:18:26.677] <info> app: Data stored on NVM: 76 bytes
+[2026-11-26 08:18:26.693] 
+[2026-11-26 08:18:26.693] BLE out: Sent  29 bytes: 'Uplink message acknowledged.'
+[2026-11-26 08:18:26.693] 
+[2026-11-26 08:18:26.693] BLE out: Sent  52 bytes: 'Downlink message. RSSI=-31dBm SNR=16dB. Rx 0 bytes.'
+[2026-11-26 08:18:26.709] 
+[2026-11-26 08:18:26.709] <info> app: SEND EMPTY PACKET
+[2026-11-26 08:18:26.709] 
+[2026-11-26 08:18:26.709] 
+[2026-11-26 08:18:26.709] 
+[2026-11-26 08:18:26.709] <info> app:   Sending 3 bytes of MAC commands in FRMPayload. FCtl = 0x80
+[2026-11-26 08:18:26.723] 
+[2026-11-26 08:18:26.723] <info> app: NUS TX Ready
+[2026-11-26 08:18:26.723] 
+[2026-11-26 08:18:26.723] <info> app: MCPS-Request: MCPS_CONFIRMED, OK
+[2026-11-26 08:18:26.723] 
+[2026-11-26 08:18:26.723] <info> app: I2C link is initialised.
+[2026-11-26 08:18:26.723] 
+[2026-11-26 08:18:26.723] <info> app: I2C RX payload 110/250 bytes. Response type is 4. CRC OK (0x0F84)
+[2026-11-26 08:18:26.739] 
+[2026-11-26 08:18:26.739] 000: 80 04 6E 00 53 6C 65 65  70 20 33 20 33 20 30 20  ..n.Sleep 3 3 0 
+[2026-11-26 08:18:26.739] 
+[2026-11-26 08:18:26.739] 010: 35 35 20 34 30 20 31 20  35 30 30 20 30 20 31 30  55 40 1 500 0 10
+[2026-11-26 08:18:26.755] 
+[2026-11-26 08:18:26.755] 020: 30 30 20 35 20 31 20 31  30 30 30 20 31 30 30 20  00 5 1 1000 100 
+[2026-11-26 08:18:26.755] 
+[2026-11-26 08:18:26.755] <info> app: NUS TX Ready
+[2026-11-26 08:18:26.755] 
+[2026-11-26 08:18:26.755] 030: 30 20 32 30 20 31 20 36  30 20 31 20 30 20 33 20  0 20 1 60 1 0 3 
+[2026-11-26 08:18:26.772] 
+[2026-11-26 08:18:26.772] 040: 30 20 32 20 35 20 36 35  20 31 35 20 30 20 30 20  0 2 5 65 15 0 0 
+[2026-11-26 08:18:26.774] 
+[2026-11-26 08:18:26.774] 050: 32 38 36 20 33 32 36 20  31 20 31 31 30 20 31 20  286 326 1 110 1 
+[2026-11-26 08:18:26.777] 
+[2026-11-26 08:18:26.777] 060: 31 35 20 35 20 30 20 30  20 30 20 34 30 33 35 20  15 5 0 0 0 4035 
+[2026-11-26 08:18:26.790] 
+[2026-11-26 08:18:26.790] 070: 30 20 00 84 FF FF FF FF  FF FF FF FF FF FF FF FF  0 ..............
+[2026-11-26 08:18:26.803] 
+[2026-11-26 08:18:26.803] <info> app: AI state machine bumped with 'Sleep' (Current state: IDLE)
+[2026-11-26 08:18:26.803] 
+[2026-11-26 08:18:26.803] 
+[2026-11-26 08:18:26.803] 
+[2026-11-26 08:18:26.803] <info> app: AI processor sends stats: '3 3 0 55 40 1 500 0 1000 5 1 1000 100 0 20 1 60 1 0 3 0 2 5 65 15 0 0 286 326 1 110 1 15 5 0 0 0 4035 0 '
+[2026-11-26 08:18:26.818] 
+[2026-11-26 08:18:26.818] <info> app: AI state changed from IDLE to SLEEP
+[2026-11-26 08:18:26.818] 
+[2026-11-26 08:18:26.818] 
+[2026-11-26 08:18:26.818] 
+[2026-11-26 08:18:26.818] BLE out: Sent   6 bytes: 'Sleep'
+[2026-11-26 08:18:26.818] 
+[2026-11-26 08:18:26.818] <info> app: MAC txDone
+[2026-11-26 08:18:26.898] 
+[2026-11-26 08:18:26.898] <info> app: NUS TX Ready
+[2026-11-26 08:18:30.851] 
+[2026-11-26 08:18:30.851] <info> app: Conn params applied: interval 120 units (150ms), timeout 4000ms
+[2026-11-26 08:18:31.797] 
+[2026-11-26 08:18:31.797] 
+[2026-11-26 08:18:31.797] BLE in: Received   6 bytes 'hack 6'
+[2026-11-26 08:18:31.811] 
+[2026-11-26 08:18:31.811] <error> app: ERROR 4 [NRF_ERROR_NO_MEM] at ../../../ble_commands.c:998
+[2026-11-26 08:18:31.811] 
+[2026-11-26 08:18:31.811] <error> app: PC at: 0x00027155
+[2026-11-26 08:18:31.816] 
+[2026-11-26 08:18:31.816] <error> app: >>> Resetting both processors after fault (2 in a row)
+[2026-11-26 08:18:32.193] 
+[2026-11-26 08:18:32.193] <info> app: 
+[2026-11-26 08:18:32.193] 
+[2026-11-26 08:18:32.193] **** Secure Bootloader (WW500_A00) Ver: 00.01.01 Built: 19:01:29 Oct 31 2025 ****
+[2026-11-26 08:18:32.193] 
+[2026-11-26 08:18:32.193] 
+[2026-11-26 08:18:32.193] <info> nrf_dfu_settings: Backing up settings page to address 0x7E000.
+[2026-11-26 08:18:32.193] 
+[2026-11-26 08:18:32.193] 
+[2026-11-26 08:18:32.193] <info> app: No firmware to activate.
+[2026-11-26 08:18:32.213] 
+[2026-11-26 08:18:32.213] 
+[2026-11-26 08:18:32.213] <info> nrf_dfu_settings: Backing up settings page to address 0x7E000.
+[2026-11-26 08:18:32.226] 
+[2026-11-26 08:18:34.148] 
+[2026-11-26 08:18:34.148] <info> app: 
+[2026-11-26 08:18:34.155] 
+[2026-11-26 08:18:34.155] **** Wildlife Watcher 1 (WW500-C02) Ver: 00.30.62 Built: 17:28:46 Nov 24 2026 ****
+[2026-11-26 08:18:34.165] 
+[2026-11-26 08:18:34.165] <info> app: BOARDTYPE bytes: 0x04 0x22
+[2026-11-26 08:18:34.165] 
+[2026-11-26 08:18:34.165] <info> app: GCC version: 10.3.1
+[2026-11-26 08:18:34.165] 
+[2026-11-26 08:18:34.165] <info> app: Compiler Version: ARM GNU, 10.3.1 20210824 (release)
+[2026-11-26 08:18:34.165] 
+[2026-11-26 08:18:34.165] <info> app: Git branch: '261106_lorawanPing' 0862858-dirty
+[2026-11-26 08:18:34.182] 
+[2026-11-26 08:18:34.182] 
+[2026-11-26 08:18:34.182] 
+[2026-11-26 08:18:34.182] <info> app_timer: RTC: initialized.
+[2026-11-26 08:18:34.182] 
+[2026-11-26 08:18:34.182] <info> app: Watchdog already running: period 30 s (kept)
+[2026-11-26 08:18:34.182] 
+[2026-11-26 08:18:34.182] <info> app: Watchdog early warning: 2 s before the reset
+[2026-11-26 08:18:34.203] 
+[2026-11-26 08:18:34.203] <info> app: System time set successfully
+[2026-11-26 08:18:34.203] 
+[2026-11-26 08:18:34.203] <info> app: 
+[2026-11-26 08:18:34.203] 
+[2026-11-26 08:18:34.203] Initialising LoRaWAN
+[2026-11-26 08:18:34.203] 
+[2026-11-26 08:18:34.203] <info> app: Initializing fds...
+[2026-11-26 08:18:34.206] 
+[2026-11-26 08:18:34.206] <info> app: Reading flash usage statistics...
+[2026-11-26 08:18:34.206] 
+[2026-11-26 08:18:34.206] <info> app: Found 6 valid records.
+[2026-11-26 08:18:34.213] 
+[2026-11-26 08:18:34.213] <info> app: Found 16 dirty records (ready to be garbage collected).
+[2026-11-26 08:18:34.213] 
+[2026-11-26 08:18:34.213] <debug> app: Record 8014 at 6D334
+[2026-11-26 08:18:34.213] 
+[2026-11-26 08:18:34.213] <debug> app: Record 8018 at 6D61C
+[2026-11-26 08:18:34.224] 
+[2026-11-26 08:18:34.224] <debug> app: Record 8019 at 6D780
+[2026-11-26 08:18:34.229] 
+[2026-11-26 08:18:34.229] <debug> app: Record 8020 at 6D854
+[2026-11-26 08:18:34.229] 
+[2026-11-26 08:18:34.229] <debug> app: Record 8021 at 6D894
+[2026-11-26 08:18:34.229] 
+[2026-11-26 08:18:34.229] <debug> app: Record 6 at 70008
+[2026-11-26 08:18:34.229] 
+[2026-11-26 08:18:34.229] <info> app: >>> LoraMac version = 0x01000300
+[2026-11-26 08:18:34.229] 
+[2026-11-26 08:18:34.229] <info> app: MAC parameters reset: uplink dwell time ON
+[2026-11-26 08:18:34.255] 
+[2026-11-26 08:18:34.255] <info> app: Data restored from NVM: 1064 bytes
+[2026-11-26 08:18:34.255] 
+[2026-11-26 08:18:34.255] <info> app: LoRaWAN initialised
+[2026-11-26 08:18:34.255] 
+[2026-11-26 08:18:34.255] 
+[2026-11-26 08:18:34.255] 
+[2026-11-26 08:18:34.255] <info> app: BLE initialised for WILD-CMSS - disconnect interval 60s
+[2026-11-26 08:18:34.259] 
+[2026-11-26 08:18:34.259] 
+[2026-11-26 08:18:34.259] 
+[2026-11-26 08:18:34.259] <info> app: Max BLE packet length is 244. PDU length = 251
+[2026-11-26 08:18:34.259] 
+[2026-11-26 08:18:34.259] <info> app: Reset cause:   software reset
+[2026-11-26 08:18:34.259] 
+[2026-11-26 08:18:34.259] <info> app: AI processor reset at boot (/RST 100 ms)
+[2026-11-26 08:18:34.275] 
+[2026-11-26 08:18:34.275] <info> app: Previous run ended with a fault: error check, error 0x00000004
+[2026-11-26 08:18:34.285] 
+[2026-11-26 08:18:34.285] <info> app:   at ble_commands.c:998, PC 0x00027155, LR 0x00000000
+[2026-11-26 08:18:34.285] 
+[2026-11-26 08:18:34.285] <info> app: Reset reason code 2. Resets since power-on: 10.
+[2026-11-26 08:18:34.291] 
+[2026-11-26 08:18:34.291] <info> app: Fault resets in a row: 2. Cleared after 10 minutes without a fault.
+[2026-11-26 08:18:34.295] 
+[2026-11-26 08:18:34.295] <info> app: Board name: WILD-CMSS
+[2026-11-26 08:18:34.295] 
+[2026-11-26 08:18:34.295] <info> app: Tests Wildlife Watcher BLE and LoRaWAN communications. Uses NUS
+[2026-11-26 08:18:34.319] 
+[2026-11-26 08:18:34.319] <info> app: TODO - clean up LoRaWAN processing - esp. failures, incl. failure to join.
+[2026-11-26 08:18:34.319] 
+[2026-11-26 08:18:34.319] <info> app: TODO - check RSSI outgoing vs incoming differences
+[2026-11-26 08:18:34.330] 
+[2026-11-26 08:18:34.330] <info> app: Device Addr:   99:0A:7A:67:EF:DA
+[2026-11-26 08:18:34.330] 
+[2026-11-26 08:18:34.330] <info> app: BLE address:   D9:0A:7A:67:EF:DA
+[2026-11-26 08:18:34.330] 
+[2026-11-26 08:18:34.330] <info> app: BLE Name:      WILD-CMSS
+[2026-11-26 08:18:34.338] 
+[2026-11-26 08:18:34.338] <info> app: Target DevEui: DA:EF:67:FE:FF:7A:0A:D9
+[2026-11-26 08:18:34.338] 
+[2026-11-26 08:18:34.338] <info> app: Target AppEui: TBD
+[2026-11-26 08:18:34.338] 
+[2026-11-26 08:18:34.338] <info> app: Softdevice ver: 0x00CB
+[2026-11-26 08:18:34.338] 
+[2026-11-26 08:18:34.338] <info> app: Reset reason:  0x00000004 CPU
+[2026-11-26 08:18:34.338] 
+[2026-11-26 08:18:34.338] <info> app: Firmware version 0.30.62
+[2026-11-26 08:18:34.356] 
+[2026-11-26 08:18:34.356] 
+[2026-11-26 08:18:34.356] 
+[2026-11-26 08:18:34.356] <info> app: Temperature: 22.75C
+[2026-11-26 08:18:34.356] 
+[2026-11-26 08:18:34.356] 
+[2026-11-26 08:18:34.356] 
+[2026-11-26 08:18:34.356] <info> app: Press SW1 to start BLE advertising.
+[2026-11-26 08:18:34.356] 
+[2026-11-26 08:18:34.356] <info> app: Press SW1 at power-on to reset credentials
+[2026-11-26 08:18:34.370] 
+[2026-11-26 08:18:34.370] <info> app: Press SW1 for > 10s to start Device Firmware Upgrade (DFU)
+[2026-11-26 08:18:34.370] 
+[2026-11-26 08:18:34.370] <info> app: Press SW2 - prohibited. This signal is asserted by AI processor.
+[2026-11-26 08:18:34.386] 
+[2026-11-26 08:18:34.386] <info> app: Hold magnet close at power-on to start Device Firmware Upgrade (DFU)
+[2026-11-26 08:18:34.386] 
+[2026-11-26 08:18:34.386] <info> app: Press RESET button for a software reset.
+[2026-11-26 08:18:34.394] 
+[2026-11-26 08:18:34.394] <info> app: UART RX Pin 2 is driven
+[2026-11-26 08:18:34.394] 
+[2026-11-26 08:18:34.394] <info> app: SW1 Pin 22 is not driven
+[2026-11-26 08:18:34.394] 
+[2026-11-26 08:18:34.394] <info> app: SW2 Pin 27 is not driven
+[2026-11-26 08:18:34.402] 
+[2026-11-26 08:18:34.402] <info> app: Mag sensor Pin 25 is driven
+[2026-11-26 08:18:34.408] 
+[2026-11-26 08:18:34.408] <info> app: Current DevEui is:   DA:EF:67:FE:FF:7A:0A:D9
+[2026-11-26 08:18:34.408] 
+[2026-11-26 08:18:34.408] <info> app: Current JoinEui is:  70:B3:D5:7E:D0:03:C8:D4
+[2026-11-26 08:18:34.424] 
+[2026-11-26 08:18:34.424] <info> app: Current ShortId is:   CMSS
+[2026-11-26 08:18:34.424] 
+[2026-11-26 08:18:34.424] <info> app: InitCred DevEui is:  00:80:E1:01:01:01:01:01
+[2026-11-26 08:18:34.426] 
+[2026-11-26 08:18:34.426] <info> app: InitCred JoinEui is: 70:B3:D5:7E:D0:03:C8:00
+[2026-11-26 08:18:34.433] 
+[2026-11-26 08:18:34.433] <info> app: We have no need to fetch parameters
+[2026-11-26 08:18:34.441] 
+[2026-11-26 08:18:34.441] 
+[2026-11-26 08:18:34.441] 
+[2026-11-26 08:18:34.441] <info> app: I2C link is initialised.
+[2026-11-26 08:18:34.441] 
+[2026-11-26 08:18:34.441] <info> app: Enabled I2C (instance 1) on pins 7 and 8
+[2026-11-26 08:18:34.450] 
+[2026-11-26 08:18:34.450] <info> app: I2C buffer sizes 250 and 250
+[2026-11-26 08:18:34.450] 
+[2026-11-26 08:18:34.450] <info> app: AI processor initialised.
+[2026-11-26 08:18:34.452] 
+[2026-11-26 08:18:34.452] <info> app: 
+[2026-11-26 08:18:34.452] 
+[2026-11-26 08:18:34.452] Initialisation finished! Starting state machine.
+[2026-11-26 08:18:34.452] 
+[2026-11-26 08:18:34.452] 
+[2026-11-26 08:18:34.452] 
+[2026-11-26 08:18:34.452] <info> app: Bumping state machine with 'Initialised' (Current state: RESET)
+[2026-11-26 08:18:34.465] 
+[2026-11-26 08:18:34.465] 
+[2026-11-26 08:18:34.465] 
+[2026-11-26 08:18:34.465] <info> app:  LoRaWAN waits for op parameter 32 from the AI processor.
+[2026-11-26 08:18:34.465] 
+[2026-11-26 08:18:34.465] 
+[2026-11-26 08:18:34.481] 
+[2026-11-26 08:18:34.481] <info> app: State changed from RESET to LORAWAN WAITING
+[2026-11-26 08:18:34.481] 
+[2026-11-26 08:18:34.481] 
+[2026-11-26 08:18:34.481] 
+[2026-11-26 08:18:34.481] <info> app: AI state machine bumped with 'Initialised' (Current state: RESET)
+[2026-11-26 08:18:34.481] 
+[2026-11-26 08:18:34.481] 
+[2026-11-26 08:18:34.481] 
+[2026-11-26 08:18:34.481] <info> app: AI state changed from RESET to SLEEP
+[2026-11-26 08:18:34.481] 
+[2026-11-26 08:18:34.481] 
+[2026-11-26 08:18:36.283] 
+[2026-11-26 08:18:36.283] <info> app: !0 
+[2026-11-26 08:18:36.293] 
+[2026-11-26 08:18:36.293] <info> app: I2C RX payload 25/250 bytes. Response type is 4. CRC OK (0xBF51)
+[2026-11-26 08:18:36.303] 
+[2026-11-26 08:18:36.303] 000: 80 04 19 00 57 61 6B 65  20 32 30 32 34 2D 30 31  ....Wake 2024-01
+[2026-11-26 08:18:36.303] 
+[2026-11-26 08:18:36.303] 010: 2D 30 31 54 30 30 3A 30  30 3A 30 32 5A 00 51 FF  -01T00:00:02Z.Q.
+[2026-11-26 08:18:36.314] 
+[2026-11-26 08:18:36.314] <info> app: AI state machine bumped with 'Wake' (Current state: SLEEP)
+[2026-11-26 08:18:36.321] 
+[2026-11-26 08:18:36.321] 
+[2026-11-26 08:18:36.321] 
+[2026-11-26 08:18:36.321] <info> app: BLE and AI time differ by 0s
+[2026-11-26 08:18:36.331] 
+[2026-11-26 08:18:36.331] <info> app: AI state changed from SLEEP to WOKEN
+[2026-11-26 08:18:36.331] 
+[2026-11-26 08:18:36.331] 
+[2026-11-26 08:18:36.331] 
+[2026-11-26 08:18:36.331] BLE out: Failed to send   5 bytes: 'Wake'
+[2026-11-26 08:18:36.338] 
+[2026-11-26 08:18:36.338] <info> app: AI State machine scheduler called with event 8 'Send SelfTest'
+[2026-11-26 08:18:36.346] 
+[2026-11-26 08:18:36.346] <info> app: AI state machine bumped with 'Send SelfTest' (Current state: WOKEN)
+[2026-11-26 08:18:36.351] 
+[2026-11-26 08:18:36.351] 
+[2026-11-26 08:18:36.356] 
+[2026-11-26 08:18:36.356] <info> app: I2C link is initialised.
+[2026-11-26 08:18:36.356] 
+[2026-11-26 08:18:36.356] Sending 'selftest' to AI processor (4 ctrl bytes, 8 payload, 2 CRC)<info> app: OK
+[2026-11-26 08:18:36.366] 
+[2026-11-26 08:18:36.366] <info> app: AI state changed from WOKEN to SELFTEST
+[2026-11-26 08:18:36.366] 
+[2026-11-26 08:18:36.366] 
+[2026-11-26 08:18:36.366] 
+[2026-11-26 08:18:36.366] <info> app: I2C TX complete: 14 bytes.
+[2026-11-26 08:18:36.366] 
+[2026-11-26 08:18:36.366] <info> app: !1 
+[2026-11-26 08:18:36.366] 
+[2026-11-26 08:18:36.366] 000: 80 01 08 00 73 65 6C 66  74 65 73 74 38 A9 00 00  ....selftest8...
+[2026-11-26 08:18:36.382] 
+[2026-11-26 08:18:36.382] <info> app: I2C link is initialised.
+[2026-11-26 08:18:36.398] 
+[2026-11-26 08:18:36.398] <info> app: I2C RX payload 13/250 bytes. Response type is 4. CRC OK (0x7FB8)
+[2026-11-26 08:18:36.398] 
+[2026-11-26 08:18:36.398] 000: 80 04 0D 00 73 65 6C 66  54 65 73 74 20 30 30 30  ....selfTest 000
+[2026-11-26 08:18:36.398] 
+[2026-11-26 08:18:36.398] 010: 30 00 B8 FF FF FF FF FF  FF FF FF FF FF FF FF FF  0...............
+[2026-11-26 08:18:36.398] 
+[2026-11-26 08:18:36.398] <info> app: AI state machine bumped with 'Selftest Rx' (Current state: SELFTEST)
+[2026-11-26 08:18:36.414] 
+[2026-11-26 08:18:36.414] 
+[2026-11-26 08:18:36.414] 
+[2026-11-26 08:18:36.414] <info> app: AI self test bits = 0x0000 (all bits now 0x0020)
+[2026-11-26 08:18:36.430] 
+[2026-11-26 08:18:36.430] <info> app: Can't send UTC
+[2026-11-26 08:18:36.430] 
+[2026-11-26 08:18:36.430] <info> app: AI state changed from SELFTEST to IDLE
+[2026-11-26 08:18:36.435] 
+[2026-11-26 08:18:36.435] 
+[2026-11-26 08:18:36.435] 
+[2026-11-26 08:18:36.435] BLE out: Failed to send  20 bytes: 'Error bits = 0x0020'
+[2026-11-26 08:18:36.442] 
+[2026-11-26 08:18:36.442] <info> app: AI State machine scheduler called with event 12 'Msg to AI'
+[2026-11-26 08:18:36.445] 
+[2026-11-26 08:18:36.445] <info> app: AI state machine bumped with 'Msg to AI' (Current state: IDLE)
+[2026-11-26 08:18:36.445] 
+[2026-11-26 08:18:36.445] 
+[2026-11-26 08:18:36.445] 
+[2026-11-26 08:18:36.445] <info> app: I2C link is initialised.
+[2026-11-26 08:18:36.445] 
+[2026-11-26 08:18:36.445] Sending 'sdused' to AI processor (4 ctrl bytes, 6 payload, 2 CRC)<info> app: AI state changed from IDLE to PROCESSING
+[2026-11-26 08:18:36.477] 
+[2026-11-26 08:18:36.477] 
+[2026-11-26 08:18:36.477] 
+[2026-11-26 08:18:36.477] <info> app: I2C TX complete: 12 bytes.
+[2026-11-26 08:18:36.477] 
+[2026-11-26 08:18:36.477] <info> app: !2 
+[2026-11-26 08:18:36.477] 
+[2026-11-26 08:18:36.477] 000: 80 01 06 00 73 64 75 73  65 64 B7 16 38 A9 00 00  ....sdused..8...
+[2026-11-26 08:18:36.477] 
+[2026-11-26 08:18:36.477] <info> app: I2C link is initialised.
+[2026-11-26 08:18:36.493] 
+[2026-11-26 08:18:36.493] <info> app: I2C RX payload 8/250 bytes. Response type is 4. CRC OK (0x6503)
+[2026-11-26 08:18:36.493] 
+[2026-11-26 08:18:36.493] 000: 80 04 08 00 73 64 75 73  65 64 20 31 00 03 FF FF  ....sdused 1....
+[2026-11-26 08:18:36.510] 
+[2026-11-26 08:18:36.510] <info> app: AI state machine bumped with 'Msg from AI' (Current state: PROCESSING)
+[2026-11-26 08:18:36.515] 
+[2026-11-26 08:18:36.515] 
+[2026-11-26 08:18:36.515] 
+[2026-11-26 08:18:36.515] <info> app: AI processor replies: 'sdused 1'
+[2026-11-26 08:18:36.515] 
+[2026-11-26 08:18:36.515] <info> app: AI processor: SD card 1% used
+[2026-11-26 08:18:36.530] 
+[2026-11-26 08:18:36.530] <info> app: AI state changed from PROCESSING to IDLE
+[2026-11-26 08:18:36.530] 
+[2026-11-26 08:18:36.530] 
+[2026-11-26 08:18:38.277] 
+[2026-11-26 08:18:38.277] <info> app: Advertising Fast.
+[2026-11-26 08:18:38.277] 
+[2026-11-26 08:18:38.277] <info> app: Starting advertising
+[2026-11-26 08:18:39.619] 
+[2026-11-26 08:18:39.619] <debug> nrf_ble_gatt: Requesting to update ATT MTU to 247 bytes on connection 0x0.
+[2026-11-26 08:18:39.628] 
+[2026-11-26 08:18:39.628] <debug> nrf_ble_gatt: Updating data length to 251 on connection 0x0.
+[2026-11-26 08:18:39.628] 
+[2026-11-26 08:18:39.628] <info> app: Connected
+[2026-11-26 08:18:39.650] 
+[2026-11-26 08:18:39.650] <info> app: Requesting DLE to 251 bytes
+[2026-11-26 08:18:39.755] 
+[2026-11-26 08:18:39.755] <debug> nrf_ble_gatt: ATT MTU updated to 247 bytes on connection 0x0 (response).
+[2026-11-26 08:18:39.771] 
+[2026-11-26 08:18:39.771] <info> app: ATT MTU exchange completed. MTU set to 247 bytes.
+[2026-11-26 08:18:39.906] 
+[2026-11-26 08:18:39.906] <debug> nrf_ble_gatt: Data length updated to 27 on connection 0x0.
+[2026-11-26 08:18:39.920] 
+[2026-11-26 08:18:39.920] <debug> nrf_ble_gatt: max_rx_octets: 27
+[2026-11-26 08:18:39.920] 
+[2026-11-26 08:18:39.920] <debug> nrf_ble_gatt: max_tx_octets: 27
+[2026-11-26 08:18:39.920] 
+[2026-11-26 08:18:39.920] <debug> nrf_ble_gatt: max_rx_time: 328
+[2026-11-26 08:18:39.930] 
+[2026-11-26 08:18:39.930] <debug> nrf_ble_gatt: max_tx_time: 328
+[2026-11-26 08:18:39.930] 
+[2026-11-26 08:18:39.930] <info> app: GATT data length updated to 27 bytes.
+[2026-11-26 08:18:39.930] 
+[2026-11-26 08:18:39.930] <info> app: Data length updated: TX = 27, RX = 27
+[2026-11-26 08:18:40.389] 
+[2026-11-26 08:18:40.389] <info> app: Conn params applied: interval 6 units (7ms), timeout 5000ms
+[2026-11-26 08:18:40.541] 
+[2026-11-26 08:18:40.541] <info> app: NUS start
+[2026-11-26 08:18:40.541] 
+[2026-11-26 08:18:40.541] <info> app: !3 
+[2026-11-26 08:18:40.547] 
+[2026-11-26 08:18:40.547] <info> app: I2C link is initialised.
+[2026-11-26 08:18:40.547] 
+[2026-11-26 08:18:40.547] <info> app: Conn params applied: interval 39 units (48ms), timeout 5000ms
+[2026-11-26 08:18:40.564] 
+[2026-11-26 08:18:40.564] <info> app: I2C RX payload 110/250 bytes. Response type is 4. CRC OK (0xBDEB)
+[2026-11-26 08:18:40.564] 
+[2026-11-26 08:18:40.564] 000: 80 04 6E 00 53 6C 65 65  70 20 33 20 33 20 30 20  ..n.Sleep 3 3 0 
+[2026-11-26 08:18:40.575] 
+[2026-11-26 08:18:40.575] 010: 35 36 20 34 30 20 31 20  35 30 30 20 30 20 31 30  56 40 1 500 0 10
+[2026-11-26 08:18:40.579] 
+[2026-11-26 08:18:40.579] 020: 30 30 20 35 20 31 20 31  30 30 30 20 31 30 30 20  00 5 1 1000 100 
+[2026-11-26 08:18:40.595] 
+[2026-11-26 08:18:40.595] 030: 30 20 32 30 20 31 20 36  30 20 31 20 30 20 33 20  0 20 1 60 1 0 3 
+[2026-11-26 08:18:40.595] 
+[2026-11-26 08:18:40.595] 040: 30 20 32 20 35 20 36 35  20 31 35 20 30 20 30 20  0 2 5 65 15 0 0 
+[2026-11-26 08:18:40.595] 
+[2026-11-26 08:18:40.595] 050: 32 38 36 20 33 32 36 20  31 20 31 31 30 20 31 20  286 326 1 110 1 
+[2026-11-26 08:18:40.595] 
+[2026-11-26 08:18:40.595] 060: 31 35 20 35 20 30 20 30  20 30 20 34 30 33 35 20  15 5 0 0 0 4035 
+[2026-11-26 08:18:40.621] 
+[2026-11-26 08:18:40.621] 070: 30 20 00 EB FF FF FF FF  FF FF FF FF FF FF FF FF  0 ..............
+[2026-11-26 08:18:40.627] 
+[2026-11-26 08:18:40.627] <info> app: AI state machine bumped with 'Sleep' (Current state: IDLE)
+[2026-11-26 08:18:40.627] 
+[2026-11-26 08:18:40.627] 
+[2026-11-26 08:18:40.627] 
+[2026-11-26 08:18:40.627] <info> app: AI processor sends stats: '3 3 0 56 40 1 500 0 1000 5 1 1000 100 0 20 1 60 1 0 3 0 2 5 65 15 0 0 286 326 1 110 1 15 5 0 0 0 4035 0 '
+[2026-11-26 08:18:40.655] 
+[2026-11-26 08:18:40.655] <info> app: Op parameter 32 (LoRaWAN ping minutes) = 15
+[2026-11-26 08:18:40.655] 
+[2026-11-26 08:18:40.655] <info> app: AI state changed from IDLE to SLEEP
+[2026-11-26 08:18:40.655] 
+[2026-11-26 08:18:40.655] 
+[2026-11-26 08:18:40.655] 
+[2026-11-26 08:18:40.655] BLE out: Sent   6 bytes: 'Sleep'
+[2026-11-26 08:18:40.659] 
+[2026-11-26 08:18:40.659] <info> app: State machine scheduler called with event 14 'LoRaWAN Config'
+[2026-11-26 08:18:40.675] 
+[2026-11-26 08:18:40.675] <info> app: Bumping state machine with 'LoRaWAN Config' (Current state: LORAWAN WAITING)
+[2026-11-26 08:18:40.675] 
+[2026-11-26 08:18:40.675] 
+[2026-11-26 08:18:40.675] 
+[2026-11-26 08:18:40.675] <info> app:  Joining now...
+[2026-11-26 08:18:40.675] 
+[2026-11-26 08:18:40.690] 
+[2026-11-26 08:18:40.690] 
+[2026-11-26 08:18:40.690] <info> app: MAC parameters reset: uplink dwell time ON
+[2026-11-26 08:18:40.690] 
+[2026-11-26 08:18:40.690] <info> app: MLME-Request: MLME_JOIN, OK
+[2026-11-26 08:18:40.690] 
+[2026-11-26 08:18:40.690] <info> app: State changed from LORAWAN WAITING to JOINING
+[2026-11-26 08:18:40.690] 
+[2026-11-26 08:18:40.690] 
+[2026-11-26 08:18:40.738] 
+[2026-11-26 08:18:40.738] <info> app: NUS TX Ready
+[2026-11-26 08:18:41.039] 
+[2026-11-26 08:18:41.039] <info> app: MAC txDone
+[2026-11-26 08:18:46.492] 
+[2026-11-26 08:18:46.492] <info> app: MAC rxDone
+[2026-11-26 08:18:46.492] 
+[2026-11-26 08:18:46.492] 
+[2026-11-26 08:18:46.492] 
+[2026-11-26 08:18:46.492] ###### ===================== JOINED = OTAA ===================== 
+[2026-11-26 08:18:46.507] 
+[2026-11-26 08:18:46.507] ###### NETWORK ID: 0x000013 DEVADDR: 0x260D8F8B
+[2026-11-26 08:18:46.507] 
+[2026-11-26 08:18:46.507] 
+[2026-11-26 08:18:46.507]  <info> app: Bumping state machine with 'Joined' (Current state: JOINING)
+[2026-11-26 08:18:46.523] 
+[2026-11-26 08:18:46.523] 
+[2026-11-26 08:18:46.525] 
+[2026-11-26 08:18:46.525] <info> app: Joined at 12915ms. Time to join: 5842ms. Credentials nonce = 0x2F33
+[2026-11-26 08:18:46.532] 
+[2026-11-26 08:18:46.532] 
+[2026-11-26 08:18:46.532] 
+[2026-11-26 08:18:46.532] <info> app: Sending empty packet 1/3 to fetch MAC data. 
+[2026-11-26 08:18:46.538] 
+[2026-11-26 08:18:46.538] 
+[2026-11-26 08:18:46.538] 
+[2026-11-26 08:18:46.538] <info> app: State changed from JOINING to GETMACS
+[2026-11-26 08:18:46.538] 
+[2026-11-26 08:18:46.538] 
+[2026-11-26 08:18:46.602] 
+[2026-11-26 08:18:46.602] <debug> app: FDS update success! FileId: 0x3E8 RecKey:0x1
+[2026-11-26 08:18:46.619] 
+[2026-11-26 08:18:46.619] <debug> app: FDS update success! FileId: 0x3E8 RecKey:0x2
+[2026-11-26 08:18:46.634] 
+[2026-11-26 08:18:46.634] <debug> app: FDS update success! FileId: 0x3E8 RecKey:0x3
+[2026-11-26 08:18:46.634] 
+[2026-11-26 08:18:46.634] <debug> app: FDS update success! FileId: 0x3E8 RecKey:0x4
+[2026-11-26 08:18:46.640] 
+[2026-11-26 08:18:46.640] <debug> app: FDS update success! FileId: 0x3E8 RecKey:0x6
+[2026-11-26 08:18:46.640] 
+[2026-11-26 08:18:46.640] <info> app: Data stored on NVM: 1040 bytes
+[2026-11-26 08:18:46.649] 
+[2026-11-26 08:18:46.649] BLE out: Sent   8 bytes: 'Joined.'
+[2026-11-26 08:18:46.649] 
+[2026-11-26 08:18:46.649] <info> app: SEND EMPTY PACKET
+[2026-11-26 08:18:46.659] 
+[2026-11-26 08:18:46.659] 
+[2026-11-26 08:18:46.659] 
+[2026-11-26 08:18:46.659] <info> app:   Sending no MAC commands. FCtl = 0x80
+[2026-11-26 08:18:46.670] 
+[2026-11-26 08:18:46.670] 
+[2026-11-26 08:18:46.670] 
+[2026-11-26 08:18:46.670] <info> app: MCPS-Request: MCPS_CONFIRMED, OK
+[2026-11-26 08:18:46.690] 
+[2026-11-26 08:18:46.690] <info> app: NUS TX Ready
+[2026-11-26 08:18:46.934] 
+[2026-11-26 08:18:46.934] <info> app: MAC txDone
+[2026-11-26 08:18:47.813] 
+[2026-11-26 08:18:47.813] 
+[2026-11-26 08:18:47.813] BLE in: Received   6 bytes 'hack 6'
+[2026-11-26 08:18:47.816] 
+[2026-11-26 08:18:47.816] <error> app: ERROR 4 [NRF_ERROR_NO_MEM] at ../../../ble_commands.c:998
+[2026-11-26 08:18:47.825] 
+[2026-11-26 08:18:47.825] <error> app: PC at: 0x00027155
+[2026-11-26 08:18:47.830] 
+[2026-11-26 08:18:47.830] <error> app: >>> Resetting both processors after fault (3 in a row)
+[2026-11-26 08:18:48.202] 
+[2026-11-26 08:18:48.202] <info> app: 
+[2026-11-26 08:18:48.203] 
+[2026-11-26 08:18:48.203] **** Secure Bootloader (WW500_A00) Ver: 00.01.01 Built: 19:01:29 Oct 31 2025 ****
+[2026-11-26 08:18:48.217] 
+[2026-11-26 08:18:48.217] 
+[2026-11-26 08:18:48.217] <info> nrf_dfu_settings: Backing up settings page to address 0x7E000.
+[2026-11-26 08:18:48.221] 
+[2026-11-26 08:18:48.221] 
+[2026-11-26 08:18:48.221] <info> app: No firmware to activate.
+[2026-11-26 08:18:48.223] 
+[2026-11-26 08:18:48.223] 
+[2026-11-26 08:18:48.223] <info> nrf_dfu_settings: Backing up settings page to address 0x7E000.
+[2026-11-26 08:18:48.235] 
+[2026-11-26 08:18:50.164] 
+[2026-11-26 08:18:50.164] <info> app: 
+[2026-11-26 08:18:50.166] 
+[2026-11-26 08:18:50.166] **** Wildlife Watcher 1 (WW500-C02) Ver: 00.30.62 Built: 17:28:46 Nov 24 2026 ****
+[2026-11-26 08:18:50.185] 
+[2026-11-26 08:18:50.185] <info> app: BOARDTYPE bytes: 0x04 0x22
+[2026-11-26 08:18:50.185] 
+[2026-11-26 08:18:50.185] <info> app: GCC version: 10.3.1
+[2026-11-26 08:18:50.185] 
+[2026-11-26 08:18:50.185] <info> app: Compiler Version: ARM GNU, 10.3.1 20210824 (release)
+[2026-11-26 08:18:50.190] 
+[2026-11-26 08:18:50.190] <info> app: Git branch: '261106_lorawanPing' 0862858-dirty
+[2026-11-26 08:18:50.195] 
+[2026-11-26 08:18:50.195] 
+[2026-11-26 08:18:50.195] 
+[2026-11-26 08:18:50.195] <info> app_timer: RTC: initialized.
+[2026-11-26 08:18:50.195] 
+[2026-11-26 08:18:50.195] <info> app: Watchdog already running: period 30 s (kept)
+[2026-11-26 08:18:50.195] 
+[2026-11-26 08:18:50.195] <info> app: Watchdog early warning: 2 s before the reset
+[2026-11-26 08:18:50.211] 
+[2026-11-26 08:18:50.211] <info> app: System time set successfully
+[2026-11-26 08:18:50.211] 
+[2026-11-26 08:18:50.211] <info> app: 
+[2026-11-26 08:18:50.211] 
+[2026-11-26 08:18:50.211] Initialising LoRaWAN
+[2026-11-26 08:18:50.218] 
+[2026-11-26 08:18:50.218] <info> app: Initializing fds...
+[2026-11-26 08:18:50.218] 
+[2026-11-26 08:18:50.218] <info> app: Reading flash usage statistics...
+[2026-11-26 08:18:50.218] 
+[2026-11-26 08:18:50.218] <info> app: Found 6 valid records.
+[2026-11-26 08:18:50.234] 
+[2026-11-26 08:18:50.234] <info> app: Found 21 dirty records (ready to be garbage collected).
+[2026-11-26 08:18:50.234] 
+[2026-11-26 08:18:50.234] <debug> app: Record 8022 at 6D8B8
+[2026-11-26 08:18:50.234] 
+[2026-11-26 08:18:50.234] <debug> app: Record 8023 at 6D8F8
+[2026-11-26 08:18:50.241] 
+[2026-11-26 08:18:50.241] <debug> app: Record 8024 at 6D91C
+[2026-11-26 08:18:50.241] 
+[2026-11-26 08:18:50.241] <debug> app: Record 8025 at 6DA80
+[2026-11-26 08:18:50.241] 
+[2026-11-26 08:18:50.241] <debug> app: Record 8026 at 6DC30
+[2026-11-26 08:18:50.246] 
+[2026-11-26 08:18:50.246] <debug> app: Record 6 at 70008
+[2026-11-26 08:18:50.256] 
+[2026-11-26 08:18:50.256] <info> app: >>> LoraMac version = 0x01000300
+[2026-11-26 08:18:50.256] 
+[2026-11-26 08:18:50.256] <info> app: MAC parameters reset: uplink dwell time ON
+[2026-11-26 08:18:50.268] 
+[2026-11-26 08:18:50.268] <info> app: Data restored from NVM: 1064 bytes
+[2026-11-26 08:18:50.268] 
+[2026-11-26 08:18:50.268] <info> app: LoRaWAN initialised
+[2026-11-26 08:18:50.268] 
+[2026-11-26 08:18:50.268] 
+[2026-11-26 08:18:50.268] 
+[2026-11-26 08:18:50.268] <info> app: BLE initialised for WILD-CMSS - disconnect interval 60s
+[2026-11-26 08:18:50.276] 
+[2026-11-26 08:18:50.276] 
+[2026-11-26 08:18:50.276] 
+[2026-11-26 08:18:50.276] <info> app: Max BLE packet length is 244. PDU length = 251
+[2026-11-26 08:18:50.276] 
+[2026-11-26 08:18:50.276] <info> app: Reset cause:   software reset
+[2026-11-26 08:18:50.286] 
+[2026-11-26 08:18:50.286] <info> app: AI processor reset at boot (/RST 100 ms)
+[2026-11-26 08:18:50.286] 
+[2026-11-26 08:18:50.286] <info> app: Previous run ended with a fault: error check, error 0x00000004
+[2026-11-26 08:18:50.301] 
+[2026-11-26 08:18:50.301] <info> app:   at ble_commands.c:998, PC 0x00027155, LR 0x00000000
+[2026-11-26 08:18:50.301] 
+[2026-11-26 08:18:50.301] <info> app: Reset reason code 2. Resets since power-on: 11.
+[2026-11-26 08:18:50.305] 
+[2026-11-26 08:18:50.305] <info> app: Fault resets in a row: 3. Cleared after 10 minutes without a fault.
+[2026-11-26 08:18:50.316] 
+[2026-11-26 08:18:50.316] <info> app: Board name: WILD-CMSS
+[2026-11-26 08:18:50.316] 
+[2026-11-26 08:18:50.316] <info> app: Tests Wildlife Watcher BLE and LoRaWAN communications. Uses NUS
+[2026-11-26 08:18:50.329] 
+[2026-11-26 08:18:50.329] <info> app: TODO - clean up LoRaWAN processing - esp. failures, incl. failure to join.
+[2026-11-26 08:18:50.334] 
+[2026-11-26 08:18:50.334] <info> app: TODO - check RSSI outgoing vs incoming differences
+[2026-11-26 08:18:50.346] 
+[2026-11-26 08:18:50.346] <info> app: Device Addr:   99:0A:7A:67:EF:DA
+[2026-11-26 08:18:50.346] 
+[2026-11-26 08:18:50.346] <info> app: BLE address:   D9:0A:7A:67:EF:DA
+[2026-11-26 08:18:50.346] 
+[2026-11-26 08:18:50.346] <info> app: BLE Name:      WILD-CMSS
+[2026-11-26 08:18:50.359] 
+[2026-11-26 08:18:50.359] <info> app: Target DevEui: DA:EF:67:FE:FF:7A:0A:D9
+[2026-11-26 08:18:50.359] 
+[2026-11-26 08:18:50.359] <info> app: Target AppEui: TBD
+[2026-11-26 08:18:50.359] 
+[2026-11-26 08:18:50.359] <info> app: Softdevice ver: 0x00CB
+[2026-11-26 08:18:50.368] 
+[2026-11-26 08:18:50.368] <info> app: Reset reason:  0x00000004 CPU
+[2026-11-26 08:18:50.368] 
+[2026-11-26 08:18:50.368] <info> app: Firmware version 0.30.62
+[2026-11-26 08:18:50.368] 
+[2026-11-26 08:18:50.368] 
+[2026-11-26 08:18:50.368] 
+[2026-11-26 08:18:50.368] <info> app: Temperature: 22.75C
+[2026-11-26 08:18:50.372] 
+[2026-11-26 08:18:50.372] 
+[2026-11-26 08:18:50.372] 
+[2026-11-26 08:18:50.372] <info> app: Press SW1 to start BLE advertising.
+[2026-11-26 08:18:50.385] 
+[2026-11-26 08:18:50.385] <info> app: Press SW1 at power-on to reset credentials
+[2026-11-26 08:18:50.385] 
+[2026-11-26 08:18:50.385] <info> app: Press SW1 for > 10s to start Device Firmware Upgrade (DFU)
+[2026-11-26 08:18:50.394] 
+[2026-11-26 08:18:50.394] <info> app: Press SW2 - prohibited. This signal is asserted by AI processor.
+[2026-11-26 08:18:50.394] 
+[2026-11-26 08:18:50.394] <info> app: Hold magnet close at power-on to start Device Firmware Upgrade (DFU)
+[2026-11-26 08:18:50.409] 
+[2026-11-26 08:18:50.409] <info> app: Press RESET button for a software reset.
+[2026-11-26 08:18:50.409] 
+[2026-11-26 08:18:50.409] <info> app: UART RX Pin 2 is driven
+[2026-11-26 08:18:50.409] 
+[2026-11-26 08:18:50.409] <info> app: SW1 Pin 22 is not driven
+[2026-11-26 08:18:50.415] 
+[2026-11-26 08:18:50.415] <info> app: SW2 Pin 27 is not driven
+[2026-11-26 08:18:50.415] 
+[2026-11-26 08:18:50.415] <info> app: Mag sensor Pin 25 is driven
+[2026-11-26 08:18:50.424] 
+[2026-11-26 08:18:50.424] <info> app: Current DevEui is:   DA:EF:67:FE:FF:7A:0A:D9
+[2026-11-26 08:18:50.424] 
+[2026-11-26 08:18:50.424] <info> app: Current JoinEui is:  70:B3:D5:7E:D0:03:C8:D4
+[2026-11-26 08:18:50.428] 
+[2026-11-26 08:18:50.428] <info> app: Current ShortId is:   CMSS
+[2026-11-26 08:18:50.428] 
+[2026-11-26 08:18:50.428] <info> app: InitCred DevEui is:  00:80:E1:01:01:01:01:01
+[2026-11-26 08:18:50.440] 
+[2026-11-26 08:18:50.440] <info> app: InitCred JoinEui is: 70:B3:D5:7E:D0:03:C8:00
+[2026-11-26 08:18:50.440] 
+[2026-11-26 08:18:50.440] <info> app: We have no need to fetch parameters
+[2026-11-26 08:18:50.440] 
+[2026-11-26 08:18:50.440] 
+[2026-11-26 08:18:50.451] 
+[2026-11-26 08:18:50.451] <info> app: I2C link is initialised.
+[2026-11-26 08:18:50.462] 
+[2026-11-26 08:18:50.462] <info> app: Enabled I2C (instance 1) on pins 7 and 8
+[2026-11-26 08:18:50.462] 
+[2026-11-26 08:18:50.462] <info> app: I2C buffer sizes 250 and 250
+[2026-11-26 08:18:50.462] 
+[2026-11-26 08:18:50.462] <info> app: AI processor initialised.
+[2026-11-26 08:18:50.465] 
+[2026-11-26 08:18:50.465] <info> app: 
+[2026-11-26 08:18:50.469] 
+[2026-11-26 08:18:50.469] Initialisation finished! Starting state machine.
+[2026-11-26 08:18:50.476] 
+[2026-11-26 08:18:50.476] 
+[2026-11-26 08:18:50.476] 
+[2026-11-26 08:18:50.476] <info> app: Bumping state machine with 'Initialised' (Current state: RESET)
+[2026-11-26 08:18:50.476] 
+[2026-11-26 08:18:50.476] 
+[2026-11-26 08:18:50.476] 
+[2026-11-26 08:18:50.476] <info> app:  LoRaWAN waits for op parameter 32 from the AI processor.
+[2026-11-26 08:18:50.487] 
+[2026-11-26 08:18:50.487] 
+[2026-11-26 08:18:50.487] 
+[2026-11-26 08:18:50.487] <info> app: State changed from RESET to LORAWAN WAITING
+[2026-11-26 08:18:50.487] 
+[2026-11-26 08:18:50.487] 
+[2026-11-26 08:18:50.487] 
+[2026-11-26 08:18:50.487] <info> app: AI state machine bumped with 'Initialised' (Current state: RESET)
+[2026-11-26 08:18:50.500] 
+[2026-11-26 08:18:50.500] 
+[2026-11-26 08:18:50.508] 
+[2026-11-26 08:18:50.508] <info> app: AI state changed from RESET to SLEEP
+[2026-11-26 08:18:50.508] 
+[2026-11-26 08:18:50.508] 
+[2026-11-26 08:18:51.340] 
+[2026-11-26 08:18:51.340] <info> app: !0 
+[2026-11-26 08:18:51.346] 
+[2026-11-26 08:18:51.346] <info> app: I2C RX payload 25/250 bytes. Response type is 4. CRC OK (0xBF51)
+[2026-11-26 08:18:51.361] 
+[2026-11-26 08:18:51.361] 000: 80 04 19 00 57 61 6B 65  20 32 30 32 34 2D 30 31  ....Wake 2024-01
+[2026-11-26 08:18:51.364] 
+[2026-11-26 08:18:51.364] 010: 2D 30 31 54 30 30 3A 30  30 3A 30 32 5A 00 51 FF  -01T00:00:02Z.Q.
+[2026-11-26 08:18:51.383] 
+[2026-11-26 08:18:51.383] <info> app: AI state machine bumped with 'Wake' (Current state: SLEEP)
+[2026-11-26 08:18:51.383] 
+[2026-11-26 08:18:51.383] 
+[2026-11-26 08:18:51.383] 
+[2026-11-26 08:18:51.383] <info> app: BLE and AI time differ by 1s
+[2026-11-26 08:18:51.383] 
+[2026-11-26 08:18:51.383] <info> app: AI state changed from SLEEP to WOKEN
+[2026-11-26 08:18:51.393] 
+[2026-11-26 08:18:51.393] 
+[2026-11-26 08:18:51.393] 
+[2026-11-26 08:18:51.393] BLE out: Failed to send   5 bytes: 'Wake'
+[2026-11-26 08:18:51.393] 
+[2026-11-26 08:18:51.393] <info> app: AI State machine scheduler called with event 8 'Send SelfTest'
+[2026-11-26 08:18:51.403] 
+[2026-11-26 08:18:51.403] <info> app: AI state machine bumped with 'Send SelfTest' (Current state: WOKEN)
+[2026-11-26 08:18:51.414] 
+[2026-11-26 08:18:51.414] 
+[2026-11-26 08:18:51.414] 
+[2026-11-26 08:18:51.414] <info> app: I2C link is initialised.
+[2026-11-26 08:18:51.414] 
+[2026-11-26 08:18:51.414] Sending 'selftest' to AI processor (4 ctrl bytes, 8 payload, 2 CRC)<info> app: OK
+[2026-11-26 08:18:51.446] 
+[2026-11-26 08:18:51.446] <info> app: AI state changed from WOKEN to SELFTEST
+[2026-11-26 08:18:51.446] 
+[2026-11-26 08:18:51.446] 
+[2026-11-26 08:18:51.446] 
+[2026-11-26 08:18:51.446] <info> app: I2C TX complete: 14 bytes.
+[2026-11-26 08:18:51.446] 
+[2026-11-26 08:18:51.448] <info> app: !1 
+[2026-11-26 08:18:51.448] 
+[2026-11-26 08:18:51.448] 000: 80 01 08 00 73 65 6C 66  74 65 73 74 38 A9 00 00  ....selftest8...
+[2026-11-26 08:18:51.448] 
+[2026-11-26 08:18:51.448] <info> app: I2C link is initialised.
+[2026-11-26 08:18:51.469] 
+[2026-11-26 08:18:51.469] <info> app: I2C RX payload 13/250 bytes. Response type is 4. CRC OK (0x7FB8)
+[2026-11-26 08:18:51.469] 
+[2026-11-26 08:18:51.469] 000: 80 04 0D 00 73 65 6C 66  54 65 73 74 20 30 30 30  ....selfTest 000
+[2026-11-26 08:18:51.469] 
+[2026-11-26 08:18:51.469] 010: 30 00 B8 FF FF FF FF FF  FF FF FF FF FF FF FF FF  0...............
+[2026-11-26 08:18:51.476] 
+[2026-11-26 08:18:51.476] <info> app: AI state machine bumped with 'Selftest Rx' (Current state: SELFTEST)
+[2026-11-26 08:18:51.476] 
+[2026-11-26 08:18:51.476] 
+[2026-11-26 08:18:51.476] 
+[2026-11-26 08:18:51.476] <info> app: AI self test bits = 0x0000 (all bits now 0x0020)
+[2026-11-26 08:18:51.492] 
+[2026-11-26 08:18:51.492] <info> app: Can't send UTC
+[2026-11-26 08:18:51.492] 
+[2026-11-26 08:18:51.492] <info> app: AI state changed from SELFTEST to IDLE
+[2026-11-26 08:18:51.492] 
+[2026-11-26 08:18:51.495] 
+[2026-11-26 08:18:51.495] 
+[2026-11-26 08:18:51.495] BLE out: Failed to send  20 bytes: 'Error bits = 0x0020'
+[2026-11-26 08:18:51.505] 
+[2026-11-26 08:18:51.505] <info> app: AI State machine scheduler called with event 12 'Msg to AI'
+[2026-11-26 08:18:51.513] 
+[2026-11-26 08:18:51.513] <info> app: AI state machine bumped with 'Msg to AI' (Current state: IDLE)
+[2026-11-26 08:18:51.533] 
+[2026-11-26 08:18:51.533] 
+[2026-11-26 08:18:51.533] 
+[2026-11-26 08:18:51.533] <info> app: I2C link is initialised.
+[2026-11-26 08:18:51.533] 
+[2026-11-26 08:18:51.533] Sending 'sdused' to AI processor (4 ctrl bytes, 6 payload, 2 CRC)<info> app: AI state changed from IDLE to PROCESSING
+[2026-11-26 08:18:51.543] 
+[2026-11-26 08:18:51.543] 
+[2026-11-26 08:18:51.543] 
+[2026-11-26 08:18:51.543] <info> app: I2C TX complete: 12 bytes.
+[2026-11-26 08:18:51.543] 
+[2026-11-26 08:18:51.543] <info> app: !2 
+[2026-11-26 08:18:51.543] 
+[2026-11-26 08:18:51.543] 000: 80 01 06 00 73 64 75 73  65 64 B7 16 38 A9 00 00  ....sdused..8...
+[2026-11-26 08:18:51.553] 
+[2026-11-26 08:18:51.553] <info> app: I2C link is initialised.
+[2026-11-26 08:18:51.565] 
+[2026-11-26 08:18:51.565] <info> app: I2C RX payload 8/250 bytes. Response type is 4. CRC OK (0x6503)
+[2026-11-26 08:18:51.565] 
+[2026-11-26 08:18:51.565] 000: 80 04 08 00 73 64 75 73  65 64 20 31 00 03 FF FF  ....sdused 1....
+[2026-11-26 08:18:51.581] 
+[2026-11-26 08:18:51.581] <info> app: AI state machine bumped with 'Msg from AI' (Current state: PROCESSING)
+[2026-11-26 08:18:51.582] 
+[2026-11-26 08:18:51.582] 
+[2026-11-26 08:18:51.582] 
+[2026-11-26 08:18:51.582] <info> app: AI processor replies: 'sdused 1'
+[2026-11-26 08:18:51.582] 
+[2026-11-26 08:18:51.582] <info> app: AI processor: SD card 1% used
+[2026-11-26 08:18:51.583] 
+[2026-11-26 08:18:51.583] <info> app: AI state changed from PROCESSING to IDLE
+[2026-11-26 08:18:51.598] 
+[2026-11-26 08:18:51.598] 
+[2026-11-26 08:18:55.072] 
+[2026-11-26 08:18:55.072] <info> app: Advertising Fast.
+[2026-11-26 08:18:55.083] 
+[2026-11-26 08:18:55.083] <info> app: Starting advertising
+[2026-11-26 08:18:55.087] 
+[2026-11-26 08:18:55.087] <debug> nrf_ble_gatt: Requesting to update ATT MTU to 247 bytes on connection 0x0.
+[2026-11-26 08:18:55.104] 
+[2026-11-26 08:18:55.104] <debug> nrf_ble_gatt: Updating data length to 251 on connection 0x0.
+[2026-11-26 08:18:55.118] 
+[2026-11-26 08:18:55.118] <info> app: Connected
+[2026-11-26 08:18:55.118] 
+[2026-11-26 08:18:55.118] <info> app: Requesting DLE to 251 bytes
+[2026-11-26 08:18:55.214] 
+[2026-11-26 08:18:55.214] <debug> nrf_ble_gatt: ATT MTU updated to 247 bytes on connection 0x0 (response).
+[2026-11-26 08:18:55.214] 
+[2026-11-26 08:18:55.214] <info> app: ATT MTU exchange completed. MTU set to 247 bytes.
+[2026-11-26 08:18:55.358] 
+[2026-11-26 08:18:55.358] <debug> nrf_ble_gatt: Data length updated to 27 on connection 0x0.
+[2026-11-26 08:18:55.370] 
+[2026-11-26 08:18:55.370] <debug> nrf_ble_gatt: max_rx_octets: 27
+[2026-11-26 08:18:55.372] 
+[2026-11-26 08:18:55.372] <debug> nrf_ble_gatt: max_tx_octets: 27
+[2026-11-26 08:18:55.372] 
+[2026-11-26 08:18:55.372] <debug> nrf_ble_gatt: max_rx_time: 328
+[2026-11-26 08:18:55.372] 
+[2026-11-26 08:18:55.372] <debug> nrf_ble_gatt: max_tx_time: 328
+[2026-11-26 08:18:55.392] 
+[2026-11-26 08:18:55.392] <info> app: GATT data length updated to 27 bytes.
+[2026-11-26 08:18:55.392] 
+[2026-11-26 08:18:55.392] <info> app: Data length updated: TX = 27, RX = 27
+[2026-11-26 08:18:55.597] 
+[2026-11-26 08:18:55.597] <info> app: !3 
+[2026-11-26 08:18:55.611] 
+[2026-11-26 08:18:55.611] <info> app: I2C link is initialised.
+[2026-11-26 08:18:55.613] 
+[2026-11-26 08:18:55.613] <info> app: I2C RX payload 110/250 bytes. Response type is 4. CRC OK (0x23D1)
+[2026-11-26 08:18:55.613] 
+[2026-11-26 08:18:55.613] 000: 80 04 6E 00 53 6C 65 65  70 20 33 20 33 20 30 20  ..n.Sleep 3 3 0 
+[2026-11-26 08:18:55.613] 
+[2026-11-26 08:18:55.613] 010: 35 37 20 34 30 20 31 20  35 30 30 20 30 20 31 30  57 40 1 500 0 10
+[2026-11-26 08:18:55.635] 
+[2026-11-26 08:18:55.635] 020: 30 30 20 35 20 31 20 31  30 30 30 20 31 30 30 20  00 5 1 1000 100 
+[2026-11-26 08:18:55.635] 
+[2026-11-26 08:18:55.635] 030: 30 20 32 30 20 31 20 36  30 20 31 20 30 20 33 20  0 20 1 60 1 0 3 
+[2026-11-26 08:18:55.644] 
+[2026-11-26 08:18:55.644] 040: 30 20 32 20 35 20 36 35  20 31 35 20 30 20 30 20  0 2 5 65 15 0 0 
+[2026-11-26 08:18:55.644] 
+[2026-11-26 08:18:55.644] 050: 32 38 36 20 33 32 36 20  31 20 31 31 30 20 31 20  286 326 1 110 1 
+[2026-11-26 08:18:55.660] 
+[2026-11-26 08:18:55.660] 060: 31 35 20 35 20 30 20 30  20 30 20 34 30 33 35 20  15 5 0 0 0 4035 
+[2026-11-26 08:18:55.660] 
+[2026-11-26 08:18:55.660] 070: 30 20 00 D1 FF FF FF FF  FF FF FF FF FF FF FF FF  0 ..............
+[2026-11-26 08:18:55.675] 
+[2026-11-26 08:18:55.675] <info> app: AI state machine bumped with 'Sleep' (Current state: IDLE)
+[2026-11-26 08:18:55.675] 
+[2026-11-26 08:18:55.675] 
+[2026-11-26 08:18:55.675] 
+[2026-11-26 08:18:55.675] <info> app: AI processor sends stats: '3 3 0 57 40 1 500 0 1000 5 1 1000 100 0 20 1 60 1 0 3 0 2 5 65 15 0 0 286 326 1 110 1 15 5 0 0 0 4035 0 '
+[2026-11-26 08:18:55.690] 
+[2026-11-26 08:18:55.690] <info> app: Op parameter 32 (LoRaWAN ping minutes) = 15
+[2026-11-26 08:18:55.710] 
+[2026-11-26 08:18:55.710] <info> app: AI state changed from IDLE to SLEEP
+[2026-11-26 08:18:55.710] 
+[2026-11-26 08:18:55.710] 
+[2026-11-26 08:18:55.710] 
+[2026-11-26 08:18:55.710] BLE out: Failed to send   6 bytes: 'Sleep'
+[2026-11-26 08:18:55.722] 
+[2026-11-26 08:18:55.722] <info> app: State machine scheduler called with event 14 'LoRaWAN Config'
+[2026-11-26 08:18:55.722] 
+[2026-11-26 08:18:55.722] <info> app: Bumping state machine with 'LoRaWAN Config' (Current state: LORAWAN WAITING)
+[2026-11-26 08:18:55.733] 
+[2026-11-26 08:18:55.733] 
+[2026-11-26 08:18:55.733] 
+[2026-11-26 08:18:55.733] <info> app:  Joining now...
+[2026-11-26 08:18:55.738] 
+[2026-11-26 08:18:55.738] 
+[2026-11-26 08:18:55.738] 
+[2026-11-26 08:18:55.738] <info> app: MAC parameters reset: uplink dwell time ON
+[2026-11-26 08:18:55.738] 
+[2026-11-26 08:18:55.738] <info> app: MLME-Request: MLME_JOIN, OK
+[2026-11-26 08:18:55.754] 
+[2026-11-26 08:18:55.754] <info> app: State changed from LORAWAN WAITING to JOINING
+[2026-11-26 08:18:55.754] 
+[2026-11-26 08:18:55.754] 
+[2026-11-26 08:18:55.851] 
+[2026-11-26 08:18:55.851] <info> app: Conn params applied: interval 6 units (7ms), timeout 5000ms
+[2026-11-26 08:18:55.977] 
+[2026-11-26 08:18:55.977] <info> app: NUS start
+[2026-11-26 08:18:55.994] 
+[2026-11-26 08:18:55.994] <info> app: Conn params applied: interval 39 units (48ms), timeout 5000ms
+[2026-11-26 08:18:56.089] 
+[2026-11-26 08:18:56.089] <info> app: MAC txDone
+[2026-11-26 08:18:59.852] 
+[2026-11-26 08:18:59.852] 
+[2026-11-26 08:18:59.852] BLE in: Received   5 bytes 'reset'
+[2026-11-26 08:18:59.860] 
+[2026-11-26 08:18:59.860] BLE out: Sent  39 bytes: 'Device will reset after disconnecting.'
+[2026-11-26 08:18:59.952] 
+[2026-11-26 08:18:59.952] <info> app: NUS TX Ready
+[2026-11-26 08:19:01.548] 
+[2026-11-26 08:19:01.548] <info> app: MAC rxDone
+[2026-11-26 08:19:01.557] 
+[2026-11-26 08:19:01.557] 
+[2026-11-26 08:19:01.557] 
+[2026-11-26 08:19:01.557] ###### ===================== JOINED = OTAA ===================== 
+[2026-11-26 08:19:01.563] 
+[2026-11-26 08:19:01.563] ###### NETWORK ID: 0x000013 DEVADDR: 0x260DCBC4
+[2026-11-26 08:19:01.572] 
+[2026-11-26 08:19:01.572] 
+[2026-11-26 08:19:01.572]  <info> app: Bumping state machine with 'Joined' (Current state: JOINING)
+[2026-11-26 08:19:01.579] 
+[2026-11-26 08:19:01.579] 
+[2026-11-26 08:19:01.579] 
+[2026-11-26 08:19:01.579] <info> app: Joined at 11956ms. Time to join: 5842ms. Credentials nonce = 0xA951
+[2026-11-26 08:19:01.579] 
+[2026-11-26 08:19:01.579] 
+[2026-11-26 08:19:01.579] 
+[2026-11-26 08:19:01.579] <info> app: Sending empty packet 1/3 to fetch MAC data. 
+[2026-11-26 08:19:01.579] 
+[2026-11-26 08:19:01.579] 
+[2026-11-26 08:19:01.579] 
+[2026-11-26 08:19:01.579] <info> app: State changed from JOINING to GETMACS
+[2026-11-26 08:19:01.608] 
+[2026-11-26 08:19:01.608] 
+[2026-11-26 08:19:01.681] 
+[2026-11-26 08:19:01.681] <debug> app: FDS update success! FileId: 0x3E8 RecKey:0x1
+[2026-11-26 08:19:01.681] 
+[2026-11-26 08:19:01.681] <debug> app: FDS update success! FileId: 0x3E8 RecKey:0x2
+[2026-11-26 08:19:01.695] 
+[2026-11-26 08:19:01.695] <debug> app: FDS update success! FileId: 0x3E8 RecKey:0x3
+[2026-11-26 08:19:01.701] 
+[2026-11-26 08:19:01.701] <debug> app: FDS update success! FileId: 0x3E8 RecKey:0x4
+[2026-11-26 08:19:01.705] 
+[2026-11-26 08:19:01.705] <debug> app: FDS update success! FileId: 0x3E8 RecKey:0x6
+[2026-11-26 08:19:01.708] 
+[2026-11-26 08:19:01.708] <info> app: Data stored on NVM: 1040 bytes
+[2026-11-26 08:19:01.708] 
+[2026-11-26 08:19:01.708] BLE out: Sent   8 bytes: 'Joined.'
+[2026-11-26 08:19:01.721] 
+[2026-11-26 08:19:01.721] <info> app: SEND EMPTY PACKET
+[2026-11-26 08:19:01.721] 
+[2026-11-26 08:19:01.721] 
+[2026-11-26 08:19:01.721] 
+[2026-11-26 08:19:01.721] <info> app:   Sending no MAC commands. FCtl = 0x80
+[2026-11-26 08:19:01.730] 
+[2026-11-26 08:19:01.730] 
+[2026-11-26 08:19:01.730] 
+[2026-11-26 08:19:01.730] <info> app: MCPS-Request: MCPS_CONFIRMED, OK
+[2026-11-26 08:19:01.757] 
+[2026-11-26 08:19:01.757] <info> app: NUS TX Ready
+[2026-11-26 08:19:02.009] 
+[2026-11-26 08:19:02.009] <info> app: MAC txDone
+[2026-11-26 08:19:02.294] 
+[2026-11-26 08:19:02.294] <info> app: Disconnected. Conn_handle: 0x0, reason: 0x13
+[2026-11-26 08:19:02.298] 
+[2026-11-26 08:19:02.298] <info> app:   remote
+[2026-11-26 08:19:02.301] 
+[2026-11-26 08:19:02.301] <info> app: State machine scheduler called with event 11 'Reset Request'
+[2026-11-26 08:19:02.311] 
+[2026-11-26 08:19:02.311] <info> app: Bumping state machine with 'Reset Request' (Current state: GETMACS)
+[2026-11-26 08:19:02.311] 
+[2026-11-26 08:19:02.311] 
+[2026-11-26 08:19:02.319] 
+[2026-11-26 08:19:02.319] <info> app: Resetting now...
+[2026-11-26 08:19:02.320] 
+[2026-11-26 08:19:02.320] 
+[2026-11-26 08:19:02.692] 
+[2026-11-26 08:19:02.692] <info> app: 
+[2026-11-26 08:19:02.692] 
+[2026-11-26 08:19:02.692] **** Secure Bootloader (WW500_A00) Ver: 00.01.01 Built: 19:01:29 Oct 31 2025 ****
+[2026-11-26 08:19:02.692] 
+[2026-11-26 08:19:02.692] 
+[2026-11-26 08:19:02.692] <info> nrf_dfu_settings: Backing up settings page to address 0x7E000.
+[2026-11-26 08:19:02.692] 
+[2026-11-26 08:19:02.692] 
+[2026-11-26 08:19:02.692] <info> app: No firmware to activate.
+[2026-11-26 08:19:02.708] 
+[2026-11-26 08:19:02.708] 
+[2026-11-26 08:19:02.708] <info> nrf_dfu_settings: Backing up settings page to address 0x7E000.
+[2026-11-26 08:19:02.708] 
+[2026-11-26 08:19:04.637] 
+[2026-11-26 08:19:04.637] <info> app: 
+[2026-11-26 08:19:04.640] 
+[2026-11-26 08:19:04.640] **** Wildlife Watcher 1 (WW500-C02) Ver: 00.30.62 Built: 17:28:46 Nov 24 2026 ****
+[2026-11-26 08:19:04.642] 
+[2026-11-26 08:19:04.642] <info> app: BOARDTYPE bytes: 0x04 0x22
+[2026-11-26 08:19:04.652] 
+[2026-11-26 08:19:04.652] <info> app: GCC version: 10.3.1
+[2026-11-26 08:19:04.652] 
+[2026-11-26 08:19:04.652] <info> app: Compiler Version: ARM GNU, 10.3.1 20210824 (release)
+[2026-11-26 08:19:04.669] 
+[2026-11-26 08:19:04.669] <info> app: Git branch: '261106_lorawanPing' 0862858-dirty
+[2026-11-26 08:19:04.669] 
+[2026-11-26 08:19:04.669] 
+[2026-11-26 08:19:04.669] 
+[2026-11-26 08:19:04.669] <info> app_timer: RTC: initialized.
+[2026-11-26 08:19:04.669] 
+[2026-11-26 08:19:04.669] <info> app: Watchdog already running: period 30 s (kept)
+[2026-11-26 08:19:04.670] 
+[2026-11-26 08:19:04.670] <info> app: Watchdog early warning: 2 s before the reset
+[2026-11-26 08:19:04.670] 
+[2026-11-26 08:19:04.670] <info> app: System time set successfully
+[2026-11-26 08:19:04.670] 
+[2026-11-26 08:19:04.670] <info> app: 
+[2026-11-26 08:19:04.687] 
+[2026-11-26 08:19:04.687] Initialising LoRaWAN
+[2026-11-26 08:19:04.687] 
+[2026-11-26 08:19:04.687] <info> app: Initializing fds...
+[2026-11-26 08:19:04.687] 
+[2026-11-26 08:19:04.687] <info> app: Reading flash usage statistics...
+[2026-11-26 08:19:04.687] 
+[2026-11-26 08:19:04.687] <info> app: Found 6 valid records.
+[2026-11-26 08:19:04.687] 
+[2026-11-26 08:19:04.687] <info> app: Found 26 dirty records (ready to be garbage collected).
+[2026-11-26 08:19:04.700] 
+[2026-11-26 08:19:04.700] <debug> app: Record 8027 at 6DD04
+[2026-11-26 08:19:04.700] 
+[2026-11-26 08:19:04.700] <debug> app: Record 8028 at 6DD44
+[2026-11-26 08:19:04.700] 
+[2026-11-26 08:19:04.700] <debug> app: Record 8029 at 6DD68
+[2026-11-26 08:19:04.700] 
+[2026-11-26 08:19:04.700] <debug> app: Record 8031 at 6DECC
+[2026-11-26 08:19:04.716] 
+[2026-11-26 08:19:04.716] <debug> app: Record 8030 at 6E06C
+[2026-11-26 08:19:04.716] 
+[2026-11-26 08:19:04.716] <debug> app: Record 6 at 70008
+[2026-11-26 08:19:04.716] 
+[2026-11-26 08:19:04.716] <info> app: >>> LoraMac version = 0x01000300
+[2026-11-26 08:19:04.736] 
+[2026-11-26 08:19:04.736] <info> app: MAC parameters reset: uplink dwell time ON
+[2026-11-26 08:19:04.736] 
+[2026-11-26 08:19:04.738] <info> app: Data restored from NVM: 1064 bytes
+[2026-11-26 08:19:04.738] 
+[2026-11-26 08:19:04.738] <info> app: LoRaWAN initialised
+[2026-11-26 08:19:04.738] 
+[2026-11-26 08:19:04.738] 
+[2026-11-26 08:19:04.740] 
+[2026-11-26 08:19:04.740] <info> app: BLE initialised for WILD-CMSS - disconnect interval 60s
+[2026-11-26 08:19:04.754] 
+[2026-11-26 08:19:04.754] 
+[2026-11-26 08:19:04.754] 
+[2026-11-26 08:19:04.754] <info> app: Max BLE packet length is 244. PDU length = 251
+[2026-11-26 08:19:04.754] 
+[2026-11-26 08:19:04.754] <info> app: Reset cause:   software reset
+[2026-11-26 08:19:04.754] 
+[2026-11-26 08:19:04.754] <info> app: AI processor reset at boot (/RST 100 ms)
+[2026-11-26 08:19:04.754] 
+[2026-11-26 08:19:04.754] <info> app: Reset reason code 8. Resets since power-on: 12.
+[2026-11-26 08:19:04.767] 
+[2026-11-26 08:19:04.767] <info> app: Fault resets in a row: 3. Cleared after 10 minutes without a fault.
+[2026-11-26 08:19:04.780] 
+[2026-11-26 08:19:04.780] <info> app: Board name: WILD-CMSS
+[2026-11-26 08:19:04.780] 
+[2026-11-26 08:19:04.780] <info> app: Tests Wildlife Watcher BLE and LoRaWAN communications. Uses NUS
+[2026-11-26 08:19:04.789] 
+[2026-11-26 08:19:04.789] <info> app: TODO - clean up LoRaWAN processing - esp. failures, incl. failure to join.
+[2026-11-26 08:19:04.795] 
+[2026-11-26 08:19:04.795] <info> app: TODO - check RSSI outgoing vs incoming differences
+[2026-11-26 08:19:04.795] 
+[2026-11-26 08:19:04.795] <info> app: Device Addr:   99:0A:7A:67:EF:DA
+[2026-11-26 08:19:04.804] 
+[2026-11-26 08:19:04.804] <info> app: BLE address:   D9:0A:7A:67:EF:DA
+[2026-11-26 08:19:04.811] 
+[2026-11-26 08:19:04.811] <info> app: BLE Name:      WILD-CMSS
+[2026-11-26 08:19:04.811] 
+[2026-11-26 08:19:04.811] <info> app: Target DevEui: DA:EF:67:FE:FF:7A:0A:D9
+[2026-11-26 08:19:04.811] 
+[2026-11-26 08:19:04.811] <info> app: Target AppEui: TBD
+[2026-11-26 08:19:04.815] 
+[2026-11-26 08:19:04.815] <info> app: Softdevice ver: 0x00CB
+[2026-11-26 08:19:04.827] 
+[2026-11-26 08:19:04.827] <info> app: Reset reason:  0x00000004 CPU
+[2026-11-26 08:19:04.827] 
+[2026-11-26 08:19:04.827] <info> app: Firmware version 0.30.62
+[2026-11-26 08:19:04.827] 
+[2026-11-26 08:19:04.827] 
+[2026-11-26 08:19:04.827] 
+[2026-11-26 08:19:04.827] <info> app: Temperature: 23.0C
+[2026-11-26 08:19:04.832] 
+[2026-11-26 08:19:04.832] 
+[2026-11-26 08:19:04.832] 
+[2026-11-26 08:19:04.832] <info> app: Press SW1 to start BLE advertising.
+[2026-11-26 08:19:04.843] 
+[2026-11-26 08:19:04.843] <info> app: Press SW1 at power-on to reset credentials
+[2026-11-26 08:19:04.843] 
+[2026-11-26 08:19:04.843] <info> app: Press SW1 for > 10s to start Device Firmware Upgrade (DFU)
+[2026-11-26 08:19:04.843] 
+[2026-11-26 08:19:04.843] <info> app: Press SW2 - prohibited. This signal is asserted by AI processor.
+[2026-11-26 08:19:04.843] 
+[2026-11-26 08:19:04.843] <info> app: Hold magnet close at power-on to start Device Firmware Upgrade (DFU)
+[2026-11-26 08:19:04.867] 
+[2026-11-26 08:19:04.867] <info> app: Press RESET button for a software reset.
+[2026-11-26 08:19:04.868] 
+[2026-11-26 08:19:04.868] <info> app: UART RX Pin 2 is driven
+[2026-11-26 08:19:04.872] 
+[2026-11-26 08:19:04.872] <info> app: SW1 Pin 22 is not driven
+[2026-11-26 08:19:04.872] 
+[2026-11-26 08:19:04.872] <info> app: SW2 Pin 27 is not driven
+[2026-11-26 08:19:04.875] 
+[2026-11-26 08:19:04.875] <info> app: Mag sensor Pin 25 is driven
+[2026-11-26 08:19:04.875] 
+[2026-11-26 08:19:04.875] <info> app: Current DevEui is:   DA:EF:67:FE:FF:7A:0A:D9
+[2026-11-26 08:19:04.888] 
+[2026-11-26 08:19:04.888] <info> app: Current JoinEui is:  70:B3:D5:7E:D0:03:C8:D4
+[2026-11-26 08:19:04.888] 
+[2026-11-26 08:19:04.888] <info> app: Current ShortId is:   CMSS
+[2026-11-26 08:19:04.891] 
+[2026-11-26 08:19:04.891] <info> app: InitCred DevEui is:  00:80:E1:01:01:01:01:01
+[2026-11-26 08:19:04.891] 
+[2026-11-26 08:19:04.891] <info> app: InitCred JoinEui is: 70:B3:D5:7E:D0:03:C8:00
+[2026-11-26 08:19:04.891] 
+[2026-11-26 08:19:04.891] <info> app: We have no need to fetch parameters
+[2026-11-26 08:19:04.906] 
+[2026-11-26 08:19:04.906] 
+[2026-11-26 08:19:04.906] 
+[2026-11-26 08:19:04.906] <info> app: I2C link is initialised.
+[2026-11-26 08:19:04.906] 
+[2026-11-26 08:19:04.906] <info> app: Enabled I2C (instance 1) on pins 7 and 8
+[2026-11-26 08:19:04.906] 
+[2026-11-26 08:19:04.906] <info> app: I2C buffer sizes 250 and 250
+[2026-11-26 08:19:04.922] 
+[2026-11-26 08:19:04.922] <info> app: AI processor initialised.
+[2026-11-26 08:19:04.925] 
+[2026-11-26 08:19:04.925] <info> app: 
+[2026-11-26 08:19:04.925] 
+[2026-11-26 08:19:04.925] Initialisation finished! Starting state machine.
+[2026-11-26 08:19:04.925] 
+[2026-11-26 08:19:04.925] 
+[2026-11-26 08:19:04.925] 
+[2026-11-26 08:19:04.925] <info> app: Bumping state machine with 'Initialised' (Current state: RESET)
+[2026-11-26 08:19:04.940] 
+[2026-11-26 08:19:04.940] 
+[2026-11-26 08:19:04.940] 
+[2026-11-26 08:19:04.940] <info> app:  LoRaWAN waits for op parameter 32 from the AI processor.
+[2026-11-26 08:19:04.940] 
+[2026-11-26 08:19:04.940] 
+[2026-11-26 08:19:04.940] 
+[2026-11-26 08:19:04.940] <info> app: State changed from RESET to LORAWAN WAITING
+[2026-11-26 08:19:04.940] 
+[2026-11-26 08:19:04.940] 
+[2026-11-26 08:19:04.954] 
+[2026-11-26 08:19:04.954] <info> app: AI state machine bumped with 'Initialised' (Current state: RESET)
+[2026-11-26 08:19:04.963] 
+[2026-11-26 08:19:04.963] 
+[2026-11-26 08:19:04.963] 
+[2026-11-26 08:19:04.963] <info> app: AI state changed from RESET to SLEEP
+[2026-11-26 08:19:04.963] 
+[2026-11-26 08:19:04.963] 
+[2026-11-26 08:19:05.511] 
+[2026-11-26 08:19:05.511] <info> app: Advertising Fast.
+[2026-11-26 08:19:05.520] 
+[2026-11-26 08:19:05.520] <info> app: Starting advertising
+[2026-11-26 08:19:06.783] 
+[2026-11-26 08:19:06.783] <info> app: !0 
+[2026-11-26 08:19:06.792] 
+[2026-11-26 08:19:06.792] <info> app: I2C RX payload 25/250 bytes. Response type is 4. CRC OK (0xBF51)
+[2026-11-26 08:19:06.800] 
+[2026-11-26 08:19:06.800] 000: 80 04 19 00 57 61 6B 65  20 32 30 32 34 2D 30 31  ....Wake 2024-01
+[2026-11-26 08:19:06.812] 
+[2026-11-26 08:19:06.812] 010: 2D 30 31 54 30 30 3A 30  30 3A 30 32 5A 00 51 FF  -01T00:00:02Z.Q.
+[2026-11-26 08:19:06.817] 
+[2026-11-26 08:19:06.817] <info> app: AI state machine bumped with 'Wake' (Current state: SLEEP)
+[2026-11-26 08:19:06.817] 
+[2026-11-26 08:19:06.817] 
+[2026-11-26 08:19:06.820] 
+[2026-11-26 08:19:06.820] <info> app: BLE and AI time differ by 0s
+[2026-11-26 08:19:06.831] 
+[2026-11-26 08:19:06.831] <info> app: AI state changed from SLEEP to WOKEN
+[2026-11-26 08:19:06.831] 
+[2026-11-26 08:19:06.831] 
+[2026-11-26 08:19:06.831] 
+[2026-11-26 08:19:06.831] BLE out: Failed to send   5 bytes: 'Wake'
+[2026-11-26 08:19:06.831] 
+[2026-11-26 08:19:06.831] <info> app: AI State machine scheduler called with event 8 'Send SelfTest'
+[2026-11-26 08:19:06.845] 
+[2026-11-26 08:19:06.845] <info> app: AI state machine bumped with 'Send SelfTest' (Current state: WOKEN)
+[2026-11-26 08:19:06.850] 
+[2026-11-26 08:19:06.850] 
+[2026-11-26 08:19:06.850] 
+[2026-11-26 08:19:06.850] <info> app: I2C link is initialised.
+[2026-11-26 08:19:06.864] 
+[2026-11-26 08:19:06.864] Sending 'selftest' to AI processor (4 ctrl bytes, 8 payload, 2 CRC)<info> app: OK
+[2026-11-26 08:19:06.866] 
+[2026-11-26 08:19:06.866] <info> app: AI state changed from WOKEN to SELFTEST
+[2026-11-26 08:19:06.866] 
+[2026-11-26 08:19:06.866] 
+[2026-11-26 08:19:06.866] 
+[2026-11-26 08:19:06.866] <info> app: I2C TX complete: 14 bytes.
+[2026-11-26 08:19:06.866] 
+[2026-11-26 08:19:06.866] <info> app: !1 
+[2026-11-26 08:19:06.879] 
+[2026-11-26 08:19:06.879] 000: 80 01 08 00 73 65 6C 66  74 65 73 74 38 A9 00 00  ....selftest8...
+[2026-11-26 08:19:06.879] 
+[2026-11-26 08:19:06.879] <info> app: I2C link is initialised.
+[2026-11-26 08:19:06.879] 
+[2026-11-26 08:19:06.879] <info> app: I2C RX payload 13/250 bytes. Response type is 4. CRC OK (0x7FB8)
+[2026-11-26 08:19:06.900] 
+[2026-11-26 08:19:06.900] 000: 80 04 0D 00 73 65 6C 66  54 65 73 74 20 30 30 30  ....selfTest 000
+[2026-11-26 08:19:06.911] 
+[2026-11-26 08:19:06.911] 010: 30 00 B8 FF FF FF FF FF  FF FF FF FF FF FF FF FF  0...............
+[2026-11-26 08:19:06.911] 
+[2026-11-26 08:19:06.911] <info> app: AI state machine bumped with 'Selftest Rx' (Current state: SELFTEST)
+[2026-11-26 08:19:06.926] 
+[2026-11-26 08:19:06.926] 
+[2026-11-26 08:19:06.926] 
+[2026-11-26 08:19:06.926] <info> app: AI self test bits = 0x0000 (all bits now 0x0000)
+[2026-11-26 08:19:06.926] 
+[2026-11-26 08:19:06.926] <info> app: Can't send UTC
+[2026-11-26 08:19:06.926] 
+[2026-11-26 08:19:06.926] <info> app: AI state changed from SELFTEST to IDLE
+[2026-11-26 08:19:06.926] 
+[2026-11-26 08:19:06.926] 
+[2026-11-26 08:19:06.926] 
+[2026-11-26 08:19:06.926] BLE out: Failed to send  20 bytes: 'Error bits = 0x0000'
+[2026-11-26 08:19:06.942] 
+[2026-11-26 08:19:06.942] <info> app: AI State machine scheduler called with event 12 'Msg to AI'
+[2026-11-26 08:19:06.942] 
+[2026-11-26 08:19:06.942] <info> app: AI state machine bumped with 'Msg to AI' (Current state: IDLE)
+[2026-11-26 08:19:06.969] 
+[2026-11-26 08:19:06.969] 
+[2026-11-26 08:19:06.969] 
+[2026-11-26 08:19:06.969] <info> app: I2C link is initialised.
+[2026-11-26 08:19:06.969] 
+[2026-11-26 08:19:06.969] Sending 'sdused' to AI processor (4 ctrl bytes, 6 payload, 2 CRC)<info> app: AI state changed from IDLE to PROCESSING
+[2026-11-26 08:19:06.974] 
+[2026-11-26 08:19:06.974] 
+[2026-11-26 08:19:06.974] 
+[2026-11-26 08:19:06.974] <info> app: I2C TX complete: 12 bytes.
+[2026-11-26 08:19:06.974] 
+[2026-11-26 08:19:06.974] <info> app: !2 
+[2026-11-26 08:19:06.974] 
+[2026-11-26 08:19:06.974] 000: 80 01 06 00 73 64 75 73  65 64 B7 16 38 A9 00 00  ....sdused..8...
+[2026-11-26 08:19:06.996] 
+[2026-11-26 08:19:06.996] <info> app: I2C link is initialised.
+[2026-11-26 08:19:06.996] 
+[2026-11-26 08:19:06.996] <info> app: I2C RX payload 8/250 bytes. Response type is 4. CRC OK (0x6503)
+[2026-11-26 08:19:07.006] 
+[2026-11-26 08:19:07.006] 000: 80 04 08 00 73 64 75 73  65 64 20 31 00 03 FF FF  ....sdused 1....
+[2026-11-26 08:19:07.006] 
+[2026-11-26 08:19:07.006] <info> app: AI state machine bumped with 'Msg from AI' (Current state: PROCESSING)
+[2026-11-26 08:19:07.011] 
+[2026-11-26 08:19:07.011] 
+[2026-11-26 08:19:07.011] 
+[2026-11-26 08:19:07.011] <info> app: AI processor replies: 'sdused 1'
+[2026-11-26 08:19:07.022] 
+[2026-11-26 08:19:07.022] <info> app: AI processor: SD card 1% used
+[2026-11-26 08:19:07.022] 
+[2026-11-26 08:19:07.022] <info> app: AI state changed from PROCESSING to IDLE
+[2026-11-26 08:19:07.022] 
+[2026-11-26 08:19:07.022] 
+[2026-11-26 08:19:08.535] 
+[2026-11-26 08:19:08.535] <debug> nrf_ble_gatt: Requesting to update ATT MTU to 247 bytes on connection 0x0.
+[2026-11-26 08:19:08.554] 
+[2026-11-26 08:19:08.554] <debug> nrf_ble_gatt: Updating data length to 251 on connection 0x0.
+[2026-11-26 08:19:08.568] 
+[2026-11-26 08:19:08.568] <info> app: Connected
+[2026-11-26 08:19:08.568] 
+[2026-11-26 08:19:08.568] <info> app: Requesting DLE to 251 bytes
+[2026-11-26 08:19:08.668] 
+[2026-11-26 08:19:08.668] <debug> nrf_ble_gatt: ATT MTU updated to 247 bytes on connection 0x0 (response).
+[2026-11-26 08:19:08.679] 
+[2026-11-26 08:19:08.679] <info> app: ATT MTU exchange completed. MTU set to 247 bytes.
+[2026-11-26 08:19:08.818] 
+[2026-11-26 08:19:08.818] <debug> nrf_ble_gatt: Data length updated to 27 on connection 0x0.
+[2026-11-26 08:19:08.827] 
+[2026-11-26 08:19:08.827] <debug> nrf_ble_gatt: max_rx_octets: 27
+[2026-11-26 08:19:08.835] 
+[2026-11-26 08:19:08.835] <debug> nrf_ble_gatt: max_tx_octets: 27
+[2026-11-26 08:19:08.835] 
+[2026-11-26 08:19:08.835] <debug> nrf_ble_gatt: max_rx_time: 328
+[2026-11-26 08:19:08.841] 
+[2026-11-26 08:19:08.841] <debug> nrf_ble_gatt: max_tx_time: 328
+[2026-11-26 08:19:08.841] 
+[2026-11-26 08:19:08.841] <info> app: GATT data length updated to 27 bytes.
+[2026-11-26 08:19:08.851] 
+[2026-11-26 08:19:08.851] <info> app: Data length updated: TX = 27, RX = 27
+[2026-11-26 08:19:09.300] 
+[2026-11-26 08:19:09.300] <info> app: Conn params applied: interval 6 units (7ms), timeout 5000ms
+[2026-11-26 08:19:09.441] 
+[2026-11-26 08:19:09.441] <info> app: NUS start
+[2026-11-26 08:19:09.456] 
+[2026-11-26 08:19:09.456] <info> app: Conn params applied: interval 39 units (48ms), timeout 5000ms
+[2026-11-26 08:19:11.035] 
+[2026-11-26 08:19:11.035] <info> app: !3 
+[2026-11-26 08:19:11.035] 
+[2026-11-26 08:19:11.035] <info> app: I2C link is initialised.
+[2026-11-26 08:19:11.050] 
+[2026-11-26 08:19:11.050] <info> app: I2C RX payload 110/250 bytes. Response type is 4. CRC OK (0x7840)
+[2026-11-26 08:19:11.073] 
+[2026-11-26 08:19:11.073] 000: 80 04 6E 00 53 6C 65 65  70 20 33 20 33 20 30 20  ..n.Sleep 3 3 0 
+[2026-11-26 08:19:11.073] 
+[2026-11-26 08:19:11.073] 010: 35 38 20 34 30 20 31 20  35 30 30 20 30 20 31 30  58 40 1 500 0 10
+[2026-11-26 08:19:11.087] 
+[2026-11-26 08:19:11.087] 020: 30 30 20 35 20 31 20 31  30 30 30 20 31 30 30 20  00 5 1 1000 100 
+[2026-11-26 08:19:11.087] 
+[2026-11-26 08:19:11.087] 030: 30 20 32 30 20 31 20 36  30 20 31 20 30 20 33 20  0 20 1 60 1 0 3 
+[2026-11-26 08:19:11.089] 
+[2026-11-26 08:19:11.089] 040: 30 20 32 20 35 20 36 35  20 31 35 20 30 20 30 20  0 2 5 65 15 0 0 
+[2026-11-26 08:19:11.102] 
+[2026-11-26 08:19:11.102] 050: 32 38 36 20 33 32 36 20  31 20 31 31 30 20 31 20  286 326 1 110 1 
+[2026-11-26 08:19:11.102] 
+[2026-11-26 08:19:11.102] 060: 31 35 20 35 20 30 20 30  20 30 20 34 30 33 35 20  15 5 0 0 0 4035 
+[2026-11-26 08:19:11.112] 
+[2026-11-26 08:19:11.112] 070: 30 20 00 40 FF FF FF FF  FF FF FF FF FF FF FF FF  0 .@............
+[2026-11-26 08:19:11.121] 
+[2026-11-26 08:19:11.121] <info> app: AI state machine bumped with 'Sleep' (Current state: IDLE)
+[2026-11-26 08:19:11.129] 
+[2026-11-26 08:19:11.129] 
+[2026-11-26 08:19:11.129] 
+[2026-11-26 08:19:11.129] <info> app: AI processor sends stats: '3 3 0 58 40 1 500 0 1000 5 1 1000 100 0 20 1 60 1 0 3 0 2 5 65 15 0 0 286 326 1 110 1 15 5 0 0 0 4035 0 '
+[2026-11-26 08:19:11.145] 
+[2026-11-26 08:19:11.145] <info> app: Op parameter 32 (LoRaWAN ping minutes) = 15
+[2026-11-26 08:19:11.145] 
+[2026-11-26 08:19:11.145] <info> app: AI state changed from IDLE to SLEEP
+[2026-11-26 08:19:11.145] 
+[2026-11-26 08:19:11.145] 
+[2026-11-26 08:19:11.145] 
+[2026-11-26 08:19:11.145] BLE out: Sent   6 bytes: 'Sleep'
+[2026-11-26 08:19:11.161] 
+[2026-11-26 08:19:11.161] <info> app: State machine scheduler called with event 14 'LoRaWAN Config'
+[2026-11-26 08:19:11.173] 
+[2026-11-26 08:19:11.173] <info> app: Bumping state machine with 'LoRaWAN Config' (Current state: LORAWAN WAITING)
+[2026-11-26 08:19:11.187] 
+[2026-11-26 08:19:11.187] 
+[2026-11-26 08:19:11.187] 
+[2026-11-26 08:19:11.187] <info> app:  Joining now...
+[2026-11-26 08:19:11.187] 
+[2026-11-26 08:19:11.187] 
+[2026-11-26 08:19:11.187] 
+[2026-11-26 08:19:11.187] <info> app: MAC parameters reset: uplink dwell time ON
+[2026-11-26 08:19:11.187] 
+[2026-11-26 08:19:11.187] <info> app: MLME-Request: MLME_JOIN, OK
+[2026-11-26 08:19:11.195] 
+[2026-11-26 08:19:11.195] <info> app: State changed from LORAWAN WAITING to JOINING
+[2026-11-26 08:19:11.195] 
+[2026-11-26 08:19:11.195] 
+[2026-11-26 08:19:11.208] 
+[2026-11-26 08:19:11.208] <info> app: NUS TX Ready
+[2026-11-26 08:19:11.533] 
+[2026-11-26 08:19:11.533] <info> app: MAC txDone
+[2026-11-26 08:19:15.699] 
+[2026-11-26 08:19:15.699] 
+[2026-11-26 08:19:15.699] BLE in: Received   6 bytes 'hack 6'
+[2026-11-26 08:19:15.704] 
+[2026-11-26 08:19:15.704] <error> app: ERROR 4 [NRF_ERROR_NO_MEM] at ../../../ble_commands.c:998
+[2026-11-26 08:19:15.715] 
+[2026-11-26 08:19:15.715] <error> app: PC at: 0x00027155
+[2026-11-26 08:19:15.715] 
+[2026-11-26 08:19:15.719] <error> app: >>> Resetting both processors after fault (4 in a row)
+[2026-11-26 08:19:16.083] 
+[2026-11-26 08:19:16.083] <info> app: 
+[2026-11-26 08:19:16.083] 
+[2026-11-26 08:19:16.083] **** Secure Bootloader (WW500_A00) Ver: 00.01.01 Built: 19:01:29 Oct 31 2025 ****
+[2026-11-26 08:19:16.097] 
+[2026-11-26 08:19:16.097] 
+[2026-11-26 08:19:16.097] <info> nrf_dfu_settings: Backing up settings page to address 0x7E000.
+[2026-11-26 08:19:16.107] 
+[2026-11-26 08:19:16.107] 
+[2026-11-26 08:19:16.107] <info> app: No firmware to activate.
+[2026-11-26 08:19:16.113] 
+[2026-11-26 08:19:16.113] 
+[2026-11-26 08:19:16.113] <info> nrf_dfu_settings: Backing up settings page to address 0x7E000.
+[2026-11-26 08:19:16.113] 
+[2026-11-26 08:19:18.053] 
+[2026-11-26 08:19:18.053] <info> app: 
+[2026-11-26 08:19:18.053] 
+[2026-11-26 08:19:18.053] **** Wildlife Watcher 1 (WW500-C02) Ver: 00.30.62 Built: 17:28:46 Nov 24 2026 ****
+[2026-11-26 08:19:18.060] 
+[2026-11-26 08:19:18.060] <info> app: BOARDTYPE bytes: 0x04 0x22
+[2026-11-26 08:19:18.060] 
+[2026-11-26 08:19:18.060] <info> app: GCC version: 10.3.1
+[2026-11-26 08:19:18.069] 
+[2026-11-26 08:19:18.069] <info> app: Compiler Version: ARM GNU, 10.3.1 20210824 (release)
+[2026-11-26 08:19:18.077] 
+[2026-11-26 08:19:18.077] <info> app: Git branch: '261106_lorawanPing' 0862858-dirty
+[2026-11-26 08:19:18.077] 
+[2026-11-26 08:19:18.077] 
+[2026-11-26 08:19:18.077] 
+[2026-11-26 08:19:18.077] <info> app_timer: RTC: initialized.
+[2026-11-26 08:19:18.077] 
+[2026-11-26 08:19:18.077] <info> app: Watchdog already running: period 30 s (kept)
+[2026-11-26 08:19:18.088] 
+[2026-11-26 08:19:18.088] <info> app: Watchdog early warning: 2 s before the reset
+[2026-11-26 08:19:18.088] 
+[2026-11-26 08:19:18.088] <info> app: System time set successfully
+[2026-11-26 08:19:18.101] 
+[2026-11-26 08:19:18.101] <info> app: 
+[2026-11-26 08:19:18.101] 
+[2026-11-26 08:19:18.101] Initialising LoRaWAN
+[2026-11-26 08:19:18.101] 
+[2026-11-26 08:19:18.101] <info> app: Initializing fds...
+[2026-11-26 08:19:18.105] 
+[2026-11-26 08:19:18.105] <info> app: Reading flash usage statistics...
+[2026-11-26 08:19:18.114] 
+[2026-11-26 08:19:18.114] <info> app: Found 6 valid records.
+[2026-11-26 08:19:18.114] 
+[2026-11-26 08:19:18.114] <info> app: Found 26 dirty records (ready to be garbage collected).
+[2026-11-26 08:19:18.114] 
+[2026-11-26 08:19:18.114] <debug> app: Record 8027 at 6DD04
+[2026-11-26 08:19:18.125] 
+[2026-11-26 08:19:18.125] <debug> app: Record 8028 at 6DD44
+[2026-11-26 08:19:18.125] 
+[2026-11-26 08:19:18.125] <debug> app: Record 8029 at 6DD68
+[2026-11-26 08:19:18.125] 
+[2026-11-26 08:19:18.125] <debug> app: Record 8031 at 6DECC
+[2026-11-26 08:19:18.125] 
+[2026-11-26 08:19:18.125] <debug> app: Record 8030 at 6E06C
+[2026-11-26 08:19:18.132] 
+[2026-11-26 08:19:18.132] <debug> app: Record 6 at 70008
+[2026-11-26 08:19:18.132] 
+[2026-11-26 08:19:18.132] <info> app: >>> LoraMac version = 0x01000300
+[2026-11-26 08:19:18.132] 
+[2026-11-26 08:19:18.132] <info> app: MAC parameters reset: uplink dwell time ON
+[2026-11-26 08:19:18.148] 
+[2026-11-26 08:19:18.148] <info> app: Data restored from NVM: 1064 bytes
+[2026-11-26 08:19:18.148] 
+[2026-11-26 08:19:18.148] <info> app: LoRaWAN initialised
+[2026-11-26 08:19:18.148] 
+[2026-11-26 08:19:18.148] 
+[2026-11-26 08:19:18.148] 
+[2026-11-26 08:19:18.148] <info> app: BLE initialised for WILD-CMSS - disconnect interval 60s
+[2026-11-26 08:19:18.164] 
+[2026-11-26 08:19:18.164] 
+[2026-11-26 08:19:18.164] 
+[2026-11-26 08:19:18.164] <info> app: Max BLE packet length is 244. PDU length = 251
+[2026-11-26 08:19:18.164] 
+[2026-11-26 08:19:18.164] <info> app: Reset cause:   software reset
+[2026-11-26 08:19:18.173] 
+[2026-11-26 08:19:18.173] <info> app: AI processor reset at boot (/RST 100 ms)
+[2026-11-26 08:19:18.173] 
+[2026-11-26 08:19:18.173] <info> app: Previous run ended with a fault: error check, error 0x00000004
+[2026-11-26 08:19:18.183] 
+[2026-11-26 08:19:18.183] <info> app:   at ble_commands.c:998, PC 0x00027155, LR 0x00000000
+[2026-11-26 08:19:18.183] 
+[2026-11-26 08:19:18.183] <info> app: Reset reason code 2. Resets since power-on: 13.
+[2026-11-26 08:19:18.188] 
+[2026-11-26 08:19:18.188] <info> app: Fault resets in a row: 4. Cleared after 10 minutes without a fault.
+[2026-11-26 08:19:18.204] 
+[2026-11-26 08:19:18.204] <info> app: Board name: WILD-CMSS
+[2026-11-26 08:19:18.204] 
+[2026-11-26 08:19:18.204] <info> app: Tests Wildlife Watcher BLE and LoRaWAN communications. Uses NUS
+[2026-11-26 08:19:18.211] 
+[2026-11-26 08:19:18.211] <info> app: TODO - clean up LoRaWAN processing - esp. failures, incl. failure to join.
+[2026-11-26 08:19:18.211] 
+[2026-11-26 08:19:18.211] <info> app: TODO - check RSSI outgoing vs incoming differences
+[2026-11-26 08:19:18.224] 
+[2026-11-26 08:19:18.224] <info> app: Device Addr:   99:0A:7A:67:EF:DA
+[2026-11-26 08:19:18.227] 
+[2026-11-26 08:19:18.227] <info> app: BLE address:   D9:0A:7A:67:EF:DA
+[2026-11-26 08:19:18.227] 
+[2026-11-26 08:19:18.227] <info> app: BLE Name:      WILD-CMSS
+[2026-11-26 08:19:18.245] 
+[2026-11-26 08:19:18.245] <info> app: Target DevEui: DA:EF:67:FE:FF:7A:0A:D9
+[2026-11-26 08:19:18.245] 
+[2026-11-26 08:19:18.245] <info> app: Target AppEui: TBD
+[2026-11-26 08:19:18.245] 
+[2026-11-26 08:19:18.245] <info> app: Softdevice ver: 0x00CB
+[2026-11-26 08:19:18.245] 
+[2026-11-26 08:19:18.245] <info> app: Reset reason:  0x00000004 CPU
+[2026-11-26 08:19:18.250] 
+[2026-11-26 08:19:18.250] <info> app: Firmware version 0.30.62
+[2026-11-26 08:19:18.258] 
+[2026-11-26 08:19:18.258] 
+[2026-11-26 08:19:18.258] 
+[2026-11-26 08:19:18.258] <info> app: Temperature: 23.0C
+[2026-11-26 08:19:18.258] 
+[2026-11-26 08:19:18.258] 
+[2026-11-26 08:19:18.258] 
+[2026-11-26 08:19:18.258] <info> app: Press SW1 to start BLE advertising.
+[2026-11-26 08:19:18.261] 
+[2026-11-26 08:19:18.261] <info> app: Press SW1 at power-on to reset credentials
+[2026-11-26 08:19:18.261] 
+[2026-11-26 08:19:18.261] <info> app: Press SW1 for > 10s to start Device Firmware Upgrade (DFU)
+[2026-11-26 08:19:18.277] 
+[2026-11-26 08:19:18.277] <info> app: Press SW2 - prohibited. This signal is asserted by AI processor.
+[2026-11-26 08:19:18.277] 
+[2026-11-26 08:19:18.277] <info> app: Hold magnet close at power-on to start Device Firmware Upgrade (DFU)
+[2026-11-26 08:19:18.288] 
+[2026-11-26 08:19:18.288] <info> app: Press RESET button for a software reset.
+[2026-11-26 08:19:18.294] 
+[2026-11-26 08:19:18.294] <info> app: UART RX Pin 2 is driven
+[2026-11-26 08:19:18.298] 
+[2026-11-26 08:19:18.298] <info> app: SW1 Pin 22 is not driven
+[2026-11-26 08:19:18.298] 
+[2026-11-26 08:19:18.298] <info> app: SW2 Pin 27 is not driven
+[2026-11-26 08:19:18.308] 
+[2026-11-26 08:19:18.308] <info> app: Mag sensor Pin 25 is driven
+[2026-11-26 08:19:18.308] 
+[2026-11-26 08:19:18.308] <info> app: Current DevEui is:   DA:EF:67:FE:FF:7A:0A:D9
+[2026-11-26 08:19:18.308] 
+[2026-11-26 08:19:18.308] <info> app: Current JoinEui is:  70:B3:D5:7E:D0:03:C8:D4
+[2026-11-26 08:19:18.315] 
+[2026-11-26 08:19:18.315] <info> app: Current ShortId is:   CMSS
+[2026-11-26 08:19:18.315] 
+[2026-11-26 08:19:18.315] <info> app: InitCred DevEui is:  00:80:E1:01:01:01:01:01
+[2026-11-26 08:19:18.322] 
+[2026-11-26 08:19:18.322] <info> app: InitCred JoinEui is: 70:B3:D5:7E:D0:03:C8:00
+[2026-11-26 08:19:18.329] 
+[2026-11-26 08:19:18.329] <info> app: We have no need to fetch parameters
+[2026-11-26 08:19:18.339] 
+[2026-11-26 08:19:18.339] 
+[2026-11-26 08:19:18.339] 
+[2026-11-26 08:19:18.339] <info> app: I2C link is initialised.
+[2026-11-26 08:19:18.339] 
+[2026-11-26 08:19:18.339] <info> app: Enabled I2C (instance 1) on pins 7 and 8
+[2026-11-26 08:19:18.339] 
+[2026-11-26 08:19:18.339] <info> app: I2C buffer sizes 250 and 250
+[2026-11-26 08:19:18.339] 
+[2026-11-26 08:19:18.339] <info> app: AI processor initialised.
+[2026-11-26 08:19:18.339] 
+[2026-11-26 08:19:18.339] <info> app: 
+[2026-11-26 08:19:18.354] 
+[2026-11-26 08:19:18.354] Initialisation finished! Starting state machine.
+[2026-11-26 08:19:18.358] 
+[2026-11-26 08:19:18.358] 
+[2026-11-26 08:19:18.358] 
+[2026-11-26 08:19:18.358] <info> app: Bumping state machine with 'Initialised' (Current state: RESET)
+[2026-11-26 08:19:18.362] 
+[2026-11-26 08:19:18.362] 
+[2026-11-26 08:19:18.362] 
+[2026-11-26 08:19:18.362] <info> app:  LoRaWAN waits for op parameter 32 from the AI processor.
+[2026-11-26 08:19:18.370] 
+[2026-11-26 08:19:18.370] 
+[2026-11-26 08:19:18.370] 
+[2026-11-26 08:19:18.370] <info> app: State changed from RESET to LORAWAN WAITING
+[2026-11-26 08:19:18.375] 
+[2026-11-26 08:19:18.375] 
+[2026-11-26 08:19:18.375] 
+[2026-11-26 08:19:18.375] <info> app: AI state machine bumped with 'Initialised' (Current state: RESET)
+[2026-11-26 08:19:18.390] 
+[2026-11-26 08:19:18.390] 
+[2026-11-26 08:19:18.390] 
+[2026-11-26 08:19:18.390] <info> app: AI state changed from RESET to SLEEP
+[2026-11-26 08:19:18.390] 
+[2026-11-26 08:19:18.390] 
+[2026-11-26 08:19:20.179] 
+[2026-11-26 08:19:20.179] <info> app: !0 
+[2026-11-26 08:19:20.187] 
+[2026-11-26 08:19:20.187] <info> app: I2C RX payload 25/250 bytes. Response type is 4. CRC OK (0xBF51)
+[2026-11-26 08:19:20.206] 
+[2026-11-26 08:19:20.206] 000: 80 04 19 00 57 61 6B 65  20 32 30 32 34 2D 30 31  ....Wake 2024-01
+[2026-11-26 08:19:20.206] 
+[2026-11-26 08:19:20.206] 010: 2D 30 31 54 30 30 3A 30  30 3A 30 32 5A 00 51 FF  -01T00:00:02Z.Q.
+[2026-11-26 08:19:20.206] 
+[2026-11-26 08:19:20.206] <info> app: AI state machine bumped with 'Wake' (Current state: SLEEP)
+[2026-11-26 08:19:20.226] 
+[2026-11-26 08:19:20.226] 
+[2026-11-26 08:19:20.226] 
+[2026-11-26 08:19:20.226] <info> app: BLE and AI time differ by 0s
+[2026-11-26 08:19:20.226] 
+[2026-11-26 08:19:20.226] <info> app: AI state changed from SLEEP to WOKEN
+[2026-11-26 08:19:20.226] 
+[2026-11-26 08:19:20.236] 
+[2026-11-26 08:19:20.236] 
+[2026-11-26 08:19:20.236] BLE out: Failed to send   5 bytes: 'Wake'
+[2026-11-26 08:19:20.236] 
+[2026-11-26 08:19:20.236] <info> app: AI State machine scheduler called with event 8 'Send SelfTest'
+[2026-11-26 08:19:20.252] 
+[2026-11-26 08:19:20.252] <info> app: AI state machine bumped with 'Send SelfTest' (Current state: WOKEN)
+[2026-11-26 08:19:20.265] 
+[2026-11-26 08:19:20.265] 
+[2026-11-26 08:19:20.265] 
+[2026-11-26 08:19:20.265] <info> app: I2C link is initialised.
+[2026-11-26 08:19:20.265] 
+[2026-11-26 08:19:20.265] Sending 'selftest' to AI processor (4 ctrl bytes, 8 payload, 2 CRC)<info> app: OK
+[2026-11-26 08:19:20.270] 
+[2026-11-26 08:19:20.270] <info> app: AI state changed from WOKEN to SELFTEST
+[2026-11-26 08:19:20.277] 
+[2026-11-26 08:19:20.277] 
+[2026-11-26 08:19:20.277] 
+[2026-11-26 08:19:20.277] <info> app: I2C TX complete: 14 bytes.
+[2026-11-26 08:19:20.277] 
+[2026-11-26 08:19:20.277] <info> app: !1 
+[2026-11-26 08:19:20.277] 
+[2026-11-26 08:19:20.277] 000: 80 01 08 00 73 65 6C 66  74 65 73 74 38 A9 00 00  ....selftest8...
+[2026-11-26 08:19:20.294] 
+[2026-11-26 08:19:20.294] <info> app: I2C link is initialised.
+[2026-11-26 08:19:20.294] 
+[2026-11-26 08:19:20.294] <info> app: Advertising Fast.
+[2026-11-26 08:19:20.294] 
+[2026-11-26 08:19:20.294] <info> app: Starting advertising
+[2026-11-26 08:19:20.299] 
+[2026-11-26 08:19:20.299] <info> app: I2C RX payload 13/250 bytes. Response type is 4. CRC OK (0x7FB8)
+[2026-11-26 08:19:20.306] 
+[2026-11-26 08:19:20.306] 000: 80 04 0D 00 73 65 6C 66  54 65 73 74 20 30 30 30  ....selfTest 000
+[2026-11-26 08:19:20.317] 
+[2026-11-26 08:19:20.317] 010: 30 00 B8 FF FF FF FF FF  FF FF FF FF FF FF FF FF  0...............
+[2026-11-26 08:19:20.317] 
+[2026-11-26 08:19:20.317] <info> app: AI state machine bumped with 'Selftest Rx' (Current state: SELFTEST)
+[2026-11-26 08:19:20.329] 
+[2026-11-26 08:19:20.329] 
+[2026-11-26 08:19:20.329] 
+[2026-11-26 08:19:20.329] <info> app: AI self test bits = 0x0000 (all bits now 0x0020)
+[2026-11-26 08:19:20.329] 
+[2026-11-26 08:19:20.329] <info> app: Can't send UTC
+[2026-11-26 08:19:20.329] 
+[2026-11-26 08:19:20.329] <info> app: AI state changed from SELFTEST to IDLE
+[2026-11-26 08:19:20.345] 
+[2026-11-26 08:19:20.345] 
+[2026-11-26 08:19:20.345] 
+[2026-11-26 08:19:20.345] BLE out: Failed to send  20 bytes: 'Error bits = 0x0020'
+[2026-11-26 08:19:20.345] 
+[2026-11-26 08:19:20.345] <info> app: AI State machine scheduler called with event 12 'Msg to AI'
+[2026-11-26 08:19:20.365] 
+[2026-11-26 08:19:20.365] <info> app: AI state machine bumped with 'Msg to AI' (Current state: IDLE)
+[2026-11-26 08:19:20.365] 
+[2026-11-26 08:19:20.365] 
+[2026-11-26 08:19:20.365] 
+[2026-11-26 08:19:20.365] <info> app: I2C link is initialised.
+[2026-11-26 08:19:20.370] 
+[2026-11-26 08:19:20.370] Sending 'sdused' to AI processor (4 ctrl bytes, 6 payload, 2 CRC)<info> app: AI state changed from IDLE to PROCESSING
+[2026-11-26 08:19:20.380] 
+[2026-11-26 08:19:20.380] 
+[2026-11-26 08:19:20.380] 
+[2026-11-26 08:19:20.380] <info> app: I2C TX complete: 12 bytes.
+[2026-11-26 08:19:20.380] 
+[2026-11-26 08:19:20.380] <info> app: !2 
+[2026-11-26 08:19:20.380] 
+[2026-11-26 08:19:20.380] 000: 80 01 06 00 73 64 75 73  65 64 B7 16 38 A9 00 00  ....sdused..8...
+[2026-11-26 08:19:20.393] 
+[2026-11-26 08:19:20.393] <info> app: I2C link is initialised.
+[2026-11-26 08:19:20.393] 
+[2026-11-26 08:19:20.393] <info> app: I2C RX payload 8/250 bytes. Response type is 4. CRC OK (0x6503)
+[2026-11-26 08:19:20.415] 
+[2026-11-26 08:19:20.415] 000: 80 04 08 00 73 64 75 73  65 64 20 31 00 03 FF FF  ....sdused 1....
+[2026-11-26 08:19:20.415] 
+[2026-11-26 08:19:20.415] <info> app: AI state machine bumped with 'Msg from AI' (Current state: PROCESSING)
+[2026-11-26 08:19:20.427] 
+[2026-11-26 08:19:20.427] 
+[2026-11-26 08:19:20.427] 
+[2026-11-26 08:19:20.427] <info> app: AI processor replies: 'sdused 1'
+[2026-11-26 08:19:20.427] 
+[2026-11-26 08:19:20.427] <info> app: AI processor: SD card 1% used
+[2026-11-26 08:19:20.430] 
+[2026-11-26 08:19:20.430] <info> app: AI state changed from PROCESSING to IDLE
+[2026-11-26 08:19:20.443] 
+[2026-11-26 08:19:20.443] 
+[2026-11-26 08:19:20.839] 
+[2026-11-26 08:19:20.839] <debug> nrf_ble_gatt: Requesting to update ATT MTU to 247 bytes on connection 0x0.
+[2026-11-26 08:19:20.846] 
+[2026-11-26 08:19:20.846] <debug> nrf_ble_gatt: Updating data length to 251 on connection 0x0.
+[2026-11-26 08:19:20.855] 
+[2026-11-26 08:19:20.855] <info> app: Connected
+[2026-11-26 08:19:20.855] 
+[2026-11-26 08:19:20.855] <info> app: Requesting DLE to 251 bytes
+[2026-11-26 08:19:20.950] 
+[2026-11-26 08:19:20.950] <debug> nrf_ble_gatt: ATT MTU updated to 247 bytes on connection 0x0 (response).
+[2026-11-26 08:19:20.969] 
+[2026-11-26 08:19:20.969] <info> app: ATT MTU exchange completed. MTU set to 247 bytes.
+[2026-11-26 08:19:21.093] 
+[2026-11-26 08:19:21.093] <debug> nrf_ble_gatt: Data length updated to 27 on connection 0x0.
+[2026-11-26 08:19:21.110] 
+[2026-11-26 08:19:21.110] <debug> nrf_ble_gatt: max_rx_octets: 27
+[2026-11-26 08:19:21.116] 
+[2026-11-26 08:19:21.116] <debug> nrf_ble_gatt: max_tx_octets: 27
+[2026-11-26 08:19:21.116] 
+[2026-11-26 08:19:21.116] <debug> nrf_ble_gatt: max_rx_time: 328
+[2026-11-26 08:19:21.116] 
+[2026-11-26 08:19:21.116] <debug> nrf_ble_gatt: max_tx_time: 328
+[2026-11-26 08:19:21.127] 
+[2026-11-26 08:19:21.127] <info> app: GATT data length updated to 27 bytes.
+[2026-11-26 08:19:21.127] 
+[2026-11-26 08:19:21.127] <info> app: Data length updated: TX = 27, RX = 27
+[2026-11-26 08:19:21.587] 
+[2026-11-26 08:19:21.587] <info> app: Conn params applied: interval 6 units (7ms), timeout 5000ms
+[2026-11-26 08:19:21.729] 
+[2026-11-26 08:19:21.729] <info> app: NUS start
+[2026-11-26 08:19:21.731] 
+[2026-11-26 08:19:21.731] <info> app: Conn params applied: interval 39 units (48ms), timeout 5000ms
+[2026-11-26 08:19:24.445] 
+[2026-11-26 08:19:24.445] <info> app: !3 
+[2026-11-26 08:19:24.445] 
+[2026-11-26 08:19:24.445] <info> app: I2C link is initialised.
+[2026-11-26 08:19:24.455] 
+[2026-11-26 08:19:24.455] <info> app: I2C RX payload 110/250 bytes. Response type is 4. CRC OK (0xE67A)
+[2026-11-26 08:19:24.463] 
+[2026-11-26 08:19:24.463] 000: 80 04 6E 00 53 6C 65 65  70 20 33 20 33 20 30 20  ..n.Sleep 3 3 0 
+[2026-11-26 08:19:24.463] 
+[2026-11-26 08:19:24.463] 010: 35 39 20 34 30 20 31 20  35 30 30 20 30 20 31 30  59 40 1 500 0 10
+[2026-11-26 08:19:24.477] 
+[2026-11-26 08:19:24.479] 020: 30 30 20 35 20 31 20 31  30 30 30 20 31 30 30 20  00 5 1 1000 100 
+[2026-11-26 08:19:24.490] 
+[2026-11-26 08:19:24.490] 030: 30 20 32 30 20 31 20 36  30 20 31 20 30 20 33 20  0 20 1 60 1 0 3 
+[2026-11-26 08:19:24.490] 
+[2026-11-26 08:19:24.490] 040: 30 20 32 20 35 20 36 35  20 31 35 20 30 20 30 20  0 2 5 65 15 0 0 
+[2026-11-26 08:19:24.500] 
+[2026-11-26 08:19:24.500] 050: 32 38 36 20 33 32 36 20  31 20 31 31 30 20 31 20  286 326 1 110 1 
+[2026-11-26 08:19:24.500] 
+[2026-11-26 08:19:24.500] 060: 31 35 20 35 20 30 20 30  20 30 20 34 30 33 35 20  15 5 0 0 0 4035 
+[2026-11-26 08:19:24.516] 
+[2026-11-26 08:19:24.516] 070: 30 20 00 7A FF FF FF FF  FF FF FF FF FF FF FF FF  0 .z............
+[2026-11-26 08:19:24.532] 
+[2026-11-26 08:19:24.532] <info> app: AI state machine bumped with 'Sleep' (Current state: IDLE)
+[2026-11-26 08:19:24.532] 
+[2026-11-26 08:19:24.532] 
+[2026-11-26 08:19:24.532] 
+[2026-11-26 08:19:24.532] <info> app: AI processor sends stats: '3 3 0 59 40 1 500 0 1000 5 1 1000 100 0 20 1 60 1 0 3 0 2 5 65 15 0 0 286 326 1 110 1 15 5 0 0 0 4035 0 '
+[2026-11-26 08:19:24.547] 
+[2026-11-26 08:19:24.547] <info> app: Op parameter 32 (LoRaWAN ping minutes) = 15
+[2026-11-26 08:19:24.547] 
+[2026-11-26 08:19:24.547] <info> app: AI state changed from IDLE to SLEEP
+[2026-11-26 08:19:24.547] 
+[2026-11-26 08:19:24.547] 
+[2026-11-26 08:19:24.547] 
+[2026-11-26 08:19:24.547] BLE out: Sent   6 bytes: 'Sleep'
+[2026-11-26 08:19:24.567] 
+[2026-11-26 08:19:24.567] <info> app: State machine scheduler called with event 14 'LoRaWAN Config'
+[2026-11-26 08:19:24.567] 
+[2026-11-26 08:19:24.567] <info> app: Bumping state machine with 'LoRaWAN Config' (Current state: LORAWAN WAITING)
+[2026-11-26 08:19:24.579] 
+[2026-11-26 08:19:24.579] 
+[2026-11-26 08:19:24.579] 
+[2026-11-26 08:19:24.579] <info> app:  Joining now...
+[2026-11-26 08:19:24.579] 
+[2026-11-26 08:19:24.579] 
+[2026-11-26 08:19:24.579] 
+[2026-11-26 08:19:24.579] <info> app: MAC parameters reset: uplink dwell time ON
+[2026-11-26 08:19:24.585] 
+[2026-11-26 08:19:24.585] <info> app: MLME-Request: MLME_JOIN, OK
+[2026-11-26 08:19:24.585] 
+[2026-11-26 08:19:24.585] <info> app: State changed from LORAWAN WAITING to JOINING
+[2026-11-26 08:19:24.595] 
+[2026-11-26 08:19:24.595] 
+[2026-11-26 08:19:24.611] 
+[2026-11-26 08:19:24.611] <info> app: NUS TX Ready
+[2026-11-26 08:19:24.929] 
+[2026-11-26 08:19:24.929] <info> app: MAC txDone
+[2026-11-26 08:19:27.350] 
+[2026-11-26 08:19:27.350] 
+[2026-11-26 08:19:27.350] BLE in: Received   6 bytes 'AI ver'
+[2026-11-26 08:19:27.350] 
+[2026-11-26 08:19:27.350] <info> app: AI state machine bumped with 'Msg to AI' (Current state: SLEEP)
+[2026-11-26 08:19:27.365] 
+[2026-11-26 08:19:27.365] 
+[2026-11-26 08:19:27.365] 
+[2026-11-26 08:19:27.365] <info> app: AI processor is in DPD. Waking it. (ver)
+[2026-11-26 08:19:27.445] 
+[2026-11-26 08:19:27.445] <info> app: !4 
+[2026-11-26 08:19:27.445] 
+[2026-11-26 08:19:27.445] <info> app: I2C link is initialised.
+[2026-11-26 08:19:27.462] 
+[2026-11-26 08:19:27.462] <info> app: I2C RX payload 25/250 bytes. Response type is 4. CRC OK (0xEE03)
+[2026-11-26 08:19:27.462] 
+[2026-11-26 08:19:27.462] 000: 80 04 19 00 57 61 6B 65  20 32 30 32 34 2D 30 31  ....Wake 2024-01
+[2026-11-26 08:19:27.473] 
+[2026-11-26 08:19:27.473] 010: 2D 30 31 54 30 30 3A 30  30 3A 31 30 5A 00 03 FF  -01T00:00:10Z...
+[2026-11-26 08:19:27.473] 
+[2026-11-26 08:19:27.473] <info> app: AI state machine bumped with 'Wake' (Current state: SLEEP)
+[2026-11-26 08:19:27.489] 
+[2026-11-26 08:19:27.489] 
+[2026-11-26 08:19:27.489] 
+[2026-11-26 08:19:27.489] <info> app: BLE and AI time differ by 0s
+[2026-11-26 08:19:27.498] 
+[2026-11-26 08:19:27.498] <info> app: AI state changed from SLEEP to WOKEN
+[2026-11-26 08:19:27.498] 
+[2026-11-26 08:19:27.498] 
+[2026-11-26 08:19:27.501] 
+[2026-11-26 08:19:27.501] BLE out: Sent   5 bytes: 'Wake'
+[2026-11-26 08:19:27.510] 
+[2026-11-26 08:19:27.510] <info> app: AI State machine scheduler called with event 8 'Send SelfTest'
+[2026-11-26 08:19:27.510] 
+[2026-11-26 08:19:27.510] <info> app: AI state machine bumped with 'Send SelfTest' (Current state: WOKEN)
+[2026-11-26 08:19:27.521] 
+[2026-11-26 08:19:27.521] 
+[2026-11-26 08:19:27.521] 
+[2026-11-26 08:19:27.521] <info> app: I2C link is initialised.
+[2026-11-26 08:19:27.529] 
+[2026-11-26 08:19:27.529] Sending 'selftest' to AI processor (4 ctrl bytes, 8 payload, 2 CRC)<info> app: OK
+[2026-11-26 08:19:27.529] 
+[2026-11-26 08:19:27.529] <info> app: AI state changed from WOKEN to SELFTEST
+[2026-11-26 08:19:27.548] 
+[2026-11-26 08:19:27.548] 
+[2026-11-26 08:19:27.548] 
+[2026-11-26 08:19:27.548] <info> app: I2C TX complete: 14 bytes.
+[2026-11-26 08:19:27.548] 
+[2026-11-26 08:19:27.548] <info> app: !5 
+[2026-11-26 08:19:27.548] 
+[2026-11-26 08:19:27.548] 000: 80 01 08 00 73 65 6C 66  74 65 73 74 38 A9 00 00  ....selftest8...
+[2026-11-26 08:19:27.556] 
+[2026-11-26 08:19:27.556] <info> app: I2C link is initialised.
+[2026-11-26 08:19:27.556] 
+[2026-11-26 08:19:27.556] <info> app: I2C RX payload 13/250 bytes. Response type is 4. CRC OK (0xFA7B)
+[2026-11-26 08:19:27.569] 
+[2026-11-26 08:19:27.569] 000: 80 04 0D 00 73 65 6C 66  54 65 73 74 20 38 30 30  ....selfTest 800
+[2026-11-26 08:19:27.569] 
+[2026-11-26 08:19:27.569] 010: 30 00 7B FF FF FF FF FF  FF FF FF FF FF FF FF FF  0.{.............
+[2026-11-26 08:19:27.585] 
+[2026-11-26 08:19:27.585] <info> app: AI state machine bumped with 'Selftest Rx' (Current state: SELFTEST)
+[2026-11-26 08:19:27.585] 
+[2026-11-26 08:19:27.585] 
+[2026-11-26 08:19:27.597] 
+[2026-11-26 08:19:27.597] <info> app: AI self test bits = 0x8000 (all bits now 0x8020)
+[2026-11-26 08:19:27.597] 
+[2026-11-26 08:19:27.597] <info> app: Can't send UTC
+[2026-11-26 08:19:27.597] 
+[2026-11-26 08:19:27.597] <info> app: AI state changed from SELFTEST to IDLE
+[2026-11-26 08:19:27.600] 
+[2026-11-26 08:19:27.600] 
+[2026-11-26 08:19:27.600] 
+[2026-11-26 08:19:27.600] <info> app: NUS TX Ready
+[2026-11-26 08:19:27.611] 
+[2026-11-26 08:19:27.611] BLE out: Sent  20 bytes: 'Error bits = 0x8020'
+[2026-11-26 08:19:27.611] 
+[2026-11-26 08:19:27.611] <info> app: AI State machine scheduler called with event 12 'Msg to AI'
+[2026-11-26 08:19:27.616] 
+[2026-11-26 08:19:27.616] <info> app: AI state machine bumped with 'Msg to AI' (Current state: IDLE)
+[2026-11-26 08:19:27.616] 
+[2026-11-26 08:19:27.616] 
+[2026-11-26 08:19:27.632] 
+[2026-11-26 08:19:27.632] <info> app: I2C link is initialised.
+[2026-11-26 08:19:27.632] 
+[2026-11-26 08:19:27.632] Sending 'ver' to AI processor (4 ctrl bytes, 3 payload, 2 CRC)<info> app: AI state changed from IDLE to PROCESSING
+[2026-11-26 08:19:27.632] 
+[2026-11-26 08:19:27.632] 
+[2026-11-26 08:19:27.632] 
+[2026-11-26 08:19:27.632] <info> app: I2C TX complete: 9 bytes.
+[2026-11-26 08:19:27.632] 
+[2026-11-26 08:19:27.632] <info> app: !6 
+[2026-11-26 08:19:27.652] 
+[2026-11-26 08:19:27.652] 000: 80 01 03 00 76 65 72 D8  5B 65 73 74 38 A9 00 00  ....ver.[est8...
+[2026-11-26 08:19:27.652] 
+[2026-11-26 08:19:27.652] <info> app: I2C link is initialised.
+[2026-11-26 08:19:27.652] 
+[2026-11-26 08:19:27.652] <info> app: I2C RX payload 30/250 bytes. Response type is 4. CRC OK (0x15FA)
+[2026-11-26 08:19:27.664] 
+[2026-11-26 08:19:27.664] 000: 80 04 1E 00 57 57 35 30  30 5F 43 30 32 20 31 38  ....WW500_C02 18
+[2026-11-26 08:19:27.664] 
+[2026-11-26 08:19:27.664] 010: 3A 30 34 3A 30 33 20 4E  6F 76 20 32 35 20 32 30  :04:03 Nov 25 20
+[2026-11-26 08:19:27.680] 
+[2026-11-26 08:19:27.680] 020: 32 36 00 FA FF FF FF FF  FF FF FF FF FF FF FF FF  26..............
+[2026-11-26 08:19:27.697] 
+[2026-11-26 08:19:27.697] <info> app: !7 
+[2026-11-26 08:19:27.697] 
+[2026-11-26 08:19:27.697] <info> app: AI state machine bumped with 'Msg from AI' (Current state: PROCESSING)
+[2026-11-26 08:19:27.712] 
+[2026-11-26 08:19:27.712] 
+[2026-11-26 08:19:27.712] 
+[2026-11-26 08:19:27.712] <info> app: NUS TX Ready
+[2026-11-26 08:19:27.712] 
+[2026-11-26 08:19:27.712] <info> app: AI processor replies: 'WW500_C02 18:04:03 Nov 25 2026'
+[2026-11-26 08:19:27.712] 
+[2026-11-26 08:19:27.712] <info> app: AI state changed from PROCESSING to IDLE
+[2026-11-26 08:19:27.713] 
+[2026-11-26 08:19:27.713] 
+[2026-11-26 08:19:27.713] 
+[2026-11-26 08:19:27.713] BLE out: Sent  31 bytes: 'WW500_C02 18:04:03 Nov 25 2026'
+[2026-11-26 08:19:27.713] 
+[2026-11-26 08:19:27.713] <info> app: I2C link is initialised.
+[2026-11-26 08:19:27.727] 
+[2026-11-26 08:19:27.727] <info> app: AI State machine scheduler called with event 12 'Msg to AI'
+[2026-11-26 08:19:27.727] 
+[2026-11-26 08:19:27.727] <info> app: I2C RX payload 13/250 bytes. Response type is 4. CRC OK (0x7FB8)
+[2026-11-26 08:19:27.743] 
+[2026-11-26 08:19:27.743] <info> app: AI state machine bumped with 'Msg to AI' (Current state: IDLE)
+[2026-11-26 08:19:27.760] 
+[2026-11-26 08:19:27.760] 
+[2026-11-26 08:19:27.760] 
+[2026-11-26 08:19:27.760] <info> app: I2C link is initialised.
+[2026-11-26 08:19:27.760] 
+[2026-11-26 08:19:27.760] Sending 'sdused' to AI processor (4 ctrl bytes, 6 payload, 2 CRC)<info> app: AI state changed from IDLE to PROCESSING
+[2026-11-26 08:19:27.778] 
+[2026-11-26 08:19:27.778] 
+[2026-11-26 08:19:27.778] 
+[2026-11-26 08:19:27.778] <info> app: I2C TX complete: 12 bytes.
+[2026-11-26 08:19:27.778] 
+[2026-11-26 08:19:27.778] <info> app: !8 
+[2026-11-26 08:19:27.778] 
+[2026-11-26 08:19:27.778] 000: 80 04 0D 00 73 65 6C 66  54 65 73 74 20 30 30 30  ....selfTest 000
+[2026-11-26 08:19:27.784] 
+[2026-11-26 08:19:27.784] 010: 30 00 B8 FF FF FF FF FF  FF FF FF FF FF FF FF FF  0...............
+[2026-11-26 08:19:27.791] 
+[2026-11-26 08:19:27.791] <info> app: AI state machine bumped with 'Selftest Rx' (Current state: PROCESSING)
+[2026-11-26 08:19:27.791] 
+[2026-11-26 08:19:27.791] 
+[2026-11-26 08:19:27.791] 
+[2026-11-26 08:19:27.791] <info> app: NUS TX Ready
+[2026-11-26 08:19:27.791] 
+[2026-11-26 08:19:27.791] <info> app: AI self test bits = 0x0000 (all bits now 0x0020)
+[2026-11-26 08:19:27.803] 
+[2026-11-26 08:19:27.803] <info> app: AI state changed from PROCESSING to IDLE
+[2026-11-26 08:19:27.812] 
+[2026-11-26 08:19:27.812] 
+[2026-11-26 08:19:27.812] 
+[2026-11-26 08:19:27.812] BLE out: Sent  20 bytes: 'Error bits = 0x0020'
+[2026-11-26 08:19:27.817] 
+[2026-11-26 08:19:27.817] 000: 80 01 06 00 73 64 75 73  65 64 B7 16 38 A9 00 00  ....sdused..8...
+[2026-11-26 08:19:27.828] 
+[2026-11-26 08:19:27.828] <info> app: I2C link is initialised.
+[2026-11-26 08:19:27.828] 
+[2026-11-26 08:19:27.828] <info> app: I2C RX payload 8/250 bytes. Response type is 4. CRC OK (0x6503)
+[2026-11-26 08:19:27.828] 
+[2026-11-26 08:19:27.828] 000: 80 04 08 00 73 64 75 73  65 64 20 31 00 03 FF FF  ....sdused 1....
+[2026-11-26 08:19:27.838] 
+[2026-11-26 08:19:27.838] <info> app: AI state machine bumped with 'Msg from AI' (Current state: IDLE)
+[2026-11-26 08:19:27.838] 
+[2026-11-26 08:19:27.838] 
+[2026-11-26 08:19:27.853] 
+[2026-11-26 08:19:27.853] <info> app: AI processor: SD card 1% used
+[2026-11-26 08:19:27.885] 
+[2026-11-26 08:19:27.885] <info> app: NUS TX Ready
+[2026-11-26 08:19:29.533] 
+[2026-11-26 08:19:29.533] <info> app: !9 
+[2026-11-26 08:19:29.538] 
+[2026-11-26 08:19:29.538] <info> app: I2C link is initialised.
+[2026-11-26 08:19:29.538] 
+[2026-11-26 08:19:29.538] <info> app: I2C RX payload 110/250 bytes. Response type is 4. CRC OK (0x618B)
+[2026-11-26 08:19:29.554] 
+[2026-11-26 08:19:29.554] 000: 80 04 6E 00 53 6C 65 65  70 20 33 20 33 20 30 20  ..n.Sleep 3 3 0 
+[2026-11-26 08:19:29.557] 
+[2026-11-26 08:19:29.557] 010: 35 39 20 34 31 20 31 20  35 30 30 20 30 20 31 30  59 41 1 500 0 10
+[2026-11-26 08:19:29.557] 
+[2026-11-26 08:19:29.557] 020: 30 30 20 35 20 31 20 31  30 30 30 20 31 30 30 20  00 5 1 1000 100 
+[2026-11-26 08:19:29.575] 
+[2026-11-26 08:19:29.575] 030: 30 20 32 30 20 31 20 36  30 20 31 20 30 20 33 20  0 20 1 60 1 0 3 
+[2026-11-26 08:19:29.575] 
+[2026-11-26 08:19:29.575] 040: 30 20 32 20 35 20 36 35  20 31 35 20 30 20 30 20  0 2 5 65 15 0 0 
+[2026-11-26 08:19:29.586] 
+[2026-11-26 08:19:29.586] 050: 32 38 36 20 33 32 36 20  31 20 31 31 30 20 31 20  286 326 1 110 1 
+[2026-11-26 08:19:29.586] 
+[2026-11-26 08:19:29.586] 060: 31 35 20 35 20 30 20 30  20 30 20 34 30 33 35 20  15 5 0 0 0 4035 
+[2026-11-26 08:19:29.610] 
+[2026-11-26 08:19:29.610] 070: 30 20 00 8B FF FF FF FF  FF FF FF FF FF FF FF FF  0 ..............
+[2026-11-26 08:19:29.610] 
+[2026-11-26 08:19:29.610] <info> app: AI state machine bumped with 'Sleep' (Current state: IDLE)
+[2026-11-26 08:19:29.621] 
+[2026-11-26 08:19:29.621] 
+[2026-11-26 08:19:29.621] 
+[2026-11-26 08:19:29.621] <info> app: AI processor sends stats: '3 3 0 59 41 1 500 0 1000 5 1 1000 100 0 20 1 60 1 0 3 0 2 5 65 15 0 0 286 326 1 110 1 15 5 0 0 0 4035 0 '
+[2026-11-26 08:19:29.633] 
+[2026-11-26 08:19:29.633] <info> app: AI state changed from IDLE to SLEEP
+[2026-11-26 08:19:29.633] 
+[2026-11-26 08:19:29.633] 
+[2026-11-26 08:19:29.633] 
+[2026-11-26 08:19:29.633] BLE out: Sent   6 bytes: 'Sleep'
+[2026-11-26 08:19:29.687] 
+[2026-11-26 08:19:29.687] <info> app: NUS TX Ready
+[2026-11-26 08:19:30.006] 
+[2026-11-26 08:19:30.006] <info> app: MAC rxTimeOut
+[2026-11-26 08:19:31.004] 
+[2026-11-26 08:19:31.004] <info> app: MAC rxTimeOut
+[2026-11-26 08:19:31.017] 
+[2026-11-26 08:19:31.017] Join failed. Status code -1
+[2026-11-26 08:19:31.024] 
+[2026-11-26 08:19:31.024] <info> app: Bumping state machine with 'Joined' (Current state: JOINING)
+[2026-11-26 08:19:31.028] 
+[2026-11-26 08:19:31.028] 
+[2026-11-26 08:19:31.028] 
+[2026-11-26 08:19:31.028] <info> app: Retry (attempt 1/6) in 5 seconds (0 minutes)
+[2026-11-26 08:19:31.033] 
+[2026-11-26 08:19:31.033] 
+[2026-11-26 08:19:31.076] 
+[2026-11-26 08:19:31.076] <debug> app: FDS update success! FileId: 0x3E8 RecKey:0x1
+[2026-11-26 08:19:31.082] 
+[2026-11-26 08:19:31.082] <debug> app: FDS update success! FileId: 0x3E8 RecKey:0x2
+[2026-11-26 08:19:31.082] 
+[2026-11-26 08:19:31.082] <debug> app: FDS update success! FileId: 0x3E8 RecKey:0x3
+[2026-11-26 08:19:31.097] 
+[2026-11-26 08:19:31.097] <debug> app: FDS update success! FileId: 0x3E8 RecKey:0x6
+[2026-11-26 08:19:31.098] 
+[2026-11-26 08:19:31.098] <info> app: Data stored on NVM: 620 bytes
+[2026-11-26 08:19:31.098] 
+[2026-11-26 08:19:31.098] BLE out: Sent  16 bytes: 'Failed to join.'
+[2026-11-26 08:19:31.146] 
+[2026-11-26 08:19:31.146] <info> app: NUS TX Ready
+[2026-11-26 08:19:36.008] 
+[2026-11-26 08:19:36.008] <info> app: Retrying transmission now.
+[2026-11-26 08:19:36.014] 
+[2026-11-26 08:19:36.014] BLE out: Sent  27 bytes: 'Retrying transmission now.'
+[2026-11-26 08:19:36.024] 
+[2026-11-26 08:19:36.024] <info> app: Bumping state machine with 'Retry Tx' (Current state: JOINING)
+[2026-11-26 08:19:36.024] 
+[2026-11-26 08:19:36.024] 
+[2026-11-26 08:19:36.024] 
+[2026-11-26 08:19:36.024] <info> app: MAC parameters reset: uplink dwell time ON
+[2026-11-26 08:19:36.024] 
+[2026-11-26 08:19:36.024] <info> app: MLME-Request: MLME_JOIN, OK
+[2026-11-26 08:19:36.072] 
+[2026-11-26 08:19:36.072] <info> app: NUS TX Ready
+[2026-11-26 08:19:36.398] 
+[2026-11-26 08:19:36.398] <info> app: MAC txDone
+[2026-11-26 08:19:39.341] 
+[2026-11-26 08:19:39.341] 
+[2026-11-26 08:19:39.341] BLE in: Received   6 bytes 'hack 6'
+[2026-11-26 08:19:39.341] 
+[2026-11-26 08:19:39.341] <error> app: ERROR 4 [NRF_ERROR_NO_MEM] at ../../../ble_commands.c:998
+[2026-11-26 08:19:39.357] 
+[2026-11-26 08:19:39.357] <error> app: PC at: 0x00027155
+[2026-11-26 08:19:39.357] 
+[2026-11-26 08:19:39.357] <error> app: >>> Resetting both processors after fault (5 in a row)
+[2026-11-26 08:19:39.732] 
+[2026-11-26 08:19:39.732] <info> app: 
+[2026-11-26 08:19:39.732] 
+[2026-11-26 08:19:39.732] **** Secure Bootloader (WW500_A00) Ver: 00.01.01 Built: 19:01:29 Oct 31 2025 ****
+[2026-11-26 08:19:39.745] 
+[2026-11-26 08:19:39.745] 
+[2026-11-26 08:19:39.745] <info> nrf_dfu_settings: Backing up settings page to address 0x7E000.
+[2026-11-26 08:19:39.749] 
+[2026-11-26 08:19:39.749] 
+[2026-11-26 08:19:39.749] <info> app: No firmware to activate.
+[2026-11-26 08:19:39.754] 
+[2026-11-26 08:19:39.754] 
+[2026-11-26 08:19:39.754] <info> nrf_dfu_settings: Backing up settings page to address 0x7E000.
+[2026-11-26 08:19:39.754] 
+[2026-11-26 08:19:41.684] 
+[2026-11-26 08:19:41.684] <info> app: 
+[2026-11-26 08:19:41.684] 
+[2026-11-26 08:19:41.684] **** Wildlife Watcher 1 (WW500-C02) Ver: 00.30.62 Built: 17:28:46 Nov 24 2026 ****
+[2026-11-26 08:19:41.699] 
+[2026-11-26 08:19:41.699] <info> app: BOARDTYPE bytes: 0x04 0x22
+[2026-11-26 08:19:41.699] 
+[2026-11-26 08:19:41.699] <info> app: GCC version: 10.3.1
+[2026-11-26 08:19:41.699] 
+[2026-11-26 08:19:41.699] <info> app: Compiler Version: ARM GNU, 10.3.1 20210824 (release)
+[2026-11-26 08:19:41.702] 
+[2026-11-26 08:19:41.702] <info> app: Git branch: '261106_lorawanPing' 0862858-dirty
+[2026-11-26 08:19:41.716] 
+[2026-11-26 08:19:41.716] 
+[2026-11-26 08:19:41.716] 
+[2026-11-26 08:19:41.716] <info> app_timer: RTC: initialized.
+[2026-11-26 08:19:41.716] 
+[2026-11-26 08:19:41.716] <info> app: Watchdog already running: period 30 s (kept)
+[2026-11-26 08:19:41.720] 
+[2026-11-26 08:19:41.720] <info> app: Watchdog early warning: 2 s before the reset
+[2026-11-26 08:19:41.724] 
+[2026-11-26 08:19:41.724] <info> app: System time set successfully
+[2026-11-26 08:19:41.738] 
+[2026-11-26 08:19:41.738] <info> app: 
+[2026-11-26 08:19:41.738] 
+[2026-11-26 08:19:41.738] Initialising LoRaWAN
+[2026-11-26 08:19:41.738] 
+[2026-11-26 08:19:41.738] <info> app: Initializing fds...
+[2026-11-26 08:19:41.738] 
+[2026-11-26 08:19:41.738] <info> app: Reading flash usage statistics...
+[2026-11-26 08:19:41.738] 
+[2026-11-26 08:19:41.738] <info> app: Found 6 valid records.
+[2026-11-26 08:19:41.740] 
+[2026-11-26 08:19:41.740] <info> app: Found 30 dirty records (ready to be garbage collected).
+[2026-11-26 08:19:41.756] 
+[2026-11-26 08:19:41.756] <debug> app: Record 8032 at 6DFA0
+[2026-11-26 08:19:41.756] 
+[2026-11-26 08:19:41.756] <debug> app: Record 8030 at 6E06C
+[2026-11-26 08:19:41.756] 
+[2026-11-26 08:19:41.756] <debug> app: Record 8033 at 6E21C
+[2026-11-26 08:19:41.756] 
+[2026-11-26 08:19:41.756] <debug> app: Record 8034 at 6E240
+[2026-11-26 08:19:41.767] 
+[2026-11-26 08:19:41.767] <debug> app: Record 8035 at 6E3A4
+[2026-11-26 08:19:41.767] 
+[2026-11-26 08:19:41.767] <debug> app: Record 6 at 70008
+[2026-11-26 08:19:41.767] 
+[2026-11-26 08:19:41.767] <info> app: >>> LoraMac version = 0x01000300
+[2026-11-26 08:19:41.767] 
+[2026-11-26 08:19:41.767] <info> app: MAC parameters reset: uplink dwell time ON
+[2026-11-26 08:19:41.787] 
+[2026-11-26 08:19:41.787] <info> app: Data restored from NVM: 1064 bytes
+[2026-11-26 08:19:41.787] 
+[2026-11-26 08:19:41.787] <info> app:    DevEui = DA:EF:67:FE:FF:7A:0A:D9
+[2026-11-26 08:19:41.787] 
+[2026-11-26 08:19:41.787] <info> app:    AppEui = 70:B3:D5:7E:D0:03:C8:D4
+[2026-11-26 08:19:41.787] 
+[2026-11-26 08:19:41.787] <info> app:    SE Pin = 00:00:00:00
+[2026-11-26 08:19:41.802] 
+[2026-11-26 08:19:41.802] <info> app: LoRaWAN initialised
+[2026-11-26 08:19:41.802] 
+[2026-11-26 08:19:41.802] 
+[2026-11-26 08:19:41.802] 
+[2026-11-26 08:19:41.802] <info> app: BLE initialised for WILD-CMSS - disconnect interval 60s
+[2026-11-26 08:19:41.802] 
+[2026-11-26 08:19:41.802] 
+[2026-11-26 08:19:41.802] 
+[2026-11-26 08:19:41.802] <info> app: Max BLE packet length is 244. PDU length = 251
+[2026-11-26 08:19:41.809] 
+[2026-11-26 08:19:41.809] <info> app: Reset cause:   software reset
+[2026-11-26 08:19:41.816] 
+[2026-11-26 08:19:41.816] <info> app: AI processor reset at boot (/RST 100 ms)
+[2026-11-26 08:19:41.816] 
+[2026-11-26 08:19:41.816] <info> app: Previous run ended with a fault: error check, error 0x00000004
+[2026-11-26 08:19:41.816] 
+[2026-11-26 08:19:41.816] <info> app:   at ble_commands.c:998, PC 0x00027155, LR 0x00000000
+[2026-11-26 08:19:41.835] 
+[2026-11-26 08:19:41.835] <info> app: Reset reason code 2. Resets since power-on: 14.
+[2026-11-26 08:19:41.835] 
+[2026-11-26 08:19:41.835] <info> app: Fault resets in a row: 5. Cleared after 10 minutes without a fault.
+[2026-11-26 08:19:41.845] 
+[2026-11-26 08:19:41.845] <info> app: Board name: WILD-CMSS
+[2026-11-26 08:19:41.845] 
+[2026-11-26 08:19:41.845] <info> app: Tests Wildlife Watcher BLE and LoRaWAN communications. Uses NUS
+[2026-11-26 08:19:41.845] 
+[2026-11-26 08:19:41.845] <info> app: TODO - clean up LoRaWAN processing - esp. failures, incl. failure to join.
+[2026-11-26 08:19:41.861] 
+[2026-11-26 08:19:41.861] <info> app: TODO - check RSSI outgoing vs incoming differences
+[2026-11-26 08:19:41.861] 
+[2026-11-26 08:19:41.861] <info> app: Device Addr:   99:0A:7A:67:EF:DA
+[2026-11-26 08:19:41.861] 
+[2026-11-26 08:19:41.861] <info> app: BLE address:   D9:0A:7A:67:EF:DA
+[2026-11-26 08:19:41.877] 
+[2026-11-26 08:19:41.877] <info> app: BLE Name:      WILD-CMSS
+[2026-11-26 08:19:41.877] 
+[2026-11-26 08:19:41.877] <info> app: Target DevEui: DA:EF:67:FE:FF:7A:0A:D9
+[2026-11-26 08:19:41.885] 
+[2026-11-26 08:19:41.885] <info> app: Target AppEui: TBD
+[2026-11-26 08:19:41.885] 
+[2026-11-26 08:19:41.885] <info> app: Softdevice ver: 0x00CB
+[2026-11-26 08:19:41.885] 
+[2026-11-26 08:19:41.885] <info> app: Reset reason:  0x00000004 CPU
+[2026-11-26 08:19:41.893] 
+[2026-11-26 08:19:41.893] <info> app: Firmware version 0.30.62
+[2026-11-26 08:19:41.893] 
+[2026-11-26 08:19:41.893] 
+[2026-11-26 08:19:41.893] 
+[2026-11-26 08:19:41.893] <info> app: Temperature: 22.75C
+[2026-11-26 08:19:41.893] 
+[2026-11-26 08:19:41.893] 
+[2026-11-26 08:19:41.893] 
+[2026-11-26 08:19:41.893] <info> app: Press SW1 to start BLE advertising.
+[2026-11-26 08:19:41.908] 
+[2026-11-26 08:19:41.908] <info> app: Press SW1 at power-on to reset credentials
+[2026-11-26 08:19:41.908] 
+[2026-11-26 08:19:41.908] <info> app: Press SW1 for > 10s to start Device Firmware Upgrade (DFU)
+[2026-11-26 08:19:41.913] 
+[2026-11-26 08:19:41.913] <info> app: Press SW2 - prohibited. This signal is asserted by AI processor.
+[2026-11-26 08:19:41.924] 
+[2026-11-26 08:19:41.924] <info> app: Hold magnet close at power-on to start Device Firmware Upgrade (DFU)
+[2026-11-26 08:19:41.924] 
+[2026-11-26 08:19:41.924] <info> app: Press RESET button for a software reset.
+[2026-11-26 08:19:41.933] 
+[2026-11-26 08:19:41.933] <info> app: UART RX Pin 2 is driven
+[2026-11-26 08:19:41.940] 
+[2026-11-26 08:19:41.940] <info> app: SW1 Pin 22 is not driven
+[2026-11-26 08:19:41.940] 
+[2026-11-26 08:19:41.940] <info> app: SW2 Pin 27 is not driven
+[2026-11-26 08:19:41.940] 
+[2026-11-26 08:19:41.940] <info> app: Mag sensor Pin 25 is driven
+[2026-11-26 08:19:41.940] 
+[2026-11-26 08:19:41.940] <info> app: Current DevEui is:   DA:EF:67:FE:FF:7A:0A:D9
+[2026-11-26 08:19:41.956] 
+[2026-11-26 08:19:41.956] <info> app: Current JoinEui is:  70:B3:D5:7E:D0:03:C8:D4
+[2026-11-26 08:19:41.956] 
+[2026-11-26 08:19:41.956] <info> app: Current ShortId is:   CMSS
+[2026-11-26 08:19:41.956] 
+[2026-11-26 08:19:41.956] <info> app: InitCred DevEui is:  00:80:E1:01:01:01:01:01
+[2026-11-26 08:19:41.972] 
+[2026-11-26 08:19:41.972] <info> app: InitCred JoinEui is: 70:B3:D5:7E:D0:03:C8:00
+[2026-11-26 08:19:41.972] 
+[2026-11-26 08:19:41.972] <info> app: We have no need to fetch parameters
+[2026-11-26 08:19:41.972] 
+[2026-11-26 08:19:41.972] 
+[2026-11-26 08:19:41.972] 
+[2026-11-26 08:19:41.972] <info> app: I2C link is initialised.
+[2026-11-26 08:19:41.972] 
+[2026-11-26 08:19:41.972] <info> app: Enabled I2C (instance 1) on pins 7 and 8
+[2026-11-26 08:19:41.996] 
+[2026-11-26 08:19:41.996] <info> app: I2C buffer sizes 250 and 250
+[2026-11-26 08:19:41.996] 
+[2026-11-26 08:19:41.996] <info> app: AI processor initialised.
+[2026-11-26 08:19:41.996] 
+[2026-11-26 08:19:41.996] <info> app: 
+[2026-11-26 08:19:41.996] 
+[2026-11-26 08:19:41.996] Initialisation finished! Starting state machine.
+[2026-11-26 08:19:42.006] 
+[2026-11-26 08:19:42.006] 
+[2026-11-26 08:19:42.006] 
+[2026-11-26 08:19:42.006] <info> app: Bumping state machine with 'Initialised' (Current state: RESET)
+[2026-11-26 08:19:42.011] 
+[2026-11-26 08:19:42.011] 
+[2026-11-26 08:19:42.011] 
+[2026-11-26 08:19:42.011] <info> app:  LoRaWAN waits for op parameter 32 from the AI processor.
+[2026-11-26 08:19:42.011] 
+[2026-11-26 08:19:42.011] 
+[2026-11-26 08:19:42.011] 
+[2026-11-26 08:19:42.011] <info> app: State changed from RESET to LORAWAN WAITING
+[2026-11-26 08:19:42.024] 
+[2026-11-26 08:19:42.024] 
+[2026-11-26 08:19:42.024] 
+[2026-11-26 08:19:42.024] <info> app: AI state machine bumped with 'Initialised' (Current state: RESET)
+[2026-11-26 08:19:42.024] 
+[2026-11-26 08:19:42.024] 
+[2026-11-26 08:19:42.024] 
+[2026-11-26 08:19:42.024] <info> app: AI state changed from RESET to SLEEP
+[2026-11-26 08:19:42.037] 
+[2026-11-26 08:19:42.037] 
+[2026-11-26 08:19:43.739] 
+[2026-11-26 08:19:43.739] <info> app: Advertising Fast.
+[2026-11-26 08:19:43.743] 
+[2026-11-26 08:19:43.743] <info> app: Starting advertising
+[2026-11-26 08:19:43.823] 
+[2026-11-26 08:19:43.823] <info> app: !0 
+[2026-11-26 08:19:43.846] 
+[2026-11-26 08:19:43.846] <info> app: I2C RX payload 25/250 bytes. Response type is 4. CRC OK (0xBF51)
+[2026-11-26 08:19:43.846] 
+[2026-11-26 08:19:43.846] 000: 80 04 19 00 57 61 6B 65  20 32 30 32 34 2D 30 31  ....Wake 2024-01
+[2026-11-26 08:19:43.853] 
+[2026-11-26 08:19:43.853] 010: 2D 30 31 54 30 30 3A 30  30 3A 30 32 5A 00 51 FF  -01T00:00:02Z.Q.
+[2026-11-26 08:19:43.863] 
+[2026-11-26 08:19:43.863] <info> app: AI state machine bumped with 'Wake' (Current state: SLEEP)
+[2026-11-26 08:19:43.873] 
+[2026-11-26 08:19:43.873] 
+[2026-11-26 08:19:43.873] 
+[2026-11-26 08:19:43.873] <info> app: BLE and AI time differ by 0s
+[2026-11-26 08:19:43.873] 
+[2026-11-26 08:19:43.873] <info> app: AI state changed from SLEEP to WOKEN
+[2026-11-26 08:19:43.873] 
+[2026-11-26 08:19:43.873] 
+[2026-11-26 08:19:43.873] 
+[2026-11-26 08:19:43.873] BLE out: Failed to send   5 bytes: 'Wake'
+[2026-11-26 08:19:43.895] 
+[2026-11-26 08:19:43.895] <info> app: AI State machine scheduler called with event 8 'Send SelfTest'
+[2026-11-26 08:19:43.895] 
+[2026-11-26 08:19:43.895] <info> app: AI state machine bumped with 'Send SelfTest' (Current state: WOKEN)
+[2026-11-26 08:19:43.899] 
+[2026-11-26 08:19:43.899] 
+[2026-11-26 08:19:43.899] 
+[2026-11-26 08:19:43.899] <info> app: I2C link is initialised.
+[2026-11-26 08:19:43.906] 
+[2026-11-26 08:19:43.906] Sending 'selftest' to AI processor (4 ctrl bytes, 8 payload, 2 CRC)<info> app: OK
+[2026-11-26 08:19:43.915] 
+[2026-11-26 08:19:43.915] <info> app: AI state changed from WOKEN to SELFTEST
+[2026-11-26 08:19:43.915] 
+[2026-11-26 08:19:43.915] 
+[2026-11-26 08:19:43.915] 
+[2026-11-26 08:19:43.915] <info> app: I2C TX complete: 14 bytes.
+[2026-11-26 08:19:43.915] 
+[2026-11-26 08:19:43.915] <info> app: !1 
+[2026-11-26 08:19:43.915] 
+[2026-11-26 08:19:43.915] 000: 80 01 08 00 73 65 6C 66  74 65 73 74 38 A9 00 00  ....selftest8...
+[2026-11-26 08:19:43.935] 
+[2026-11-26 08:19:43.935] <info> app: I2C link is initialised.
+[2026-11-26 08:19:43.950] 
+[2026-11-26 08:19:43.950] <info> app: I2C RX payload 13/250 bytes. Response type is 4. CRC OK (0x7FB8)
+[2026-11-26 08:19:43.950] 
+[2026-11-26 08:19:43.950] 000: 80 04 0D 00 73 65 6C 66  54 65 73 74 20 30 30 30  ....selfTest 000
+[2026-11-26 08:19:43.963] 
+[2026-11-26 08:19:43.963] 010: 30 00 B8 FF FF FF FF FF  FF FF FF FF FF FF FF FF  0...............
+[2026-11-26 08:19:43.963] 
+[2026-11-26 08:19:43.963] <info> app: AI state machine bumped with 'Selftest Rx' (Current state: SELFTEST)
+[2026-11-26 08:19:43.963] 
+[2026-11-26 08:19:43.963] 
+[2026-11-26 08:19:43.963] 
+[2026-11-26 08:19:43.963] <info> app: AI self test bits = 0x0000 (all bits now 0x0020)
+[2026-11-26 08:19:43.980] 
+[2026-11-26 08:19:43.980] <info> app: Can't send UTC
+[2026-11-26 08:19:43.980] 
+[2026-11-26 08:19:43.980] <info> app: AI state changed from SELFTEST to IDLE
+[2026-11-26 08:19:43.980] 
+[2026-11-26 08:19:43.980] 
+[2026-11-26 08:19:43.980] 
+[2026-11-26 08:19:43.980] BLE out: Failed to send  20 bytes: 'Error bits = 0x0020'
+[2026-11-26 08:19:43.980] 
+[2026-11-26 08:19:43.980] <info> app: AI State machine scheduler called with event 12 'Msg to AI'
+[2026-11-26 08:19:44.000] 
+[2026-11-26 08:19:44.000] <info> app: AI state machine bumped with 'Msg to AI' (Current state: IDLE)
+[2026-11-26 08:19:44.013] 
+[2026-11-26 08:19:44.013] 
+[2026-11-26 08:19:44.013] 
+[2026-11-26 08:19:44.013] <info> app: I2C link is initialised.
+[2026-11-26 08:19:44.013] 
+[2026-11-26 08:19:44.013] Sending 'sdused' to AI processor (4 ctrl bytes, 6 payload, 2 CRC)<info> app: AI state changed from IDLE to PROCESSING
+[2026-11-26 08:19:44.013] 
+[2026-11-26 08:19:44.013] 
+[2026-11-26 08:19:44.013] 
+[2026-11-26 08:19:44.013] <info> app: I2C TX complete: 12 bytes.
+[2026-11-26 08:19:44.013] 
+[2026-11-26 08:19:44.013] <info> app: !2 
+[2026-11-26 08:19:44.028] 
+[2026-11-26 08:19:44.028] 000: 80 01 06 00 73 64 75 73  65 64 B7 16 38 A9 00 00  ....sdused..8...
+[2026-11-26 08:19:44.046] 
+[2026-11-26 08:19:44.046] <info> app: I2C link is initialised.
+[2026-11-26 08:19:44.046] 
+[2026-11-26 08:19:44.046] <info> app: I2C RX payload 8/250 bytes. Response type is 4. CRC OK (0x6503)
+[2026-11-26 08:19:44.059] 
+[2026-11-26 08:19:44.059] 000: 80 04 08 00 73 64 75 73  65 64 20 31 00 03 FF FF  ....sdused 1....
+[2026-11-26 08:19:44.059] 
+[2026-11-26 08:19:44.059] <info> app: AI state machine bumped with 'Msg from AI' (Current state: PROCESSING)
+[2026-11-26 08:19:44.075] 
+[2026-11-26 08:19:44.075] 
+[2026-11-26 08:19:44.075] 
+[2026-11-26 08:19:44.075] <info> app: AI processor replies: 'sdused 1'
+[2026-11-26 08:19:44.075] 
+[2026-11-26 08:19:44.075] <info> app: AI processor: SD card 1% used
+[2026-11-26 08:19:44.075] 
+[2026-11-26 08:19:44.075] <info> app: AI state changed from PROCESSING to IDLE
+[2026-11-26 08:19:44.075] 
+[2026-11-26 08:19:44.075] 
+[2026-11-26 08:19:44.498] 
+[2026-11-26 08:19:44.498] <debug> nrf_ble_gatt: Requesting to update ATT MTU to 247 bytes on connection 0x0.
+[2026-11-26 08:19:44.508] 
+[2026-11-26 08:19:44.508] <debug> nrf_ble_gatt: Updating data length to 251 on connection 0x0.
+[2026-11-26 08:19:44.508] 
+[2026-11-26 08:19:44.508] <info> app: Connected
+[2026-11-26 08:19:44.519] 
+[2026-11-26 08:19:44.519] <info> app: Requesting DLE to 251 bytes
+[2026-11-26 08:19:44.648] 
+[2026-11-26 08:19:44.648] <debug> nrf_ble_gatt: ATT MTU updated to 247 bytes on connection 0x0 (response).
+[2026-11-26 08:19:44.648] 
+[2026-11-26 08:19:44.648] <info> app: ATT MTU exchange completed. MTU set to 247 bytes.
+[2026-11-26 08:19:44.789] 
+[2026-11-26 08:19:44.789] <debug> nrf_ble_gatt: Data length updated to 27 on connection 0x0.
+[2026-11-26 08:19:44.805] 
+[2026-11-26 08:19:44.805] <debug> nrf_ble_gatt: max_rx_octets: 27
+[2026-11-26 08:19:44.810] 
+[2026-11-26 08:19:44.810] <debug> nrf_ble_gatt: max_tx_octets: 27
+[2026-11-26 08:19:44.810] 
+[2026-11-26 08:19:44.810] <debug> nrf_ble_gatt: max_rx_time: 328
+[2026-11-26 08:19:44.814] 
+[2026-11-26 08:19:44.814] <debug> nrf_ble_gatt: max_tx_time: 328
+[2026-11-26 08:19:44.826] 
+[2026-11-26 08:19:44.826] <info> app: GATT data length updated to 27 bytes.
+[2026-11-26 08:19:44.826] 
+[2026-11-26 08:19:44.826] <info> app: Data length updated: TX = 27, RX = 27
+[2026-11-26 08:19:45.284] 
+[2026-11-26 08:19:45.284] <info> app: Conn params applied: interval 6 units (7ms), timeout 5000ms
+[2026-11-26 08:19:45.430] 
+[2026-11-26 08:19:45.430] <info> app: NUS start
+[2026-11-26 08:19:45.445] 
+[2026-11-26 08:19:45.445] <info> app: Conn params applied: interval 39 units (48ms), timeout 5000ms
+[2026-11-26 08:19:48.080] 
+[2026-11-26 08:19:48.080] <info> app: !3 
+[2026-11-26 08:19:48.080] 
+[2026-11-26 08:19:48.080] <info> app: I2C link is initialised.
+[2026-11-26 08:19:48.098] 
+[2026-11-26 08:19:48.098] <info> app: I2C RX payload 110/250 bytes. Response type is 4. CRC OK (0xA67C)
+[2026-11-26 08:19:48.098] 
+[2026-11-26 08:19:48.098] 000: 80 04 6E 00 53 6C 65 65  70 20 33 20 33 20 30 20  ..n.Sleep 3 3 0 
+[2026-11-26 08:19:48.119] 
+[2026-11-26 08:19:48.119] 010: 36 30 20 34 31 20 31 20  35 30 30 20 30 20 31 30  60 41 1 500 0 10
+[2026-11-26 08:19:48.119] 
+[2026-11-26 08:19:48.119] 020: 30 30 20 35 20 31 20 31  30 30 30 20 31 30 30 20  00 5 1 1000 100 
+[2026-11-26 08:19:48.137] 
+[2026-11-26 08:19:48.137] 030: 30 20 32 30 20 31 20 36  30 20 31 20 30 20 33 20  0 20 1 60 1 0 3 
+[2026-11-26 08:19:48.137] 
+[2026-11-26 08:19:48.137] 040: 30 20 32 20 35 20 36 35  20 31 35 20 30 20 30 20  0 2 5 65 15 0 0 
+[2026-11-26 08:19:48.143] 
+[2026-11-26 08:19:48.143] 050: 32 38 36 20 33 32 36 20  31 20 31 31 30 20 31 20  286 326 1 110 1 
+[2026-11-26 08:19:48.156] 
+[2026-11-26 08:19:48.156] 060: 31 35 20 35 20 30 20 30  20 30 20 34 30 33 35 20  15 5 0 0 0 4035 
+[2026-11-26 08:19:48.156] 
+[2026-11-26 08:19:48.156] 070: 30 20 00 7C FF FF FF FF  FF FF FF FF FF FF FF FF  0 .|............
+[2026-11-26 08:19:48.159] 
+[2026-11-26 08:19:48.159] <info> app: AI state machine bumped with 'Sleep' (Current state: IDLE)
+[2026-11-26 08:19:48.178] 
+[2026-11-26 08:19:48.178] 
+[2026-11-26 08:19:48.178] 
+[2026-11-26 08:19:48.178] <info> app: AI processor sends stats: '3 3 0 60 41 1 500 0 1000 5 1 1000 100 0 20 1 60 1 0 3 0 2 5 65 15 0 0 286 326 1 110 1 15 5 0 0 0 4035 0 '
+[2026-11-26 08:19:48.184] 
+[2026-11-26 08:19:48.184] <info> app: Op parameter 32 (LoRaWAN ping minutes) = 15
+[2026-11-26 08:19:48.189] 
+[2026-11-26 08:19:48.189] <info> app: AI state changed from IDLE to SLEEP
+[2026-11-26 08:19:48.190] 
+[2026-11-26 08:19:48.190] 
+[2026-11-26 08:19:48.190] 
+[2026-11-26 08:19:48.190] BLE out: Sent   6 bytes: 'Sleep'
+[2026-11-26 08:19:48.212] 
+[2026-11-26 08:19:48.212] <info> app: State machine scheduler called with event 14 'LoRaWAN Config'
+[2026-11-26 08:19:48.219] 
+[2026-11-26 08:19:48.219] <info> app: Bumping state machine with 'LoRaWAN Config' (Current state: LORAWAN WAITING)
+[2026-11-26 08:19:48.219] 
+[2026-11-26 08:19:48.219] 
+[2026-11-26 08:19:48.219] 
+[2026-11-26 08:19:48.219] <info> app:  Joining now...
+[2026-11-26 08:19:48.230] 
+[2026-11-26 08:19:48.230] 
+[2026-11-26 08:19:48.230] 
+[2026-11-26 08:19:48.230] <info> app: MAC parameters reset: uplink dwell time ON
+[2026-11-26 08:19:48.230] 
+[2026-11-26 08:19:48.230] <info> app: MLME-Request: MLME_JOIN, OK
+[2026-11-26 08:19:48.236] 
+[2026-11-26 08:19:48.236] <info> app: State changed from LORAWAN WAITING to JOINING
+[2026-11-26 08:19:48.242] 
+[2026-11-26 08:19:48.242] 
+[2026-11-26 08:19:48.269] 
+[2026-11-26 08:19:48.269] <info> app: NUS TX Ready
+[2026-11-26 08:19:48.571] 
+[2026-11-26 08:19:48.571] <info> app: MAC txDone
+[2026-11-26 08:19:50.515] 
+[2026-11-26 08:19:50.515] 
+[2026-11-26 08:19:50.515] BLE in: Received   5 bytes 'reset'
+[2026-11-26 08:19:50.531] 
+[2026-11-26 08:19:50.531] BLE out: Sent  39 bytes: 'Device will reset after disconnecting.'
+[2026-11-26 08:19:50.612] 
+[2026-11-26 08:19:50.612] <info> app: NUS TX Ready
+[2026-11-26 08:19:53.653] 
+[2026-11-26 08:19:53.653] <info> app: MAC rxTimeOut
+[2026-11-26 08:19:54.553] 
+[2026-11-26 08:19:54.553] <info> app: Disconnected. Conn_handle: 0x0, reason: 0x13
+[2026-11-26 08:19:54.562] 
+[2026-11-26 08:19:54.562] <info> app:   remote
+[2026-11-26 08:19:54.569] 
+[2026-11-26 08:19:54.569] <info> app: State machine scheduler called with event 11 'Reset Request'
+[2026-11-26 08:19:54.578] 
+[2026-11-26 08:19:54.578] <info> app: Bumping state machine with 'Reset Request' (Current state: JOINING)
+[2026-11-26 08:19:54.591] 
+[2026-11-26 08:19:54.591] 
+[2026-11-26 08:19:54.653] 
+[2026-11-26 08:19:54.653] <info> app: MAC rxTimeOut
+[2026-11-26 08:19:54.658] 
+[2026-11-26 08:19:54.658] Join failed. Status code -1
+[2026-11-26 08:19:54.664] 
+[2026-11-26 08:19:54.664] <info> app: Bumping state machine with 'Joined' (Current state: JOINING)
+[2026-11-26 08:19:54.669] 
+[2026-11-26 08:19:54.669] 
+[2026-11-26 08:19:54.680] 
+[2026-11-26 08:19:54.680] <info> app: Retry (attempt 1/6) in 5 seconds (0 minutes)
+[2026-11-26 08:19:54.680] 
+[2026-11-26 08:19:54.680] 
+[2026-11-26 08:19:54.680] 
+[2026-11-26 08:19:54.680] <debug> app: FDS update success! FileId: 0x3E8 RecKey:0x1
+[2026-11-26 08:19:54.680] 
+[2026-11-26 08:19:54.680] <debug> app: FDS update success! FileId: 0x3E8 RecKey:0x2
+[2026-11-26 08:19:54.699] 
+[2026-11-26 08:19:54.699] <info> app: Data stored on NVM: 76 bytes
+[2026-11-26 08:19:54.699] 
+[2026-11-26 08:19:54.699] BLE out: Failed to send  16 bytes: 'Failed to join.'
+[2026-11-26 08:19:59.652] 
+[2026-11-26 08:19:59.652] <info> app: Retrying transmission now.
+[2026-11-26 08:19:59.662] 
+[2026-11-26 08:19:59.662] BLE out: Failed to send  27 bytes: 'Retrying transmission now.'
+[2026-11-26 08:19:59.668] 
+[2026-11-26 08:19:59.668] <info> app: Bumping state machine with 'Retry Tx' (Current state: JOINING)
+[2026-11-26 08:19:59.678] 
+[2026-11-26 08:19:59.678] 
+[2026-11-26 08:19:59.678] 
+[2026-11-26 08:19:59.678] <info> app: MAC parameters reset: uplink dwell time ON
+[2026-11-26 08:19:59.684] 
+[2026-11-26 08:19:59.684] <info> app: MLME-Request: MLME_JOIN, OK
+[2026-11-26 08:20:00.035] 
+[2026-11-26 08:20:00.035] <info> app: MAC txDone
+[2026-11-26 08:20:01.623] 
+[2026-11-26 08:20:01.623] <info> app: Advertising Fast.
+[2026-11-26 08:20:01.639] 
+[2026-11-26 08:20:01.639] <info> app: Starting advertising
+[2026-11-26 08:20:04.436] 
+[2026-11-26 08:20:04.436] <debug> nrf_ble_gatt: Requesting to update ATT MTU to 247 bytes on connection 0x0.
+[2026-11-26 08:20:04.448] 
+[2026-11-26 08:20:04.448] <debug> nrf_ble_gatt: Updating data length to 251 on connection 0x0.
+[2026-11-26 08:20:04.458] 
+[2026-11-26 08:20:04.458] <info> app: Connected
+[2026-11-26 08:20:04.458] 
+[2026-11-26 08:20:04.458] <info> app: Requesting DLE to 251 bytes
+[2026-11-26 08:20:04.589] 
+[2026-11-26 08:20:04.589] <debug> nrf_ble_gatt: ATT MTU updated to 247 bytes on connection 0x0 (response).
+[2026-11-26 08:20:04.594] 
+[2026-11-26 08:20:04.594] <info> app: ATT MTU exchange completed. MTU set to 247 bytes.
+[2026-11-26 08:20:04.721] 
+[2026-11-26 08:20:04.721] <debug> nrf_ble_gatt: Data length updated to 27 on connection 0x0.
+[2026-11-26 08:20:04.737] 
+[2026-11-26 08:20:04.737] <debug> nrf_ble_gatt: max_rx_octets: 27
+[2026-11-26 08:20:04.745] 
+[2026-11-26 08:20:04.745] <debug> nrf_ble_gatt: max_tx_octets: 27
+[2026-11-26 08:20:04.745] 
+[2026-11-26 08:20:04.745] <debug> nrf_ble_gatt: max_rx_time: 328
+[2026-11-26 08:20:04.759] 
+[2026-11-26 08:20:04.759] <debug> nrf_ble_gatt: max_tx_time: 328
+[2026-11-26 08:20:04.759] 
+[2026-11-26 08:20:04.759] <info> app: GATT data length updated to 27 bytes.
+[2026-11-26 08:20:04.759] 
+[2026-11-26 08:20:04.759] <info> app: Data length updated: TX = 27, RX = 27
+[2026-11-26 08:20:05.223] 
+[2026-11-26 08:20:05.223] <info> app: Conn params applied: interval 6 units (7ms), timeout 5000ms
+[2026-11-26 08:20:05.378] 
+[2026-11-26 08:20:05.378] <info> app: NUS start
+[2026-11-26 08:20:05.382] 
+[2026-11-26 08:20:05.382] <info> app: Conn params applied: interval 39 units (48ms), timeout 5000ms
+[2026-11-26 08:20:05.500] 
+[2026-11-26 08:20:05.500] <info> app: MAC rxDone
+[2026-11-26 08:20:05.507] 
+[2026-11-26 08:20:05.507] 
+[2026-11-26 08:20:05.507] 
+[2026-11-26 08:20:05.507] ###### ===================== JOINED = OTAA ===================== 
+[2026-11-26 08:20:05.516] 
+[2026-11-26 08:20:05.516] ###### NETWORK ID: 0x000013 DEVADDR: 0x260DA71A
+[2026-11-26 08:20:05.516] 
+[2026-11-26 08:20:05.516] 
+[2026-11-26 08:20:05.516]  <info> app: Bumping state machine with 'Joined' (Current state: JOINING)
+[2026-11-26 08:20:05.532] 
+[2026-11-26 08:20:05.532] 
+[2026-11-26 08:20:05.532] 
+[2026-11-26 08:20:05.532] <info> app: Joined at 24375ms. Time to join: 17308ms. Credentials nonce = 0x5F98
+[2026-11-26 08:20:05.540] 
+[2026-11-26 08:20:05.540] 
+[2026-11-26 08:20:05.540] 
+[2026-11-26 08:20:05.540] <info> app: State changed from JOINING to GETMACS
+[2026-11-26 08:20:05.554] 
+[2026-11-26 08:20:05.554] 
+[2026-11-26 08:20:05.554] 
+[2026-11-26 08:20:05.554] <info> app: Resetting now...
+[2026-11-26 08:20:05.554] 
+[2026-11-26 08:20:05.554] 
+[2026-11-26 08:20:05.915] 
+[2026-11-26 08:20:05.915] <info> app: 
+[2026-11-26 08:20:05.915] 
+[2026-11-26 08:20:05.915] **** Secure Bootloader (WW500_A00) Ver: 00.01.01 Built: 19:01:29 Oct 31 2025 ****
+[2026-11-26 08:20:05.921] 
+[2026-11-26 08:20:05.921] 
+[2026-11-26 08:20:05.921] <info> nrf_dfu_settings: Backing up settings page to address 0x7E000.
+[2026-11-26 08:20:05.930] 
+[2026-11-26 08:20:05.930] 
+[2026-11-26 08:20:05.930] <info> app: No firmware to activate.
+[2026-11-26 08:20:05.930] 
+[2026-11-26 08:20:05.930] 
+[2026-11-26 08:20:05.930] <info> nrf_dfu_settings: Backing up settings page to address 0x7E000.
+[2026-11-26 08:20:05.930] 
+[2026-11-26 08:20:07.853] 
+[2026-11-26 08:20:07.853] <info> app: 
+[2026-11-26 08:20:07.853] 
+[2026-11-26 08:20:07.853] **** Wildlife Watcher 1 (WW500-C02) Ver: 00.30.62 Built: 17:28:46 Nov 24 2026 ****
+[2026-11-26 08:20:07.869] 
+[2026-11-26 08:20:07.869] <info> app: BOARDTYPE bytes: 0x04 0x22
+[2026-11-26 08:20:07.869] 
+[2026-11-26 08:20:07.869] <info> app: GCC version: 10.3.1
+[2026-11-26 08:20:07.869] 
+[2026-11-26 08:20:07.869] <info> app: Compiler Version: ARM GNU, 10.3.1 20210824 (release)
+[2026-11-26 08:20:07.869] 
+[2026-11-26 08:20:07.869] <info> app: Git branch: '261106_lorawanPing' 0862858-dirty
+[2026-11-26 08:20:07.888] 
+[2026-11-26 08:20:07.888] 
+[2026-11-26 08:20:07.888] 
+[2026-11-26 08:20:07.888] <info> app_timer: RTC: initialized.
+[2026-11-26 08:20:07.903] 
+[2026-11-26 08:20:07.903] <info> app: Watchdog already running: period 30 s (kept)
+[2026-11-26 08:20:07.903] 
+[2026-11-26 08:20:07.903] <info> app: Watchdog early warning: 2 s before the reset
+[2026-11-26 08:20:07.903] 
+[2026-11-26 08:20:07.903] <info> app: System time set successfully
+[2026-11-26 08:20:07.918] 
+[2026-11-26 08:20:07.918] <info> app: 
+[2026-11-26 08:20:07.918] 
+[2026-11-26 08:20:07.918] Initialising LoRaWAN
+[2026-11-26 08:20:07.918] 
+[2026-11-26 08:20:07.918] <info> app: Initializing fds...
+[2026-11-26 08:20:07.918] 
+[2026-11-26 08:20:07.918] <info> app: Reading flash usage statistics...
+[2026-11-26 08:20:07.918] 
+[2026-11-26 08:20:07.918] <info> app: Found 6 valid records.
+[2026-11-26 08:20:07.925] 
+[2026-11-26 08:20:07.925] <info> app: Found 32 dirty records (ready to be garbage collected).
+[2026-11-26 08:20:07.933] 
+[2026-11-26 08:20:07.933] <debug> app: Record 8030 at 6E06C
+[2026-11-26 08:20:07.933] 
+[2026-11-26 08:20:07.933] <debug> app: Record 8034 at 6E240
+[2026-11-26 08:20:07.933] 
+[2026-11-26 08:20:07.933] <debug> app: Record 8035 at 6E3A4
+[2026-11-26 08:20:07.933] 
+[2026-11-26 08:20:07.933] <debug> app: Record 8036 at 6E478
+[2026-11-26 08:20:07.933] 
+[2026-11-26 08:20:07.933] <debug> app: Record 8037 at 6E4B8
+[2026-11-26 08:20:07.950] 
+[2026-11-26 08:20:07.950] <debug> app: Record 6 at 70008
+[2026-11-26 08:20:07.950] 
+[2026-11-26 08:20:07.950] <info> app: >>> LoraMac version = 0x01000300
+[2026-11-26 08:20:07.950] 
+[2026-11-26 08:20:07.950] <info> app: MAC parameters reset: uplink dwell time ON
+[2026-11-26 08:20:07.950] 
+[2026-11-26 08:20:07.950] <info> app: Data restored from NVM: 1064 bytes
+[2026-11-26 08:20:07.950] 
+[2026-11-26 08:20:07.950] <info> app:    DevEui = DA:EF:67:FE:FF:7A:0A:D9
+[2026-11-26 08:20:07.965] 
+[2026-11-26 08:20:07.965] <info> app:    AppEui = 70:B3:D5:7E:D0:03:C8:D4
+[2026-11-26 08:20:07.965] 
+[2026-11-26 08:20:07.965] <info> app:    SE Pin = 00:00:00:00
+[2026-11-26 08:20:07.965] 
+[2026-11-26 08:20:07.965] <info> app: LoRaWAN initialised
+[2026-11-26 08:20:07.965] 
+[2026-11-26 08:20:07.965] 
+[2026-11-26 08:20:07.965] 
+[2026-11-26 08:20:07.965] <info> app: BLE initialised for WILD-CMSS - disconnect interval 60s
+[2026-11-26 08:20:07.985] 
+[2026-11-26 08:20:07.985] 
+[2026-11-26 08:20:07.985] 
+[2026-11-26 08:20:07.985] <info> app: Max BLE packet length is 244. PDU length = 251
+[2026-11-26 08:20:07.990] 
+[2026-11-26 08:20:07.990] <info> app: Reset cause:   software reset
+[2026-11-26 08:20:07.990] 
+[2026-11-26 08:20:07.990] <info> app: AI processor reset at boot (/RST 100 ms)
+[2026-11-26 08:20:07.990] 
+[2026-11-26 08:20:07.990] <info> app: Reset reason code 8. Resets since power-on: 15.
+[2026-11-26 08:20:07.997] 
+[2026-11-26 08:20:07.997] <info> app: Fault resets in a row: 5. Cleared after 10 minutes without a fault.
+[2026-11-26 08:20:07.997] 
+[2026-11-26 08:20:07.997] <info> app: Board name: WILD-CMSS
+[2026-11-26 08:20:08.019] 
+[2026-11-26 08:20:08.019] <info> app: Tests Wildlife Watcher BLE and LoRaWAN communications. Uses NUS
+[2026-11-26 08:20:08.019] 
+[2026-11-26 08:20:08.019] <info> app: TODO - clean up LoRaWAN processing - esp. failures, incl. failure to join.
+[2026-11-26 08:20:08.030] 
+[2026-11-26 08:20:08.030] <info> app: TODO - check RSSI outgoing vs incoming differences
+[2026-11-26 08:20:08.030] 
+[2026-11-26 08:20:08.030] <info> app: Device Addr:   99:0A:7A:67:EF:DA
+[2026-11-26 08:20:08.030] 
+[2026-11-26 08:20:08.030] <info> app: BLE address:   D9:0A:7A:67:EF:DA
+[2026-11-26 08:20:08.045] 
+[2026-11-26 08:20:08.045] <info> app: BLE Name:      WILD-CMSS
+[2026-11-26 08:20:08.045] 
+[2026-11-26 08:20:08.045] <info> app: Target DevEui: DA:EF:67:FE:FF:7A:0A:D9
+[2026-11-26 08:20:08.045] 
+[2026-11-26 08:20:08.045] <info> app: Target AppEui: TBD
+[2026-11-26 08:20:08.045] 
+[2026-11-26 08:20:08.045] <info> app: Softdevice ver: 0x00CB
+[2026-11-26 08:20:08.045] 
+[2026-11-26 08:20:08.045] <info> app: Reset reason:  0x00000004 CPU
+[2026-11-26 08:20:08.045] 
+[2026-11-26 08:20:08.045] <info> app: Firmware version 0.30.62
+[2026-11-26 08:20:08.061] 
+[2026-11-26 08:20:08.061] 
+[2026-11-26 08:20:08.061] 
+[2026-11-26 08:20:08.061] <info> app: Temperature: 23.25C
+[2026-11-26 08:20:08.061] 
+[2026-11-26 08:20:08.061] 
+[2026-11-26 08:20:08.061] 
+[2026-11-26 08:20:08.061] <info> app: Press SW1 to start BLE advertising.
+[2026-11-26 08:20:08.061] 
+[2026-11-26 08:20:08.061] <info> app: Press SW1 at power-on to reset credentials
+[2026-11-26 08:20:08.077] 
+[2026-11-26 08:20:08.077] <info> app: Press SW1 for > 10s to start Device Firmware Upgrade (DFU)
+[2026-11-26 08:20:08.077] 
+[2026-11-26 08:20:08.077] <info> app: Press SW2 - prohibited. This signal is asserted by AI processor.
+[2026-11-26 08:20:08.077] 
+[2026-11-26 08:20:08.077] <info> app: Hold magnet close at power-on to start Device Firmware Upgrade (DFU)
+[2026-11-26 08:20:08.093] 
+[2026-11-26 08:20:08.093] <info> app: Press RESET button for a software reset.
+[2026-11-26 08:20:08.093] 
+[2026-11-26 08:20:08.093] <info> app: UART RX Pin 2 is driven
+[2026-11-26 08:20:08.093] 
+[2026-11-26 08:20:08.093] <info> app: SW1 Pin 22 is not driven
+[2026-11-26 08:20:08.109] 
+[2026-11-26 08:20:08.109] <info> app: SW2 Pin 27 is not driven
+[2026-11-26 08:20:08.109] 
+[2026-11-26 08:20:08.109] <info> app: Mag sensor Pin 25 is driven
+[2026-11-26 08:20:08.109] 
+[2026-11-26 08:20:08.109] <info> app: Current DevEui is:   DA:EF:67:FE:FF:7A:0A:D9
+[2026-11-26 08:20:08.119] 
+[2026-11-26 08:20:08.119] <info> app: Current JoinEui is:  70:B3:D5:7E:D0:03:C8:D4
+[2026-11-26 08:20:08.121] 
+[2026-11-26 08:20:08.121] <info> app: Current ShortId is:   CMSS
+[2026-11-26 08:20:08.136] 
+[2026-11-26 08:20:08.136] <info> app: InitCred DevEui is:  00:80:E1:01:01:01:01:01
+[2026-11-26 08:20:08.136] 
+[2026-11-26 08:20:08.136] <info> app: InitCred JoinEui is: 70:B3:D5:7E:D0:03:C8:00
+[2026-11-26 08:20:08.138] 
+[2026-11-26 08:20:08.138] <info> app: We have no need to fetch parameters
+[2026-11-26 08:20:08.141] 
+[2026-11-26 08:20:08.141] 
+[2026-11-26 08:20:08.141] 
+[2026-11-26 08:20:08.141] <info> app: I2C link is initialised.
+[2026-11-26 08:20:08.141] 
+[2026-11-26 08:20:08.141] <info> app: Enabled I2C (instance 1) on pins 7 and 8
+[2026-11-26 08:20:08.141] 
+[2026-11-26 08:20:08.141] <info> app: I2C buffer sizes 250 and 250
+[2026-11-26 08:20:08.164] 
+[2026-11-26 08:20:08.164] <info> app: AI processor initialised.
+[2026-11-26 08:20:08.164] 
+[2026-11-26 08:20:08.164] <info> app: 
+[2026-11-26 08:20:08.164] 
+[2026-11-26 08:20:08.164] Initialisation finished! Starting state machine.
+[2026-11-26 08:20:08.173] 
+[2026-11-26 08:20:08.173] 
+[2026-11-26 08:20:08.173] 
+[2026-11-26 08:20:08.173] <info> app: Bumping state machine with 'Initialised' (Current state: RESET)
+[2026-11-26 08:20:08.175] 
+[2026-11-26 08:20:08.175] 
+[2026-11-26 08:20:08.175] 
+[2026-11-26 08:20:08.175] <info> app:  LoRaWAN waits for op parameter 32 from the AI processor.
+[2026-11-26 08:20:08.175] 
+[2026-11-26 08:20:08.175] 
+[2026-11-26 08:20:08.175] 
+[2026-11-26 08:20:08.175] <info> app: State changed from RESET to LORAWAN WAITING
+[2026-11-26 08:20:08.190] 
+[2026-11-26 08:20:08.190] 
+[2026-11-26 08:20:08.190] 
+[2026-11-26 08:20:08.190] <info> app: AI state machine bumped with 'Initialised' (Current state: RESET)
+[2026-11-26 08:20:08.204] 
+[2026-11-26 08:20:08.204] 
+[2026-11-26 08:20:08.204] 
+[2026-11-26 08:20:08.204] <info> app: AI state changed from RESET to SLEEP
+[2026-11-26 08:20:08.204] 
+[2026-11-26 08:20:08.204] 
+[2026-11-26 08:20:10.011] 
+[2026-11-26 08:20:10.011] <info> app: !0 
+[2026-11-26 08:20:10.021] 
+[2026-11-26 08:20:10.021] <info> app: I2C RX payload 25/250 bytes. Response type is 4. CRC OK (0xBF51)
+[2026-11-26 08:20:10.028] 
+[2026-11-26 08:20:10.028] 000: 80 04 19 00 57 61 6B 65  20 32 30 32 34 2D 30 31  ....Wake 2024-01
+[2026-11-26 08:20:10.042] 
+[2026-11-26 08:20:10.042] 010: 2D 30 31 54 30 30 3A 30  30 3A 30 32 5A 00 51 FF  -01T00:00:02Z.Q.
+[2026-11-26 08:20:10.042] 
+[2026-11-26 08:20:10.042] <info> app: AI state machine bumped with 'Wake' (Current state: SLEEP)
+[2026-11-26 08:20:10.049] 
+[2026-11-26 08:20:10.049] 
+[2026-11-26 08:20:10.049] 
+[2026-11-26 08:20:10.049] <info> app: BLE and AI time differ by 0s
+[2026-11-26 08:20:10.052] 
+[2026-11-26 08:20:10.052] <info> app: AI state changed from SLEEP to WOKEN
+[2026-11-26 08:20:10.068] 
+[2026-11-26 08:20:10.068] 
+[2026-11-26 08:20:10.068] 
+[2026-11-26 08:20:10.068] BLE out: Failed to send   5 bytes: 'Wake'
+[2026-11-26 08:20:10.068] 
+[2026-11-26 08:20:10.068] <info> app: AI State machine scheduler called with event 8 'Send SelfTest'
+[2026-11-26 08:20:10.072] 
+[2026-11-26 08:20:10.072] <info> app: AI state machine bumped with 'Send SelfTest' (Current state: WOKEN)
+[2026-11-26 08:20:10.084] 
+[2026-11-26 08:20:10.084] 
+[2026-11-26 08:20:10.084] 
+[2026-11-26 08:20:10.084] <info> app: I2C link is initialised.
+[2026-11-26 08:20:10.084] 
+[2026-11-26 08:20:10.084] Sending 'selftest' to AI processor (4 ctrl bytes, 8 payload, 2 CRC)<info> app: OK
+[2026-11-26 08:20:10.084] 
+[2026-11-26 08:20:10.084] <info> app: AI state changed from WOKEN to SELFTEST
+[2026-11-26 08:20:10.084] 
+[2026-11-26 08:20:10.084] 
+[2026-11-26 08:20:10.084] 
+[2026-11-26 08:20:10.084] <info> app: I2C TX complete: 14 bytes.
+[2026-11-26 08:20:10.115] 
+[2026-11-26 08:20:10.115] <info> app: !1 
+[2026-11-26 08:20:10.115] 
+[2026-11-26 08:20:10.115] 000: 80 01 08 00 73 65 6C 66  74 65 73 74 38 A9 00 00  ....selftest8...
+[2026-11-26 08:20:10.115] 
+[2026-11-26 08:20:10.115] <info> app: I2C link is initialised.
+[2026-11-26 08:20:10.131] 
+[2026-11-26 08:20:10.131] <info> app: I2C RX payload 13/250 bytes. Response type is 4. CRC OK (0x7FB8)
+[2026-11-26 08:20:10.131] 
+[2026-11-26 08:20:10.131] 000: 80 04 0D 00 73 65 6C 66  54 65 73 74 20 30 30 30  ....selfTest 000
+[2026-11-26 08:20:10.131] 
+[2026-11-26 08:20:10.131] 010: 30 00 B8 FF FF FF FF FF  FF FF FF FF FF FF FF FF  0...............
+[2026-11-26 08:20:10.131] 
+[2026-11-26 08:20:10.131] <info> app: AI state machine bumped with 'Selftest Rx' (Current state: SELFTEST)
+[2026-11-26 08:20:10.147] 
+[2026-11-26 08:20:10.147] 
+[2026-11-26 08:20:10.147] 
+[2026-11-26 08:20:10.147] <info> app: AI self test bits = 0x0000 (all bits now 0x0000)
+[2026-11-26 08:20:10.154] 
+[2026-11-26 08:20:10.154] <info> app: Can't send UTC
+[2026-11-26 08:20:10.164] 
+[2026-11-26 08:20:10.164] <info> app: AI state changed from SELFTEST to IDLE
+[2026-11-26 08:20:10.164] 
+[2026-11-26 08:20:10.164] 
+[2026-11-26 08:20:10.164] 
+[2026-11-26 08:20:10.164] BLE out: Failed to send  20 bytes: 'Error bits = 0x0000'
+[2026-11-26 08:20:10.164] 
+[2026-11-26 08:20:10.164] <info> app: AI State machine scheduler called with event 12 'Msg to AI'
+[2026-11-26 08:20:10.180] 
+[2026-11-26 08:20:10.180] <info> app: AI state machine bumped with 'Msg to AI' (Current state: IDLE)
+[2026-11-26 08:20:10.180] 
+[2026-11-26 08:20:10.180] 
+[2026-11-26 08:20:10.180] 
+[2026-11-26 08:20:10.180] <info> app: I2C link is initialised.
+[2026-11-26 08:20:10.198] 
+[2026-11-26 08:20:10.198] Sending 'sdused' to AI processor (4 ctrl bytes, 6 payload, 2 CRC)<info> app: AI state changed from IDLE to PROCESSING
+[2026-11-26 08:20:10.198] 
+[2026-11-26 08:20:10.198] 
+[2026-11-26 08:20:10.198] 
+[2026-11-26 08:20:10.198] <info> app: I2C TX complete: 12 bytes.
+[2026-11-26 08:20:10.211] 
+[2026-11-26 08:20:10.211] <info> app: !2 
+[2026-11-26 08:20:10.211] 
+[2026-11-26 08:20:10.211] 000: 80 01 06 00 73 64 75 73  65 64 B7 16 38 A9 00 00  ....sdused..8...
+[2026-11-26 08:20:10.211] 
+[2026-11-26 08:20:10.211] <info> app: I2C link is initialised.
+[2026-11-26 08:20:10.230] 
+[2026-11-26 08:20:10.230] <info> app: I2C RX payload 8/250 bytes. Response type is 4. CRC OK (0x6503)
+[2026-11-26 08:20:10.230] 
+[2026-11-26 08:20:10.230] 000: 80 04 08 00 73 64 75 73  65 64 20 31 00 03 FF FF  ....sdused 1....
+[2026-11-26 08:20:10.243] 
+[2026-11-26 08:20:10.243] <info> app: AI state machine bumped with 'Msg from AI' (Current state: PROCESSING)
+[2026-11-26 08:20:10.243] 
+[2026-11-26 08:20:10.243] 
+[2026-11-26 08:20:10.243] 
+[2026-11-26 08:20:10.243] <info> app: AI processor replies: 'sdused 1'
+[2026-11-26 08:20:10.243] 
+[2026-11-26 08:20:10.243] <info> app: AI processor: SD card 1% used
+[2026-11-26 08:20:10.259] 
+[2026-11-26 08:20:10.259] <info> app: AI state changed from PROCESSING to IDLE
+[2026-11-26 08:20:10.259] 
+[2026-11-26 08:20:10.259] 
+[2026-11-26 08:20:14.298] 
+[2026-11-26 08:20:14.298] <info> app: !3 
+[2026-11-26 08:20:14.298] 
+[2026-11-26 08:20:14.298] <info> app: I2C link is initialised.
+[2026-11-26 08:20:14.298] 
+[2026-11-26 08:20:14.298] <info> app: I2C RX payload 110/250 bytes. Response type is 4. CRC OK (0x3846)
+[2026-11-26 08:20:14.326] 
+[2026-11-26 08:20:14.326] 000: 80 04 6E 00 53 6C 65 65  70 20 33 20 33 20 30 20  ..n.Sleep 3 3 0 
+[2026-11-26 08:20:14.332] 
+[2026-11-26 08:20:14.332] 010: 36 31 20 34 31 20 31 20  35 30 30 20 30 20 31 30  61 41 1 500 0 10
+[2026-11-26 08:20:14.332] 
+[2026-11-26 08:20:14.332] 020: 30 30 20 35 20 31 20 31  30 30 30 20 31 30 30 20  00 5 1 1000 100 
+[2026-11-26 08:20:14.346] 
+[2026-11-26 08:20:14.346] 030: 30 20 32 30 20 31 20 36  30 20 31 20 30 20 33 20  0 20 1 60 1 0 3 
+[2026-11-26 08:20:14.362] 
+[2026-11-26 08:20:14.362] 040: 30 20 32 20 35 20 36 35  20 31 35 20 30 20 30 20  0 2 5 65 15 0 0 
+[2026-11-26 08:20:14.362] 
+[2026-11-26 08:20:14.362] 050: 32 38 36 20 33 32 36 20  31 20 31 31 30 20 31 20  286 326 1 110 1 
+[2026-11-26 08:20:14.362] 
+[2026-11-26 08:20:14.362] 060: 31 35 20 35 20 30 20 30  20 30 20 34 30 33 35 20  15 5 0 0 0 4035 
+[2026-11-26 08:20:14.376] 
+[2026-11-26 08:20:14.376] 070: 30 20 00 46 FF FF FF FF  FF FF FF FF FF FF FF FF  0 .F............
+[2026-11-26 08:20:14.391] 
+[2026-11-26 08:20:14.391] <info> app: AI state machine bumped with 'Sleep' (Current state: IDLE)
+[2026-11-26 08:20:14.391] 
+[2026-11-26 08:20:14.391] 
+[2026-11-26 08:20:14.391] 
+[2026-11-26 08:20:14.391] <info> app: AI processor sends stats: '3 3 0 61 41 1 500 0 1000 5 1 1000 100 0 20 1 60 1 0 3 0 2 5 65 15 0 0 286 326 1 110 1 15 5 0 0 0 4035 0 '
+[2026-11-26 08:20:14.401] 
+[2026-11-26 08:20:14.401] <info> app: Op parameter 32 (LoRaWAN ping minutes) = 15
+[2026-11-26 08:20:14.416] 
+[2026-11-26 08:20:14.417] <info> app: AI state changed from IDLE to SLEEP
+[2026-11-26 08:20:14.417] 
+[2026-11-26 08:20:14.417] 
+[2026-11-26 08:20:14.417] 
+[2026-11-26 08:20:14.417] BLE out: Failed to send   6 bytes: 'Sleep'
+[2026-11-26 08:20:14.422] 
+[2026-11-26 08:20:14.422] <info> app: State machine scheduler called with event 14 'LoRaWAN Config'
+[2026-11-26 08:20:14.434] 
+[2026-11-26 08:20:14.434] <info> app: Bumping state machine with 'LoRaWAN Config' (Current state: LORAWAN WAITING)
+[2026-11-26 08:20:14.437] 
+[2026-11-26 08:20:14.437] 
+[2026-11-26 08:20:14.437] 
+[2026-11-26 08:20:14.437] <info> app:  Joining now...
+[2026-11-26 08:20:14.443] 
+[2026-11-26 08:20:14.443] 
+[2026-11-26 08:20:14.443] 
+[2026-11-26 08:20:14.443] <info> app: MAC parameters reset: uplink dwell time ON
+[2026-11-26 08:20:14.452] 
+[2026-11-26 08:20:14.452] <info> app: MLME-Request: MLME_JOIN, OK
+[2026-11-26 08:20:14.452] 
+[2026-11-26 08:20:14.452] <info> app: State changed from LORAWAN WAITING to JOINING
+[2026-11-26 08:20:14.459] 
+[2026-11-26 08:20:14.459] 
+[2026-11-26 08:20:14.792] 
+[2026-11-26 08:20:14.792] <info> app: MAC txDone
+[2026-11-26 08:20:15.126] 
+[2026-11-26 08:20:15.126] <info> app: Advertising Fast.
+[2026-11-26 08:20:15.127] 
+[2026-11-26 08:20:15.127] <info> app: Starting advertising
+[2026-11-26 08:20:16.271] 
+[2026-11-26 08:20:16.271] <debug> nrf_ble_gatt: Requesting to update ATT MTU to 247 bytes on connection 0x0.
+[2026-11-26 08:20:16.271] 
+[2026-11-26 08:20:16.271] <debug> nrf_ble_gatt: Updating data length to 251 on connection 0x0.
+[2026-11-26 08:20:16.287] 
+[2026-11-26 08:20:16.287] <info> app: Connected
+[2026-11-26 08:20:16.287] 
+[2026-11-26 08:20:16.287] <info> app: Requesting DLE to 251 bytes
+[2026-11-26 08:20:16.382] 
+[2026-11-26 08:20:16.382] <debug> nrf_ble_gatt: ATT MTU updated to 247 bytes on connection 0x0 (response).
+[2026-11-26 08:20:16.382] 
+[2026-11-26 08:20:16.382] <info> app: ATT MTU exchange completed. MTU set to 247 bytes.
+[2026-11-26 08:20:16.531] 
+[2026-11-26 08:20:16.531] <debug> nrf_ble_gatt: Data length updated to 27 on connection 0x0.
+[2026-11-26 08:20:16.537] 
+[2026-11-26 08:20:16.537] <debug> nrf_ble_gatt: max_rx_octets: 27
+[2026-11-26 08:20:16.542] 
+[2026-11-26 08:20:16.542] <debug> nrf_ble_gatt: max_tx_octets: 27
+[2026-11-26 08:20:16.545] 
+[2026-11-26 08:20:16.545] <debug> nrf_ble_gatt: max_rx_time: 328
+[2026-11-26 08:20:16.557] 
+[2026-11-26 08:20:16.557] <debug> nrf_ble_gatt: max_tx_time: 328
+[2026-11-26 08:20:16.557] 
+[2026-11-26 08:20:16.557] <info> app: GATT data length updated to 27 bytes.
+[2026-11-26 08:20:16.568] 
+[2026-11-26 08:20:16.568] <info> app: Data length updated: TX = 27, RX = 27
+[2026-11-26 08:20:17.023] 
+[2026-11-26 08:20:17.023] <info> app: Conn params applied: interval 6 units (7ms), timeout 5000ms
+[2026-11-26 08:20:17.166] 
+[2026-11-26 08:20:17.166] <info> app: Conn params applied: interval 39 units (48ms), timeout 5000ms
+[2026-11-26 08:20:17.211] 
+[2026-11-26 08:20:17.211] <info> app: NUS start
+[2026-11-26 08:20:19.868] 
+[2026-11-26 08:20:19.868] <info> app: MAC rxTimeOut
+[2026-11-26 08:20:20.869] 
+[2026-11-26 08:20:20.869] <info> app: MAC rxTimeOut
+[2026-11-26 08:20:20.869] 
+[2026-11-26 08:20:20.869] Join failed. Status code -1
+[2026-11-26 08:20:20.869] 
+[2026-11-26 08:20:20.869] <info> app: Bumping state machine with 'Joined' (Current state: JOINING)
+[2026-11-26 08:20:20.887] 
+[2026-11-26 08:20:20.887] 
+[2026-11-26 08:20:20.887] 
+[2026-11-26 08:20:20.887] <info> app: Retry (attempt 1/6) in 5 seconds (0 minutes)
+[2026-11-26 08:20:20.887] 
+[2026-11-26 08:20:20.887] 
+[2026-11-26 08:20:20.900] 
+[2026-11-26 08:20:20.900] <debug> app: FDS update success! FileId: 0x3E8 RecKey:0x1
+[2026-11-26 08:20:20.900] 
+[2026-11-26 08:20:20.900] <debug> app: FDS update success! FileId: 0x3E8 RecKey:0x2
+[2026-11-26 08:20:20.906] 
+[2026-11-26 08:20:20.906] <info> app: Data stored on NVM: 76 bytes
+[2026-11-26 08:20:20.906] 
+[2026-11-26 08:20:20.906] BLE out: Sent  16 bytes: 'Failed to join.'
+[2026-11-26 08:20:20.965] 
+[2026-11-26 08:20:20.965] <info> app: NUS TX Ready
+[2026-11-26 08:20:21.559] 
+[2026-11-26 08:20:21.559] 
+[2026-11-26 08:20:21.559] BLE in: Received   6 bytes 'hack 6'
+[2026-11-26 08:20:21.565] 
+[2026-11-26 08:20:21.565] <error> app: ERROR 4 [NRF_ERROR_NO_MEM] at ../../../ble_commands.c:998
+[2026-11-26 08:20:21.569] 
+[2026-11-26 08:20:21.569] <error> app: PC at: 0x00027155
+[2026-11-26 08:20:21.586] 
+[2026-11-26 08:20:21.586] <error> app: 5 fault resets in a row: waiting 10 minutes before resetting.

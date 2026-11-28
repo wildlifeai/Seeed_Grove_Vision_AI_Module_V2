@@ -1,0 +1,115 @@
+# Board 2, 17:40: 30 s press: output stops after frame 1, no echo to 'selftest' 1 and 2 minutes later (both consoles)
+[17:40:07.696] himax| --- silent for 30 s ---
+[17:40:07.919] note | T4 board 2 press 3: capture
+[17:40:07.919] himax| <<< typing 'capture 300 1000'
+[17:40:07.971] himax| ^C
+[17:40:08.505] himax| cmd> capture 300 1000
+[17:40:08.505] himax| About to capture 300 images with an interval of '1000' milliseconds
+[17:40:08.505] himax| cmd> IMAGE Task received event 'Image Event Start Capture' (0x0a01). Rx data = 0x0000012c
+[17:40:08.505] himax| Images to capture: 300
+[17:40:08.505] himax| Interval: 1000ms
+[17:40:08.505] himax| sensor_type: 8
+[17:40:08.505] himax|    Interval of 1000ms gives sleep count = 0x8030
+[17:40:08.505] himax|    Changing mode from 0 to 2 with nFrames=1, sleepTime=1000 sleepCount = 0x8030
+[17:40:08.505] himax| IMAGE Task state changed from 'Init' (1) to 'Capturing' (2)
+[17:40:08.568] himax| IMAGE Task received event 'Image Event Frame Ready' (0x0a04). Rx data = 0x00000000
+[17:40:08.568] nrf  | <info> app: !2 
+[17:40:08.568] himax| DEBUG: ledFlashDisable()
+[17:40:08.568] himax| Image capture 1/300 took 32ms
+[17:40:08.568] himax| Skipping NN processing (no model loaded).
+[17:40:08.568] himax| HM0360 AE regs:
+[17:40:08.568] himax|   Integration time = 27 lines
+[17:40:08.568] himax|   Analog gain = 0
+[17:40:08.568] himax|   Digital gain = 64
+[17:40:08.568] himax|   AE Mean = 17
+[17:40:08.568] himax|   AEConverged?: N
+[17:40:08.568] himax| IF Task received event 'Message to Master' (0x070d). Rx data = 0x30010148
+[17:40:08.568] himax| Assert inter-processor interrupt.
+[17:40:08.568] himax| Sending 122 bytes: Header 4, payload 116, checksum 2 'HM0360 AE regs:
+[17:40:08.568] himax|   Integration time = 27 lines
+[17:40:08.568] himax|   Analog gain = 0
+[17:40:08.568] himax|   Digital gain = 64
+[17:40:08.568] himax|   AE Mean = 17
+[17:40:08.568] himax|   AEConverged?: N'
+[17:40:08.568] himax| Negate inter-processor interrupt.
+[17:40:08.568] himax| IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+[17:40:08.568] himax| IF Task received event 'I2C Tx' (0x0701). Rx data = 0x00000000
+[17:40:08.568] himax| I2C transmission complete.
+[17:40:08.568] himax| IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+[17:40:08.568] himax| HM0360 motion in 0 blocks:
+[17:40:08.568] himax| IF Task received event 'Message to Master' (0x070d). Rx data = 0x30010148
+[17:40:08.568] himax| Assert inter-processor interrupt.
+[17:40:08.568] himax| Sending 129 bytes: Header 4, payload 123, checksum 2 'HM0360 motion in 0 blocks:
+[17:40:08.568] himax| Negate inter-processor interrupt.
+[17:40:08.568] himax| IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+[17:40:08.631] himax| Added 12 EXIF tags
+[17:40:08.631] himax| Writing 8668 bytes (8156 + 512) to '59200A20.JPG' from jpeg buffer of 115860 bytes
+[17:40:08.631] himax| IMAGE Task state changed from 'Capturing' (2) to 'NN Processing' (3)
+[17:40:08.631] himax| FatFS Task received event 'Write image' (0x0901). Rx data = 0x3001eb24
+[17:40:08.631] himax| FatFS task sending event 0x0a06. Tx data = 0x0000000d
+[17:40:08.631] himax| IMAGE task sending event 0x0901. Rx data = 0x3001eb24
+[17:40:08.631] himax| IMAGE Task received event 'Image Event Disk Write Complete' (0x0a06). Rx data = 0x0000000d
+[17:40:08.631] himax| Image not written. Error: 13
+[17:40:08.631] himax| sensor_type: 8
+[17:40:08.631] himax| IMAGE Task state changed from 'NN Processing' (3) to 'Capturing' (2)
+[17:40:08.631] himax| IF Task received event 'I2C Tx' (0x0701). Rx data = 0x00000000
+[17:40:08.631] himax| I2C transmission complete.
+[17:40:08.631] himax| IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+[17:40:08.754] nrf  | <info> app: I2C RX payload 116/250 bytes. Response type is 4. CRC OK (0xA758)
+[17:40:08.754] nrf  | <info> app: !3 
+[17:40:08.754] nrf  | <info> app: AI state machine bumped with 'Msg from AI' (Current state: IDLE)
+[17:40:08.754] nrf  | BLE out: Failed to send 117 bytes: 'HM0360 AE regs:
+[17:40:08.754] nrf  |   Integration time = 27 lines
+[17:40:08.754] nrf  |   Analog gain = 0
+[17:40:08.754] nrf  |   Digital gain = 64
+[17:40:08.754] nrf  |   AE Mean = 17
+[17:40:08.754] nrf  |   AEConverged?: N'
+[17:40:08.754] nrf  | <info> app: I2C RX payload 123/250 bytes. Response type is 4. CRC OK (0x7C2A)
+[17:40:08.754] nrf  | <info> app: AI state machine bumped with 'Msg from AI' (Current state: IDLE)
+[17:40:08.754] nrf  | BLE out: Failed to send 124 bytes: 'HM0360 motion in 0 blocks:
+[17:40:09.153] nrf  | <info> app: MAC rxTimeOut
+[17:40:10.039] himax| \x00  [no newline]
+[17:40:10.231] nrf  | <info> app: MAC rxTimeOut
+[17:40:10.231] nrf  | Join failed. Status code -1
+[17:40:10.231] nrf  | <info> app: Bumping state machine with 'Joined' (Current state: JOINING)
+[17:40:10.231] nrf  | <info> app: Retry (attempt 3/6) in 21 seconds (0 minutes)
+[17:40:10.231] nrf  | <debug> app: FDS update success! FileId: 0x3E8 RecKey:0x1
+[17:40:10.231] nrf  | <debug> app: FDS update success! FileId: 0x3E8 RecKey:0x2
+[17:40:10.231] nrf  | <info> app: Data stored on NVM: 76 bytes
+[17:40:10.231] nrf  | BLE out: Failed to send  16 bytes: 'Failed to join.'
+[17:40:30.882] himax| \x00  [no newline]
+[17:40:31.471] nrf  | <info> app: Retrying transmission now.
+[17:40:31.471] nrf  | BLE out: Failed to send  27 bytes: 'Retrying transmission now.'
+[17:40:31.471] nrf  | <info> app: Bumping state machine with 'Retry Tx' (Current state: JOINING)
+[17:40:31.471] nrf  | <info> app: MLME-Request: MLME_JOIN, OK
+[17:40:31.871] nrf  | <info> app: MAC txDone
+[17:40:36.922] nrf  | <info> app: MAC rxTimeOut
+[17:40:37.969] nrf  | <info> app: MAC rxTimeOut
+[17:40:37.969] nrf  | Join failed. Status code -1
+[17:40:37.969] nrf  | <info> app: Bumping state machine with 'Joined' (Current state: JOINING)
+[17:40:37.969] nrf  | <info> app: Retry (attempt 4/6) in 43 seconds (0 minutes)
+[17:40:37.969] nrf  | <debug> app: FDS update success! FileId: 0x3E8 RecKey:0x1
+[17:40:37.969] nrf  | <debug> app: FDS update success! FileId: 0x3E8 RecKey:0x2
+[17:40:37.969] nrf  | <info> app: Data stored on NVM: 76 bytes
+[17:40:37.969] nrf  | BLE out: Failed to send  16 bytes: 'Failed to join.'
+[17:41:00.370] himax| --- silent for 30 s ---
+[17:41:05.635] note | probe after press 3
+[17:41:05.635] himax| <<< typing 'selftest'
+[17:41:07.985] nrf  | --- silent for 30 s ---
+[17:41:21.187] nrf  | <info> app: Retrying transmission now.
+[17:41:21.187] nrf  | BLE out: Failed to send  27 bytes: 'Retrying transmission now.'
+[17:41:21.187] nrf  | <info> app: Bumping state machine with 'Retry Tx' (Current state: JOINING)
+[17:41:21.187] nrf  | <info> app: MLME-Request: MLME_JOIN, OK
+[17:41:21.538] nrf  | <info> app: MAC txDone
+[17:41:26.648] nrf  | <info> app: MAC rxTimeOut
+[17:41:27.653] nrf  | <info> app: MAC rxTimeOut
+[17:41:27.653] nrf  | Join failed. Status code -1
+[17:41:27.653] nrf  | <info> app: Bumping state machine with 'Joined' (Current state: JOINING)
+[17:41:27.653] nrf  | <info> app: Retry (attempt 5/6) in 86 seconds (1 minutes)
+[17:41:27.653] nrf  | <debug> app: FDS update success! FileId: 0x3E8 RecKey:0x1
+[17:41:27.653] nrf  | <debug> app: FDS update success! FileId: 0x3E8 RecKey:0x2
+[17:41:27.653] nrf  | <info> app: Data stored on NVM: 76 bytes
+[17:41:27.653] nrf  | BLE out: Failed to send  16 bytes: 'Failed to join.'
+[17:41:57.668] nrf  | --- silent for 30 s ---
+[17:42:11.114] note | probe 2 after press 3
+[17:42:11.114] himax| <<< typing 'selftest'

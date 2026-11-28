@@ -1,0 +1,22 @@
+# Board 1, 16:12: ribbon moved with power on. Double reset, garbled boot, 2nd bootloader stops, bus fault a minute later (photo app log, no per-line times)
+##### 16:12:00 black and white photo
+##### 16:12:00 typing 'slots'
+s\x01ts
+Command not recognised.  Enter 'help' to view a list of available commands.
+cmd> 
+##### 16:12:02 typing 'slots'
+\x001st BL Modem Build DATE=Jan 17 2025, Version: 2.12
+Please input any key to enter X-Modem mode in 30 ms 
+waiting input key...
+slot flash_of\xce\xe6et 0x00000000
+\x001st BL Modem Build DATE=Jan 17 2025, Version: 2.12
+Please input any key to enter X-Modem mode in 30 ms 
+waiting input key...
+slot flash_offset 0x00000000
+New MemDesp himax_sec_SB_image_process PASS
+set_memory_s_ns
+H\xd8_DS\xa0_\xfe\xe8LAG 1
+\x00\xf0\xf0\xf0\xf0\xf0\xf0\xf0\xf0\xf0\xf0\xf0\xf0\xf0\xf0\xf0\xf0\xf0\xf0\xf0\xf0\xf0\xf0\xf0\xf0\xf0\xf0\xf0\xf0\xf0\xf0\xf0\xf0\xf0\xf0\xf0\xf0\xf0\xf0\xf0SCB->CFSR:0x00008200
+SCB->BFAR:0x00000000
+SCB->HFSR:0x40000000
+##### 16:14:04 black and white photo: FAIL the board did not boot (no RESET in 2 minutes, or the wrong port)

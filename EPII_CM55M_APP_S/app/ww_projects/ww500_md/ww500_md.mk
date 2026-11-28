@@ -182,6 +182,9 @@ all: stage_elf
 # The APPL_DEFINES line below must match this line in ww.mk:
 # APP_TYPE = ww500_md
 APPL_DEFINES += -DWW500_MD
+# A failed configASSERT() reports and resets, in place of looping for ever - see vAssertCalled() in
+# hardfault_handler.c and os/freertos_10_5_1/NTZ/config/FreeRTOSConfig.h
+APPL_DEFINES += -DWW_ASSERT_RESETS
 
 #APPL_DEFINES += -DIP_xdma
 #APPL_DEFINES += -DEVT_DATAPATH

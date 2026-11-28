@@ -109,3 +109,6 @@ node_modules/
 .claude/
 **/claude/
 /CLAUDE_CGP.md
+
+# Frames saved by _Tools/live_view.py ("Save frame"): bench snapshots, not source
+_Tools/live_frames/

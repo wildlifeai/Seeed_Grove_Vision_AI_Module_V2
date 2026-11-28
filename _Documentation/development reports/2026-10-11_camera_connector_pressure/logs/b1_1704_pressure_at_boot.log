@@ -1,0 +1,175 @@
+# Board 1, 17:04: top-edge pressure, 2nd bootloader's first line corrupted, stops; released + RESET boots (photo app log)
+##### 17:04:37 black and white photo
+##### 17:04:37 typing 'slots'
+##### 17:04:39 typing 'slots'
+\x001st BL Modem Build DATE=Jan 17 2025, Version: 2.12
+Please input any key to enter X-Modem mode in 30 ms 
+waiting input key...\x0d\x00
+slot flash_of\xfe\xf6s\xfd\xf6\xd0\xff@0x00000000
+New MemDesp himax_sec_SB_image_process PASS
+set_memory_s_ns
+HX_DSP_FLAG 1
+##### 17:04:53 black and white photo: FAIL the board reset but did not finish booting. Unplug its power, check the camera ribbon, plug it back in and click again
+##### 17:05:06 black and white photo
+##### 17:05:06 typing 'slots'
+##### 17:05:08 typing 'slots'
+\x001st BL Modem Build DATE=Jan 17 2025, Version: 2.12
+Please input any key to enter X-Modem mode in 30 ms 
+waiting input key...
+slot flash_offset 0x00000000
+New MemDesp himax_sec_SB_image_process PASS
+set_memory_s_ns
+HX_DSP_FLAG 1
+jump_addr=0x10000000
+Compiler Version: ARM GNU, 14.3.1 20250623
+**** WW500 MD. (WW500_C02) Built: 05:37:05 Oct  6 2026 ****
+Git branch: 'dev' 6c8ee1ca
+Compiler Version: ARM GNU, 14.3.1 20250623
+Wakeup_event = 0x0000, WakeupEvt1 = 0x0000 Cold boot
+Camera: HM0360
+PCA9574 present at 0x20
+DEBUG: ledFlashSelectLED(0)
+Initialised LED Flash
+HM0360 present at 0x24
+Main camera present at 0x24
+### Cold Boot ###
+FreeRTOS tickless idle is enabled. configMAX_PRIORITIES = 5
+Initialising FreeRTOS tasks
+Created task 'CLI' Priority 4
+Created task 'IFTask' Priority 3
+Created task 'FAT' Priority 2
+Created task 'IMAGE' Priority 1
+FreeRTOS scheduler started.
+Starting CLI Task
+Enter 'help' to view a list of available commands.
+cmd> Starting IFTask
+I2C slave instance 0 configured at address 0x62
+I2C buffers have 256 bytes, payload is 244
+Inter-processor interrupt pulse short
+Starting FatFS Task
+##### 17:05:15 typing 'slots'
+^C
+cmd> Mounting FatFS on SD card sl	Error: MSB = 1
+Put the card SPI/Idle state fail
+;32;31mFailed error = 3
+SD card initialisation failed (reason 3)
+FatFs setup took 143ms
+Inactivity period set at 1000ms
+ts
+Flash ID 0xEF initialised
+Active slot 0 running 'HM0360 (night/IR)'. Slot A: 'HM0360 (night/IR)', Slot B: 'RP3 (day/colour)'. Auto-switch: off
+cmd> 
+##### 17:05:16 typing 'selftest'
+^C
+cmd> selftest
+selfTest 0800
+cmd> 
+IF Task received event 'Awake' (0x070f). Rx data = 0x00000000
+Starting Image Task
+Image 640 x 480. Raw buffer 460800. JPEG buffer 115860. JPEG compression x4
+Initialising HM0360 at 0x24 (p.u. delay 1ms)
+Memory allocated: 460800 for raw buffer, 115860 for JPEG, 100 for JPEG header
+   Inhibiting MD
+   Changing mode from 2 to 0 with nFrames=0, sleepTime=0 sleepCount = 0xffff
+HM0360 Init 
+HM0360 Init Mirror Off
+HM0360 Init finished
+HM0360 MD sensitivity 1
+SD card not mounted...
+sensor_type: 8
+DEBUG: ledFlashBrightness(5%) [brbits = 0x0]
+DEBUG: ledFlashSelectLED(0)
+[LS] In ledFlashSetFlashModeFromOpParam with 0 Mode 0
+DEBUG: ledFlashDisable()
+Not initialising NN (project ID is 0)
+No model found.
+NN Initialisation took 8ms TODO - consider doing this after taking the picture!
+Image sensor and data path initialised for camera HM0360
+  Camera system enabled.
+  Neural network disabled.
+  Flash LED(s) in use: 0
+  Flash brightness: 5%
+  Flash is currently not armed.
+  MD disabled.
+  Timelapse disabled.
+IF Task received event 'FreeRTOS Initialised' (0x0710). Rx data = 0x00000000
+Assert inter-processor interrupt.
+Sending 31 bytes: Header 4, payload 25, checksum 2 'Wake 2024-01-01T00:00:02Z'
+##### 17:05:19 typing 'preview 1'
+T00:00:02Z.Q 
+Negate inter-processor interrupt.
+IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+IF Task received event 'I2C Tx' (0x0701). Rx data = 0x00000000
+I2C transmission complete.
+IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+IF Task received event 'I2C Rx' (0x0700). Rx data = 0x00000000
+Received I2C message.
+MKL62BA command received: 'selftest'
+selfTest 0800
+IF Task state changed from 'Idle' (1) to 'I2C RX State' (2)
+IF Task received event 'String Response' (0x0703). Rx data = 0x3000ea70
+Assert inter-processor interrupt.
+Sending 19 bytes: Header 4, payload 13, checksum 2 'selfTest 0800'
+Negate inter-processor interrupt.
+IF Task state changed from 'I2C RX State' (2) to 'I2C TX State' (3)
+IF Task received event 'I2C Tx' (0x0701). Rx data = 0x00000000
+I2C transmission complete.
+IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+^C
+cmd> preview 1
+Preview mode 1 (SD save skipped). Start frames with e.g. 'capture 1000 0'.
+cmd> 
+##### 17:05:19 typing 'capture 3 500'
+^C
+cmd> capture 3 500
+About to capture 3 images with an interval of '500' milliseconds
+cmd> IMAGE Task received event 'Image Event Start Capture' (0x0a01). Rx data = 0x00000003
+Images to capture: 3
+Interval: 500ms
+sensor_type: 8
+   Interval of 500ms gives sleep count = 0x4018
+   Changing mode from 0 to 2 with nFrames=1, sleepTime=500 sleepCount = 0x4018
+IMAGE Task state changed from 'Init' (1) to 'Capturing' (2)
+IMAGE Task received event 'Image Event Frame Ready' (0x0a04). Rx data = 0x00000000
+Boot timing (cold wake), ms since app_main(): cameras checked 8, scheduler started 3021, SD mounted 3166, SD ready 4167, camera ready 4409, capture started 7716, frame ready 7786,
+DEBUG: ledFlashDisable()
+Image capture 1/3 took 73ms
+Skipping NN processing (no model loaded).
+HM0360 AE regs:
+  Integration time = 376 lines
+  Analog gain = 0
+  Digital gain = 104
+  AE Mean = 77
+  AEConverged?: Y
+IF Task received event 'Message to Master' (0x070d). Rx data = 0x300115b0
+Assert inter-processor interrupt.
+Sending 124 bytes: Header 4, payload 118, checksum 2 'HM0360 AE regs:
+  Integration time = 376 lines
+  Analog gain = 0
+  Digital gain = 104
+  AE Mean = 77
+  AEConverged?: Y'
+Negate inter-processor interrupt.
+IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+IF Task received event 'I2C Tx' (0x0701). Rx data = 0x00000000
+I2C transmission complete.
+IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+HM0360 motion in 0 blocks:
+IF Task received event 'Message to Master' (0x070d). Rx data = 0x300115b0
+Assert inter-processor interrupt.
+Sending 129 bytes: Header 4, payload 123, checksum 2 'HM0360 motion in 0 blocks:
+Negate inter-processor interrupt.
+IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+Skipping file save.
+IF Task received event 'I2C Tx' (0x0701). Rx data = 0x00000000
+I2C transmission complete.
+IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+IMAGE Task state changed from 'Capturing' (2) to 'NN Processing' (3)
+FatFS Task received event 'Write image' (0x0901). Rx data = 0x30020038
+FatFS task sending event 0x0a06. Tx data = 0x0000000d
+IMAGE task sending event 0x0901. Rx data = 0x30020038
+IMAGE Task received event 'Image Event Disk Write Complete' (0x0a06). Rx data = 0x0000000d
+Image not written. Error: 13
+sensor_type: 8
+IMAGE Task state changed from 'NN Processing' (3) to 'Capturing' (2)
+##### 17:05:22 typing 'preview 0'

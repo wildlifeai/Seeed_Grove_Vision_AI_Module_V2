@@ -1,0 +1,2733 @@
+
+1st BL Modem Build DATE=Jan 17 2025, Version: 2.12
+
+Please input any key to enter X-Modem mode in 30 ms 
+
+waiting input key...
+
+slot flash_offset 0x00100000
+
+New MemDesp himax_sec_SB_image_process PASS
+
+set_memory_s_ns
+
+HX_DSP_FLAG 1
+
+jump_addr=0x10000000
+
+Compiler Version: ARM GNU, 14.3.1 20250623
+
+
+
+
+**** WW500 MD. (WW500_C02) Built: 14:31:08 Oct 30 2026 ****
+
+
+
+
+Git branch: '261027_XIP_save_state' 7db960e6-dirty
+
+Compiler Version: ARM GNU, 14.3.1 20250623
+
+
+
+Wakeup_event = 0x0000, WakeupEvt1 = 0x0000 Cold boot
+
+PCA9574 present at 0x20
+
+DEBUG: ledFlashSelectLED(0)
+
+Initialised LED Flash
+
+
+
+### Cold Boot ###
+
+FreeRTOS tickless idle is enabled. configMAX_PRIORITIES = 5
+
+Camera: RP v3 (IMX708)
+
+Enabling RP SENSOR_ENABLE
+
+HM0360 present at 0x24
+
+Main camera present at 0x1a
+
+Disabling RP SENSOR_ENABLE
+
+Initialising FreeRTOS tasks
+
+Created task 'CLI' Priority 4
+
+Created task 'IFTask' Priority 3
+
+Created task 'IMAGE' Priority 2
+
+Created task 'FAT' Priority 1
+
+FreeRTOS scheduler started.
+
+Starting CLI Task
+
+
+
+Enter 'help' to view a list of available commands.
+
+cmd> Starting IFTask
+
+I2C slave instance 0 configured at address 0x62
+
+I2C buffers have 256 bytes, payload is 244
+
+Inter-processor interrupt pulse short
+
+Starting FatFS Task
+
+Flash ID 0xEF initialised
+
+Fast-start record: seq 54 loaded (32 ops, 0 extra camera registers, the record's are for the other camera)
+
+Starting Image Task
+
+Slot B labelled variant 2 = RP3 (day/colour)
+
+Image 2304 x 1296. Raw buffer 460800. JPEG buffer 115860. JPEG compression x4
+
+Enabling RP SENSOR_ENABLE
+
+Initialising IMX708 at 0x1a (p.u. delay 10ms)
+
+
+Mounting FatFS on SD card AE: restored exposure 273 gain code 0
+
+WD1[340a69a0], WD2_J[340a69a0], WD3_RAW[340361a0], JPAuto[34036120]
+
+sensor_type: 15
+
+DEBUG: ledFlashBrightness(5%) [brbits = 0x0]
+
+DEBUG: ledFlashSelectLED(0)
+
+[LS] In ledFlashSetFlashModeFromOpParam with 0 Mode 0
+
+DEBUG: ledFlashDisable()
+
+Initialising HM0360 at 0x24 for MD only.
+
+
+   Inhibiting MD
+
+   Changing mode from 2 to 0 with nFrames=0, sleepTime=0 sleepCount = 0xffff
+
+
+HM0360 registers initialised for MD.
+
+Model file name in flash is '20V1.TFL'
+
+Initialising NN with 2412/ETHOS-U 2411 library. Arena size 524288
+
+Ethos-U55 device initialised
+
+Looking for model '20V1.TFL' in flash or SD card
+
+Meta data found in flash
+
+000: 4c 42 41 4c 00 00 00 00  02 00 14 00 6e 6f 20 70 LBAL........no p
+
+010: 65 72 73 6f 6e 00 00 00  00 00 00 00 00 00 00 00 erson...........
+
+020: 70 65 72 73 6f 6e 00 00  00 00 00 00 00 00 00 00 person..........
+
+030: 00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00 ................
+
+040: 00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00 ................
+
+050: 00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00 ................
+
+060: 00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00 ................
+
+070: 00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00 ................
+
+080: 00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00 ................
+
+090: 00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00 ................
+
+0a0: 00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00 ................
+
+0b0: 00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00 ................
+
+0c0: 00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00 ................
+
+0d0: 00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00 ................
+
+0e0: 00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00 ................
+
+0f0: 00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00 ................
+
+100: 00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00 ................
+
+110: 00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00 ................
+
+120: 00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00 ................
+
+130: 00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00 ................
+
+140: 00 00 00 00 00 00 00 00  00 00 00 00 32 30 56 31 ............20V1
+
+150: 2e 54 46 4c 00 00 00 00  00 00 00 00             .TFL........    
+
+Magic: 0x4c41424c Model '20V1.TFL' has 2 labels of 20 bytes:
+
+0 = 'no person'
+
+1 = 'person'
+
+Model file name in flash is '20V1.TFL'
+
+Flash already contains model '20V1.TFL'; loading from flash.
+
+TFLM Ethos-U55 Model Fingerprint
+
+
+---------------------------------
+
+
+Schema version : 3 (expected 3)
+
+
+Subgraphs      : 1
+
+
+Operators      : 1
+
+
+  Op 0: CUSTOM (ethos-u), weight bytes: 250576
+
+
+Input tensor   : i8 [1,96,96,1]
+
+
+Output tensor  : i8 [1,2]
+
+
+Total weight bytes : 250612
+
+
+---------------------------------
+
+
+There are 2 classes (2)
+
+Initialised neural network.
+
+NN Initialisation took 47ms
+
+
+
+Image sensor and data path initialised for camera RP v3
+
+  Camera system enabled.
+
+  Neural network enabled.
+
+  Flash LED(s) in use: 0
+
+  Flash brightness: 5%
+
+  Flash is currently not armed.
+
+  Flash duration 100ms
+
+
+  MD sampling: 1000ms.
+
+  Timelapse disabled.
+
+OK
+
+Directory '/MANIFEST' exists
+
+
+SD card initialised. CWD is '0:/'
+
+Loading configuration: CWD is '0:/MANIFEST'
+
+'CONFIG.TXT' found. (Next image #2087), camera enabled. Flash brightness 5
+
+
+Retaining existing images directory (74 <= 100) '/MEDIA/3f2a9c1e/IMAGES.008'
+
+Directory '/MEDIA/3f2a9c1e/IMAGES.008' exists
+
+
+FatFs setup took 516ms
+
+Inactivity period set at 1000ms
+
+
+
+IF Task received event 'Awake' (0x070f). Rx data = 0x00000000
+
+
+Fast-start record: seq 54 differs from CONFIG.TXT:
+
+  extra camera registers: the record's are from the other camera image
+
+
+
+IF Task received event 'FreeRTOS Initialised' (0x0710). Rx data = 0x00000000
+
+
+Assert inter-processor interrupt.
+
+Sending 31 bytes: Header 4, payload 25, checksum 2 'Wake 2024-01-01T00:00:02Z'
+
+000: 80 04 19 00 57 61 6b 65  20 32 30 32 34 2d 30 31 ....Wake 2024-01
+
+010: 2d 30 31 54 30 30 3a 30  30 3a 30 32 5a bf 51    -01T00:00:02Z.Q 
+
+Negate inter-processor interrupt.
+
+IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+
+
+
+
+IF Task received event 'I2C Tx' (0x0701). Rx data = 0x000005fc
+
+
+I2C transmission complete.
+
+IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+
+
+
+
+IF Task received event 'I2C Rx' (0x0700). Rx data = 0x00000000
+
+
+
+
+Received I2C message.
+
+000: 80 01 08 00 73 65 6c 66  74 65 73 74 38 a9       ....selftest8.  
+
+MKL62BA command received: 'selftest'
+
+selfTest 0000
+
+IF Task state changed from 'Idle' (1) to 'I2C RX State' (2)
+
+
+
+
+IF Task received event 'String Response' (0x0703). Rx data = 0x30011c70
+
+
+Assert inter-processor interrupt.
+
+Sending 19 bytes: Header 4, payload 13, checksum 2 'selfTest 0000'
+
+000: 80 04 0d 00 73 65 6c 66  54 65 73 74 20 30 30 30 ....selfTest 000
+
+010: 30 7f b8                                         0..             
+
+Negate inter-processor interrupt.
+
+IF Task state changed from 'I2C RX State' (2) to 'I2C TX State' (3)
+
+
+
+
+IF Task received event 'I2C Tx' (0x0701). Rx data = 0x00000666
+
+
+I2C transmission complete.
+
+IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+
+
+Inactive for 1000ms
+
+IMAGE Task received event 'Image Event Inactivity' (0x0a00). Rx data = 0x00000000
+
+
+IMAGE Task state changed from 'Init' (1) to 'Save State' (5)
+
+
+IMAGE task sending event 0x0904. Rx data = 0x00000000
+
+
+
+
+
+
+
+FatFS Task received event 'Save State' (0x0904). Rx data = 0x00000000
+
+
+Saved state to SD card. Image sequence number = 2087
+
+Fast-start record: written, seq 55 slot 11
+
+IMAGE Task received event 'Image Event Disk Write Complete' (0x0a06). Rx data = 0x00000000
+
+
+Image task ready to sleep.
+
+IMAGE Task state changed from 'Save State' (5) to 'Uninitialised' (0)
+
+
+
+
+
+FatFS task sending event 0x0a06. Tx data = 0x00000000
+
+
+
+
+IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+
+
+Assert inter-processor interrupt.
+
+Sending 121 bytes: Header 4, payload 115, checksum 2 'Sleep 2087 366 8 39 638 1 500 0 1000 5 1 1000 100 0 20 1 18 1 0 74 8 2 5 65 15 0 0 286 326 1 110 1 0 5 0 0 0 273 0 '
+
+000: 80 04 73 00 53 6c 65 65  70 20 32 30 38 37 20 33 ..s.Sleep 2087 3
+
+010: 36 36 20 38 20 33 39 20  36 33 38 20 31 20 35 30 66 8 39 638 1 50
+
+020: 30 20 30 20 31 30 30 30  20 35 20 31 20 31 30 30 0 0 1000 5 1 100
+
+030: 30 20 31 30 30 20 30 20  32 30 20 31 20 31 38 20 0 100 0 20 1 18 
+
+040: 31 20 30 20 37 34 20 38  20 32 20 35 20 36 35 20 1 0 74 8 2 5 65 
+
+050: 31 35 20 30 20 30 20 32  38 36 20 33 32 36 20 31 15 0 0 286 326 1
+
+060: 20 31 31 30 20 31 20 30  20 35 20 30 20 30 20 30  110 1 0 5 0 0 0
+
+070: 20 32 37 33 20 30 20 12  43                       273 0 .C       
+
+Negate inter-processor interrupt.
+
+IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+
+
+
+
+IF Task received event 'I2C Tx' (0x0701). Rx data = 0x00000e25
+
+
+I2C transmission complete.
+
+IF task ready to sleep.
+
+DEBUG: ledFlashDisable()
+
+HM0360 MD sensitivity 1
+
+Preparing HM0360 for MD:   HM0360 Motion Detection on! 1000ms frame interval, sensitivity 1, wake threshold 5 cells
+
+
+   Interval of 1000ms gives sleep count = 0x8030
+
+   Changing mode from 0 to 2 with nFrames=1, sleepTime=1000 sleepCount = 0x8030
+
+
+ No LED flashes.
+
+>>> Entering DPD at 2024:01:01 00:00:04
+
+
+
+1st BL Modem Build DATE=Jan 17 2025, Version: 2.12
+
+slot flash_offset 0x00100000
+
+New MemDesp himax_sec_SB_image_process PASS
+
+set_memory_s_ns
+
+HX_DSP_FLAG 1
+
+jump_addr=0x10000000
+
+Compiler Version: ARM GNU, 14.3.1 20250623
+
+
+
+
+**** WW500 MD. (WW500_C02) Built: 14:31:08 Oct 30 2026 ****
+
+
+
+
+Git branch: '261027_XIP_save_state' 7db960e6-dirty
+
+Compiler Version: ARM GNU, 14.3.1 20250623
+
+
+
+Wakeup_event = 0x0000, WakeupEvt1 = 0x0001 WAKE signal
+
+PCA9574 present at 0x20
+
+DEBUG: ledFlashSelectLED(0)
+
+Initialised LED Flash
+
+Camera: RP v3 (IMX708)
+
+Enabling RP SENSOR_ENABLE
+
+HM0360 present at 0x24
+
+Main camera present at 0x1a
+
+Disabling RP SENSOR_ENABLE
+
+### Warm Boot ###
+
+Woke at 2024:01:01 00:00:04 
+
+Motion detected INT_INDIC = 0xc8
+
+Initialising FreeRTOS tasks
+
+Created task 'CLI' Priority 4
+
+Created task 'IFTask' Priority 3
+
+Created task 'IMAGE' Priority 2
+
+Created task 'FAT' Priority 1
+
+FreeRTOS scheduler started.
+
+Starting CLI Task
+
+
+
+Enter 'help' to view a list of available commands.
+
+cmd> Starting IFTask
+
+I2C slave instance 0 configured at address 0x62
+
+I2C buffers have 256 bytes, payload is 244
+
+Inter-processor interrupt pulse short
+
+Starting FatFS Task
+
+Flash ID 0xEF initialised
+
+Fast-start record: seq 55 loaded (32 ops, 0 extra camera registers)
+
+Starting Image Task
+
+Image 2304 x 1296. Raw buffer 460800. JPEG buffer 115860. JPEG compression x4
+
+Enabling RP SENSOR_ENABLE
+
+Initialising IMX708 at 0x1a (p.u. delay 10ms)
+
+
+Mounting FatFS on SD card AE: restored exposure 273 gain code 0
+
+WD1[340a69a0], WD2_J[340a69a0], WD3_RAW[340361a0], JPAuto[34036120]
+
+sensor_type: 15
+
+DEBUG: ledFlashBrightness(5%) [brbits = 0x0]
+
+DEBUG: ledFlashSelectLED(0)
+
+[LS] In ledFlashSetFlashModeFromOpParam with 0 Mode 0
+
+DEBUG: ledFlashDisable()
+
+Model file name in flash is '20V1.TFL'
+
+Image sensor and data path initialised for camera RP v3
+
+  Camera system enabled.
+
+  Neural network starts after the capture.
+
+  Flash LED(s) in use: 0
+
+  Flash brightness: 5%
+
+  Flash is currently not armed.
+
+  Flash duration 100ms
+
+
+  MD sampling: 1000ms.
+
+  Timelapse disabled.
+
+IMAGE Task received event 'Image Event Start Capture' (0x0a01). Rx data = 0x00000001
+
+
+Images to capture: 1
+
+Interval: 500ms
+
+WD1[340a69a0], WD2_J[340a69a0], WD3_RAW[340361a0], JPAuto[34036120]
+
+sensor_type: 15
+
+DEBUG: ledFlashDisable()
+
+g_cursensorstream: 0
+
+Model file name in flash is '20V1.TFL'
+
+Initialising NN with 2412/ETHOS-U 2411 library. Arena size 524288
+
+Ethos-U55 device initialised
+
+Looking for model '20V1.TFL' in flash or SD card
+
+Model file name in flash is '20V1.TFL'
+
+Flash already contains model '20V1.TFL'; loading from flash.
+
+There are 2 classes (2)
+
+Initialised neural network.
+
+NN Initialisation took 12ms
+
+
+
+IMAGE Task state changed from 'Init' (1) to 'Capturing' (2)
+
+
+
+
+
+IMAGE Task received event 'Image Event Frame Ready' (0x0a04). Rx data = 0x00000000
+
+
+DEBUG: ledFlashDisable()
+
+Image capture 1/1 took 24ms
+
+
+
+Input image is 640 x 480 (460800 bytes)
+
+Input tensor is 96 x 96 (1 channels)
+
+Model invoked.
+
+Class 'no person': 57.0% (raw: 34)
+
+Class 'person': 43.4% (raw: -34)
+
+DEBUG: cv_run says there are 2 classes
+
+Class 0 'no person' = logit 34
+
+Class 1 'person' = logit -34
+
+Target object not detected.
+
+
+
+IF Task received event 'Message to Master' (0x070d). Rx data = 0x30014948
+
+
+Assert inter-processor interrupt.
+
+Sending 9 bytes: Header 4, payload 3, checksum 2 'NN-'
+
+000: 80 04 03 00 4e 4e 2d 86  58                      ....NN-.X       
+
+Negate inter-processor interrupt.
+
+IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+
+
+Score -34/128 (Threshold 18)
+
+NN processing took 16ms
+
+
+
+
+
+IF Task received event 'I2C Tx' (0x0701). Rx data = 0x00000074
+
+
+I2C transmission complete.
+
+IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+
+
+HM0360 AE regs:
+
+  Integration time = 95 lines
+
+  Analog gain = 0
+
+  Digital gain = 64
+
+  AE Mean = 65
+
+  AEConverged?: Y
+
+
+
+IF Task received event 'Message to Master' (0x070d). Rx data = 0x30014948
+
+
+Assert inter-processor interrupt.
+
+Sending 122 bytes: Header 4, payload 116, checksum 2 'HM0360 AE regs:
+
+  Integration time = 95 lines
+
+  Analog gain = 0
+
+  Digital gain = 64
+
+  AE Mean = 65
+
+  AEConverged?: Y'
+
+000: 80 04 74 00 48 4d 30 33  36 30 20 41 45 20 72 65 ..t.HM0360 AE re
+
+010: 67 73 3a 0a 20 20 49 6e  74 65 67 72 61 74 69 6f gs:.  Integratio
+
+020: 6e 20 74 69 6d 65 20 3d  20 39 35 20 6c 69 6e 65 n time = 95 line
+
+030: 73 0a 20 20 41 6e 61 6c  6f 67 20 67 61 69 6e 20 s.  Analog gain 
+
+040: 3d 20 30 0a 20 20 44 69  67 69 74 61 6c 20 67 61 = 0.  Digital ga
+
+050: 69 6e 20 3d 20 36 34 0a  20 20 41 45 20 4d 65 61 in = 64.  AE Mea
+
+060: 6e 20 3d 20 36 35 0a 20  20 41 45 43 6f 6e 76 65 n = 65.  AEConve
+
+070: 72 67 65 64 3f 3a 20 59  07 89                   rged?: Y..      
+
+Negate inter-processor interrupt.
+
+IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+
+
+HM0360 woken by motion in 62 blocks:
+
+0a d8 14 0b 30 04 00 02 00 40 00 18 00 68 00 50 1c d0 1a c0 f2 80 d8 08 c7 09 66 04 2c 0a 
+
+IF Task received event 'I2C Tx' (0x0701). Rx data = 0x00000096
+
+
+I2C transmission complete.
+
+IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+
+
+00 00 
+
+
+
+IF Task received event 'Message to Master' (0x070d). Rx data = 0x30014948
+
+
+Assert inter-processor interrupt.
+
+Sending 139 bytes: Header 4, payload 133, checksum 2 'HM0360 woken by motion in 62 blocks:
+
+0a d8 14 0b 30 04 00 02 00 40 00 18 00 68 00 50 1c d0 1a c0 f2 80 d8 08 c7 09 66 04 2c 0a 00 00 '
+
+000: 80 04 85 00 48 4d 30 33  36 30 20 77 6f 6b 65 6e ....HM0360 woken
+
+010: 20 62 79 20 6d 6f 74 69  6f 6e 20 69 6e 20 36 32  by motion in 62
+
+020: 20 62 6c 6f 63 6b 73 3a  0a 30 61 20 64 38 20 31  blocks:.0a d8 1
+
+030: 34 20 30 62 20 33 30 20  30 34 20 30 30 20 30 32 4 0b 30 04 00 02
+
+040: 20 30 30 20 34 30 20 30  30 20 31 38 20 30 30 20  00 40 00 18 00 
+
+050: 36 38 20 30 30 20 35 30  20 31 63 20 64 30 20 31 68 00 50 1c d0 1
+
+060: 61 20 63 30 20 66 32 20  38 30 20 64 38 20 30 38 a c0 f2 80 d8 08
+
+070: 20 63 37 20 30 39 20 36  36 20 30 34 20 32 63 20  c7 09 66 04 2c 
+
+080: 30 61 20 30 30 20 30 30  20 3d 06                0a 00 00 =.     
+
+Negate inter-processor interrupt.
+
+IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+
+
+.#.#.......##.##
+
+..#.#...##.#....
+
+....##....#.....
+
+.........#......
+
+..............#.
+
+...........##...
+
+...........#.##.
+
+............#.#.
+
+..###.......#.##
+
+.#.##.........##
+
+.#..####.......#
+
+...##.##...#....
+
+###...###..#....
+
+.##..##...#.....
+
+..##.#...#.#....
+
+................
+
+
+
+AE: p75=92 (target 110) exposure 273->336 gain code 0->0
+
+
+
+IF Task received event 'I2C Tx' (0x0701). Rx data = 0x000000ec
+
+
+I2C transmission complete.
+
+IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+
+
+OK
+
+Directory '/MANIFEST' exists
+
+
+SD card initialised. CWD is '0:/'
+
+Loading configuration: CWD is '0:/MANIFEST'
+
+'CONFIG.TXT' found. (Next image #2087), camera enabled. Flash brightness 5
+
+
+Retaining existing images directory (74 <= 100) '/MEDIA/3f2a9c1e/IMAGES.008'
+
+Directory '/MEDIA/3f2a9c1e/IMAGES.008' exists
+
+
+FatFs setup took 314ms
+
+Inactivity period set at 1000ms
+
+
+
+IF Task received event 'Awake' (0x070f). Rx data = 0x00000000
+
+
+Fast-start record: seq 55 matches CONFIG.TXT
+
+WB auto: means R=49 G=76 B=50 -> gains R x420/256, B x367/256
+
+Colour correction: R x420/256, B x367/256 in 87ms
+
+SW JPEG 18540 bytes in 185ms
+
+EXIF: Adding DeploymentID: 3f2a9c1e-7b4d-4e8a-9c6f-0a1b2c3d4e5f
+
+Added 14 EXIF tags
+
+Writing 19564 bytes (18540 + 1024) to '59200850.JPG' from jpeg buffer of 115860 bytes
+
+Boot timing (motion wake), ms since app_main(): cameras checked 16, scheduler started 40, flash record read 45, SD mounted 348, CONFIG.TXT loaded 353, image dir ready 357, SD ready 359, camera ready 102, capture started 112, frame ready 135, photo queued 636,
+
+IMAGE Task state changed from 'Capturing' (2) to 'NN Processing' (3)
+
+
+IMAGE task sending event 0x0901. Rx data = 0x30023318
+
+
+
+
+
+
+
+IF Task received event 'FreeRTOS Initialised' (0x0710). Rx data = 0x00000000
+
+
+Assert inter-processor interrupt.
+
+Sending 33 bytes: Header 4, payload 27, checksum 2 'Motion 2024-01-01T00:00:05Z'
+
+000: 80 04 1b 00 4d 6f 74 69  6f 6e 20 32 30 32 34 2d ....Motion 2024-
+
+010: 30 31 2d 30 31 54 30 30  3a 30 30 3a 30 35 5a 68 01-01T00:00:05Zh
+
+020: d0                                               .               
+
+Negate inter-processor interrupt.
+
+IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+
+
+
+
+FatFS Task received event 'Write image' (0x0901). Rx data = 0x30023318
+
+
+
+
+IF Task received event 'I2C Tx' (0x0701). Rx data = 0x00000264
+
+
+I2C transmission complete.
+
+IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+
+
+
+
+IF Task received event 'I2C Rx' (0x0700). Rx data = 0x00000000
+
+
+
+
+Received I2C message.
+
+000: 80 01 08 00 73 65 6c 66  74 65 73 74 38 a9       ....selftest8.  
+
+MKL62BA command received: 'selftest'
+
+selfTest 0000
+
+IF Task state changed from 'Idle' (1) to 'I2C RX State' (2)
+
+
+
+
+IF Task received event 'String Response' (0x0703). Rx data = 0x30011c70
+
+
+Assert inter-processor interrupt.
+
+Sending 19 bytes: Header 4, payload 13, checksum 2 'selfTest 0000'
+
+000: 80 04 0d 00 73 65 6c 66  54 65 73 74 20 30 30 30 ....selfTest 000
+
+010: 30 7f b8                                         0..             
+
+Negate inter-processor interrupt.
+
+IF Task state changed from 'I2C RX State' (2) to 'I2C TX State' (3)
+
+
+
+
+IF Task received event 'I2C Tx' (0x0701). Rx data = 0x000002cf
+
+
+I2C transmission complete.
+
+IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+
+
+Wrote 19562 byte image to SD: 59200850.JPG at 0:0:5 1/1/2024
+
+File write took 116ms
+
+IMAGE Task received event 'Image Event Disk Write Complete' (0x0a06). Rx data = 0x00000000
+
+
+Current captures completed: 1
+
+Average file write time 116ms
+
+Total frames captured since last reset: 1
+
+
+
+IF Task received event 'Message to Master' (0x070d). Rx data = 0x30014948
+
+
+Assert inter-processor interrupt.
+
+Sending 69 bytes: Header 4, payload 63, checksum 2 'Captured 1 images. Last is 59200850.JPG (File write 116ms avg.)'
+
+000: 80 04 3f 00 43 61 70 74  75 72 65 64 20 31 20 69 ..?.Captured 1 i
+
+010: 6d 61 67 65 73 2e 20 4c  61 73 74 20 69 73 20 35 mages. Last is 5
+
+020: 39 32 30 30 38 35 30 2e  4a 50 47 20 28 46 69 6c 9200850.JPG (Fil
+
+030: 65 20 77 72 69 74 65 20  31 31 36 6d 73 20 61 76 e write 116ms av
+
+040: 67 2e 29 4c d4                                   g.)L.           
+
+Negate inter-processor interrupt.
+
+IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+
+
+IMAGE Task state changed from 'NN Processing' (3) to 'Init' (1)
+
+
+
+
+
+FatFS task sending event 0x0a06. Tx data = 0x00000000
+
+
+
+
+IF Task received event 'I2C Tx' (0x0701). Rx data = 0x00000307
+
+
+I2C transmission complete.
+
+IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+
+
+Inactive for 1000ms
+
+IMAGE Task received event 'Image Event Inactivity' (0x0a00). Rx data = 0x00000000
+
+
+IMAGE Task state changed from 'Init' (1) to 'Save State' (5)
+
+
+IMAGE task sending event 0x0904. Rx data = 0x00000000
+
+
+
+
+
+
+
+FatFS Task received event 'Save State' (0x0904). Rx data = 0x00000000
+
+
+Saved state to SD card. Image sequence number = 2088
+
+Fast-start record: unchanged (seq 55)
+
+IMAGE Task received event 'Image Event Disk Write Complete' (0x0a06). Rx data = 0x00000000
+
+
+Image task ready to sleep.
+
+IMAGE Task state changed from 'Save State' (5) to 'Uninitialised' (0)
+
+
+
+
+
+FatFS task sending event 0x0a06. Tx data = 0x00000000
+
+
+
+
+IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+
+
+Assert inter-processor interrupt.
+
+Sending 121 bytes: Header 4, payload 115, checksum 2 'Sleep 2088 367 8 39 639 1 500 0 1000 5 1 1000 100 0 20 1 18 1 0 75 8 2 5 65 15 0 0 286 326 1 110 1 0 5 0 0 0 336 0 '
+
+000: 80 04 73 00 53 6c 65 65  70 20 32 30 38 38 20 33 ..s.Sleep 2088 3
+
+010: 36 37 20 38 20 33 39 20  36 33 39 20 31 20 35 30 67 8 39 639 1 50
+
+020: 30 20 30 20 31 30 30 30  20 35 20 31 20 31 30 30 0 0 1000 5 1 100
+
+030: 30 20 31 30 30 20 30 20  32 30 20 31 20 31 38 20 0 100 0 20 1 18 
+
+040: 31 20 30 20 37 35 20 38  20 32 20 35 20 36 35 20 1 0 75 8 2 5 65 
+
+050: 31 35 20 30 20 30 20 32  38 36 20 33 32 36 20 31 15 0 0 286 326 1
+
+060: 20 31 31 30 20 31 20 30  20 35 20 30 20 30 20 30  110 1 0 5 0 0 0
+
+070: 20 33 33 36 20 30 20 8e  41                       336 0 .A       
+
+Negate inter-processor interrupt.
+
+IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+
+
+
+
+IF Task received event 'I2C Tx' (0x0701). Rx data = 0x00000ac4
+
+
+I2C transmission complete.
+
+IF task ready to sleep.
+
+DEBUG: ledFlashDisable()
+
+HM0360 MD sensitivity 1
+
+Preparing HM0360 for MD:   HM0360 Motion Detection on! 1000ms frame interval, sensitivity 1, wake threshold 5 cells
+
+
+   Interval of 1000ms gives sleep count = 0x8030
+
+   Changing mode from 2 to 2 with nFrames=1, sleepTime=1000 sleepCount = 0x8030
+
+
+ No LED flashes.
+
+>>> Entering DPD at 2024:01:01 00:00:07
+
+
+
+1st BL Modem Build DATE=Jan 17 2025, Version: 2.12
+
+slot flash_offset 0x00100000
+
+New MemDesp himax_sec_SB_image_process PASS
+
+set_memory_s_ns
+
+HX_DSP_FLAG 1
+
+jump_addr=0x10000000
+
+Compiler Version: ARM GNU, 14.3.1 20250623
+
+
+
+
+**** WW500 MD. (WW500_C02) Built: 14:31:08 Oct 30 2026 ****
+
+
+
+
+Git branch: '261027_XIP_save_state' 7db960e6-dirty
+
+Compiler Version: ARM GNU, 14.3.1 20250623
+
+
+
+Wakeup_event = 0x0000, WakeupEvt1 = 0x0001 WAKE signal
+
+PCA9574 present at 0x20
+
+DEBUG: ledFlashSelectLED(0)
+
+Initialised LED Flash
+
+Camera: RP v3 (IMX708)
+
+Enabling RP SENSOR_ENABLE
+
+HM0360 present at 0x24
+
+Main camera present at 0x1a
+
+Disabling RP SENSOR_ENABLE
+
+### Warm Boot ###
+
+Woke at 2024:01:01 00:00:07 
+
+Motion detected INT_INDIC = 0xc8
+
+Initialising FreeRTOS tasks
+
+Created task 'CLI' Priority 4
+
+Created task 'IFTask' Priority 3
+
+Created task 'IMAGE' Priority 2
+
+Created task 'FAT' Priority 1
+
+FreeRTOS scheduler started.
+
+Starting CLI Task
+
+
+
+Enter 'help' to view a list of available commands.
+
+cmd> Starting IFTask
+
+I2C slave instance 0 configured at address 0x62
+
+I2C buffers have 256 bytes, payload is 244
+
+Inter-processor interrupt pulse short
+
+Starting FatFS Task
+
+Flash ID 0xEF initialised
+
+Fast-start record: seq 55 loaded (32 ops, 0 extra camera registers)
+
+Starting Image Task
+
+Image 2304 x 1296. Raw buffer 460800. JPEG buffer 115860. JPEG compression x4
+
+Enabling RP SENSOR_ENABLE
+
+Initialising IMX708 at 0x1a (p.u. delay 10ms)
+
+
+Mounting FatFS on SD card AE: restored exposure 273 gain code 0
+
+WD1[340a69a0], WD2_J[340a69a0], WD3_RAW[340361a0], JPAuto[34036120]
+
+sensor_type: 15
+
+DEBUG: ledFlashBrightness(5%) [brbits = 0x0]
+
+DEBUG: ledFlashSelectLED(0)
+
+[LS] In ledFlashSetFlashModeFromOpParam with 0 Mode 0
+
+DEBUG: ledFlashDisable()
+
+Model file name in flash is '20V1.TFL'
+
+Image sensor and data path initialised for camera RP v3
+
+  Camera system enabled.
+
+  Neural network starts after the capture.
+
+  Flash LED(s) in use: 0
+
+  Flash brightness: 5%
+
+  Flash is currently not armed.
+
+  Flash duration 100ms
+
+
+  MD sampling: 1000ms.
+
+  Timelapse disabled.
+
+IMAGE Task received event 'Image Event Start Capture' (0x0a01). Rx data = 0x00000001
+
+
+Images to capture: 1
+
+Interval: 500ms
+
+WD1[340a69a0], WD2_J[340a69a0], WD3_RAW[340361a0], JPAuto[34036120]
+
+sensor_type: 15
+
+DEBUG: ledFlashDisable()
+
+g_cursensorstream: 0
+
+Model file name in flash is '20V1.TFL'
+
+Initialising NN with 2412/ETHOS-U 2411 library. Arena size 524288
+
+Ethos-U55 device initialised
+
+Looking for model '20V1.TFL' in flash or SD card
+
+Model file name in flash is '20V1.TFL'
+
+Flash already contains model '20V1.TFL'; loading from flash.
+
+There are 2 classes (2)
+
+Initialised neural network.
+
+NN Initialisation took 12ms
+
+
+
+IMAGE Task state changed from 'Init' (1) to 'Capturing' (2)
+
+
+
+
+
+IMAGE Task received event 'Image Event Frame Ready' (0x0a04). Rx data = 0x00000000
+
+
+DEBUG: ledFlashDisable()
+
+Image capture 1/1 took 24ms
+
+
+
+Input image is 640 x 480 (460800 bytes)
+
+Input tensor is 96 x 96 (1 channels)
+
+Model invoked.
+
+Class 'no person': 51.0% (raw: 4)
+
+Class 'person': 49.2% (raw: -4)
+
+DEBUG: cv_run says there are 2 classes
+
+Class 0 'no person' = logit 4
+
+Class 1 'person' = logit -4
+
+Target object not detected.
+
+
+
+IF Task received event 'Message to Master' (0x070d). Rx data = 0x30014948
+
+
+Assert inter-processor interrupt.
+
+Sending 9 bytes: Header 4, payload 3, checksum 2 'NN-'
+
+000: 80 04 03 00 4e 4e 2d 86  58                      ....NN-.X       
+
+Negate inter-processor interrupt.
+
+IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+
+
+Score -4/128 (Threshold 18)
+
+NN processing took 16ms
+
+
+
+
+
+IF Task received event 'I2C Tx' (0x0701). Rx data = 0x00000074
+
+
+I2C transmission complete.
+
+IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+
+
+HM0360 AE regs:
+
+  Integration time = 113 lines
+
+  Analog gain = 0
+
+  Digital gain = 64
+
+  AE Mean = 66
+
+  AEConverged?: Y
+
+
+
+IF Task received event 'Message to Master' (0x070d). Rx data = 0x30014948
+
+
+Assert inter-processor interrupt.
+
+Sending 123 bytes: Header 4, payload 117, checksum 2 'HM0360 AE regs:
+
+  Integration time = 113 lines
+
+  Analog gain = 0
+
+  Digital gain = 64
+
+  AE Mean = 66
+
+  AEConverged?: Y'
+
+000: 80 04 75 00 48 4d 30 33  36 30 20 41 45 20 72 65 ..u.HM0360 AE re
+
+010: 67 73 3a 0a 20 20 49 6e  74 65 67 72 61 74 69 6f gs:.  Integratio
+
+020: 6e 20 74 69 6d 65 20 3d  20 31 31 33 20 6c 69 6e n time = 113 lin
+
+030: 65 73 0a 20 20 41 6e 61  6c 6f 67 20 67 61 69 6e es.  Analog gain
+
+040: 20 3d 20 30 0a 20 20 44  69 67 69 74 61 6c 20 67  = 0.  Digital g
+
+050: 61 69 6e 20 3d 20 36 34  0a 20 20 41 45 20 4d 65 ain = 64.  AE Me
+
+060: 61 6e 20 3d 20 36 36 0a  20 20 41 45 43 6f 6e 76 an = 66.  AEConv
+
+070: 65 72 67 65 64 3f 3a 20  59 58 be                erged?: YX.     
+
+Negate inter-processor interrupt.
+
+IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+
+
+HM0360 woken by motion in 33 blocks:
+
+00 00 10 00 00 00 00 00 00 00 00 80 00 00 00 a0 00 20 00 80 00 60 01 b8 0c f8 10 fc 04 bc 00 00 
+
+IF Task received event 'I2C Tx' (0x0701). Rx data = 0x00000096
+
+
+I2C transmission complete.
+
+IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+
+
+
+
+
+
+IF Task received event 'Message to Master' (0x070d). Rx data = 0x30014948
+
+
+Assert inter-processor interrupt.
+
+Sending 139 bytes: Header 4, payload 133, checksum 2 'HM0360 woken by motion in 33 blocks:
+
+00 00 10 00 00 00 00 00 00 00 00 80 00 00 00 a0 00 20 00 80 00 60 01 b8 0c f8 10 fc 04 bc 00 00 '
+
+000: 80 04 85 00 48 4d 30 33  36 30 20 77 6f 6b 65 6e ....HM0360 woken
+
+010: 20 62 79 20 6d 6f 74 69  6f 6e 20 69 6e 20 33 33  by motion in 33
+
+020: 20 62 6c 6f 63 6b 73 3a  0a 30 30 20 30 30 20 31  blocks:.00 00 1
+
+030: 30 20 30 30 20 30 30 20  30 30 20 30 30 20 30 30 0 00 00 00 00 00
+
+040: 20 30 30 20 30 30 20 30  30 20 38 30 20 30 30 20  00 00 00 80 00 
+
+050: 30 30 20 30 30 20 61 30  20 30 30 20 32 30 20 30 00 00 a0 00 20 0
+
+060: 30 20 38 30 20 30 30 20  36 30 20 30 31 20 62 38 0 80 00 60 01 b8
+
+070: 20 30 63 20 66 38 20 31  30 20 66 63 20 30 34 20  0c f8 10 fc 04 
+
+080: 62 63 20 30 30 20 30 30  20 10 77                bc 00 00 .w     
+
+Negate inter-processor interrupt.
+
+IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+
+
+................
+
+....#...........
+
+................
+
+................
+
+................
+
+...............#
+
+................
+
+.............#.#
+
+.............#..
+
+...............#
+
+.............##.
+
+#..........###.#
+
+..##.......#####
+
+....#.....######
+
+..#.......####.#
+
+................
+
+
+
+AE: p75=84 (target 110) exposure 273->376 gain code 0->0
+
+
+
+IF Task received event 'I2C Tx' (0x0701). Rx data = 0x000000ec
+
+
+I2C transmission complete.
+
+IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+
+
+OK
+
+Directory '/MANIFEST' exists
+
+
+SD card initialised. CWD is '0:/'
+
+Loading configuration: CWD is '0:/MANIFEST'
+
+'CONFIG.TXT' found. (Next image #2088), camera enabled. Flash brightness 5
+
+
+Retaining existing images directory (75 <= 100) '/MEDIA/3f2a9c1e/IMAGES.008'
+
+Directory '/MEDIA/3f2a9c1e/IMAGES.008' exists
+
+
+FatFs setup took 315ms
+
+Inactivity period set at 1000ms
+
+
+
+IF Task received event 'Awake' (0x070f). Rx data = 0x00000000
+
+
+Fast-start record: seq 55 matches CONFIG.TXT
+
+WB auto: means R=42 G=64 B=43 -> gains R x412/256, B x360/256
+
+Colour correction: R x412/256, B x360/256 in 87ms
+
+SW JPEG 21092 bytes in 185ms
+
+EXIF: Adding DeploymentID: 3f2a9c1e-7b4d-4e8a-9c6f-0a1b2c3d4e5f
+
+Added 14 EXIF tags
+
+Writing 22116 bytes (21092 + 1024) to '59200880.JPG' from jpeg buffer of 115860 bytes
+
+Boot timing (motion wake), ms since app_main(): cameras checked 16, scheduler started 40, flash record read 45, SD mounted 349, CONFIG.TXT loaded 354, image dir ready 358, SD ready 360, camera ready 102, capture started 112, frame ready 135, photo queued 638,
+
+IMAGE Task state changed from 'Capturing' (2) to 'NN Processing' (3)
+
+
+IMAGE task sending event 0x0901. Rx data = 0x30023318
+
+
+
+
+
+
+
+IF Task received event 'FreeRTOS Initialised' (0x0710). Rx data = 0x00000000
+
+
+Assert inter-processor interrupt.
+
+Sending 33 bytes: Header 4, payload 27, checksum 2 'Motion 2024-01-01T00:00:08Z'
+
+000: 80 04 1b 00 4d 6f 74 69  6f 6e 20 32 30 32 34 2d ....Motion 2024-
+
+010: 30 31 2d 30 31 54 30 30  3a 30 30 3a 30 38 5a 1e 01-01T00:00:08Z.
+
+020: 8c                                               .               
+
+Negate inter-processor interrupt.
+
+IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+
+
+
+
+FatFS Task received event 'Write image' (0x0901). Rx data = 0x30023318
+
+
+
+
+IF Task received event 'I2C Tx' (0x0701). Rx data = 0x00000266
+
+
+I2C transmission complete.
+
+IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+
+
+
+
+IF Task received event 'I2C Rx' (0x0700). Rx data = 0x00000000
+
+
+
+
+Received I2C message.
+
+000: 80 01 08 00 73 65 6c 66  74 65 73 74 38 a9       ....selftest8.  
+
+MKL62BA command received: 'selftest'
+
+selfTest 0000
+
+IF Task state changed from 'Idle' (1) to 'I2C RX State' (2)
+
+
+
+
+IF Task received event 'String Response' (0x0703). Rx data = 0x30011c70
+
+
+Assert inter-processor interrupt.
+
+Sending 19 bytes: Header 4, payload 13, checksum 2 'selfTest 0000'
+
+000: 80 04 0d 00 73 65 6c 66  54 65 73 74 20 30 30 30 ....selfTest 000
+
+010: 30 7f b8                                         0..             
+
+Negate inter-processor interrupt.
+
+IF Task state changed from 'I2C RX State' (2) to 'I2C TX State' (3)
+
+
+
+
+IF Task received event 'I2C Tx' (0x0701). Rx data = 0x000002d1
+
+
+I2C transmission complete.
+
+IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+
+
+Wrote 22114 byte image to SD: 59200880.JPG at 0:0:8 1/1/2024
+
+File write took 120ms
+
+IMAGE Task received event 'Image Event Disk Write Complete' (0x0a06). Rx data = 0x00000000
+
+
+Current captures completed: 1
+
+Average file write time 120ms
+
+Total frames captured since last reset: 1
+
+
+
+IF Task received event 'Message to Master' (0x070d). Rx data = 0x30014948
+
+
+Assert inter-processor interrupt.
+
+Sending 69 bytes: Header 4, payload 63, checksum 2 'Captured 1 images. Last is 59200880.JPG (File write 120ms avg.)'
+
+000: 80 04 3f 00 43 61 70 74  75 72 65 64 20 31 20 69 ..?.Captured 1 i
+
+010: 6d 61 67 65 73 2e 20 4c  61 73 74 20 69 73 20 35 mages. Last is 5
+
+020: 39 32 30 30 38 38 30 2e  4a 50 47 20 28 46 69 6c 9200880.JPG (Fil
+
+030: 65 20 77 72 69 74 65 20  31 32 30 6d 73 20 61 76 e write 120ms av
+
+040: 67 2e 29 c2 08                                   g.)..           
+
+Negate inter-processor interrupt.
+
+IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+
+
+IMAGE Task state changed from 'NN Processing' (3) to 'Init' (1)
+
+
+
+
+
+FatFS task sending event 0x0a06. Tx data = 0x00000000
+
+
+
+
+IF Task received event 'I2C Tx' (0x0701). Rx data = 0x00000309
+
+
+I2C transmission complete.
+
+IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+
+
+Inactive for 1000ms
+
+IMAGE Task received event 'Image Event Inactivity' (0x0a00). Rx data = 0x00000000
+
+
+IMAGE Task state changed from 'Init' (1) to 'Save State' (5)
+
+
+IMAGE task sending event 0x0904. Rx data = 0x00000000
+
+
+
+
+
+
+
+FatFS Task received event 'Save State' (0x0904). Rx data = 0x00000000
+
+
+Saved state to SD card. Image sequence number = 2089
+
+Fast-start record: written, seq 56 slot 12
+
+IMAGE Task received event 'Image Event Disk Write Complete' (0x0a06). Rx data = 0x00000000
+
+
+Image task ready to sleep.
+
+IMAGE Task state changed from 'Save State' (5) to 'Uninitialised' (0)
+
+
+
+
+
+FatFS task sending event 0x0a06. Tx data = 0x00000000
+
+
+
+
+IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+
+
+Assert inter-processor interrupt.
+
+Sending 121 bytes: Header 4, payload 115, checksum 2 'Sleep 2089 368 8 39 640 1 500 0 1000 5 1 1000 100 0 20 1 18 1 0 76 8 2 5 65 15 0 0 286 326 1 110 1 0 5 0 0 0 376 0 '
+
+000: 80 04 73 00 53 6c 65 65  70 20 32 30 38 39 20 33 ..s.Sleep 2089 3
+
+010: 36 38 20 38 20 33 39 20  36 34 30 20 31 20 35 30 68 8 39 640 1 50
+
+020: 30 20 30 20 31 30 30 30  20 35 20 31 20 31 30 30 0 0 1000 5 1 100
+
+030: 30 20 31 30 30 20 30 20  32 30 20 31 20 31 38 20 0 100 0 20 1 18 
+
+040: 31 20 30 20 37 36 20 38  20 32 20 35 20 36 35 20 1 0 76 8 2 5 65 
+
+050: 31 35 20 30 20 30 20 32  38 36 20 33 32 36 20 31 15 0 0 286 326 1
+
+060: 20 31 31 30 20 31 20 30  20 35 20 30 20 30 20 30  110 1 0 5 0 0 0
+
+070: 20 33 37 36 20 30 20 cf  37                       376 0 .7       
+
+Negate inter-processor interrupt.
+
+IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+
+
+
+
+IF Task received event 'I2C Tx' (0x0701). Rx data = 0x00000ac7
+
+
+I2C transmission complete.
+
+IF task ready to sleep.
+
+DEBUG: ledFlashDisable()
+
+HM0360 MD sensitivity 1
+
+Preparing HM0360 for MD:   HM0360 Motion Detection on! 1000ms frame interval, sensitivity 1, wake threshold 5 cells
+
+
+   Interval of 1000ms gives sleep count = 0x8030
+
+   Changing mode from 2 to 2 with nFrames=1, sleepTime=1000 sleepCount = 0x8030
+
+
+ No LED flashes.
+
+>>> Entering DPD at 2024:01:01 00:00:10
+
+
+
+1st BL Modem Build DATE=Jan 17 2025, Version: 2.12
+
+slot flash_offset 0x00100000
+
+New MemDesp himax_sec_SB_image_process PASS
+
+set_memory_s_ns
+
+HX_DSP_FLAG 1
+
+jump_addr=0x10000000
+
+Compiler Version: ARM GNU, 14.3.1 20250623
+
+
+
+
+**** WW500 MD. (WW500_C02) Built: 14:31:08 Oct 30 2026 ****
+
+
+
+
+Git branch: '261027_XIP_save_state' 7db960e6-dirty
+
+Compiler Version: ARM GNU, 14.3.1 20250623
+
+
+
+Wakeup_event = 0x0000, WakeupEvt1 = 0x0001 WAKE signal
+
+PCA9574 present at 0x20
+
+DEBUG: ledFlashSelectLED(0)
+
+Initialised LED Flash
+
+Camera: RP v3 (IMX708)
+
+Enabling RP SENSOR_ENABLE
+
+HM0360 present at 0x24
+
+Main camera present at 0x1a
+
+Disabling RP SENSOR_ENABLE
+
+### Warm Boot ###
+
+Woke at 2024:01:01 00:00:10 
+
+Motion detected INT_INDIC = 0xc8
+
+Initialising FreeRTOS tasks
+
+Created task 'CLI' Priority 4
+
+Created task 'IFTask' Priority 3
+
+Created task 'IMAGE' Priority 2
+
+Created task 'FAT' Priority 1
+
+FreeRTOS scheduler started.
+
+Starting CLI Task
+
+
+
+Enter 'help' to view a list of available commands.
+
+cmd> Starting IFTask
+
+I2C slave instance 0 configured at address 0x62
+
+I2C buffers have 256 bytes, payload is 244
+
+Inter-processor interrupt pulse short
+
+Starting FatFS Task
+
+Flash ID 0xEF initialised
+
+Fast-start record: seq 56 loaded (32 ops, 0 extra camera registers)
+
+Starting Image Task
+
+Image 2304 x 1296. Raw buffer 460800. JPEG buffer 115860. JPEG compression x4
+
+Enabling RP SENSOR_ENABLE
+
+Initialising IMX708 at 0x1a (p.u. delay 10ms)
+
+
+Mounting FatFS on SD card AE: restored exposure 376 gain code 0
+
+WD1[340a69a0], WD2_J[340a69a0], WD3_RAW[340361a0], JPAuto[34036120]
+
+sensor_type: 15
+
+DEBUG: ledFlashBrightness(5%) [brbits = 0x0]
+
+DEBUG: ledFlashSelectLED(0)
+
+[LS] In ledFlashSetFlashModeFromOpParam with 0 Mode 0
+
+DEBUG: ledFlashDisable()
+
+Model file name in flash is '20V1.TFL'
+
+Image sensor and data path initialised for camera RP v3
+
+  Camera system enabled.
+
+  Neural network starts after the capture.
+
+  Flash LED(s) in use: 0
+
+  Flash brightness: 5%
+
+  Flash is currently not armed.
+
+  Flash duration 100ms
+
+
+  MD sampling: 1000ms.
+
+  Timelapse disabled.
+
+IMAGE Task received event 'Image Event Start Capture' (0x0a01). Rx data = 0x00000001
+
+
+Images to capture: 1
+
+Interval: 500ms
+
+WD1[340a69a0], WD2_J[340a69a0], WD3_RAW[340361a0], JPAuto[34036120]
+
+sensor_type: 15
+
+DEBUG: ledFlashDisable()
+
+g_cursensorstream: 0
+
+Model file name in flash is '20V1.TFL'
+
+Initialising NN with 2412/ETHOS-U 2411 library. Arena size 524288
+
+Ethos-U55 device initialised
+
+Looking for model '20V1.TFL' in flash or SD card
+
+Model file name in flash is '20V1.TFL'
+
+Flash already contains model '20V1.TFL'; loading from flash.
+
+There are 2 classes (2)
+
+Initialised neural network.
+
+NN Initialisation took 12ms
+
+
+
+IMAGE Task state changed from 'Init' (1) to 'Capturing' (2)
+
+
+
+
+
+IMAGE Task received event 'Image Event Frame Ready' (0x0a04). Rx data = 0x00000000
+
+
+DEBUG: ledFlashDisable()
+
+Image capture 1/1 took 25ms
+
+
+
+Input image is 640 x 480 (460800 bytes)
+
+Input tensor is 96 x 96 (1 channels)
+
+Model invoked.
+
+Class 'no person': 54.0% (raw: 18)
+
+Class 'person': 46.5% (raw: -18)
+
+DEBUG: cv_run says there are 2 classes
+
+Class 0 'no person' = logit 18
+
+Class 1 'person' = logit -18
+
+Target object not detected.
+
+
+
+IF Task received event 'Message to Master' (0x070d). Rx data = 0x30014948
+
+
+Assert inter-processor interrupt.
+
+Sending 9 bytes: Header 4, payload 3, checksum 2 'NN-'
+
+000: 80 04 03 00 4e 4e 2d 86  58                      ....NN-.X       
+
+Negate inter-processor interrupt.
+
+IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+
+
+Score -18/128 (Threshold 18)
+
+NN processing took 16ms
+
+
+
+
+
+IF Task received event 'I2C Tx' (0x0701). Rx data = 0x00000075
+
+
+I2C transmission complete.
+
+IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+
+
+HM0360 AE regs:
+
+  Integration time = 376 lines
+
+  Analog gain = 2
+
+  Digital gain = 108
+
+  AE Mean = 73
+
+  AEConverged?: Y
+
+
+
+IF Task received event 'Message to Master' (0x070d). Rx data = 0x30014948
+
+
+Assert inter-processor interrupt.
+
+Sending 124 bytes: Header 4, payload 118, checksum 2 'HM0360 AE regs:
+
+  Integration time = 376 lines
+
+  Analog gain = 2
+
+  Digital gain = 108
+
+  AE Mean = 73
+
+  AEConverged?: Y'
+
+000: 80 04 76 00 48 4d 30 33  36 30 20 41 45 20 72 65 ..v.HM0360 AE re
+
+010: 67 73 3a 0a 20 20 49 6e  74 65 67 72 61 74 69 6f gs:.  Integratio
+
+020: 6e 20 74 69 6d 65 20 3d  20 33 37 36 20 6c 69 6e n time = 376 lin
+
+030: 65 73 0a 20 20 41 6e 61  6c 6f 67 20 67 61 69 6e es.  Analog gain
+
+040: 20 3d 20 32 0a 20 20 44  69 67 69 74 61 6c 20 67  = 2.  Digital g
+
+050: 61 69 6e 20 3d 20 31 30  38 0a 20 20 41 45 20 4d ain = 108.  AE M
+
+060: 65 61 6e 20 3d 20 37 33  0a 20 20 41 45 43 6f 6e ean = 73.  AECon
+
+070: 76 65 72 67 65 64 3f 3a  20 59 97 74             verged?: Y.t    
+
+Negate inter-processor interrupt.
+
+IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+
+
+HM0360 woken by motion in 71 blocks:
+
+06 40 00 80 80 87 c0 17 00 06 00 00 00 00 0f 00 fb 00 b5 01 3f 03 ff 01 ff 00 fe 80 ac 00 00 0
+
+IF Task received event 'I2C Tx' (0x0701). Rx data = 0x00000098
+
+
+I2C transmission complete.
+
+IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+
+
+0 
+
+
+
+IF Task received event 'Message to Master' (0x070d). Rx data = 0x30014948
+
+
+Assert inter-processor interrupt.
+
+Sending 139 bytes: Header 4, payload 133, checksum 2 'HM0360 woken by motion in 71 blocks:
+
+06 40 00 80 80 87 c0 17 00 06 00 00 00 00 0f 00 fb 00 b5 01 3f 03 ff 01 ff 00 fe 80 ac 00 00 00 '
+
+000: 80 04 85 00 48 4d 30 33  36 30 20 77 6f 6b 65 6e ....HM0360 woken
+
+010: 20 62 79 20 6d 6f 74 69  6f 6e 20 69 6e 20 37 31  by motion in 71
+
+020: 20 62 6c 6f 63 6b 73 3a  0a 30 36 20 34 30 20 30  blocks:.06 40 0
+
+030: 30 20 38 30 20 38 30 20  38 37 20 63 30 20 31 37 0 80 80 87 c0 17
+
+040: 20 30 30 20 30 36 20 30  30 20 30 30 20 30 30 20  00 06 00 00 00 
+
+050: 30 30 20 30 66 20 30 30  20 66 62 20 30 30 20 62 00 0f 00 fb 00 b
+
+060: 35 20 30 31 20 33 66 20  30 33 20 66 66 20 30 31 5 01 3f 03 ff 01
+
+070: 20 66 66 20 30 30 20 66  65 20 38 30 20 61 63 20  ff 00 fe 80 ac 
+
+080: 30 30 20 30 30 20 30 30  20 a9 00                00 00 00 ..     
+
+Negate inter-processor interrupt.
+
+IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+
+
+.##...........#.
+
+...............#
+
+.......####....#
+
+......#####.#...
+
+.........##.....
+
+................
+
+................
+
+####............
+
+##.#####........
+
+#.#.##.##.......
+
+######..##......
+
+#########.......
+
+########........
+
+.#######.......#
+
+..##.#.#........
+
+................
+
+
+
+AE: p75=76 (target 110) exposure 376->588 gain code 0->0
+
+OK
+
+Directory '/MANIFEST' exists
+
+
+SD card initialised. CWD is '0:/'
+
+Loading configuration: CWD is '0:/MANIFEST'
+
+'CONFIG.TXT' found. (Next image #2089), camera enabled. Flash brightness 5
+
+
+Retaining existing images directory (76 <= 100) '/MEDIA/3f2a9c1e/IMAGES.008'
+
+Directory '/MEDIA/3f2a9c1e/IMAGES.008' exists
+
+
+FatFs setup took 233ms
+
+Inactivity period set at 1000ms
+
+
+
+IF Task received event 'Awake' (0x070f). Rx data = 0x00000000
+
+
+IF Task unhandled event 'Awake' in 'I2C TX State'
+
+
+
+
+IF Task received event 'I2C Tx' (0x0701). Rx data = 0x000000ee
+
+
+I2C transmission complete.
+
+IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+
+
+Fast-start record: seq 56 matches CONFIG.TXT
+
+WB auto: means R=35 G=49 B=36 -> gains R x379/256, B x329/256
+
+Colour correction: R x379/256, B x329/256 in 87ms
+
+SW JPEG 23089 bytes in 186ms
+
+EXIF: Adding DeploymentID: 3f2a9c1e-7b4d-4e8a-9c6f-0a1b2c3d4e5f
+
+Added 14 EXIF tags
+
+Writing 24113 bytes (23089 + 1024) to '592008B0.JPG' from jpeg buffer of 115860 bytes
+
+Boot timing (motion wake), ms since app_main(): cameras checked 16, scheduler started 40, flash record read 45, SD mounted 267, CONFIG.TXT loaded 272, image dir ready 276, SD ready 281, camera ready 102, capture started 112, frame ready 136, photo queued 559,
+
+IMAGE Task state changed from 'Capturing' (2) to 'NN Processing' (3)
+
+
+IMAGE task sending event 0x0901. Rx data = 0x30023318
+
+
+
+
+
+
+
+IF Task received event 'FreeRTOS Initialised' (0x0710). Rx data = 0x00000000
+
+
+Assert inter-processor interrupt.
+
+Sending 33 bytes: Header 4, payload 27, checksum 2 'Motion 2024-01-01T00:00:11Z'
+
+000: 80 04 1b 00 4d 6f 74 69  6f 6e 20 32 30 32 34 2d ....Motion 2024-
+
+010: 30 31 2d 30 31 54 30 30  3a 30 30 3a 31 31 5a 93 01-01T00:00:11Z.
+
+020: 24                                               $               
+
+Negate inter-processor interrupt.
+
+IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+
+
+
+
+FatFS Task received event 'Write image' (0x0901). Rx data = 0x30023318
+
+
+
+
+IF Task received event 'I2C Tx' (0x0701). Rx data = 0x00000217
+
+
+I2C transmission complete.
+
+IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+
+
+
+
+IF Task received event 'I2C Rx' (0x0700). Rx data = 0x00000000
+
+
+
+
+Received I2C message.
+
+000: 80 01 08 00 73 65 6c 66  74 65 73 74 38 a9       ....selftest8.  
+
+MKL62BA command received: 'selftest'
+
+selfTest 0000
+
+IF Task state changed from 'Idle' (1) to 'I2C RX State' (2)
+
+
+
+
+IF Task received event 'String Response' (0x0703). Rx data = 0x30011c70
+
+
+Assert inter-processor interrupt.
+
+Sending 19 bytes: Header 4, payload 13, checksum 2 'selfTest 0000'
+
+000: 80 04 0d 00 73 65 6c 66  54 65 73 74 20 30 30 30 ....selfTest 000
+
+010: 30 7f b8                                         0..             
+
+Negate inter-processor interrupt.
+
+IF Task state changed from 'I2C RX State' (2) to 'I2C TX State' (3)
+
+
+
+
+IF Task received event 'I2C Tx' (0x0701). Rx data = 0x00000283
+
+
+I2C transmission complete.
+
+IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+
+
+Wrote 24111 byte image to SD: 592008B0.JPG at 0:0:11 1/1/2024
+
+File write took 120ms
+
+IMAGE Task received event 'Image Event Disk Write Complete' (0x0a06). Rx data = 0x00000000
+
+
+Current captures completed: 1
+
+Average file write time 120ms
+
+Total frames captured since last reset: 1
+
+
+
+IF Task received event 'Message to Master' (0x070d). Rx data = 0x30014948
+
+
+Assert inter-processor interrupt.
+
+Sending 69 bytes: Header 4, payload 63, checksum 2 'Captured 1 images. Last is 592008B0.JPG (File write 120ms avg.)'
+
+000: 80 04 3f 00 43 61 70 74  75 72 65 64 20 31 20 69 ..?.Captured 1 i
+
+010: 6d 61 67 65 73 2e 20 4c  61 73 74 20 69 73 20 35 mages. Last is 5
+
+020: 39 32 30 30 38 42 30 2e  4a 50 47 20 28 46 69 6c 92008B0.JPG (Fil
+
+030: 65 20 77 72 69 74 65 20  31 32 30 6d 73 20 61 76 e write 120ms av
+
+040: 67 2e 29 5d 7d                                   g.)]}           
+
+Negate inter-processor interrupt.
+
+IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+
+
+IMAGE Task state changed from 'NN Processing' (3) to 'Init' (1)
+
+
+
+
+
+FatFS task sending event 0x0a06. Tx data = 0x00000000
+
+
+
+
+IF Task received event 'I2C Tx' (0x0701). Rx data = 0x000002bb
+
+
+I2C transmission complete.
+
+IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+
+
+Inactive for 1000ms
+
+IMAGE Task received event 'Image Event Inactivity' (0x0a00). Rx data = 0x00000000
+
+
+IMAGE Task state changed from 'Init' (1) to 'Save State' (5)
+
+
+IMAGE task sending event 0x0904. Rx data = 0x00000000
+
+
+
+
+
+
+
+FatFS Task received event 'Save State' (0x0904). Rx data = 0x00000000
+
+
+Saved state to SD card. Image sequence number = 2090
+
+Fast-start record: written, seq 57 slot 13
+
+IMAGE Task received event 'Image Event Disk Write Complete' (0x0a06). Rx data = 0x00000000
+
+
+Image task ready to sleep.
+
+IMAGE Task state changed from 'Save State' (5) to 'Uninitialised' (0)
+
+
+
+
+
+FatFS task sending event 0x0a06. Tx data = 0x00000000
+
+
+
+
+IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+
+
+Assert inter-processor interrupt.
+
+Sending 121 bytes: Header 4, payload 115, checksum 2 'Sleep 2090 369 8 39 641 1 500 0 1000 5 1 1000 100 0 20 1 18 1 0 77 8 2 5 65 15 0 0 286 326 1 110 1 0 5 0 0 0 588 0 '
+
+000: 80 04 73 00 53 6c 65 65  70 20 32 30 39 30 20 33 ..s.Sleep 2090 3
+
+010: 36 39 20 38 20 33 39 20  36 34 31 20 31 20 35 30 69 8 39 641 1 50
+
+020: 30 20 30 20 31 30 30 30  20 35 20 31 20 31 30 30 0 0 1000 5 1 100
+
+030: 30 20 31 30 30 20 30 20  32 30 20 31 20 31 38 20 0 100 0 20 1 18 
+
+040: 31 20 30 20 37 37 20 38  20 32 20 35 20 36 35 20 1 0 77 8 2 5 65 
+
+050: 31 35 20 30 20 30 20 32  38 36 20 33 32 36 20 31 15 0 0 286 326 1
+
+060: 20 31 31 30 20 31 20 30  20 35 20 30 20 30 20 30  110 1 0 5 0 0 0
+
+070: 20 35 38 38 20 30 20 98  23                       588 0 .#       
+
+Negate inter-processor interrupt.
+
+IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+
+
+
+
+IF Task received event 'I2C Tx' (0x0701). Rx data = 0x00000a7a
+
+
+I2C transmission complete.
+
+IF task ready to sleep.
+
+DEBUG: ledFlashDisable()
+
+HM0360 MD sensitivity 1
+
+Preparing HM0360 for MD:   HM0360 Motion Detection on! 1000ms frame interval, sensitivity 1, wake threshold 5 cells
+
+
+   Interval of 1000ms gives sleep count = 0x8030
+
+   Changing mode from 2 to 2 with nFrames=1, sleepTime=1000 sleepCount = 0x8030
+
+
+ No LED flashes.
+
+>>> Entering DPD at 2024:01:01 00:00:13
+
+
+
+1st BL Modem Build DATE=Jan 17 2025, Version: 2.12
+
+slot flash_offset 0x00100000
+
+New MemDesp himax_sec_SB_image_process PASS
+
+set_memory_s_ns
+
+HX_DSP_FLAG 1
+
+jump_addr=0x10000000
+
+Compiler Version: ARM GNU, 14.3.1 20250623
+
+
+
+
+**** WW500 MD. (WW500_C02) Built: 14:31:08 Oct 30 2026 ****
+
+
+
+
+Git branch: '261027_XIP_save_state' 7db960e6-dirty
+
+Compiler Version: ARM GNU, 14.3.1 20250623
+
+
+
+Wakeup_event = 0x0000, WakeupEvt1 = 0x0001 WAKE signal
+
+PCA9574 present at 0x20
+
+DEBUG: ledFlashSelectLED(0)
+
+Initialised LED Flash
+
+Camera: RP v3 (IMX708)
+
+Enabling RP SENSOR_ENABLE
+
+HM0360 present at 0x24
+
+Main camera present at 0x1a
+
+Disabling RP SENSOR_ENABLE
+
+### Warm Boot ###
+
+Woke at 2024:01:01 00:00:13 
+
+BLE wake
+
+Initialising FreeRTOS tasks
+
+Created task 'CLI' Priority 4
+
+Created task 'IFTask' Priority 3
+
+Created task 'IMAGE' Priority 2
+
+Created task 'FAT' Priority 1
+
+FreeRTOS scheduler started.
+
+Starting CLI Task
+
+
+
+Enter 'help' to view a list of available commands.
+
+cmd> Starting IFTask
+
+I2C slave instance 0 configured at address 0x62
+
+I2C buffers have 256 bytes, payload is 244
+
+Inter-processor interrupt pulse short
+
+Starting FatFS Task
+
+Flash ID 0xEF initialised
+
+Fast-start record: seq 57 loaded (32 ops, 0 extra camera registers)
+
+Starting Image Task
+
+Image 2304 x 1296. Raw buffer 460800. JPEG buffer 115860. JPEG compression x4
+
+Enabling RP SENSOR_ENABLE
+
+Initialising IMX708 at 0x1a (p.u. delay 10ms)
+
+
+Mounting FatFS on SD card AE: restored exposure 588 gain code 0
+
+WD1[340a69a0], WD2_J[340a69a0], WD3_RAW[340361a0], JPAuto[34036120]
+
+sensor_type: 15
+
+DEBUG: ledFlashBrightness(5%) [brbits = 0x0]
+
+DEBUG: ledFlashSelectLED(0)
+
+[LS] In ledFlashSetFlashModeFromOpParam with 0 Mode 0
+
+DEBUG: ledFlashDisable()
+
+Model file name in flash is '20V1.TFL'
+
+Initialising NN with 2412/ETHOS-U 2411 library. Arena size 524288
+
+Ethos-U55 device initialised
+
+Looking for model '20V1.TFL' in flash or SD card
+
+Model file name in flash is '20V1.TFL'
+
+Flash already contains model '20V1.TFL'; loading from flash.
+
+There are 2 classes (2)
+
+Initialised neural network.
+
+NN Initialisation took 12ms
+
+
+
+Image sensor and data path initialised for camera RP v3
+
+  Camera system enabled.
+
+  Neural network enabled.
+
+  Flash LED(s) in use: 0
+
+  Flash brightness: 5%
+
+  Flash is currently not armed.
+
+  Flash duration 100ms
+
+
+  MD sampling: 1000ms.
+
+  Timelapse disabled.
+
+OK
+
+Directory '/MANIFEST' exists
+
+
+SD card initialised. CWD is '0:/'
+
+Loading configuration: CWD is '0:/MANIFEST'
+
+'CONFIG.TXT' found. (Next image #2090), camera enabled. Flash brightness 5
+
+
+Retaining existing images directory (77 <= 100) '/MEDIA/3f2a9c1e/IMAGES.008'
+
+Directory '/MEDIA/3f2a9c1e/IMAGES.008' exists
+
+
+FatFs setup took 233ms
+
+Inactivity period set at 1000ms
+
+
+
+IF Task received event 'Awake' (0x070f). Rx data = 0x00000000
+
+
+Fast-start record: seq 57 matches CONFIG.TXT
+
+
+
+IF Task received event 'FreeRTOS Initialised' (0x0710). Rx data = 0x00000000
+
+
+Assert inter-processor interrupt.
+
+Sending 31 bytes: Header 4, payload 25, checksum 2 'Wake 2024-01-01T00:00:14Z'
+
+000: 80 04 19 00 57 61 6b 65  20 32 30 32 34 2d 30 31 ....Wake 2024-01
+
+010: 2d 30 31 54 30 30 3a 30  30 3a 31 34 5a 22 c7    -01T00:00:14Z". 
+
+Negate inter-processor interrupt.
+
+IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+
+
+
+
+IF Task received event 'I2C Tx' (0x0701). Rx data = 0x000000f9
+
+
+I2C transmission complete.
+
+IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+
+
+
+
+IF Task received event 'I2C Rx' (0x0700). Rx data = 0x00000000
+
+
+
+
+Received I2C message.
+
+000: 80 01 08 00 73 65 6c 66  74 65 73 74 38 a9       ....selftest8.  
+
+MKL62BA command received: 'selftest'
+
+selfTest 0000
+
+IF Task state changed from 'Idle' (1) to 'I2C RX State' (2)
+
+
+
+
+IF Task received event 'String Response' (0x0703). Rx data = 0x30011c70
+
+
+Assert inter-processor interrupt.
+
+Sending 19 bytes: Header 4, payload 13, checksum 2 'selfTest 0000'
+
+000: 80 04 0d 00 73 65 6c 66  54 65 73 74 20 30 30 30 ....selfTest 000
+
+010: 30 7f b8                                         0..             
+
+Negate inter-processor interrupt.
+
+IF Task state changed from 'I2C RX State' (2) to 'I2C TX State' (3)
+
+
+
+
+IF Task received event 'I2C Tx' (0x0701). Rx data = 0x0000015b
+
+
+I2C transmission complete.
+
+IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+
+
+
+
+IF Task received event 'I2C Rx' (0x0700). Rx data = 0x00000000
+
+
+
+
+Received I2C message.
+
+000: 80 01 0a 00 73 65 74 6f  70 20 31 31 20 30 d7 35 ....setop 11 0.5
+
+MKL62BA command received: 'setop 11 0'
+
+Set OpParam 11 = 0
+
+IF Task state changed from 'Idle' (1) to 'I2C RX State' (2)
+
+
+
+
+IF Task received event 'String Response' (0x0703). Rx data = 0x30011c70
+
+
+Assert inter-processor interrupt.
+
+Sending 24 bytes: Header 4, payload 18, checksum 2 'Set OpParam 11 = 0'
+
+000: 80 04 12 00 53 65 74 20  4f 70 50 61 72 61 6d 20 ....Set OpParam 
+
+010: 31 31 20 3d 20 30 3e 8c                          11 = 0>.        
+
+Negate inter-processor interrupt.
+
+IF Task state changed from 'I2C RX State' (2) to 'I2C TX State' (3)
+
+
+
+
+FatFS Task received event 'Save config' (0x0908). Rx data = 0x00000000
+
+
+
+
+IF Task received event 'I2C Tx' (0x0701). Rx data = 0x000001be
+
+
+I2C transmission complete.
+
+IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+
+
+Config saved (op params persisted).
+
+Inactive for 1000ms
+
+IMAGE Task received event 'Image Event Inactivity' (0x0a00). Rx data = 0x00000000
+
+
+IMAGE Task state changed from 'Init' (1) to 'Save State' (5)
+
+
+IMAGE task sending event 0x0904. Rx data = 0x00000000
+
+
+
+
+
+
+
+FatFS Task received event 'Save State' (0x0904). Rx data = 0x00000000
+

@@ -214,6 +214,10 @@ then measure the RTC rate against the host clock for 100 s+ - all of these rever
 **The trim does not survive DPD or a power-cycle** - it reads back at the hardware default after either, so to
 use 33 it would need setting again every boot (e.g. in `app_main()`/`rtc_util_init()`). Not done; no code changed.
 
+**Later finding (ww500_md, 30 October 2026): the trim has no effect on the DPD wake alarm.** Set to 33 just before
+DPD, the sleep was the same as at 31. The default trim also differs between chips (28 on one board). ww500_md
+instead measures the oscillator against the crystal while awake and corrects the alarm (`ww500_md/rtc_cal.c`).
+
 ### FreeRTOS tick accuracy: crystal vs the 24 MHz RC oscillator
 
 The FreeRTOS tick is accurate when the CPU runs from the crystal-fed PLL (about -10 ppm at 400 MHz - see

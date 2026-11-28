@@ -1,6 +1,6 @@
 # WW500 BLE commands
 #### CGP - 25 November 2025
-#### Updated 28 September 2026 (`AI ble`, by Claude); 1 September 2026 (`AI light` and the `AE light check` line) and 3 September 2026 (the gain-based wording from ee65771f, checked against e8b7feb5) by Claude, reviewed by Victor Anton
+#### Updated 7 November 2026 (`AI sdused`, `selftest` bit 15, by Claude); 25 October 2026 (`AI interval`, op range check, by Claude); 28 September 2026 (`AI ble`, by Claude); 1 September 2026 (`AI light` and the `AE light check` line) and 3 September 2026 (the gain-based wording from ee65771f, checked against e8b7feb5) by Claude, reviewed by Victor Anton
 
 When the smartphone app establishes a BLE connection to the WW500 it can send and receive messages.
 The messages that it sends are treated as commands to the WW500. The messages it receives are 
@@ -161,15 +161,19 @@ The "Reqd?" column indicates whether the command should be implemented by the ap
 | AI status      |               | Reports whether the camera is enabled         | Y     |
 | AI getop       | n             | Requests the value of Operational Parameter n | Y, 1  |
 | AI setop       | n m           | Sets the value of Operational Parameter n to m | Y, 1   |
-| AI capture     | n m           | Trigger capture of n images at m millisecond intervals  | Y     |
+| AI capture     | n m           | Trigger capture of n images at m millisecond intervals  | Y, 7  |
+| AI interval    | ms            | Changes the interval of the capture in progress from the next image: `Interval N ms from the next image`, or `No capture in progress: the next 'capture' sets the interval`. Not saved. Used by the live viewer | -     |
 | AI txfile      | filename, or '.' | File contents returned in several chunks   | Y, 2  |
-| AI camreg      | addr [val]    | Read or write a camera sensor register (hex). Writes are saved to the SD card and re-applied at every sensor init. Also `AI camreg list` and `AI camreg clear` | 3 |
+| AI camreg      | addr [val]    | Read or write a camera sensor register (hex). Writes are saved to the SD card (and copied to the fast-start record in flash at sleep) and re-applied at every sensor init. Also `AI camreg list` and `AI camreg clear` | 3 |
 | AI vcm         | pos           | Set focus lens position 0-1023 (RP3 camera only). `AI vcm probe` checks the actuator is present | 3 |
 | AI light       |               | Requests a fresh HM0360 light-sensor reading. Replies **immediately** with `Checking light level...`; the reading itself arrives later as asynchronous telemetry | 5 |
 | AI slots       |               | Reports the active firmware slot and the camera variant in each slot, e.g. `Active slot 0 running 'RP3 (day/colour)'. Slot A: 'RP3 (day/colour)', Slot B: 'HM0360 (night/IR)'. Auto-switch: on` | Y, 4 |
 | AI switchslot  |               | Boots the firmware image in the other slot (day/night camera change). Response `Switched to slot n ('variant'). Reset scheduled.` — the device resets when it next sleeps | Y, 4 |
 | AI firmware    | file [0xCRC]  | Writes `/MANIFEST/<file>` to the INACTIVE firmware slot, verifies it and updates the slot selector; `AI reset` boots it. With the optional CRC16-CCITT the file is checked before flash is touched. Used twice (once per camera image) by the app's "Update both cameras" flow — see [firmware_update_and_recovery.md](firmware_update_and_recovery.md) | Y, 4 |
+| AI xipstate    | [test]        | Lists the flash records: each fast-start settings record (sequence number, ops) and the board record (RTC calibration). `test` runs a write and read-back test of the fast-start sector | - |
+| AI rtccal      | [measure \| on \| off] | `RTC calibration: N ppm (P %), measured S RTC s ago.` The RC32K clock's error, measured against the crystal and used to correct the sleep (#245). `measure` measures now (busy up to 3 s), `off` stops the correction, `on` restores it | - |
 | AI ble         | [clear]       | `BLE processor responsive`, or `BLE processor unresponsive: messages to it are not sent`. `clear` clears that flag | -, 6 |
+| AI sdused      |               | `sdused N`: % of the SD card used. 0 = nothing used, 100 = no free space left, 1 to 99 between. `sdused 255` = unknown (no card, mount failed). Works with no card, unlike the SD commands such as `AI info`. Early in a wake it waits for the SD card start-up (up to about 0.7 s with no card). For the LoRaWAN health message | - |
 
 Note that there are addition commands that could be run on the AI processor, not documented here.
 These can be seen by typing "help" at the console. 
@@ -180,6 +184,7 @@ __Notes:__
      - Get value: `AI getop 19`
      - Set value: `AI setop 19 2`
      - ❌ **Common mistake:** Omitting the `AI` prefix will result in "Unrecognised" error
+   - Ops 17 and 33 are range-checked: an invalid value is refused with `Error: N is not a valid value for op M.` (24 October 2026)
 2. See separate document [txfile.md](txfile.md) for the details.
 3. Camera tuning commands added for bench/field validation of exposure, gain, white balance and focus.
    See [camera-phase0-bench-runbook.md](camera-phase0-bench-runbook.md) and [camera-field-tuning-roadmap.md](camera-field-tuning-roadmap.md).
@@ -211,20 +216,36 @@ __Notes:__
    the auto camera-switch check, so it is the cheap way to measure light. Taking a normal
    capture purely to force a reading is no longer necessary.
 6. **`ble` is a console diagnostic** (28 September 2026), for boards without a BLE processor. After each boot the AI
-   processor sends its first message ("Wake ...", "Timer ..." or "MD ...") with a 300 ms timeout (`BLE_PROBE_TIME` in
+   processor sends its first message ("Wake ...", "Timer ..." or "Motion ...") with a 300 ms timeout (`BLE_PROBE_TIME` in
    `if_task.c`; later messages keep the 4000 ms `MISSINGMASTERTIME`). If the BLE processor does not read it, the AI
-   processor treats it as unresponsive: it sends it nothing more (no `/IP_INT` pulse, no I2C data, no "Sleep" message)
-   and enters DPD without it. The flag is cleared if the BLE processor sends a command, by `ble clear`, or at the next
+   processor treats it as unresponsive: it sends it nothing more (no `/IP_INT` signal, no I2C data, no "Sleep" message)
+   and enters DPD without it. Since 3 November 2026 the first message itself stays waiting (`/IP_INT` low) for the
+   full 4000 ms, and a late read clears the flag. The flag is cleared if the BLE processor sends a command, by `ble clear`, or at the next
    boot. Not needed by the app: an app that can send `AI ble` has a working BLE processor, so the answer is always
-   "responsive". The flag is also self test bit 14 (`SELF_TEST_AI_NO_BLE`, 0x4000) in the AI processor's `selfTest.h`.
-   The self test bit list is shared with the BLE processor (`ww-hardware`, `selfTest.h`) and the app, which do not have
-   bit 14 yet.
+   "responsive". When the flag is set, self test bit 14 (`SELF_TEST_AI_NO_BLE`, 0x4000) is set too, but the bit is not
+   cleared with the flag: it stays set until a final `selftest` reply (bit 15 clear, see below) has carried it (from the BLE processor or the console),
+   so a BLE processor that was only late still learns of it from its `selftest` on that wake (#246, 4 November 2026).
+   `ble clear` clears only the flag. The self test bit list is shared with the BLE processor (`ww-hardware`,
+   `selfTest.h`) and the app.
+7. **`selftest` bit 15 (`SELF_TEST_AI_PROVISIONAL`, 0x8000)** (7 November 2026, #290). On a warm boot "Wake" goes before the
+   SD card is mounted, so a `selftest` answered then cannot know bit 11 (no SD card). Such a reply has bit 15 set. When the
+   SD card start-up finishes (about 0.2 s after "Wake" with a card, 0.7 s without) the AI processor sends the final
+   `selfTest xxxx`, bit 15 clear, without being asked. Treat bit 15 as "checking", not a fault.
 
 __Other AI Processor Commands__
 
 If you type "help" at the console of the AI processor you will see all of the commands that the AI processor has.
 Only some have been documented in the table above. All of them can be issued via the app by prefixing "AI ".
 Some might be useful in due course, such as those for navigating the file system.
+7. **No captures between a cold boot and the first sleep (13 October 2026).** `AI capture` and
+   `AI light` reply `Error: no captures until after the first sleep.` if the AI processor has
+   cold-booted and not yet been through DPD. A cold boot follows power-on, RESET, `AI reset`,
+   `AI switchslot` and a firmware update. The AI processor sleeps by itself after the inactivity
+   period (op 8), and the next command wakes it. They also reply `Error: going to sleep, try again.`
+   in the few seconds between the AI processor starting to prepare for sleep and its "Sleep"
+   message (#296, 25 November 2026). Send the command again after "Sleep" and it wakes the AI processor.
+   `AI setop`, `AI setdid`, `AI setgps` and `AI md` give the same reply in that time, as the settings
+   have already been saved and a change would be lost (#207, 27 November 2026).
 
 ## Asynchronous Messages
 
@@ -244,9 +265,11 @@ Some of these messages are documented un the table below.
 | Wake      |                               |          | Sent by AI processor when it leaves DPD.             |
 | Sleep     |                               |          | Sent by AI processor when it enters DPD.             |
 | NN+       |                               | ```NN+``` | Sent by AI processor when the NN detects its target. |
-| NN+       |                               | ```NN-``` | Sent by AI processor when the NN does not detect its target. |
+| NN-       |                               | ```NN-``` | Sent by AI processor when the NN does not detect its target. |
 | Captured  |                               | ```Captured 3 images. Last is MD000708.JPG``` | Sent by AI processor when a sequence of image captures completes. |
+| Capture failed |                          | ```Capture failed after 1 of 3 images: EDM WDT2 timeout``` | Sent by AI processor when a sequence of image captures is abandoned. `Captured` is not sent. The text after the colon is the reason. |
 | HM0360 AE regs | multi-line               | ```HM0360 AE regs:```<br>```  Integration time = 376 lines```<br>```  Analog gain = 4```<br>```  Digital gain = 192```<br>```  AE Mean = 12```<br>```  AEConverged?: N``` | Raw auto-exposure registers, sent after each capture and after each light check. The app already parses these. |
+| HM0360 motion |                           | ```HM0360 woken by motion in 7 blocks:```<br>```00 00 1c 00 ...``` (32 hex bytes)<br>```HM0360 motion in 5 blocks:```<br>```00 00 08 00 ...``` | The HM0360 motion-detection grid (16 x 16 cells, one bit per cell). `woken by motion` (added 26 October 2026) is sent once after a motion wake, after the first image: the cells that woke the device. `motion in` follows each image from the second of a burst (since 26 October 2026; the first image's grid is always empty, as there is no earlier frame to compare with). |
 | AE light check |                          | ```AE light check: AGain = 2, conv=Y -> BRIGHT (change)``` | The **decision** and its inputs, in one line. Sent after every light check: always for `AI light` and the op24 timer wake, and after a capture only when something consumes the decision (op13 selects a LED, or op26 = 1). Otherwise a capture sends the regs block and no decision line. Two wordings depending on the build; see the note below. |
 
 
@@ -319,11 +342,18 @@ But that assumes it has LoRaWAN connectivity, which not all devices will have.
 * In the absence of either external time source the BLE processor will retain a reasonably accurate time over weeks, 
 with its accurate crystal.
 * After power-on and until the BLE processor gets the time from the app or LoRaWAN its time starts at midnight on 1 Jan 2024.  
-* The BLE processor passes its UTC time to the AI processor every few minutes. The AI processor can thus have a 
-reasonably accurate time for purposes of timestamping images.
+* The BLE processor sends `setutc` to the AI processor on every wake, after `selftest`, if it has the time (since
+1 Nov 2026, issue #56; before that only when the two clocks differed by more than 300 s). The AI processor stamps its
+photos from that time plus the ticks since it, and the file names, file dates and `AI getutc` use it too. The first
+photo of a wake waits up to 300 ms for it, then uses the AI processor's own clock.
 * From the app's point of view, it should send the UTC time whenever it connects, in a command like this: `setutc 2025-01-01T01:02:03Z`.
-* At present, the `setutc` command results in two responses - first from the BLE processor then from the AI processor. For some reason
-the AI processor RTC setting takes 1-2 seconds, and the response reports this duration.
+* At present, the `setutc` command results in two responses - first from the BLE processor then from the AI processor.
+* On the AI processor `setutc` no longer writes the RTC at once (the write blocks its interrupts for about 1.4 s): the RTC
+is written at the next sleep, only if more than 10 minutes out or never set. The reply is `RTC set to <time> (was out by N s)`,
+without the bracket in the first second after a wake (the RTC may still read the time at sleep); the `RTC set ` prefix is
+what the BLE processor matches.
+* Commands from the BLE processor that change settings (e.g. `setop`) are held on the AI processor until CONFIG.TXT has
+loaded, about 250 ms after a wake; `selftest`, `setutc`, `getutc` and `ver` run at once.
 * If the app wants to read the time back from the BLE and/or AI processor it can (no need to, I think): `getutc` will read 
 the BLE processor time and `AI getutc` will read the AI processor time.  
 * I have provided functions on the AI processor for creating the timestamp in a format suitable for inclusion in EXIF. I understand that 

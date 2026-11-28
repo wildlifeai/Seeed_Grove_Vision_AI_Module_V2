@@ -1,0 +1,11 @@
+path,label
+_Tools/nnfiles_example_cat/frames/cat_1.jpg,cat
+_Tools/nnfiles_example_cat/frames/cat_2.jpg,cat
+_Tools/nnfiles_example_cat/frames/cat_3.jpg,cat
+_Tools/nnfiles_example_cat/frames/cat_4.jpg,cat
+_Tools/nnfiles_example_cat/frames/cat_5.jpg,cat
+_Tools/nnfiles_example_cat/frames/possum.jpg,not cat
+_Tools/nnfiles_example_cat/frames/rabbit.jpg,not cat
+_Tools/nnfiles_example_cat/frames/hedgehog.jpg,not cat
+_Tools/nnfiles_example_cat/frames/bird.jpg,not cat
+_Tools/nnfiles_example_cat/frames/empty.jpg,not cat

@@ -37,9 +37,7 @@
 #define AE_REG_GAIN_L		0x0205
 
 #define AE_EXPOSURE_DEFAULT	0x0940	// the init-table value (IMX708_EXPOSURE_SETTING)
-#define AE_EXPOSURE_MIN		8		// lines (bright daylight needs very short exposures)
-#define AE_EXPOSURE_MAX		5000	// lines (bench-verified; frame time grows beyond)
-#define AE_GAIN_CODE_MAX	960		// 16x  (gain = 1024 / (1024 - code))
+// AE_EXPOSURE_MIN, AE_EXPOSURE_MAX and AE_GAIN_CODE_MAX are in ae.h (they are also the op 37/38 ranges)
 #define AE_GAIN_Q8_UNITY	256
 #define AE_GAIN_Q8_MAX		4096	// 16x in Q8.8
 
@@ -128,16 +126,38 @@ static void writeReg16(uint16_t regH, uint16_t value) {
 /*********************************************** Global Function Definitions *********************************/
 
 /**
- * @brief Reset AE state to the sensor's table defaults.
+ * @brief Restart AE after a sensor init, from the saved exposure if there is one.
  *
- * Call after a full sensor init (cisdp_sensor_init(true)) - the registers
- * have just reverted, so the loop must restart from the table values.
+ * Call after a full sensor init (cisdp_sensor_init(true)) and the staged
+ * register file - the registers have just reverted to the tables. If AE is on
+ * and ops 37/38 hold a saved exposure and gain, they are written to the sensor
+ * and the loop continues from them; otherwise it restarts from the table values.
  */
 void ae_notifySensorInit(void) {
+	uint16_t savedExposure = fatfs_getOperationalParameter(OP_PARAMETER_CAM_AE_EXPOSURE);
+	uint16_t savedGainCode = fatfs_getOperationalParameter(OP_PARAMETER_CAM_AE_GAIN);
+
 	// Registers just reverted to the init tables (+ any camreg staged file)
 	curExposure = AE_EXPOSURE_DEFAULT;
 	curGainCode = 0;
 	stepsThisWake = 0;
+
+	// AE off: leave the table (and staged) values alone
+	if (fatfs_getOperationalParameter(OP_PARAMETER_CAM_AE_ENABLE) == 0) {
+		return;
+	}
+	// 0 = none saved (first boot, new card). Load_configuration() and setop keep them in range,
+	// but check again since a wrong value goes straight to the sensor
+	if ((savedExposure < AE_EXPOSURE_MIN) || (savedExposure > AE_EXPOSURE_MAX)
+			|| (savedGainCode > AE_GAIN_CODE_MAX)) {
+		return;
+	}
+
+	writeReg16(AE_REG_EXPOSURE_H, savedExposure);
+	writeReg16(AE_REG_GAIN_H, savedGainCode);
+	curExposure = savedExposure;
+	curGainCode = savedGainCode;
+	xprintf("AE: restored exposure %d gain code %d\n", (int)curExposure, (int)curGainCode);
 }
 
 /**
@@ -222,6 +242,9 @@ bool ae_process(uint32_t yAddr, uint16_t w, uint16_t h) {
 		writeReg16(AE_REG_GAIN_H, (uint16_t)newGainCode);
 		curGainCode = (uint16_t)newGainCode;
 	}
+	// Keep them for the next wake (CONFIG.TXT is saved before DPD)
+	fatfs_setOperationalParameter(OP_PARAMETER_CAM_AE_EXPOSURE, (int16_t)curExposure);
+	fatfs_setOperationalParameter(OP_PARAMETER_CAM_AE_GAIN, (int16_t)curGainCode);
 	stepsThisWake++;
 	return true;
 }

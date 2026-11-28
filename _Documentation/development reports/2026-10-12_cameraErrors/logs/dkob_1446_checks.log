@@ -1,0 +1,970 @@
+# DKOB, 13 Oct 14:46, PR #275 187302ce built locally: flash RP3 + HM0360, then on each build a capture after a cold boot (refused), hardfault, freeze, reset, switchslot. '##### CHECK' lines give the results
+##### 14:46:11.934 PRESS RESET on the board now
+[14:46:43.220] \x001st BL Modem Build DATE=Jan 17 2025, Version: 2.12
+[14:46:43.409] Please input any key to enter X-Modem mode in 30 ms
+[14:46:43.409] waiting input key
+##### 14:46:43.409 bootloader reset seen
+[14:46:43.425] Set X-modem flag = Yes, OTA from UART(0)
+[14:46:43.425] slot flash_offset 0x00000000
+[14:46:43.425] jump_addr=0x3401f000
+[14:46:43.425] 2nd BL Build DATE=Jan  7 2025, Version: 2.03
+[14:46:43.425] set_IP_secure done
+[14:46:43.441] flash type[2], flash size[5]
+[14:46:43.441] slot FlashOffset 0x00100000
+[14:46:43.441] Image max size 0x00100000
+[14:46:43.441] ------------------------------------------------------------
+[14:46:43.441] [0] Reboot system
+[14:46:43.441] [1] Xmodem download and burn FW image
+[14:46:43.441] [2] Debug mode, switch TXD(PB7) to SWDCLK, D2(PB8) to SWDIO
+[14:46:43.441] ------------------------------------------------------------
+[14:46:43.441] !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+[14:46:43.441] !!  Please keep the power on during the program upgrade process  !!
+[14:46:43.441] !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+[14:46:43.441] Send data using the xmodem protocol from your terminal
+##### 14:46:43.441 bootloader in XMODEM download mode
+##### 14:46:43.442 sending C:\Users\Victor\AppData\Local\Temp\claude\C--Users-ww\4734aec8-67a9-407b-8080-2dd46f8ce1d4\scratchpad\ribbon\fw_pr275\R6A13E41.IMG
+##### 14:46:59.522 xmodem send R6A13E41.IMG: OK
+[14:46:59.540] \x06
+[14:46:59.585] backup slot header
+[14:46:59.710] Do you want to end file transmission and reboot system? (y)
+[14:47:00.022] \x001st BL Modem Build DATE=Jan 17 2025, Version: 2.12
+[14:47:00.053] Please input any key to enter X-Modem mode in 30 ms
+[14:47:00.053] waiting input key
+##### 14:47:00.053 bootloader reset seen
+[14:47:00.068] Set X-modem flag = Yes, OTA from UART(0)
+[14:47:00.068] slot flash_offset 0x00100000
+[14:47:00.068] jump_addr=0x3401f000
+[14:47:00.068] 2nd BL Build DATE=Jan  7 2025, Version: 2.03
+[14:47:00.068] set_IP_secure done
+[14:47:00.068] flash type[2], flash size[5]
+[14:47:00.083] slot FlashOffset 0x00000000
+[14:47:00.083] Image max size 0x00100000
+[14:47:00.083] ------------------------------------------------------------
+[14:47:00.083] [0] Reboot system
+[14:47:00.083] [1] Xmodem download and burn FW image
+[14:47:00.083] [2] Debug mode, switch TXD(PB7) to SWDCLK, D2(PB8) to SWDIO
+[14:47:00.083] ------------------------------------------------------------
+[14:47:00.083] !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+[14:47:00.083] !!  Please keep the power on during the program upgrade process  !!
+[14:47:00.083] !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+[14:47:00.083] Send data using the xmodem protocol from your terminal
+##### 14:47:00.083 bootloader in XMODEM download mode
+##### 14:47:00.084 sending C:\Users\Victor\AppData\Local\Temp\claude\C--Users-ww\4734aec8-67a9-407b-8080-2dd46f8ce1d4\scratchpad\ribbon\fw_pr275\H6A13E43.IMG
+##### 14:47:13.577 xmodem send H6A13E43.IMG: OK
+[14:47:13.580] \x06
+[14:47:13.627] backup slot header
+[14:47:13.767] Do you want to end file transmission and reboot system? (y)
+[14:47:14.081] \x001st BL Modem Build DATE=Jan 17 2025, Version: 2.12
+[14:47:14.112] Please input any key to enter X-Modem mode in 30 ms
+[14:47:14.112] waiting input key...
+[14:47:14.143] slot flash_offset 0x00000000
+[14:47:14.143] New MemDesp himax_sec_SB_image_process PASS
+[14:47:14.143] set_memory_s_ns
+[14:47:14.143] HX_DSP_FLAG 1
+[14:47:14.159] jump_addr=0x10000000
+[14:47:14.173] Compiler Version: ARM GNU, 14.3.1 20250623
+[14:47:14.173] **** WW500 MD. (WW500_C02) Built: 14:44:04 Oct 13 2026 ****
+[14:47:14.173] Git branch: 'nogit' nogit-dirty
+[14:47:14.173] Compiler Version: ARM GNU, 14.3.1 20250623
+[14:47:14.173] Wakeup_event = 0x0000, WakeupEvt1 = 0x0000 Cold boot
+[14:47:14.173] PCA9574 present at 0x20
+[14:47:14.173] DEBUG: ledFlashSelectLED(0)
+[14:47:14.173] Initialised LED Flash
+[14:47:14.173] ### Cold Boot ###
+[14:47:14.173] FreeRTOS tickless idle is enabled. configMAX_PRIORITIES = 5
+[14:47:15.629] Camera: HM0360
+[14:47:15.629] Disabling RP SENSOR_ENABLE
+[14:47:15.629] HM0360 present at 0x24
+[14:47:15.629] Main camera present at 0x24
+[14:47:15.629] Initialising FreeRTOS tasks
+[14:47:15.629] Created task 'CLI' Priority 4
+[14:47:15.629] Created task 'IFTask' Priority 3
+[14:47:15.629] Created task 'FAT' Priority 2
+[14:47:15.629] Created task 'IMAGE' Priority 1
+[14:47:15.629] FreeRTOS scheduler started.
+[14:47:15.629] Starting CLI Task
+[14:47:15.629] Enter 'help' to view a list of available commands.
+[14:47:15.629] cmd> Starting IFTask
+[14:47:15.629] I2C slave instance 0 configured at address 0x62
+[14:47:15.629] I2C buffers have 256 bytes, payload is 244
+[14:47:15.629] Inter-processor interrupt pulse short
+[14:47:15.629] Starting FatFS Task
+##### 14:47:15.629 booted HM0360: **** WW500 MD. (WW500_C02) Built: 14:44:04 Oct 13 2026
+##### 14:47:15.629 typing 'setop 7 0'
+[14:47:15.676] ^C
+[14:47:15.676] cmd> Mounting FatFS on SD card OK
+[14:47:15.676] Directory '/MANIFEST' exists
+[14:47:15.676] SD card initialised. CWD is '0:/'
+[14:47:15.676] Loading configuration: CWD is '0:/MANIFEST'
+[14:47:15.676] 'CONFIG.TXT' found. (Next image #600), camera enabled. Flash brightness 5
+[14:47:15.676] Retaining existing images directory (0 <= 100) '/MEDIA/00000000/IMAGES.002'
+[14:47:15.676] Directory '/MEDIA/00000000/IMAGES.002' exists
+[14:47:15.723] FatFss setup took 55ms
+[14:47:15.723] Inactivity period set at 1000ms
+[14:47:15.770] etop 7 0
+[14:47:16.191] Set OpParam 7 = 0
+[14:47:16.191] cmd>
+##### 14:47:16.206 typing 'capture 3 500'
+[14:47:16.253] ^C
+[14:47:16.253] cmd> capture 3
+[14:47:16.721] IF Task received event 'Awake' (0x070f). Rx data = 0x00000000
+[14:47:16.721] FatFS Task received event 'Save config' (0x0908). Rx data = 0x00000000
+[14:47:16.721] Config saved (op params persisted).
+[14:47:16.721] Starting Image Task
+[14:47:16.721] Flash ID 0xEF initialised
+[14:47:16.767] 5Slot A labelled variant 1 = HM0360 (night/IR)
+[14:47:16.767] Image 640 x 480. Raw buffer 460800. JPEG buffer 115860. JPEG compression x4
+[14:47:16.767] Initialising HM0360 at 0x24 (p.u. delay 1ms)
+[14:47:16.767] Memory allocated: 460800 for raw buffer, 115860 for JPEG, 100 for JPEG header
+[14:47:16.767]    Inhibiting MD
+[14:47:16.767]    Changing mode from 2 to 0 with nFrames=0, sleepTime=0 sleepCount = 0xffff
+[14:47:16.814] 00
+[14:47:16.955] Error: no captures until after the first sleep.
+[14:47:16.955] cmd>
+##### 14:47:16.970 CHECK HM0360 capture after cold boot refused: PASS no captures until after the first sleep
+##### 14:47:17.971 typing 'hardfault'
+[14:47:18.018] HM0360 Init
+[14:47:18.018] HM0360 Init Mirror Off
+[14:47:18.018] HM0360 Init finished
+[14:47:18.018] HM0360 MD sensitivity 1
+[14:47:18.018] CWD is '0:/MANIFEST'
+[14:47:18.018] Error opening '0:/HM0360EX.BIN': 4
+[14:47:18.018] sensor_type: 8
+[14:47:18.018] DEBUG: ledFlashBrightness(5%) [brbits = 0x0]
+[14:47:18.018] DEBUG: ledFlashSelectLED(0)
+[14:47:18.018] [LS] In ledFlashSetFlashModeFromOpParam with 0 Mode 0
+[14:47:18.018] DEBUG: ledFlashDisable()
+[14:47:18.018] Not initialising NN (project ID is 0)
+[14:47:18.018] No model found.
+[14:47:18.018] NN Initialisation took 9ms TODO - consider doing this after taking the picture!
+[14:47:18.018] Image sensor and data path initialised for camera HM0360
+[14:47:18.018]   Camera system enabled.
+[14:47:18.018]   Neural network disabled.
+[14:47:18.018]   Flash LED(s) in use: 0
+[14:47:18.018]   Flash brightness: 5%
+[14:47:18.018]   Flash is currently not armed.
+[14:47:18.018]   MD disabled.
+[14:47:18.018]   Timelapse disabled.
+[14:47:18.018] IF Task received event 'FreeRTOS Initialised' (0x0710). Rx data = 0x00000000
+[14:47:18.018] Assert inter-processor interrupt.
+[14:47:18.018] Sending 31 bytes: Header 4, payload 25, checksum 2 'Wake 2024-01-01T00:00:02Z'
+[14:47:18.018] Negate inter-processor interrupt.
+[14:47:18.018] IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+[14:47:18.018] IF Task received event 'I2C Tx' (0x0701). Rx data = 0x0000057d
+[14:47:18.018] I2C transmission complete.
+[14:47:18.018] IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+[14:47:18.018] IF Task received event 'I2C Rx' (0x0700). Rx data = 0x00000000
+[14:47:18.018] Received I2C message.
+[14:47:18.018] MKL62BA command received: 'selftest'
+[14:47:18.018] selfTest 0000
+[14:47:18.018] IF Task state changed from 'Idle' (1) to 'I2C RX State' (2)
+[14:47:18.018] IF Task received event 'String Response' (0x0703). Rx data = 0x3000f9d0
+[14:47:18.018] Assert inter-processor interrupt.
+[14:47:18.018] Sending 19 bytes: Header 4, payload 13, checksum 2 'selfTest 0000'
+[14:47:18.018] Negate inter-processor interrupt.
+[14:47:18.018] IF Task state changed from 'I2C RX State' (2) to 'I2C TX State' (3)
+[14:47:18.018] IF Task received event 'I2C Tx' (0x0701). Rx data = 0x000005e1
+[14:47:18.018] I2C transmission complete.
+[14:47:18.018] IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+[14:47:18.018] ^C
+[14:47:18.018] cmd> hardfault
+[14:47:18.534] Forcing a hard fault. Expect a fault report, then a reset.
+[14:47:18.534] Entering HardFault interrupt!
+[14:47:18.534] SCB->CFSR:0x00010000
+[14:47:18.534] SCB->HFSR:0x40000000
+[14:47:18.534] SCB->BFAR:0xa9cff4c7 (not valid)
+[14:47:18.534] SCB->MMFAR:0xa9cff4c7 (not valid)
+[14:47:18.534]   UNDEFINSTR: Undefined instruction
+[14:47:18.534] Stacked registers:
+[14:47:18.534] R0   = 0x00000000
+[14:47:18.534] R1   = 0xc0000000
+[14:47:18.534] R2   = 0x00000000
+[14:47:18.534] R3   = 0x54003000
+[14:47:18.534] R12  = 0x30013b7f
+[14:47:18.534] LR   = 0x1000481b
+[14:47:18.534] PC   = 0x1000481c
+[14:47:18.534] xPSR = 0x61100000
+[14:47:18.534] >>> Reset by watchdog after fault
+[14:47:19.055] 1st BL Modem Build DATE=Jan 17 2025, Version: 2.12
+[14:47:19.055] Please input any key to enter X-Modem mode in 30 ms
+[14:47:19.055] waiting input key...
+[14:47:19.087] slot flash_offset 0x00000000
+[14:47:19.087] New MemDesp himax_sec_SB_image_process PASS
+[14:47:19.087] set_memory_s_ns
+[14:47:19.087] HX_DSP_FLAG 1
+[14:47:19.118] jump_addr=0x10000000
+[14:47:19.118] Compiler Version: ARM GNU, 14.3.1 20250623
+[14:47:19.118] **** WW500 MD. (WW500_C02) Built: 14:44:04 Oct 13 2026 ****
+[14:47:19.118] Git branch: 'nogit' nogit-dirty
+[14:47:19.118] Compiler Version: ARM GNU, 14.3.1 20250623
+[14:47:19.118] Wakeup_event = 0x0000, WakeupEvt1 = 0x0000 Cold boot
+[14:47:19.118] PCA9574 present at 0x20
+[14:47:19.118] DEBUG: ledFlashSelectLED(0)
+[14:47:19.118] Initialised LED Flash
+[14:47:19.118] ### Cold Boot ###
+[14:47:19.118] FreeRTOS tickless idle is enabled. configMAX_PRIORITIES = 5
+##### 14:47:19.119 CHECK HM0360 hardfault resets: PASS cold boot 1.1 s after typing; 'secure bus error' absent
+[14:47:20.439] Camera: HM0360
+[14:47:20.455] Disabling RP SENSOR_ENABLE
+[14:47:20.455] HM0360 present at 0x24
+[14:47:20.455] Main camera present at 0x24
+[14:47:20.455] Initialising FreeRTOS tasks
+[14:47:20.455] Created task 'CLI' Priority 4
+[14:47:20.455] Created task 'IFTask' Priority 3
+[14:47:20.455] Created task 'FAT' Priority 2
+[14:47:20.455] Created task 'IMAGE' Priority 1
+[14:47:20.455] FreeRTOS scheduler started.
+[14:47:20.455] Starting CLI Task
+[14:47:20.455] Enter 'help' to view a list of available commands.
+[14:47:20.455] cmd> Starting IFTask
+[14:47:20.455] I2C slave instance 0 configured at address 0x62
+[14:47:20.455] I2C buffers have 256 bytes, payload is 244
+[14:47:20.455] Inter-processor interrupt pulse short
+[14:47:20.455] Starting FatFS Task
+##### 14:47:20.455 typing 'freeze'
+[14:47:20.501] Mounting FatFS on SD card ^C
+[14:47:20.501] cmd> OK
+[14:47:20.501] Directory '/MANIFEST' exists
+[14:47:20.501] SD card initialised. CWD is '0:/'
+[14:47:20.501] Loading configuration: CWD is '0:/MANIFEST'
+[14:47:20.501] 'CONFIG.TXT' found. (Next image #600), camera enabled. Flash brightness 5
+[14:47:20.501] Retaining existing images directory (0 <= 100) '/MEDIA/00000000/IMAGES.002'
+[14:47:20.501] Directory '/MEDIA/00000000/IMAGES.002' exists
+[14:47:20.501] FatFs setup took 36ms
+[14:47:20.501] Inactivity period set at 1000ms
+[14:47:20.547] freeze
+[14:47:20.875] Freezing: interrupts masked, looping for ever. Watchdog is running.
+[14:47:30.344] \x001st BL Modem Build DATE=Jan 17 2025, Version: 2.12
+[14:47:30.375] Please input any key to enter X-Modem mode in 30 ms
+[14:47:30.375] waiting input key...
+[14:47:30.406] slot flash_offset 0x00000000
+[14:47:30.406] New MemDesp himax_sec_SB_image_process PASS
+[14:47:30.406] set_memory_s_ns
+[14:47:30.406] HX_DSP_FLAG 1
+[14:47:30.436] jump_addr=0x10000000
+[14:47:30.436] Compiler Version: ARM GNU, 14.3.1 20250623
+[14:47:30.436] **** WW500 MD. (WW500_C02) Built: 14:44:04 Oct 13 2026 ****
+[14:47:30.436] Git branch: 'nogit' nogit-dirty
+[14:47:30.436] Compiler Version: ARM GNU, 14.3.1 20250623
+[14:47:30.436] Wakeup_event = 0x0000, WakeupEvt1 = 0x0000 Cold boot
+[14:47:30.436] PCA9574 present at 0x20
+[14:47:30.436] DEBUG: ledFlashSelectLED(0)
+[14:47:30.436] Initialised LED Flash
+[14:47:30.436] ### Cold Boot ###
+[14:47:30.436] FreeRTOS tickless idle is enabled. configMAX_PRIORITIES = 5
+##### 14:47:30.436 CHECK HM0360 freeze reset by watchdog: FAIL 10.0 s
+[14:47:32.848] Camera: HM0360
+[14:47:32.848] Disabling RP SENSOR_ENABLE
+[14:47:32.848] HM0360 present at 0x24
+[14:47:32.848] Main camera present at 0x24
+[14:47:32.848] Initialising FreeRTOS tasks
+[14:47:32.864] Created task 'CLI' Priority 4
+[14:47:32.864] Created task 'IFTask' Priority 3
+[14:47:32.864] Created task 'FAT' Priority 2
+[14:47:32.864] Created task 'IMAGE' Priority 1
+[14:47:32.864] FreeRTOS scheduler started.
+[14:47:32.864] Starting CLI Task
+[14:47:32.864] Enter 'help' to view a list of available commands.
+[14:47:32.864] cmd> Starting IFTask
+[14:47:32.864] I2C slave instance 0 configured at address 0x62
+[14:47:32.864] I2C buffers have 256 bytes, payload is 244
+[14:47:32.864] Inter-processor interrupt pulse short
+[14:47:32.864] Starting FatFS Task
+[14:47:32.864] Mounting FatFS on SD card
+##### 14:47:32.864 typing 'reset'
+[14:47:32.912] ^C
+[14:47:32.912] cmd> OK
+[14:47:32.912] Directory '/MANIFEST' exists
+[14:47:32.912] SD card initialised. CWD is '0:/'
+[14:47:32.912] Loading configuration: CWD is '0:/MANIFEST'
+[14:47:32.912] 'CONFIG.TXT' found. (Next image #600), camera enabled. Flash brightness 5
+[14:47:32.912] Retaining existing images directory (0 <= 100) '/MEDIA/00000000/IMAGES.002'
+[14:47:32.912] Directory '/MEDIA/00000000/IMAGES.002' exists
+[14:47:32.912] FatFs setup took 36ms
+[14:47:32.912] Inactivity period set at 1000ms
+[14:47:32.959] reset
+[14:47:33.236] Forcing reset soon.
+[14:47:33.236] cmd>
+##### 14:47:33.252 typing 'dpd'
+[14:47:33.299] ^C
+[14:47:33.299] cmd> dpd
+[14:47:33.532] Forcing DPD by clearing inactivity period
+[14:47:33.532] cmd> Inactive for 200ms
+[14:47:33.702] IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+[14:47:33.702] Assert inter-processor interrupt.
+[14:47:33.702] Sending 106 bytes: Header 4, payload 100, checksum 2 'Sleep 600 0 0 13 2 1 500 0 1000 5 1 0 100 0 0 0 18 1 0 0 2 2 50 65 15 0 0 286 326 1 110 1 0 0 0 0 0 '
+[14:47:33.717] Negate inter-processor interrupt.
+[14:47:33.717] IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+[14:47:33.717] IF Task received event 'I2C Tx' (0x0701). Rx data = 0x00000359
+[14:47:33.717] I2C transmission complete.
+[14:47:33.717] IF task ready to sleep.
+[14:47:33.717] IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+[14:47:33.903] IF Task received event 'Awake' (0x070f). Rx data = 0x00000000
+[14:47:33.903] Starting Image Task
+[14:47:33.903] Flash ID 0xEF initialised
+[14:47:33.903] Image 640 x 480. Raw buffer 460800. JPEG buffer 115860. JPEG compression x4
+[14:47:33.903] Initialising HM0360 at 0x24 (p.u. delay 1ms)
+[14:47:33.903] Memory allocated: 460800 for raw buffer, 115860 for JPEG, 100 for JPEG header
+[14:47:33.918]    Inhibiting MD
+[14:47:33.918]    Changing mode from 0 to 0 with nFrames=0, sleepTime=0 sleepCount = 0xffff
+[14:47:34.137] HM0360 Init
+[14:47:34.137] HM0360 Init Mirror Off
+[14:47:34.137] HM0360 Init finished
+[14:47:34.137] HM0360 MD sensitivity 1
+[14:47:34.152] CWD is '0:/MANIFEST'
+[14:47:34.152] Error opening '0:/HM0360EX.BIN': 4
+[14:47:34.152] sensor_type: 8
+[14:47:34.152] DEBUG: ledFlashBrightness(5%) [brbits = 0x0]
+[14:47:34.152] DEBUG: ledFlashSelectLED(0)
+[14:47:34.152] [LS] In ledFlashSetFlashModeFromOpParam with 0 Mode 0
+[14:47:34.152] DEBUG: ledFlashDisable()
+[14:47:34.152] Not initialising NN (project ID is 0)
+[14:47:34.152] No model found.
+[14:47:34.152] NN Initialisation took 8ms TODO - consider doing this after taking the picture!
+[14:47:34.168] Image sensor and data path initialised for camera HM0360
+[14:47:34.168]   Camera system enabled.
+[14:47:34.168]   Neural network disabled.
+[14:47:34.168]   Flash LED(s) in use: 0
+[14:47:34.168]   Flash brightness: 5%
+[14:47:34.168]   Flash is currently not armed.
+[14:47:34.168]   MD disabled.
+[14:47:34.168]   Timelapse disabled.
+[14:47:34.168] IF Task received event 'FreeRTOS Initialised' (0x0710). Rx data = 0x00000000
+[14:47:34.168] Assert inter-processor interrupt.
+[14:47:34.168] Sending 31 bytes: Header 4, payload 25, checksum 2 'Wake 2024-01-01T00:00:02Z'
+[14:47:34.168] Negate inter-processor interrupt.
+[14:47:34.168] IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+[14:47:34.168] IMAGE Task received event 'Image Event Inactivity' (0x0a00). Rx data = 0x00000000
+[14:47:34.168] IMAGE Task state changed from 'Init' (1) to 'Save State' (5)
+[14:47:34.168] FatFS Task received event 'Save State' (0x0904). Rx data = 0x00000000
+[14:47:34.168] IF Task received event 'I2C Tx' (0x0701). Rx data = 0x00000524
+[14:47:34.168] I2C transmission complete.
+[14:47:34.168] IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+[14:47:34.184] Saved state to SD card. Image sequence number = 600
+[14:47:34.199] FatFS task sending event 0x0a06. Tx data = 0x00000000
+[14:47:34.199] IMAGE task sending event 0x0904. Rx data = 0x00000000
+[14:47:34.199] IMAGE Task received event 'Image Event Disk Write Complete' (0x0a06). Rx data = 0x00000000
+[14:47:34.199] Image task ready to sleep.
+[14:47:34.199] DEBUG: ledFlashDisable()
+[14:47:34.199] HM0360 MD sensitivity 1
+[14:47:34.199] Preparing HM0360 for MD:   HM0360 Motion Detection off (the frame interval, op 11, is 0).
+[14:47:34.199]    Inhibiting MD
+[14:47:34.199]    Changing mode from 0 to 2 with nFrames=1, sleepTime=0 sleepCount = 0xffff
+[14:47:34.199]  No LED flashes.
+[14:47:34.199] >>> Reset by watchdog
+[14:47:34.199] hx_drv_watchdog_start
+[14:47:34.199] IMAGE Task state changed from 'Save State' (5) to 'Uninitialised' (0)
+[14:47:34.245] IF Task received event 'I2C Rx' (0x0700). Rx data = 0x00000000
+[14:47:34.245] Received I2C message.
+[14:47:34.245] MKL62BA command received: 'selftest'
+[14:47:34.245] selfTest 0000
+[14:47:34.245] IF Task state changed from 'Idle' (1) to 'I2C RX State' (2)
+[14:47:34.245] IF Task received event 'String Response' (0x0703). Rx data = 0x3000f9d0
+[14:47:34.245] Assert inter-processor interrupt.
+[14:47:34.245] Sending 19 bytes: Header 4, payload 13, checksum 2 'selfTest 0000'
+[14:47:34.245] Negate inter-processor interrupt.
+[14:47:34.245] IF Task state changed from 'I2C RX State' (2) to 'I2C TX State' (3)
+[14:47:34.277] IF Task received event 'I2C Tx' (0x0701). Rx data = 0x0000058a
+[14:47:34.277] I2C transmission complete.
+[14:47:34.277] IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+[14:47:34.400] \x001st BL Modem Build DATE=Jan 17 2025, Version: 2.12
+[14:47:34.431] Please input any key to enter X-Modem mode in 30 ms
+[14:47:34.431] waiting input key...
+[14:47:34.463] slot flash_offset 0x00000000
+[14:47:34.463] New MemDesp himax_sec_SB_image_process PASS
+[14:47:34.463] set_memory_s_ns
+[14:47:34.463] HX_DSP_FLAG 1
+[14:47:34.494] jump_addr=0x10000000
+[14:47:34.494] Compiler Version: ARM GNU, 14.3.1 20250623
+[14:47:34.494] **** WW500 MD. (WW500_C02) Built: 14:44:04 Oct 13 2026 ****
+[14:47:34.494] Git branch: 'nogit' nogit-dirty
+[14:47:34.494] Compiler Version: ARM GNU, 14.3.1 20250623
+[14:47:34.494] Wakeup_event = 0x0000, WakeupEvt1 = 0x0000 Cold boot
+[14:47:34.494] PCA9574 present at 0x20
+[14:47:34.494] DEBUG: ledFlashSelectLED(0)
+[14:47:34.494] Initialised LED Flash
+[14:47:34.494] ### Cold Boot ###
+[14:47:34.494] FreeRTOS tickless idle is enabled. configMAX_PRIORITIES = 5
+[14:47:36.913] Camera: HM0360
+[14:47:36.913] Disabling RP SENSOR_ENABLE
+[14:47:36.913] HM0360 present at 0x24
+[14:47:36.913] Main camera present at 0x24
+[14:47:36.913] Initialising FreeRTOS tasks
+[14:47:36.913] Created task 'CLI' Priority 4
+[14:47:36.913] Created task 'IFTask' Priority 3
+[14:47:36.913] Created task 'FAT' Priority 2
+[14:47:36.913] Created task 'IMAGE' Priority 1
+[14:47:36.913] FreeRTOS scheduler started.
+[14:47:36.913] Starting CLI Task
+[14:47:36.913] Enter 'help' to view a list of available commands.
+[14:47:36.913] cmd> Starting IFTask
+[14:47:36.913] I2C slave instance 0 configured at address 0x62
+[14:47:36.913] I2C buffers have 256 bytes, payload is 244
+[14:47:36.913] Inter-processor interrupt pulse short
+[14:47:36.913] Starting FatFS Task
+##### 14:47:36.913 CHECK HM0360 reset: PASS booted HM0360
+##### 14:47:36.913 typing 'switchslot'
+[14:47:36.959] ^C
+[14:47:36.959] cmd> Mounting FatFS on SD card OK
+[14:47:36.959] Directory '/MANIFEST' exists
+[14:47:36.959] SD card initialised. CWD is '0:/'
+[14:47:36.959] Loading configuration: CWD is '0:/MANIFEST'
+[14:47:36.959] 'CONFIG.TXT' found. (Next image #600), camera enabled. Flash brightness 5
+[14:47:36.959] Retaining existing images directory (0 <= 100) '/MEDIA/00000000/IMAGES.002'
+[14:47:36.959] Directory '/MEDIA/00000000/IMAGES.002' exists
+[14:47:36.959] FatFs setup took 36ms
+[14:47:36.959] Inactivity period set at 1000ms
+[14:47:37.005] switchslot
+[14:47:37.517] Flash ID 0xEF initialised
+[14:47:37.548] write_slot_selector: slot 1 selector written OK
+[14:47:37.548] switch_slot: selector now points at slot 1
+[14:47:37.548] Switched to slot 1 ('unknown'). Reset scheduled.
+[14:47:37.548] cmd>
+##### 14:47:37.548 typing 'dpd'
+[14:47:37.595] ^C
+[14:47:37.595] cmd> dpd
+[14:47:37.830] Forcing DPD by clearing inactivity period
+[14:47:37.830] cmd>
+[14:47:37.954] IF Task received event 'Awake' (0x070f). Rx data = 0x00000000
+[14:47:37.954] Starting Image Task
+[14:47:37.954] Slot B labelled variant 1 = HM0360 (night/IR)
+[14:47:38.001] Image 640 x 480. Raw buffer 460800. JPEG buffer 115860. JPEG compression x4
+[14:47:38.017] Initialising HM0360 at 0x24 (p.u. delay 1ms)
+[14:47:38.017] Memory allocated: 460800 for raw buffer, 115860 for JPEG, 100 for JPEG header
+[14:47:38.017]    Inhibiting MD
+[14:47:38.017]    Changing mode from 2 to 0 with nFrames=0, sleepTime=0 sleepCount = 0xffff
+[14:47:38.248] HM0360 Init
+[14:47:38.248] HM0360 Init Mirror Off
+[14:47:38.248] HM0360 Init finished
+[14:47:38.248] HM0360 MD sensitivity 1
+[14:47:38.248] CWD is '0:/MANIFEST'
+[14:47:38.248] Error opening '0:/HM0360EX.BIN': 4
+[14:47:38.248] sensor_type: 8
+[14:47:38.248] DEBUG: ledFlashBrightness(5%) [brbits = 0x0]
+[14:47:38.248] DEBUG: ledFlashSelectLED(0)
+[14:47:38.248] [LS] In ledFlashSetFlashModeFromOpParam with 0 Mode 0
+[14:47:38.248] DEBUG: ledFlashDisable()
+[14:47:38.263] Not initialising NN (project ID is 0)
+[14:47:38.263] No model found.
+[14:47:38.263] NN Initialisation took 8ms TODO - consider doing this after taking the picture!
+[14:47:38.263] Image sensor and data path initialised for camera HM0360
+[14:47:38.263]   Camera system enabled.
+[14:47:38.263]   Neural network disabled.
+[14:47:38.263]   Flash LED(s) in use: 0
+[14:47:38.263]   Flash brightness: 5%
+[14:47:38.263]   Flash is currently not armed.
+[14:47:38.263]   MD disabled.
+[14:47:38.263]   Timelapse disabled.
+[14:47:38.263] IF Task received event 'FreeRTOS Initialised' (0x0710). Rx data = 0x00000000
+[14:47:38.263] Assert inter-processor interrupt.
+[14:47:38.263] Sending 31 bytes: Header 4, payload 25, checksum 2 'Wake 2024-01-01T00:00:02Z'
+[14:47:38.263] Negate inter-processor interrupt.
+[14:47:38.263] IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+[14:47:38.278] IF Task received event 'I2C Tx' (0x0701). Rx data = 0x0000054e
+[14:47:38.278] I2C transmission complete.
+[14:47:38.278] IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+[14:47:38.479] Inactive for 200ms
+[14:47:38.479] IMAGE Task received event 'Image Event Inactivity' (0x0a00). Rx data = 0x00000000
+[14:47:38.479] IMAGE Task state changed from 'Init' (1) to 'Save State' (5)
+[14:47:38.479] FatFS Task received event 'Save State' (0x0904). Rx data = 0x00000000
+[14:47:38.495] Saved state to SD card. Image sequence number = 600
+[14:47:38.510] FatFS task sending event 0x0a06. Tx data = 0x00000000
+[14:47:38.510] IMAGE task sending event 0x0904. Rx data = 0x00000000
+[14:47:38.510] IMAGE Task received event 'Image Event Disk Write Complete' (0x0a06). Rx data = 0x00000000
+[14:47:38.510] Image task ready to sleep.
+[14:47:38.510] IMAGE Task state changed from 'Save State' (5) to 'Uninitialised' (0)
+[14:47:38.510] IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+[14:47:38.510] Assert inter-processor interrupt.
+[14:47:38.510] Sending 106 bytes: Header 4, payload 100, checksum 2 'Sleep 600 0 0 14 2 1 500 0 1000 5 1 0 100 0 0 0 18 1 0 0 2 2 50 65 15 0 0 286 326 1 110 1 0 0 0 0 0 '
+[14:47:38.510] Negate inter-processor interrupt.
+[14:47:38.510] IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+[14:47:38.526] IF Task received event 'I2C Tx' (0x0701). Rx data = 0x00000645
+[14:47:38.526] I2C transmission complete.
+[14:47:38.526] IF task ready to sleep.
+[14:47:38.526] DEBUG: ledFlashDisable()
+[14:47:38.526] HM0360 MD sensitivity 1
+[14:47:38.526] Preparing HM0360 for MD:   HM0360 Motion Detection off (the frame interval, op 11, is 0).
+[14:47:38.526]    Inhibiting MD
+[14:47:38.526]    Changing mode from 0 to 2 with nFrames=1, sleepTime=0 sleepCount = 0xffff
+[14:47:38.541]  No LED flashes.
+[14:47:38.541] >>> Reset by watchdog
+[14:47:38.541] hx_drv_watchdog_start
+[14:47:38.541] IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+[14:47:38.726] \x001st BL Modem Build DATE=Jan 17 2025, Version: 2.12
+[14:47:38.757] Please input any key to enter X-Modem mode in 30 ms
+[14:47:38.772] waiting input key...
+[14:47:38.787] slot flash_offset 0x00100000
+[14:47:38.803] New MemDesp himax_sec_SB_image_process PASS
+[14:47:38.803] set_memory_s_ns
+[14:47:38.803] HX_DSP_FLAG 1
+[14:47:38.819] jump_addr=0x10000000
+[14:47:38.819] Compiler Version: ARM GNU, 14.3.1 20250623
+[14:47:38.819] **** WW500 MD. (WW500_C02) Built: 14:42:08 Oct 13 2026 ****
+[14:47:38.819] Git branch: 'nogit' nogit-dirty
+[14:47:38.835] Compiler Version: ARM GNU, 14.3.1 20250623
+[14:47:38.835] Wakeup_event = 0x0000, WakeupEvt1 = 0x0000 Cold boot
+[14:47:38.835] PCA9574 present at 0x20
+[14:47:38.835] DEBUG: ledFlashSelectLED(0)
+[14:47:38.835] Initialised LED Flash
+[14:47:38.835] ### Cold Boot ###
+[14:47:38.835] FreeRTOS tickless idle is enabled. configMAX_PRIORITIES = 5
+[14:47:41.244] Camera: RP v3 (IMX708)
+[14:47:41.244] Enabling RP SENSOR_ENABLE
+[14:47:41.260] HM0360 present at 0x24
+[14:47:41.260] Main camera present at 0x1a
+[14:47:41.260] Disabling RP SENSOR_ENABLE
+[14:47:41.260] Initialising FreeRTOS tasks
+[14:47:41.260] Created task 'CLI' Priority 4
+[14:47:41.260] Created task 'IFTask' Priority 3
+[14:47:41.260] Created task 'FAT' Priority 2
+[14:47:41.260] Created task 'IMAGE' Priority 1
+[14:47:41.260] FreeRTOS scheduler started.
+[14:47:41.260] Starting CLI Task
+[14:47:41.260] Enter 'help' to view a list of available commands.
+[14:47:41.260] cmd> Starting IFTask
+[14:47:41.260] I2C slave instance 0 configured at address 0x62
+[14:47:41.260] I2C buffers have 256 bytes, payload is 244
+[14:47:41.260] Inter-processor interrupt pulse short
+[14:47:41.260] Starting FatFS Task
+##### 14:47:41.262 CHECK switchslot to RP3: PASS booted RP v3 (IMX708)
+##### 14:47:41.262 typing 'capture 3 500'
+[14:47:41.307] Mounting FatFS on SD card ^C
+[14:47:41.307] cmd> OK
+[14:47:41.307] Directory '/MANIFEST' exists
+[14:47:41.307] SD card initialised. CWD is '0:/'
+[14:47:41.307] Loading configuration: CWD is '0:/MANIFEST'
+[14:47:41.307] 'CONFIG.TXT' found. (Next image #600), camera enabled. Flash brightness 5
+[14:47:41.307] Retaining existing images directory (0 <= 100) '/MEDIA/00000000/IMAGES.002'
+[14:47:41.307] Directory '/MEDIA/00000000/IMAGES.002' exists
+[14:47:41.307] FatFs setup took 36ms
+[14:47:41.307] Inactivity period set at 1000ms
+[14:47:41.354] capture 3 500
+[14:47:42.010] Error: no captures until after the first sleep.
+[14:47:42.010] cmd>
+##### 14:47:42.026 CHECK RP3 capture after cold boot refused: PASS no captures until after the first sleep
+##### 14:47:43.027 typing 'hardfault'
+[14:47:43.066] IF Task received event 'Awake' (0x070f). Rx data = 0x00000000
+[14:47:43.066] Starting Image Task
+[14:47:43.066] Flash ID 0xEF initialised
+[14:47:43.066] Slot B labelled variant 2 = RP3 (day/colour)
+[14:47:43.066] Image 2304 x 1296. Raw buffer 460800. JPEG buffer 115860. JPEG compression x4
+[14:47:43.066] Enabling RP SENSOR_ENABLE
+[14:47:43.066] Initialising IMX708 at 0x1a (p.u. delay 10ms)
+[14:47:43.066] CWD is '0:/MANIFEST'
+[14:47:43.066] Error opening '0:/RPV3_EX.BIN': 4
+[14:47:43.066] WD1[340a6960], WD2_J[340a6960], WD3_RAW[34036160], JPAuto[340360e0]
+[14:47:43.066] sensor_type: 15
+[14:47:43.066] DEBUG: ledFlashBrightness(5%) [brbits = 0x0]
+[14:47:43.066] DEBUG: ledFlashSelectLED(0)
+[14:47:43.066] [LS] In ledFlashSetFlashModeFromOpParam with 0 Mode 0
+[14:47:43.066] DEBUG: ledFlashDisable()
+[14:47:43.066] Initialising HM0360 at 0x24 for MD only.
+[14:47:43.066]    Inhibiting MD
+[14:47:43.066]    Changing mode from 2 to 0 with nFrames=0, sleepTime=0 sleepCount = 0xffff
+[14:47:43.066] HM0360 registers initialised for MD.
+[14:47:43.066] Not initialising NN (project ID is 0)
+[14:47:43.066] No model found.
+[14:47:43.066] NN Initialisation took 9ms TODO - consider doing this after taking the picture!
+[14:47:43.066] Image sensor and data path initialised for camera RP v3
+[14:47:43.066]   Camera system enabled.
+[14:47:43.066]   Neural network disabled.
+[14:47:43.066]   Flash LED(s) in use: 0
+[14:47:43.066]   Flash brightness: 5%
+[14:47:43.066]   Flash is currently not armed.
+[14:47:43.066]   Flash duration 100ms
+[14:47:43.066]   MD disabled.
+[14:47:43.066]   Timelapse disabled.
+[14:47:43.066] IF Task received event 'FreeRTOS Initialised' (0x0710). Rx data = 0x00000000
+[14:47:43.066] Assert inter-processor interrupt.
+[14:47:43.066] Sending 31 bytes: Header 4, payload 25, checksum 2 'Wake 2024-01-01T00:00:02Z'
+[14:47:43.066] Negate inter-processor interrupt.
+[14:47:43.066] IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+[14:47:43.066] IF Task received event 'I2C Tx' (0x0701). Rx data = 0x00000572
+[14:47:43.066] I2C transmission complete.
+[14:47:43.066] IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+[14:47:43.066] IF Task received event 'I2C Rx' (0x0700). Rx data = 0x00000000
+[14:47:43.066] Received I2C message.
+[14:47:43.066] MKL62BA command received: 'selftest'
+[14:47:43.066] selfTest 0000
+[14:47:43.066] IF Task state changed from 'Idle' (1) to 'I2C RX State' (2)
+[14:47:43.066] IF Task received event 'String Response' (0x0703). Rx data = 0x3000fd30
+[14:47:43.066] Assert inter-processor interrupt.
+[14:47:43.066] Sending 19 bytes: Header 4, payload 13, checksum 2 'selfTest 0000'
+[14:47:43.066] Negate inter-processor interrupt.
+[14:47:43.066] IF Task state changed from 'I2C RX State' (2) to 'I2C TX State' (3)
+[14:47:43.066] IF Task received event 'I2C Tx' (0x0701). Rx data = 0x000005d9
+[14:47:43.066] I2C transmission complete.
+[14:47:43.066] IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+[14:47:43.066] ^C
+[14:47:43.066] cmd> hardfault
+[14:47:43.579] Forcing a hard fault. Expect a fault report, then a reset.
+[14:47:43.579] Entering HardFault interrupt!
+[14:47:43.579] SCB->CFSR:0x00010000
+[14:47:43.579] SCB->HFSR:0x40000000
+[14:47:43.579] SCB->BFAR:0xa9cff4c7 (not valid)
+[14:47:43.579] SCB->MMFAR:0xa9cff4c7 (not valid)
+[14:47:43.579]   UNDEFINSTR: Undefined instruction
+[14:47:43.579] Stacked registers:
+[14:47:43.579] R0   = 0x00000000
+[14:47:43.579] R1   = 0xc0000000
+[14:47:43.579] R2   = 0x00000000
+[14:47:43.579] R3   = 0x54003000
+[14:47:43.579] R12  = 0x30014cdf
+[14:47:43.579] LR   = 0x10004bc3
+[14:47:43.579] PC   = 0x10004bc4
+[14:47:43.579] xPSR = 0x61100000
+[14:47:43.579] >>> Reset by watchdog after fault
+[14:47:44.104] 1st BL Modem Build DATE=Jan 17 2025, Version: 2.12
+[14:47:44.104] Please input any key to enter X-Modem mode in 30 ms
+[14:47:44.104] waiting input key...
+[14:47:44.135] slot flash_offset 0x00100000
+[14:47:44.135] New MemDesp himax_sec_SB_image_process PASS
+[14:47:44.135] set_memory_s_ns
+[14:47:44.135] HX_DSP_FLAG 1
+[14:47:44.166] jump_addr=0x10000000
+[14:47:44.166] Compiler Version: ARM GNU, 14.3.1 20250623
+[14:47:44.166] **** WW500 MD. (WW500_C02) Built: 14:42:08 Oct 13 2026 ****
+[14:47:44.166] Git branch: 'nogit' nogit-dirty
+[14:47:44.166] Compiler Version: ARM GNU, 14.3.1 20250623
+[14:47:44.166] Wakeup_event = 0x0000, WakeupEvt1 = 0x0000 Cold boot
+[14:47:44.166] PCA9574 present at 0x20
+[14:47:44.166] DEBUG: ledFlashSelectLED(0)
+[14:47:44.166] Initialised LED Flash
+[14:47:44.166] ### Cold Boot ###
+[14:47:44.166] FreeRTOS tickless idle is enabled. configMAX_PRIORITIES = 5
+##### 14:47:44.166 CHECK RP3 hardfault resets: PASS cold boot 1.1 s after typing; 'secure bus error' absent
+[14:47:45.525] \x001st BL Modem Build DATE=Jan 17 2025, Version: 2.12
+[14:47:45.555] Please input any key to enter X-Modem mode in 30 ms
+[14:47:45.555] waiting input key...
+[14:47:45.586] slot flash_offset 0x00100000
+[14:47:45.586] New MemDesp himax_sec_SB_image_process PASS
+[14:47:45.586] set_memory_s_ns
+[14:47:45.586] HX_DSP_FLAG 1
+[14:47:45.617] jump_addr=0x10000000
+[14:47:45.617] Compiler Version: ARM GNU, 14.3.1 20250623
+[14:47:45.617] **** WW500 MD. (WW500_C02) Built: 14:42:08 Oct 13 2026 ****
+[14:47:45.617] Git branch: 'nogit' nogit-dirty
+[14:47:45.617] Compiler Version: ARM GNU, 14.3.1 20250623
+[14:47:45.617] Wakeup_event = 0x0000, WakeupEvt1 = 0x0000 Cold boot
+[14:47:45.617] PCA9574 present at 0x20
+[14:47:45.617] DEBUG: ledFlashSelectLED(0)
+[14:47:45.617] Initialised LED Flash
+[14:47:45.617] ### Cold Boot ###
+[14:47:45.617] FreeRTOS tickless idle is enabled. configMAX_PRIORITIES = 5
+[14:47:48.032] Camera: RP v3 (IMX708)
+[14:47:48.032] Enabling RP SENSOR_ENABLE
+[14:47:48.048] HM0360 present at 0x24
+[14:47:48.048] Main camera present at 0x1a
+[14:47:48.048] Disabling RP SENSOR_ENABLE
+[14:47:48.048] Initialising FreeRTOS tasks
+[14:47:48.048] Created task 'CLI' Priority 4
+[14:47:48.048] Created task 'IFTask' Priority 3
+[14:47:48.048] Created task 'FAT' Priority 2
+[14:47:48.048] Created task 'IMAGE' Priority 1
+[14:47:48.048] FreeRTOS scheduler started.
+[14:47:48.048] Starting CLI Task
+[14:47:48.048] Enter 'help' to view a list of available commands.
+[14:47:48.048] cmd> Starting IFTask
+[14:47:48.048] I2C slave instance 0 configured at address 0x62
+[14:47:48.048] I2C buffers have 256 bytes, payload is 244
+[14:47:48.048] Inter-processor interrupt pulse short
+[14:47:48.048] Starting FatFS Task
+##### 14:47:48.048 typing 'freeze'
+[14:47:48.095] ^C
+[14:47:48.095] cmd> Mounting FatFS on SD card OK
+[14:47:48.095] Directory '/MANIFEST' exists
+[14:47:48.095] SD card initialised. CWD is '0:/'
+[14:47:48.095] Loading configuration: CWD is '0:/MANIFEST'
+[14:47:48.095] 'CONFIG.TXT' found. (Next image #600), camera enabled. Flash brightness 5
+[14:47:48.095] Retaining existing images directory (0 <= 100) '/MEDIA/00000000/IMAGES.002'
+[14:47:48.095] Directory '/MEDIA/00000000/IMAGES.002' exists
+[14:47:48.095] FatFs setup took 36ms
+[14:47:48.095] Inactivity period set at 1000ms
+[14:47:48.142] freeze
+[14:47:48.468] Freezing: interrupts masked, looping for ever. Watchdog is running.
+[14:48:07.839] \x001st BL Modem Build DATE=Jan 17 2025, Version: 2.12
+[14:48:07.870] Please input any key to enter X-Modem mode in 30 ms
+[14:48:07.870] waiting input key...
+[14:48:07.901] slot flash_offset 0x00100000
+[14:48:07.901] New MemDesp himax_sec_SB_image_process PASS
+[14:48:07.901] set_memory_s_ns
+[14:48:07.901] HX_DSP_FLAG 1
+[14:48:07.931] jump_addr=0x10000000
+[14:48:07.931] Compiler Version: ARM GNU, 14.3.1 20250623
+[14:48:07.931] **** WW500 MD. (WW500_C02) Built: 14:42:08 Oct 13 2026 ****
+[14:48:07.931] Git branch: 'nogit' nogit-dirty
+[14:48:07.931] Compiler Version: ARM GNU, 14.3.1 20250623
+[14:48:07.931] Wakeup_event = 0x0000, WakeupEvt1 = 0x0000 Cold boot
+[14:48:07.931] PCA9574 present at 0x20
+[14:48:07.931] DEBUG: ledFlashSelectLED(0)
+[14:48:07.931] Initialised LED Flash
+[14:48:07.931] ### Cold Boot ###
+[14:48:07.931] FreeRTOS tickless idle is enabled. configMAX_PRIORITIES = 5
+##### 14:48:07.931 CHECK RP3 freeze reset by watchdog: PASS 19.9 s
+[14:48:09.377] Camera: RP v3 (IMX708)
+[14:48:09.377] Enabling RP SENSOR_ENABLE
+[14:48:09.393] HM0360 present at 0x24
+[14:48:09.393] Main camera present at 0x1a
+[14:48:09.393] Disabling RP SENSOR_ENABLE
+[14:48:09.393] Initialising FreeRTOS tasks
+[14:48:09.393] Created task 'CLI' Priority 4
+[14:48:09.393] Created task 'IFTask' Priority 3
+[14:48:09.393] Created task 'FAT' Priority 2
+[14:48:09.393] Created task 'IMAGE' Priority 1
+[14:48:09.393] FreeRTOS scheduler started.
+[14:48:09.393] Starting CLI Task
+[14:48:09.393] Enter 'help' to view a list of available commands.
+[14:48:09.393] cmd> Starting IFTask
+[14:48:09.393] I2C slave instance 0 configured at address 0x62
+[14:48:09.393] I2C buffers have 256 bytes, payload is 244
+[14:48:09.393] Inter-processor interrupt pulse short
+[14:48:09.393] Starting FatFS Task
+##### 14:48:09.393 typing 'switchslot'
+[14:48:09.439] ^C
+[14:48:09.439] cmd> Mounting FatFS on SD card OK
+[14:48:09.439] Directory '/MANIFEST' exists
+[14:48:09.439] SD card initialised. CWD is '0:/'
+[14:48:09.439] Loading configuration: CWD is '0:/MANIFEST'
+[14:48:09.439] 'CONFIG.TXT' found. (Next image #600), camera enabled. Flash brightness 5
+[14:48:09.439] Retaining existing images directory (0 <= 100) '/MEDIA/00000000/IMAGES.002'
+[14:48:09.439] Directory '/MEDIA/00000000/IMAGES.002' exists
+[14:48:09.439] FatFs setup took 36ms
+[14:48:09.439] Inactivity period set at 1000ms
+[14:48:09.485] switchslot
+[14:48:09.993] Flash ID 0xEF initialised
+[14:48:10.023] write_slot_selector: slot 0 selector written OK
+[14:48:10.023] switch_slot: selector now points at slot 0
+[14:48:10.023] Switched to slot 0 ('HM0360 (night/IR)'). Reset scheduled.
+[14:48:10.023] cmd>
+##### 14:48:10.023 typing 'dpd'
+[14:48:10.070] ^C
+[14:48:10.070] cmd> dpd
+[14:48:10.303] Forcing DPD by clearing inactivity period
+[14:48:10.303] cmd>
+[14:48:10.428] IF Task received event 'Awake' (0x070f). Rx data = 0x00000000
+[14:48:10.428] Starting Image Task
+[14:48:10.428] Slot A labelled variant 2 = RP3 (day/colour)
+[14:48:10.490] Image 2304 x 1296. Raw buffer 460800. JPEG buffer 115860. JPEG compression x4
+[14:48:10.490] Enabling RP SENSOR_ENABLE
+[14:48:10.490] Initialising IMX708 at 0x1a (p.u. delay 10ms)
+[14:48:10.536] CWD is '0:/MANIFEST'
+[14:48:10.536] Error opening '0:/RPV3_EX.BIN': 4
+[14:48:10.536] WD1[340a6960], WD2_J[340a6960], WD3_RAW[34036160], JPAuto[340360e0]
+[14:48:10.536] sensor_type: 15
+[14:48:10.536] DEBUG: ledFlashBrightness(5%) [brbits = 0x0]
+[14:48:10.536] DEBUG: ledFlashSelectLED(0)
+[14:48:10.536] [LS] In ledFlashSetFlashModeFromOpParam with 0 Mode 0
+[14:48:10.551] DEBUG: ledFlashDisable()
+[14:48:10.551] Initialising HM0360 at 0x24 for MD only.
+[14:48:10.551]    Inhibiting MD
+[14:48:10.551]    Changing mode from 0 to 0 with nFrames=0, sleepTime=0 sleepCount = 0xffff
+[14:48:10.756] HM0360 registers initialised for MD.
+[14:48:10.772] Not initialising NN (project ID is 0)
+[14:48:10.772] No model found.
+[14:48:10.772] NN Initialisation took 9ms TODO - consider doing this after taking the picture!
+[14:48:10.772] Image sensor and data path initialised for camera RP v3
+[14:48:10.772]   Camera system enabled.
+[14:48:10.772]   Neural network disabled.
+[14:48:10.772]   Flash LED(s) in use: 0
+[14:48:10.772]   Flash brightness: 5%
+[14:48:10.772]   Flash is currently not armed.
+[14:48:10.772]   Flash duration 100ms
+[14:48:10.772]   MD disabled.
+[14:48:10.772]   Timelapse disabled.
+[14:48:10.772] IF Task received event 'FreeRTOS Initialised' (0x0710). Rx data = 0x00000000
+[14:48:10.772] Assert inter-processor interrupt.
+[14:48:10.772] Sending 31 bytes: Header 4, payload 25, checksum 2 'Wake 2024-01-01T00:00:02Z'
+[14:48:10.772] Negate inter-processor interrupt.
+[14:48:10.772] IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+[14:48:10.789] IF Task received event 'I2C Tx' (0x0701). Rx data = 0x0000056a
+[14:48:10.789] I2C transmission complete.
+[14:48:10.789] IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+[14:48:10.990] Inactive for 200ms
+[14:48:10.990] IMAGE Task received event 'Image Event Inactivity' (0x0a00). Rx data = 0x00000000
+[14:48:10.990] IMAGE Task state changed from 'Init' (1) to 'Save State' (5)
+[14:48:10.990] FatFS Task received event 'Save State' (0x0904). Rx data = 0x00000000
+[14:48:11.005] Saved state to SD card. Image sequence number = 600
+[14:48:11.005] FatFS task sending event 0x0a06. Tx data = 0x00000000
+[14:48:11.005] IMAGE task sending event 0x0904. Rx data = 0x00000000
+[14:48:11.005] IMAGE Task received event 'Image Event Disk Write Complete' (0x0a06). Rx data = 0x00000000
+[14:48:11.005] Image task ready to sleep.
+[14:48:11.005] IMAGE Task state changed from 'Save State' (5) to 'Uninitialised' (0)
+[14:48:11.005] IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+[14:48:11.005] Assert inter-processor interrupt.
+[14:48:11.021] Sending 106 bytes: Header 4, payload 100, checksum 2 'Sleep 600 0 0 15 2 1 500 0 1000 5 1 0 100 0 0 0 18 1 0 0 2 2 50 65 15 0 0 286 326 1 110 1 0 0 0 0 0 '
+[14:48:11.021] Negate inter-processor interrupt.
+[14:48:11.021] IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+[14:48:11.021] IF Task received event 'I2C Tx' (0x0701). Rx data = 0x00000661
+[14:48:11.021] I2C transmission complete.
+[14:48:11.036] IF task ready to sleep.
+[14:48:11.036] DEBUG: ledFlashDisable()
+[14:48:11.036] HM0360 MD sensitivity 1
+[14:48:11.036] Preparing HM0360 for MD:   HM0360 Motion Detection off (the frame interval, op 11, is 0).
+[14:48:11.036]    Inhibiting MD
+[14:48:11.036]    Changing mode from 0 to 2 with nFrames=1, sleepTime=0 sleepCount = 0xffff
+[14:48:11.036]  No LED flashes.
+[14:48:11.036] >>> Reset by watchdog
+[14:48:11.036] hx_drv_watchdog_start
+[14:48:11.036] IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+[14:48:11.236] \x001st BL Modem Build DATE=Jan 17 2025, Version: 2.12
+[14:48:11.268] Please input any key to enter X-Modem mode in 30 ms
+[14:48:11.268] waiting input key...
+[14:48:11.300] slot flash_offset 0x00000000
+[14:48:11.300] New MemDesp himax_sec_SB_image_process PASS
+[14:48:11.300] set_memory_s_ns
+[14:48:11.300] HX_DSP_FLAG 1
+[14:48:11.332] jump_addr=0x10000000
+[14:48:11.332] Compiler Version: ARM GNU, 14.3.1 20250623
+[14:48:11.332] **** WW500 MD. (WW500_C02) Built: 14:44:04 Oct 13 2026 ****
+[14:48:11.332] Git branch: 'nogit' nogit-dirty
+[14:48:11.332] Compiler Version: ARM GNU, 14.3.1 20250623
+[14:48:11.332] Wakeup_event = 0x0000, WakeupEvt1 = 0x0000 Cold boot
+[14:48:11.332] PCA9574 present at 0x20
+[14:48:11.332] DEBUG: ledFlashSelectLED(0)
+[14:48:11.332] Initialised LED Flash
+[14:48:11.332] ### Cold Boot ###
+[14:48:11.332] FreeRTOS tickless idle is enabled. configMAX_PRIORITIES = 5
+[14:48:12.774] Camera: HM0360
+[14:48:12.789] Disabling RP SENSOR_ENABLE
+[14:48:12.789] HM0360 present at 0x24
+[14:48:12.789] Main camera present at 0x24
+[14:48:12.789] Initialising FreeRTOS tasks
+[14:48:12.789] Created task 'CLI' Priority 4
+[14:48:12.789] Created task 'IFTask' Priority 3
+[14:48:12.789] Created task 'FAT' Priority 2
+[14:48:12.789] Created task 'IMAGE' Priority 1
+[14:48:12.789] FreeRTOS scheduler started.
+[14:48:12.789] Starting CLI Task
+[14:48:12.789] Enter 'help' to view a list of available commands.
+[14:48:12.789] cmd> Starting IFTask
+[14:48:12.789] I2C slave instance 0 configured at address 0x62
+[14:48:12.789] I2C buffers have 256 bytes, payload is 244
+[14:48:12.789] Inter-processor interrupt pulse short
+[14:48:12.789] Starting FatFS Task
+##### 14:48:12.789 CHECK switchslot back to HM0360: PASS booted HM0360
+##### 14:48:12.789 typing 'setop 5 300'
+[14:48:12.837] ^C
+[14:48:12.837] cmd> Mounting FatFS on SD card OK
+[14:48:12.837] Directory '/MANIFEST' exists
+[14:48:12.837] SD card initialised. CWD is '0:/'
+[14:48:12.837] Loading configuration: CWD is '0:/MANIFEST'
+[14:48:12.837] 'CONFIG.TXT' found. (Next image #600), camera enabled. Flash brightness 5
+[14:48:12.837] Retaining existing images directory (0 <= 100) '/MEDIA/00000000/IMAGES.002'
+[14:48:12.837] Directory '/MEDIA/00000000/IMAGES.002' exists
+[14:48:12.837] FatFs setup took 36ms
+[14:48:12.837] Inactivity period set at 1000ms
+[14:48:12.883] setop 5 300
+[14:48:13.444] Set OpParam 5 = 300
+[14:48:13.444] cmd>
+##### 14:48:14.460 typing 'setop 6 1000'
+[14:48:14.505] IF Task received event 'Awake' (0x070f). Rx data = 0x00000000
+[14:48:14.505] FatFS Task received event 'Save config' (0x0908). Rx data = 0x00000000
+[14:48:14.505] Config saved (op params persisted).
+[14:48:14.505] Starting Image Task
+[14:48:14.505] Flash ID 0xEF initialised
+[14:48:14.505] Slot A labelled variant 1 = HM0360 (night/IR)
+[14:48:14.505] Image 640 x 480. Raw buffer 460800. JPEG buffer 115860. JPEG compression x4
+[14:48:14.505] Initialising HM0360 at 0x24 (p.u. delay 1ms)
+[14:48:14.505] Memory allocated: 460800 for raw buffer, 115860 for JPEG, 100 for JPEG header
+[14:48:14.505]    Inhibiting MD
+[14:48:14.505]    Changing mode from 2 to 0 with nFrames=0, sleepTime=0 sleepCount = 0xffff
+[14:48:14.505] HM0360 Init
+[14:48:14.505] HM0360 Init Mirror Off
+[14:48:14.505] HM0360 Init finished
+[14:48:14.505] HM0360 MD sensitivity 1
+[14:48:14.505] CWD is '0:/MANIFEST'
+[14:48:14.505] Error opening '0:/HM0360EX.BIN': 4
+[14:48:14.505] sensor_type: 8
+[14:48:14.505] DEBUG: ledFlashBrightness(5%) [brbits = 0x0]
+[14:48:14.505] DEBUG: ledFlashSelectLED(0)
+[14:48:14.505] [LS] In ledFlashSetFlashModeFromOpParam with 0 Mode 0
+[14:48:14.505] DEBUG: ledFlashDisable()
+[14:48:14.505] Not initialising NN (project ID is 0)
+[14:48:14.505] No model found.
+[14:48:14.505] NN Initialisation took 9ms TODO - consider doing this after taking the picture!
+[14:48:14.505] Image sensor and data path initialised for camera HM0360
+[14:48:14.505]   Camera system enabled.
+[14:48:14.505]   Neural network disabled.
+[14:48:14.505]   Flash LED(s) in use: 0
+[14:48:14.505]   Flash brightness: 5%
+[14:48:14.505]   Flash is currently not armed.
+[14:48:14.505]   MD disabled.
+[14:48:14.505]   Timelapse disabled.
+[14:48:14.505] IF Task received event 'FreeRTOS Initialised' (0x0710). Rx data = 0x00000000
+[14:48:14.505] Assert inter-processor interrupt.
+[14:48:14.505] Sending 31 bytes: Header 4, payload 25, checksum 2 'Wake 2024-01-01T00:00:02Z'
+[14:48:14.505] Negate inter-processor interrupt.
+[14:48:14.505] IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+[14:48:14.505] IF Task received event 'I2C Tx' (0x0701). Rx data = 0x00000566
+[14:48:14.505] I2C transmission complete.
+[14:48:14.505] IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+[14:48:14.505] IF Task received event 'I2C Rx' (0x0700). Rx data = 0x00000000
+[14:48:14.505] Received I2C message.
+[14:48:14.505] MKL62BA command received: 'selftest'
+[14:48:14.505] selfTest 0000
+[14:48:14.505] IF Task state changed from 'Idle' (1) to 'I2C RX State' (2)
+[14:48:14.505] IF Task received event 'String Response' (0x0703). Rx data = 0x3000f9d0
+[14:48:14.505] Assert inter-processor interrupt.
+[14:48:14.505] Sending 19 bytes: Header 4, payload 13, checksum 2 'selfTest 0000'
+[14:48:14.505] Negate inter-processor interrupt.
+[14:48:14.505] IF Task state changed from 'I2C RX State' (2) to 'I2C TX State' (3)
+[14:48:14.505] IF Task received event 'I2C Tx' (0x0701). Rx data = 0x000005cd
+[14:48:14.505] I2C transmission complete.
+[14:48:14.505] IF Task state changed from 'I2C TX State' (3) to 'Idle' (1)
+[14:48:14.505] ^C
+[14:48:14.505] cmd> setop 6 1000
+[14:48:15.145] Set OpParam 6 = 1000
+[14:48:15.145] cmd>
+[14:48:15.145] FatFS Task received event 'Save config' (0x0908). Rx data = 0x00000000
+[14:48:15.145] Config saved (op params persisted).
+##### 14:48:16.161 typing 'setop 7 10'
+[14:48:16.207] ^C
+[14:48:16.207] cmd> setop 7 10
+[14:48:16.770] Set OpParam 7 = 10
+[14:48:16.770] cmd>
+[14:48:16.770] FatFS Task received event 'Save config' (0x0908). Rx data = 0x00000000
+[14:48:16.770] Config saved (op params persisted).
+##### 14:48:17.785 typing 'setop 8 5000'
+[14:48:17.826] ^C
+[14:48:17.826] cmd> setop 8 5000
+[14:48:18.470] Set OpParam 8 = 5000
+[14:48:18.470] cmd>
+[14:48:18.470] FatFS Task received event 'Save config' (0x0908). Rx data = 0x00000000
+[14:48:18.470] Config saved (op params persisted).
+##### 14:48:19.486 typing 'slots'
+[14:48:19.528] ^C
+[14:48:19.528] cmd> slots
+[14:48:19.844] Active slot 0 running 'HM0360 (night/IR)'. Slot A: 'HM0360 (night/IR)', Slot B: 'RP3 (day/colour)'. Auto-switch: off
+[14:48:19.844] cmd>
+##### 14:48:19.860 typing 'dpd'
+[14:48:19.907] ^C
+[14:48:19.907] cmd> dpd
+[14:48:20.142] Forcing DPD by clearing inactivity period
+[14:48:20.142] cmd> Inactive for 200ms
+[14:48:20.316] IMAGE Task received event 'Image Event Inactivity' (0x0a00). Rx data = 0x00000000
+[14:48:20.316] IMAGE Task state changed from 'Init' (1) to 'Save State' (5)
+[14:48:20.316] FatFS Task received event 'Save State' (0x0904). Rx data = 0x00000000
+[14:48:20.331] Saved state to SD card. Image sequence number = 600
+[14:48:20.331] FatFS task sending event 0x0a06. Tx data = 0x00000000
+[14:48:20.331] IMAGE task sending event 0x0904. Rx data = 0x00000000
+[14:48:20.331] IMAGE Task received event 'Image Event Disk Write Complete' (0x0a06). Rx data = 0x00000000
+[14:48:20.331] Image task ready to sleep.
+[14:48:20.331] IMAGE Task state changed from 'Save State' (5) to 'Uninitialised' (0)
+[14:48:20.331] IF Task received event 'Inactivity' (0x070e). Rx data = 0x00000000
+[14:48:20.331] Assert inter-processor interrupt.
+[14:48:20.331] Sending 110 bytes: Header 4, payload 104, checksum 2 'Sleep 600 0 0 16 2 300 1000 10 5000 5 1 0 100 0 0 0 18 1 0 0 2 2 50 65 15 0 0 286 326 1 110 1 0 0 0 0 0 '
+[14:48:20.346] Negate inter-processor interrupt.
+[14:48:20.346] IF Task state changed from 'Idle' (1) to 'I2C TX State' (3)
+[14:48:20.346] IF Task received event 'I2C Tx' (0x0701). Rx data = 0x00001d8c
+[14:48:20.346] I2C transmission complete.
+[14:48:20.346] IF task ready to sleep.
+[14:48:20.346] DEBUG: ledFlashDisable()
+[14:48:20.346] HM0360 MD sensitivity 1
+[14:48:20.362] Preparing HM0360 for MD:   HM0360 Motion Detection off (the frame interval, op 11, is 0).
+[14:48:20.362]    Inhibiting MD
+[14:48:20.362]    Changing mode from 0 to 2 with nFrames=1, sleepTime=0 sleepCount = 0xffff
+[14:48:20.362]  No LED flashes.
+[14:48:20.362] >>> Entering DPD at 2024:01:01 00:00:08
+[14:48:20.362] Will wake at 2024:01:01 00:00:18
+##### 14:48:20.362 SUMMARY HM0360 capture after cold boot refused: PASS; HM0360 hardfault resets: PASS; HM0360 freeze reset by watchdog: FAIL; HM0360 reset: PASS; switchslot to RP3: PASS; RP3 capture after cold boot refused: PASS; RP3 hardfault resets: PASS; RP3 freeze reset by watchdog: PASS; switchslot back to HM0360: PASS
+##### 14:48:20.362 done: asleep, timelapse wake in 10 s for the pressure tries

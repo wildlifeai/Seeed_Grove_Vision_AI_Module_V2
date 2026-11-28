@@ -26,6 +26,7 @@
 #include "boot_timing.h"
 
 #include "inactivity.h"
+#include "watchdog.h"
 #include "pinmux_cfg.h"
 #include "printf_x.h"
 #include "sleep_mode.h"
@@ -461,8 +462,10 @@ static void printLinkerStats(void) {
  *  - Inform the Image Task so it can ask the FatFS task to save state, and set the
  *  	HM0360 into motion detect mode, then wait for the IF Task to complete
  *
- *  - Inform the If Task to send a final "Sleep" message to the BLE processor.
- *  	It then gives a semaphore so the image task can enter DPD
+ *  - Inform the If Task to send a final "Sleep" message to the BLE processor, but only once the image task is
+ *  	ready to sleep. The image task sends the first such request itself, after its RTC work, so that "Sleep" is
+ *  	the last thing before DPD (#296). This one covers the IF task dropping that request when the BLE processor
+ *  	read a message meanwhile (dropDeferredInactivity()).
  */
 void app_onInactivityDetection(void) {
 	APP_MSG_T send_msg;
@@ -478,6 +481,10 @@ void app_onInactivityDetection(void) {
 	// Send a message to the image state machine to start the motion detection mechanism
 	if (xQueueSend(xImageTaskQueue, (void *)&send_msg, __QueueSendTicksToWait) != pdTRUE) {
 		xprintf("send_msg=0x%x fail\r\n", send_msg.msg_event);
+	}
+
+	if (!image_isReadyToSleep()) {
+		return;
 	}
 
 	send_msg.msg_event = APP_MSG_IFTASK_INACTIVITY;
@@ -582,8 +589,14 @@ int app_main(void){
 
 	boot_timing_start();	// Times the stages to the first frame (boot_timing.h, issue #249)
 
+	// A watchdog started before the reset can still be running. Stop it before anything slow happens
+	// (on a cold boot, setting the RTC below takes 1.4s).
+	watchdog_init();
+
 	initVersionString();
 	pinmux_init();
+	// /IP_INT high as soon as possible: from reset it is pulled down, which the BLE processor reads as a message
+	ifTask_ipIntInit();
 	selfTest_init();
 
 	XP_YELLOW;
@@ -684,6 +697,7 @@ int app_main(void){
 		//exif_utc_get_rtc_as_time_dpd(&time);	// This takes time! c. 900ms
 		// TODO sort out getting time efficiently after warm boot
 		exif_utc_get_rtc_as_time(&time);
+		exif_utc_note_boot_time(&time);	// this read may still be the time at sleep (#56)
 		exif_utc_time_to_exif_string(&time, timeString, sizeof(timeString));
 
 		xprintf("Woke at %s \n", timeString);
@@ -692,6 +706,10 @@ int app_main(void){
 		// HM0360 is main camera
 		if (hm0360_md_isHM0360Present()) {
 			hm0360_md_getInterruptStatus(&hm0360_interrupt_status);
+			if ((hm0360_interrupt_status & MD_INT) == MD_INT) {
+				// Save the cells that woke us before the HM0360 is reconfigured. Printed after the first image
+				hm0360_md_saveWakeGrid();
+			}
 			// Wait till image_task before clearing the interrupt as this allows simple measurement of latency
 			hm0360_md_disableInterrupt();	/// stop further MD activity
 		}
@@ -786,20 +804,23 @@ int app_main(void){
 	internalStates[taskIndex++] = internalState;
 	xprintf("Created task '%s' Priority %d\n", pcTaskGetName(task_id), priority);
 
-	// This tasks provides a CLI interface to the FatFs
-	task_id = fatfs_createTask(--priority, wakeReason);
-	internalState.task_id = task_id;
-	internalState.getState = fatfs_getState;
-	internalState.stateString = fatfs_getStateString;
-	internalState.priority = priority;
-	internalStates[taskIndex++] = internalState;
-	xprintf("Created task '%s' Priority %d\n", pcTaskGetName(task_id), priority);
-
-	// Image task for camera init & image capture and processing
+	// Image task for camera init & image capture and processing. Above the FatFS task (29 Oct 2026, XIP save
+	// state step 6): the camera starts from the fast-start record while the FatFS task is still mounting the card,
+	// and the time that matters is the wake to the first frame. The card's busy-waiting SPI transfers must not hold
+	// the camera up; the card itself is only needed once the photo is saved
 	task_id = image_createTask(--priority, wakeReason);
 	internalState.task_id = task_id;
 	internalState.getState = image_getState;
 	internalState.stateString = image_getStateString;
+	internalState.priority = priority;
+	internalStates[taskIndex++] = internalState;
+	xprintf("Created task '%s' Priority %d\n", pcTaskGetName(task_id), priority);
+
+	// This tasks provides a CLI interface to the FatFs. Below the image task (see above)
+	task_id = fatfs_createTask(--priority, wakeReason);
+	internalState.task_id = task_id;
+	internalState.getState = fatfs_getState;
+	internalState.stateString = fatfs_getStateString;
 	internalState.priority = priority;
 	internalStates[taskIndex++] = internalState;
 	xprintf("Created task '%s' Priority %d\n", pcTaskGetName(task_id), priority);
@@ -810,6 +831,9 @@ int app_main(void){
 	barrier_init(&startupBarrier, taskIndex, ifTask_allTasksReady);
 	// Also a barrier to entering DPD -
 	barrier_init(&shutdownBarrier, 2, image_sleepNow);
+
+	// From here a processor that stops is reset by the watchdog. The feed timer starts with the scheduler.
+	watchdog_start();
 
 	xprintf("FreeRTOS scheduler started.\n");
 	boot_timing_mark(BOOT_TIMING_SCHEDULER);	// from here the boot timing uses the tick count

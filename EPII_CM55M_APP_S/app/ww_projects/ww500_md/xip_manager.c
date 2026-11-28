@@ -50,6 +50,7 @@
 #include "image_task.h"
 #include "printf_x.h"
 #include "xip_manager.h"
+#include "watchdog.h"
 #include "camera_switch.h"
 
 /*************************************** Definitions *******************************************/
@@ -210,6 +211,7 @@ static int write_firmware_from_sd(uint8_t slot, const char *filepath);
 static int write_slot_selector(uint8_t slot);
 static int read_slot_meta(SlotMetaRecord *meta);
 static int write_selector_sector(const SlotSelectorHeader *hdr, const SlotMetaRecord *meta);
+static bool state_area_ok(uint32_t addr, uint32_t len);
 
 /*************************************** Local Function Definitions ***************************/
 
@@ -290,6 +292,23 @@ static uint8_t load_labels_from_manifest(char *filename, char (*labels)[MAX_LABE
     }
 }
 
+/**
+ * @brief Check that a flash range lies inside the saved-state area and is whole words.
+ *
+ * Used by xip_state_area_read/write/erase(), the only way into the area, so they can
+ * reach nothing else.
+ *
+ * @param addr  physical start address
+ * @param len   length in bytes
+ * @return true if [addr, addr + len) is inside the area and both are multiples of 4
+ */
+static bool state_area_ok(uint32_t addr, uint32_t len) {
+    return ((addr >= XIP_STATE_AREA_ADDR)
+            && (len <= XIP_STATE_AREA_SIZE)
+            && ((addr - XIP_STATE_AREA_ADDR) <= (XIP_STATE_AREA_SIZE - len))
+            && ((addr % 4) == 0) && ((len % 4) == 0));
+}
+
 /*************************************** Global Function Definitions **************************/
 
 /**
@@ -350,7 +369,11 @@ static int init_flash(void) {
     }
 
     if (ret == 0) {
-        vTaskDelay(pdMS_TO_TICKS(10));
+        // One tick (up to 1 ms), was 10 ms (29 Oct 2026, XIP save state step 6: this is on the path to the first
+        // photo). The flash is the boot flash, powered all along and read by the bootloader moments before, so no
+        // power-up time applies. If it is not ready the ID read below fails and is reported: the fast-start record
+        // is not read, so the boot waits for the card as before, and the next caller (the NN start-up) tries again
+        vTaskDelay(pdMS_TO_TICKS(1));
 
         if (hx_lib_spi_eeprom_read_ID(spi_inst, &id_info) != 0) {
             xprintf("init_flash: failed to read flash ID\n");
@@ -430,8 +453,13 @@ static bool disable_xip(void) {
         return false;
     }
 
+    // No watchdog reset while the flash is being erased or written: a reset part way through a
+    // firmware update could leave the board unable to boot. enable_xip() restarts the watchdog.
+    watchdog_suspend();
+
     if (hx_lib_spi_eeprom_enable_XIP(spi_inst, false, FLASH_QUAD, true) != 0) {
         xprintf("disable_xip: mode switch failed\n");
+        watchdog_resume();
         xSemaphoreGive(xSPIMutex);
         return false;
     }
@@ -455,10 +483,13 @@ static bool disable_xip(void) {
 static bool enable_xip(void) {
     if (hx_lib_spi_eeprom_enable_XIP(spi_inst, true, FLASH_QUAD, true) != 0) {
         xprintf("enable_xip: mode switch failed\n");
+        watchdog_resume();
         xSemaphoreGive(xSPIMutex);
         return false;
     }
 
+    // The flash operation is over: restart the watchdog that disable_xip() suspended
+    watchdog_resume();
     xSemaphoreGive(xSPIMutex);
     return true;
 }
@@ -774,6 +805,19 @@ bool xip_copy_model_from_sd_to_flash(char *filename) {
     }
 
     xprintf("Model file size: %lu bytes\n", fileSize);
+
+    // Refuse a file too big for the model area, before anything is erased:
+    // the erase would otherwise run on into the fast-start area (0x00F00000)
+    // and the slot selector. Compared before adding the metadata, so a huge
+    // fileSize cannot wrap flashSizeRequired.
+    if (fileSize > FLASH_MODEL_AREA_SIZE - align_up(sizeof(ModelMetaData), 16)) {
+        xprintf("Model file too big for the model area (%lu bytes max)\n",
+                (unsigned long)(FLASH_MODEL_AREA_SIZE - align_up(sizeof(ModelMetaData), 16)));
+        f_close(&file);
+        vPortFree(write_buf);
+        vPortFree(verify_buf);
+        return false;
+    }
 
     // Step 3: erase flash to make space for the model and the meta data.
     // The model data must be pushed out to align on a 16-byte boundary.
@@ -1805,4 +1849,72 @@ int xip_switch_slot(void) {
     xprintf("switch_slot: selector now points at slot %d\n", target_slot);
 
     return target_slot;
+}
+
+
+/********************* Saved-state area (see xip_state.c) ***************************/
+
+/**
+ * @brief Read from the saved-state area.
+ *
+ * Uses SPI commands, not the XIP window, so it never returns cached data.
+ *
+ * @param addr  physical address in the area, word aligned
+ * @param data  output, word aligned
+ * @param len   bytes, a multiple of 4
+ * @return 0 on success, -1 on failure or a bad address
+ */
+int xip_state_area_read(uint32_t addr, uint32_t *data, uint32_t len) {
+    if (!state_area_ok(addr, len) || (init_flash() != 0)) {
+        return -1;
+    }
+    if (!disable_xip()) {
+        return -1;
+    }
+    int ret = hx_lib_spi_eeprom_word_read(spi_inst, addr, data, len);
+    enable_xip();
+    return (ret == 0) ? 0 : -1;
+}
+
+/**
+ * @brief Program erased bytes in the saved-state area.
+ *
+ * The caller keeps each write inside one 256-byte flash page.
+ *
+ * @param addr  physical address in the area, word aligned
+ * @param data  input, word aligned
+ * @param len   bytes, a multiple of 4
+ * @return 0 on success, -1 on failure or a bad address
+ */
+int xip_state_area_write(uint32_t addr, uint32_t *data, uint32_t len) {
+    if (!state_area_ok(addr, len) || (init_flash() != 0)) {
+        return -1;
+    }
+    if (!disable_xip()) {
+        return -1;
+    }
+    int ret = hx_lib_spi_eeprom_word_write(spi_inst, addr, data, len);
+    enable_xip();
+    return (ret == 0) ? 0 : -1;
+}
+
+/**
+ * @brief Erase one 4 KB sector of the saved-state area.
+ *
+ * Takes typically 45 ms, at most about 400 ms.
+ *
+ * @param addr  physical address of the sector, sector aligned
+ * @return 0 on success, -1 on failure or a bad address
+ */
+int xip_state_area_erase(uint32_t addr) {
+    if (!state_area_ok(addr, FLASH_SECTOR_SIZE) || ((addr % FLASH_SECTOR_SIZE) != 0)
+            || (init_flash() != 0)) {
+        return -1;
+    }
+    if (!disable_xip()) {
+        return -1;
+    }
+    int ret = hx_lib_spi_eeprom_erase_sector(spi_inst, addr, FLASH_SECTOR);
+    enable_xip();
+    return (ret == 0) ? 0 : -1;
 }

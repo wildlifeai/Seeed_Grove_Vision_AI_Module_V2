@@ -24,6 +24,7 @@
 #include "sleep_mode.h"
 
 #include "hx_drv_rtc.h"
+#include "rtc_cal.h"		// the RTC calibration: the alarm correction (#245)
 
 /*************************************** Defines *************************************/
 
@@ -407,6 +408,15 @@ void sleep_mode_enter_dpd(SLEEPMODE_WAKE_SOURCE_E wakeSource, uint16_t alarmDela
 	exif_utc_get_rtc_as_time(&time);
 	exif_utc_time_to_exif_string(&time, timeString, sizeof(timeString));
 
+	// The correction for this sleep, for measuring the sleep timer (#245, _Tools/sleep_timing.py)
+	int32_t rtcPpm = 0;
+	if (rtc_cal_getCorrection(&rtcPpm)) {
+		xprintf("RTC correction %d ppm\n", (int) rtcPpm);
+	}
+	else {
+		xprintf("RTC correction none\n");
+	}
+
 	XP_LT_RED;
 	xprintf(">>> Entering DPD at %s\n\n", timeString);
 	XP_LT_GREY;	// Grey so the bootloader messages are printed in grey, on exit from DPD
@@ -496,9 +506,11 @@ void sleep_mode_enter_dpd(SLEEPMODE_WAKE_SOURCE_E wakeSource, uint16_t alarmDela
 
 	if (wakeSource & SLEEPMODE_WAKE_SOURCE_RTC) {
 		rtc_wkalrm alarm;
+		// The RC32K oscillator runs fast: ask for more RTC seconds so the sleep lasts alarmDelay real seconds
+		uint16_t rtcSeconds = rtc_cal_correctAlarm(alarmDelay);
 
-		// Add some time:
-		time = exif_utc_add_seconds_to_tm(time, alarmDelay);
+		xprintf("Sleep %ds = %d RTC s\n", alarmDelay, rtcSeconds);
+		time = exif_utc_add_seconds_to_tm(time, rtcSeconds);
 
 		exif_utc_time_to_exif_string(&time, timeString, sizeof(timeString));
 		xprintf("Will wake at %s\n\n", timeString);
@@ -511,6 +523,22 @@ void sleep_mode_enter_dpd(SLEEPMODE_WAKE_SOURCE_E wakeSource, uint16_t alarmDela
 
 		/*UnMask RTC IP Interrupt fo PMU*/
 		cfg.pmu_rtc_mask = PM_RTC_INT_MASK_ALLUNMASK;
+	}
+	else {
+		// No RTC wake (op 7 = 0). RTC0 must still be unmasked: with it masked the RTC stops counting in DPD and
+		// the clock loses the whole sleep (#56, benched 1 Nov 2026). Turning the alarm interrupt off does not stop
+		// an alarm left from an earlier timer sleep waking us (benched 2 Nov 2026), so the alarm is also moved to
+		// 2020. It fires only when the RTC equals it, and the RTC never reads before 2024
+		rtc_wkalrm alarm = {0};
+
+		alarm.time.tm_mday = 1;
+		alarm.time.tm_mon = 1;
+		alarm.time.tm_year = 2020;
+		hx_drv_rtc_set_alarm(RTC_ID_0, &alarm, NULL);
+		hx_drv_rtc_set_alarm_int(RTC_ID_0, RTC_AIE_OFF);
+		hx_drv_rtc_clear_alarm_int_status(RTC_ID_0);
+		cfg.pmu_rtc_mask = PM_RTC_INT_MASK_RTC1 | PM_RTC_INT_MASK_RTC2;
+		xprintf("No RTC wake: RTC kept running, alarm off\n\n");
 	}
 
 	if (verbose) {

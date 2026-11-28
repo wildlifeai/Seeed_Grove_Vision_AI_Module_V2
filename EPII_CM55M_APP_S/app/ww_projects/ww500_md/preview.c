@@ -7,7 +7,14 @@
  * Frame line format (one line per frame, CR ... LF):
  *
  *   {"type": 1, "name": "INVOKE", "code": 0, "data": {"count": N,
- *    "resolution": [W, H], "boxes": [], "image": "<base64 JPEG>"}}
+ *    "resolution": [W, H], "boxes": [], "md": "<64 hex>",
+ *    "mdstat": {"int": N, "ctrl": N, "ctrl1": N, "thA": N, "thB": N},
+ *    "image": "<base64 JPEG>"}}
+ *
+ * "md" (the HM0360's 32 ROI_OUT motion bytes for this capture) is present
+ * only when the image task supplied them - see preview_setMdBits(). "mdstat"
+ * (INT_INDIC, MD_CTRL, MD_CTRL1 and the context A and B MD_BLOCK_NUM_TH
+ * registers, as decimal numbers) likewise - see preview_setMdStatus().
  *
  * This is the same framing the Himax/SSCMA scenario apps use (see
  * app/scenario_app/tflm_fd_fm/send_result.cpp), so as well as
@@ -27,6 +34,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <stddef.h>
 
 #include "WE2_core.h"		// SCB_InvalidateDCache_by_Addr
 #include "xprintf.h"
@@ -45,6 +53,9 @@
 // occur at the very end of the frame.
 #define PREVIEW_CHUNK_IN	510
 
+// HM0360 motion detection output: 32 ROI_OUT registers, one bit per cell
+#define PREVIEW_MD_BYTES	32
+
 /*********************************************** Local Types ************************************************/
 
 
@@ -52,6 +63,20 @@
 
 static volatile PREVIEW_MODE_E previewMode = PREVIEW_OFF;
 static uint32_t frameCount = 0;
+
+// True while preview_sendFrame() is writing a frame line. Other tasks check it
+// (via preview_isSending()) to hold back console prints that would split the line.
+static volatile bool frameSending = false;
+
+// HM0360 MD bits read for the frame about to be sent (preview_setMdBits()).
+// Sent once as the frame's "md" field, then invalidated.
+static uint8_t mdBits[PREVIEW_MD_BYTES];
+static bool mdValid = false;
+
+// HM0360 MD interrupt status for the frame about to be sent (preview_setMdStatus()).
+// Sent once as the frame's "mdstat" field, then invalidated.
+static HM0360_MD_STATUS_T mdStatus;
+static bool mdStatusValid = false;
 
 static const char BASE64_CHARS[] =
 		"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
@@ -120,6 +145,8 @@ void preview_setMode(PREVIEW_MODE_E mode) {
 	previewMode = mode;
 	if (mode == PREVIEW_OFF) {
 		frameCount = 0;
+		mdValid = false;
+		mdStatusValid = false;
 	}
 }
 
@@ -148,6 +175,59 @@ bool preview_isActive(void) {
  */
 bool preview_skipsFileSave(void) {
 	return (previewMode == PREVIEW_STREAM);
+}
+
+/**
+ * @brief True while a frame line is being written to the console UART.
+ *
+ * A print from another task during this time lands inside the frame line and
+ * corrupts it, so tasks with chatty console output (e.g. the IF task) check
+ * this and stay quiet.
+ *
+ * @return true if preview_sendFrame() is writing a frame.
+ */
+bool preview_isSending(void) {
+	return frameSending;
+}
+
+/**
+ * @brief Record the HM0360 motion detection bits for the next frame.
+ *
+ * The image task reads the 32 ROI_OUT registers once per capture; passing
+ * them here adds them to that frame's line as "md" (64 hex characters), so
+ * the viewer can draw them over the image. Ignored unless preview is on.
+ *
+ * @param roiOut the ROI_OUT register values, ROI_OUT_0 first.
+ * @param length number of bytes in roiOut (must be 32).
+ */
+void preview_setMdBits(const uint8_t *roiOut, uint8_t length) {
+	if ((previewMode == PREVIEW_OFF) || (roiOut == NULL) || (length != PREVIEW_MD_BYTES)) {
+		return;
+	}
+
+	for (uint8_t i = 0; i < PREVIEW_MD_BYTES; i++) {
+		mdBits[i] = roiOut[i];
+	}
+	mdValid = true;
+}
+
+/**
+ * @brief Record the HM0360 MD interrupt status for the next frame.
+ *
+ * Read at the start of the frame handling, before the image task clears the
+ * HM0360 interrupt bits, and sent with that frame's line as "mdstat" so the
+ * viewer can compare the MD interrupt with the motion cell count. Ignored
+ * unless preview is on.
+ *
+ * @param status the registers read by hm0360_md_getMDStatus().
+ */
+void preview_setMdStatus(const HM0360_MD_STATUS_T *status) {
+	if ((previewMode == PREVIEW_OFF) || (status == NULL)) {
+		return;
+	}
+
+	mdStatus = *status;
+	mdStatusValid = true;
 }
 
 /**
@@ -184,13 +264,34 @@ void preview_sendFrame(void) {
 	SCB_InvalidateDCache_by_Addr((void *)jpegBuffer, jpegLength);
 
 	frameCount++;
+	frameSending = true;
 
 	xprintf("\r{\"type\": 1, \"name\": \"INVOKE\", \"code\": 0, \"data\": {\"count\": %d, "
-			"\"resolution\": [%d, %d], \"boxes\": [], \"image\": \"",
+			"\"resolution\": [%d, %d], \"boxes\": [], ",
 			(int)frameCount,
 			(int)app_get_raw_width(), (int)app_get_raw_height());
+
+	if (mdValid) {
+		xprintf("\"md\": \"");
+		for (uint8_t i = 0; i < PREVIEW_MD_BYTES; i++) {
+			xprintf("%02x", mdBits[i]);
+		}
+		xprintf("\", ");
+		mdValid = false;	// these bits belong to this frame only
+	}
+
+	if (mdStatusValid) {
+		xprintf("\"mdstat\": {\"int\": %d, \"ctrl\": %d, \"ctrl1\": %d, \"thA\": %d, \"thB\": %d}, ",
+				mdStatus.intIndic, mdStatus.mdCtrl, mdStatus.mdCtrl1,
+				mdStatus.blockNumThA, mdStatus.blockNumThB);
+		mdStatusValid = false;	// this status belongs to this frame only
+	}
+
+	xprintf("\"image\": \"");
 
 	sendBase64((const uint8_t *)jpegBuffer, jpegLength);
 
 	xprintf("\"}}\n");
+
+	frameSending = false;
 }

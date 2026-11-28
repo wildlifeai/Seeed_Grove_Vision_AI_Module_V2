@@ -193,8 +193,11 @@ void cis_file_loadStagedFromFile(void) {
 	res = f_open(&file, CAMERA_EXTRA_FILE, FA_READ);
 
 	if ((res == FR_NO_FILE) || (res == FR_NO_PATH)) {
-		// No file - there really are no staged registers
+		// No file - there really are no staged registers (clear any copied from the fast-start record)
+		taskENTER_CRITICAL();
+		stagedCount = 0;
 		stagedLoaded = true;
+		taskEXIT_CRITICAL();
 		return;
 	}
 	if (res != FR_OK) {
@@ -211,7 +214,10 @@ void cis_file_loadStagedFromFile(void) {
 
 	if (numEntries == 0) {
 		f_close(&file);
+		taskENTER_CRITICAL();
+		stagedCount = 0;	// as above
 		stagedLoaded = true;
+		taskEXIT_CRITICAL();
 		return;
 	}
 
@@ -316,6 +322,59 @@ void cis_file_clearStaged(void) {
 	stagedCount = 0;
 	stagedLoaded = true;	// an explicit clear is authoritative - do not reload the file
 	taskEXIT_CRITICAL();
+}
+
+/**
+ * @brief Fill the staged table from the fast-start record, before the card is ready.
+ *
+ * Does nothing once the table has been loaded from the card. Does not mark the table loaded:
+ * cis_file_loadStagedFromFile() still replaces it with the card's file, and 'camreg' edits stay
+ * refused until it has.
+ *
+ * @param table  register settings from the record
+ * @param count  number of settings, at most CIS_FILE_MAX_STAGED
+ */
+void cis_file_setStagedFromRecord(const HX_CIS_SensorSetting_t *table, uint16_t count) {
+	if (count > CIS_FILE_MAX_STAGED) {
+		count = CIS_FILE_MAX_STAGED;
+	}
+	taskENTER_CRITICAL();
+	if (!stagedLoaded) {
+		memcpy(stagedSettings, table, count * sizeof(HX_CIS_SensorSetting_t));
+		stagedCount = count;
+	}
+	taskEXIT_CRITICAL();
+}
+
+/**
+ * @brief Apply the staged table to the sensor, without reading the card.
+ *
+ * Used at sensor init before the card is ready, in place of cis_file_process(CAMERA_EXTRA_FILE).
+ * Applies at most CIS_FILE_MAX_STAGED settings; a file longer than that is applied in full only
+ * by cis_file_process().
+ *
+ * @return HX_CIS_NO_ERROR on success (including an empty table), otherwise the driver's error
+ */
+HX_CIS_ERROR_E cis_file_applyStaged(void) {
+	HX_CIS_SensorSetting_t settings[CIS_FILE_MAX_STAGED];
+	uint16_t count;
+	HX_CIS_ERROR_E result = HX_CIS_NO_ERROR;
+
+	taskENTER_CRITICAL();
+	count = stagedCount;
+	memcpy(settings, stagedSettings, count * sizeof(HX_CIS_SensorSetting_t));
+	taskEXIT_CRITICAL();
+
+	if (count > 0) {
+		result = hx_drv_cis_setRegTable(settings, count);
+		if (result == HX_CIS_NO_ERROR) {
+			xprintf("Processed %d staged settings (from the fast-start record)\n", count);
+		}
+		else {
+			xprintf("Error: hx_drv_cis_setRegTable failed with code %d\n", result);
+		}
+	}
+	return result;
 }
 
 /**
